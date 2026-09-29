@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Nightly DB dump to /data/backups, keeps 14 days.
-# Install: echo "30 2 * * * root /opt/riftstorm/scripts/backup-db.sh" | sudo tee /etc/cron.d/clipflow-backup
+# Install: echo "30 2 * * * root /opt/clipflow/scripts/backup-db.sh" | sudo tee /etc/cron.d/clipflow-backup
 set -euo pipefail
-cd /opt/riftstorm
+cd /opt/clipflow
 set -a; . ./.env; set +a
 OUT=/data/backups/clipflow-$(date +%F).sql.gz
 docker compose exec -T postgres pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" | gzip > "$OUT.tmp" && mv "$OUT.tmp" "$OUT"

@@ -5,7 +5,7 @@
 > it lists every feature that existed before and must be rebuilt, with the
 > gotchas learned the first time. Update this file as invariants change.
 
-## Layout (this server: /opt/riftstorm, VM on Proxmox)
+## Layout (this server: /opt/clipflow, VM on Proxmox)
 
 ```
 docker-compose.yml   project name "riftstorm" → volume riftstorm_postgres_data

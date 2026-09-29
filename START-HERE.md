@@ -27,7 +27,7 @@ tar xzf clipflow-rebuild.tar.gz
 sudo bash riftstorm/scripts/bootstrap.sh
 ```
 
-It installs to `/opt/riftstorm`, generates the DB password and
+It installs to `/opt/clipflow`, generates the DB password and
 `CLIPFLOW_API_KEY`, prepares `/data`, makes the first git commit, builds the
 images (the first build takes 10–20 min: torch + whisper) and starts everything.
 It ends by printing `{"status":"healthy"}` and the URL.
@@ -35,8 +35,8 @@ It ends by printing `{"status":"healthy"}` and the URL.
 Then add your keys and restart:
 
 ```bash
-nano /opt/riftstorm/.env        # GEMINI_API_KEY, ANTHROPIC_API_KEY, SUBMAGIC_API_KEY, RUNWAY, YOUTUBE_*, TELEGRAM_*
-cd /opt/riftstorm && docker compose up -d
+nano /opt/clipflow/.env        # GEMINI_API_KEY, ANTHROPIC_API_KEY, SUBMAGIC_API_KEY, RUNWAY, YOUTUBE_*, TELEGRAM_*
+cd /opt/clipflow && docker compose up -d
 ```
 
 ## 3. Things that were lost and must be redone by hand
@@ -54,7 +54,7 @@ cd /opt/riftstorm && docker compose up -d
 Create an **empty private** repo on github.com (no README), then:
 
 ```bash
-cd /opt/riftstorm
+cd /opt/clipflow
 git ls-files | grep -x .env && echo "STOP: .env is tracked" || echo "ok: .env not tracked"
 ssh-keygen -t ed25519 -C clipflow-vm -f ~/.ssh/id_ed25519 -N ""
 cat ~/.ssh/id_ed25519.pub     # add at GitHub → repo → Settings → Deploy keys (allow write)
@@ -65,8 +65,8 @@ git push -u origin main
 ## 5. Nightly database backup
 
 ```bash
-echo "30 2 * * * root /opt/riftstorm/scripts/backup-db.sh" | sudo tee /etc/cron.d/clipflow-backup
-sudo /opt/riftstorm/scripts/backup-db.sh && ls -lh /data/backups
+echo "30 2 * * * root /opt/clipflow/scripts/backup-db.sh" | sudo tee /etc/cron.d/clipflow-backup
+sudo /opt/clipflow/scripts/backup-db.sh && ls -lh /data/backups
 ```
 
 Plus runbook Phase 7's Proxmox backup of the VM (system disk only).
@@ -75,10 +75,10 @@ Plus runbook Phase 7's Proxmox backup of the VM (system disk only).
 
 ```bash
 curl -fsSL https://claude.ai/install.sh | bash
-cd /opt/riftstorm && claude
+cd /opt/clipflow && claude
 ```
 
-Running `claude` inside `/opt/riftstorm` gives it the whole codebase. The
+Running `claude` inside `/opt/clipflow` gives it the whole codebase. The
 `clipflow` user owns the folder and is in the `docker` group, so it can build,
 restart and read logs. (Log out and back in once after bootstrap so the
 group change applies.)

@@ -2,12 +2,12 @@
 # ClipFlow bootstrap: run ONCE on the new Ubuntu VM, as root, from the
 # unpacked kit folder:   sudo bash scripts/bootstrap.sh
 #
-# Installs the kit to /opt/riftstorm, generates secrets into .env,
+# Installs the kit to /opt/clipflow, generates secrets into .env,
 # prepares /data, makes the first git commit, builds and starts the stack.
 # Safe to re-run: it never overwrites an existing .env or database.
 set -euo pipefail
 
-APP_DIR=/opt/riftstorm
+APP_DIR=/opt/clipflow
 APP_USER=${APP_USER:-clipflow}          # the Linux user Claude Code runs as
 KIT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
