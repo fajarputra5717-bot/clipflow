@@ -473,6 +473,7 @@ button.primary:hover:not(:disabled),.analyze-ready:hover:not(:disabled){backgrou
 .job-card.processing:before{content:"";position:absolute;left:0;right:0;top:0;height:2px;background:linear-gradient(90deg,transparent,#0071e3,#64b5ff,transparent);background-size:220% 100%;animation:sweep 2.2s linear infinite}
 .job-header{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
 .job-header-side{display:flex;align-items:center;gap:7px;flex:none}
+.cancel-job-btn{padding:5px 10px;font-size:11.5px;min-height:0}
 .job-id,.job-url{font-size:9.5px;color:var(--muted2);word-break:break-all;margin-top:3px}.job-url{max-width:75vw}
 .progress-msg{font-size:9.5px;color:var(--muted);margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:70vw}
 .job-header-side .progress-ring{margin:0 1px}
@@ -926,10 +927,11 @@ summary > .chev{margin-left:auto}
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="15" rx="3"/><path d="M9.5 4.5v15"/></svg>
     </button>
     <div class="logo">R</div>
-    <div><h1>ClipFlow <button class="version-badge" id="versionBadge" type="button" aria-expanded="false">BETA · v2.1107</button></h1><p>Video clipping workspace · import → queue → publish</p>
+    <div><h1>ClipFlow <button class="version-badge" id="versionBadge" type="button" aria-expanded="false">BETA · v2.1108</button></h1><p>Video clipping workspace · import → queue → publish</p>
       <div class="version-popover" id="versionPopover" role="dialog" aria-hidden="true">
-        <div class="version-popover-title">What's new in v2.1107</div>
+        <div class="version-popover-title">What's new in v2.1108</div>
         <ul>
+          <li>Cancel a running job (stops the download, transcription or render within seconds)</li>
           <li>11 new caption fonts (Montserrat, Inter, Oswald, Poppins, Anton, Bebas Neue, Archivo Black), shown in their own typeface</li>
           <li>Every expandable section uses the same chevron that turns when it opens</li>
           <li>Status badges: clearer colours (grey waiting, blue working, amber needs you) that pass contrast in light and dark</li>
@@ -1212,6 +1214,9 @@ function mediaUrl(u){return u&&mediaToken?u+(u.includes("?")?"&":"?")+"mt="+enco
 function saveActive(id){activeJobId=id||null;if(id)localStorage.setItem(STORAGE_KEY,String(id));else localStorage.removeItem(STORAGE_KEY)}
 function loadActive(){return activeJobId||localStorage.getItem(STORAGE_KEY)||null}
 function isBusy(s){return BUSY.includes(s)}
+// Mirrors JOB_NOT_CANCELLABLE in main.py (R-08). Not isBusy(): BUSY lacks "processing".
+const NOT_CANCELLABLE=["completed","failed","cancelled","paused","review","partial_failure"];
+function isCancellable(s){return !!s&&!NOT_CANCELLABLE.includes(s)}
 function stageLabel(s){return({queued:"Queued",processing:"Processing",downloading:"Downloading video",download:"Downloading video",transcribing:"Transcribing audio",analyzing:"AI analyzing viral hooks",analysis:"AI analyzing viral hooks",preview_queued:"Preview queued",preview_rendering:"Rendering preview",preview:"Rendering preview",review:"Ready for review",render_queued:"Final render queued",rendering:"Rendering final",thumbnail_queued:"Thumbnail queued",thumbnail_rendering:"Generating AI thumbnails",completed:"Completed",failed:"Failed",cancelled:"Cancelled",partial_failure:"Partial failure",candidate:"Candidate"})[s]||(s?String(s).replace(/_/g," ").replace(/^./,m=>m.toUpperCase()):"Processing")}
 // idle grey · running blue · attention amber · completed green · failed red; cancelled = grey outline.
 function badgeClass(s){if(s==="completed")return"completed";if(s==="review"||s==="partial_failure")return"attention";if(s==="failed")return"failed";if(s==="cancelled")return"cancelled";if(s==="queued"||s==="candidate"||/_queued$/.test(s))return"idle";return"running"}
@@ -1345,6 +1350,7 @@ function renderCurrentJob(j,i=0){
       <div class="job-header-side">
         ${platformIcon(j.platform,"sm")}
         <span class="badge ${badgeClass(s)}">${esc(stageLabel(s))}</span>
+        ${isCancellable(s)?`<button class="secondary cancel-job-btn" data-cancel-job="${esc(j.id)}" type="button">Cancel</button>`:""}
       </div>
     </div>
     ${done?"":miniProgressBar(p,stageColor(s))}
@@ -1369,6 +1375,7 @@ function renderQueueJob(j,i=0){
       <div class="job-header-side">
         ${platformIcon(j.platform,"sm")}
         <span class="badge ${badgeClass(s)}">${esc(stageLabel(s))}</span>
+        ${isCancellable(s)?`<button class="secondary cancel-job-btn" data-cancel-job="${esc(j.id)}" type="button">Cancel</button>`:""}
       </div>
     </div>
     ${done?"":miniProgressBar(p,stageColor(s))}
@@ -1766,7 +1773,7 @@ function renderDetail(j){
   return `<div class="panel detail-head">
     <div class="job-header">
       <div><h2>${esc(jobDisplayTitle(j))}</h2><div class="job-id">${esc(j.id)}</div><div class="detail-meta"><span class="tag">${esc(stageLabel(j.status))}</span><span class="tag">${platformIcon(j.platform,"sm")}${esc(platformLabel(j.platform))}</span><span class="tag">${esc(String(j.split_ratio||70))}:${esc(String(100-Number(j.split_ratio||70)))}</span></div></div>
-      <div class="actions" style="margin-top:0"><button class="secondary" data-back-queue type="button">Back</button></div>
+      <div class="actions" style="margin-top:0">${isCancellable(j.status)?`<button class="secondary cancel-job-btn" data-cancel-job="${esc(j.id)}" type="button">Cancel job</button>`:""}<button class="secondary" data-back-queue type="button">Back</button></div>
     </div>
     <div class="muted" style="margin-top:7px">${esc(j.youtube_url||"")}</div>
   </div>
@@ -1862,6 +1869,17 @@ async function refreshJob(id){
 }
 function startPolling(id){if(!id)return;stopPolling();activeJobId=id;saveActive(id);refreshJob(id);pollTimer=setInterval(()=>refreshJob(id),POLL_INTERVAL)}
 function stopPolling(){if(pollTimer){clearInterval(pollTimer);pollTimer=null}}
+async function cancelJob(id,btn){
+  if(!confirm("Cancel this job? Work in progress stops and can't be resumed."))return;
+  setBusy(btn,true,"Cancelling…");
+  try{
+    await api(`/api/jobs/${id}/cancel`,{method:"POST"});
+    // Stop this job's pollers: the analysis poll and its candidate watchers.
+    if(String(activeJobId)===String(id))stopPolling();
+    document.querySelectorAll('[id^="candidate-"]').forEach(el=>{const cid=el.id.slice(10);if(window["cw_"+cid]&&$("queueDetail")?.contains(el)){clearInterval(window["cw_"+cid]);delete window["cw_"+cid]}});
+    await Promise.allSettled([loadCurrentJobs(),refreshRunningJobs(),currentTab==="queue"?loadQueue():null]);
+  }catch(e){setBusy(btn,false);alert("Could not cancel: "+e.message)}
+}
 
 function toggleCandidateEdit(cid){
   const el=$("candidate-"+cid);if(!el)return;
@@ -2268,6 +2286,7 @@ document.addEventListener("click",e=>{
   if(e.target.closest("#refreshQueue"))return loadQueue();
   const ce=e.target.closest("[data-edit]");if(ce)return toggleCandidateEdit(ce.dataset.edit);
   const rn=e.target.closest("[data-rename]");if(rn)return renameJob(rn.dataset.rename);
+  const cj=e.target.closest("[data-cancel-job]");if(cj)return cancelJob(cj.dataset.cancelJob,cj);
   const o=e.target.closest("[data-open]");if(o)return openAsCurrent(o.dataset.open);
   const m=e.target.closest("[data-move]");if(m)return moveToQueue(m.dataset.move);
   const qo=e.target.closest("[data-queue-open-button]");if(qo)return openQueueJob(qo.dataset.queueOpenButton);

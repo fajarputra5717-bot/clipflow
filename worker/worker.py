@@ -4,6 +4,7 @@ import random
 import re
 import statistics
 import subprocess
+import threading
 import time
 import traceback
 import uuid
@@ -371,11 +372,14 @@ def update_job(
 
     with db() as conn:
 
+        # A cancelled job stays cancelled: a late progress/status
+        # write from a stage that was already running is dropped (R-08).
         conn.execute(
             f"""
             UPDATE jobs
             SET {", ".join(sets)}
             WHERE id = %s
+              AND status IS DISTINCT FROM 'cancelled'
             """,
             values,
         )
@@ -419,6 +423,7 @@ def update_candidate(
             UPDATE clip_candidates
             SET {", ".join(sets)}
             WHERE id = %s
+              AND status IS DISTINCT FROM 'cancelled'
             """,
             values,
         )
@@ -429,6 +434,111 @@ def update_candidate(
 # ============================================================
 # PROCESS EXECUTION
 # ============================================================
+
+# ============================================================
+# CANCELLATION (R-08)
+# ============================================================
+# The worker is single-threaded, so a cancel can't interrupt it from
+# the main loop. While a job/candidate is being worked on, CancelWatch
+# runs a daemon thread that polls the DB every CANCEL_POLL_SECONDS; on
+# cancel it sets _cancel_event and terminates the running subprocess
+# (ffmpeg / yt-dlp). The main thread notices at the next
+# check_cancelled(): every stage boundary (StageTimer.start), every
+# Whisper segment, and right after run_command returns.
+
+CANCEL_POLL_SECONDS = 2.0
+
+_cancel_event = threading.Event()
+_process_lock = threading.Lock()
+_active_process = None
+
+
+class JobCancelled(Exception):
+    pass
+
+
+def _set_active_process(process):
+    global _active_process
+    with _process_lock:
+        _active_process = process
+
+
+def _terminate_active_process():
+    with _process_lock:
+        process = _active_process
+    if process is None or process.poll() is not None:
+        return
+    log(f"Cancel: terminating pid {process.pid}")
+    process.terminate()
+    try:
+        process.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        process.kill()
+
+
+def check_cancelled():
+    if _cancel_event.is_set():
+        raise JobCancelled("Cancelled by user")
+
+
+def is_cancelled(job_id=None, candidate_id=None):
+    with db() as conn:
+        if candidate_id is not None:
+            row = conn.execute(
+                """
+                SELECT c.status AS c_status, j.status AS j_status
+                FROM clip_candidates c
+                JOIN jobs j ON j.id = c.job_id
+                WHERE c.id = %s
+                """,
+                (candidate_id,),
+            ).fetchone()
+            return bool(row) and "cancelled" in (
+                row["c_status"], row["j_status"],
+            )
+        row = conn.execute(
+            "SELECT status FROM jobs WHERE id = %s", (job_id,),
+        ).fetchone()
+        return bool(row) and row["status"] == "cancelled"
+
+
+class CancelWatch:
+
+    def __init__(self, job_id=None, candidate_id=None):
+        self.job_id = job_id
+        self.candidate_id = candidate_id
+        self._stop = threading.Event()
+        self._thread = None
+
+    def __enter__(self):
+        _cancel_event.clear()
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        self._thread.start()
+        return self
+
+    def __exit__(self, *exc):
+        self._stop.set()
+        self._thread.join(timeout=CANCEL_POLL_SECONDS + 1)
+        _cancel_event.clear()
+        return False
+
+    def _run(self):
+        while not self._stop.wait(CANCEL_POLL_SECONDS):
+            try:
+                cancelled = is_cancelled(self.job_id, self.candidate_id)
+            except Exception as exc:
+                log(f"Cancel watch: DB check failed: {exc}")
+                continue
+            if cancelled:
+                log(
+                    "Cancel requested for "
+                    + (f"candidate {self.candidate_id}"
+                       if self.candidate_id else f"job {self.job_id}")
+                )
+                _cancel_event.set()
+                _terminate_active_process()
+                return
+
 
 def run_command(
     command,
@@ -443,17 +553,27 @@ def run_command(
         )
     )
 
-    result = subprocess.run(
+    # Popen (not subprocess.run) so a cancel can terminate it (R-08).
+    process = subprocess.Popen(
         command,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
     )
 
-    output = (
-        result.stdout
-        or ""
-    )
+    _set_active_process(process)
+
+    try:
+        output, _ = process.communicate()
+    finally:
+        _set_active_process(None)
+
+    output = output or ""
+
+    # Killed by CancelWatch: report a cancel, not an ffmpeg error.
+    check_cancelled()
+
+    result = process
 
     if check and result.returncode != 0:
 
@@ -902,8 +1022,13 @@ def transcribe(
         word_timestamps=True,
     )
 
-    # The generator does the actual decoding; materialize it once.
-    raw_segments = list(raw_segments)
+    # The generator does the actual decoding (in-process, so it can't
+    # be killed); check for a cancel after every segment (R-08).
+    decoded = []
+    for raw in raw_segments:
+        decoded.append(raw)
+        check_cancelled()
+    raw_segments = decoded
 
     transcript = "".join(
         segment.text for segment in raw_segments
@@ -3902,6 +4027,8 @@ class StageTimer:
         self.done = []
 
     def start(self, name):
+        # Every stage boundary is a cancellation point (R-08).
+        check_cancelled()
         self._close()
         self.current = name
         self.current_started = time.monotonic()
@@ -3925,7 +4052,12 @@ class StageTimer:
         )
 
 
-def process_analysis_job(
+def process_analysis_job(job):
+    with CancelWatch(job_id=job["id"]):
+        _process_analysis_job(job)
+
+
+def _process_analysis_job(
     job
 ):
 
@@ -4296,6 +4428,10 @@ def process_analysis_job(
                     f"{index + 1} ready"
                 )
 
+            except JobCancelled:
+
+                raise
+
             except Exception as exc:
 
                 failed_candidates += 1
@@ -4415,6 +4551,19 @@ def process_analysis_job(
                 f"{job_id} "
                 f"(all previews failed)"
             )
+
+    except JobCancelled:
+
+        # Status is already 'cancelled' (set by the API) and
+        # update_job() won't overwrite it.
+        log(f"JOB CANCELLED {job_id} [{stage}]")
+
+        # A download killed mid-way leaves yt-dlp .part/fragment files
+        # that nothing will ever resume; drop them.
+        if stage == "download":
+            for leftover in DOWNLOAD_DIR.glob(f"{job_id}.*"):
+                leftover.unlink(missing_ok=True)
+                log(f"Removed partial download {leftover.name}")
 
     except Exception as exc:
 
@@ -4902,6 +5051,7 @@ def claim_candidate_task():
                 'render_queued',
                 'thumbnail_queued'
             )
+              AND j.status IS DISTINCT FROM 'cancelled'
             ORDER BY c.updated_at
             FOR UPDATE SKIP LOCKED
             LIMIT 1
@@ -4951,7 +5101,12 @@ def claim_candidate_task():
 # PROCESS CANDIDATE TASK
 # ============================================================
 
-def process_candidate_task(
+def process_candidate_task(task):
+    with CancelWatch(candidate_id=task["id"]):
+        _process_candidate_task(task)
+
+
+def _process_candidate_task(
     task
 ):
 
@@ -5063,6 +5218,10 @@ def process_candidate_task(
                 + str(candidate_id)
             )
 
+    except JobCancelled:
+
+        log(f"CANDIDATE TASK CANCELLED {candidate_id} [{stage}]")
+
     except Exception as exc:
 
         detail = (
@@ -5166,6 +5325,7 @@ def claim_submagic_task():
                 'queued_export',
                 'queued_apply'
             )
+              AND j.status IS DISTINCT FROM 'cancelled'
             ORDER BY c.updated_at
             FOR UPDATE SKIP LOCKED
             LIMIT 1

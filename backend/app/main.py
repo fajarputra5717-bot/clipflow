@@ -3367,6 +3367,100 @@ def update_settings(req: SettingsUpdate):
 # QUEUE / CURRENT JOB MANAGEMENT
 # ============================================================
 
+# ============================================================
+# CANCEL JOB (R-08)
+# ============================================================
+# Sets the job and its in-flight candidates to 'cancelled'. The worker
+# notices within ~2 s (CancelWatch polls the DB), terminates the running
+# ffmpeg/yt-dlp and stops at the next stage boundary; its update_job()/
+# update_candidate() never overwrite a cancelled row, and the claims skip
+# cancelled jobs. Candidates already in review/completed are untouched,
+# and Submagic work already at Submagic (transcribing/exporting) is left
+# to finish: an export may already be billed.
+
+JOB_NOT_CANCELLABLE = (
+    "completed", "failed", "cancelled", "paused", "review",
+    "partial_failure",
+)
+
+CANDIDATE_BUSY_STATUSES = (
+    "queued", "preview_queued", "preview_rendering", "render_queued",
+    "rendering", "thumbnail_queued", "thumbnail_rendering",
+)
+
+
+@app.post("/api/jobs/{job_id}/cancel")
+def cancel_job(job_id: str):
+
+    with get_db() as conn:
+
+        with conn.cursor() as cur:
+
+            cur.execute(
+                "SELECT status FROM jobs WHERE id = %s FOR UPDATE",
+                (job_id,),
+            )
+
+            row = cur.fetchone()
+
+            if not row:
+                raise HTTPException(status_code=404, detail="Job not found")
+
+            if row[0] in JOB_NOT_CANCELLABLE:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Job is {row[0]}; only running jobs can be cancelled",
+                )
+
+            cur.execute(
+                """
+                UPDATE jobs
+                SET status = 'cancelled',
+                    message = 'Cancelled by user',
+                    completed_at = NOW(),
+                    updated_at = NOW()
+                WHERE id = %s
+                """,
+                (job_id,),
+            )
+
+            cur.execute(
+                """
+                UPDATE clip_candidates
+                SET status = 'cancelled',
+                    message = 'Cancelled by user',
+                    updated_at = NOW()
+                WHERE job_id = %s
+                  AND status = ANY(%s)
+                """,
+                (job_id, list(CANDIDATE_BUSY_STATUSES)),
+            )
+
+            cancelled_candidates = cur.rowcount
+
+            cur.execute(
+                """
+                UPDATE clip_candidates
+                SET submagic_status = 'failed',
+                    submagic_error = 'Cancelled with the job',
+                    updated_at = NOW()
+                WHERE job_id = %s
+                  AND submagic_status IN (
+                      'queued_upload', 'queued_export', 'queued_apply'
+                  )
+                """,
+                (job_id,),
+            )
+
+        conn.commit()
+
+    return {
+        "status": "cancelled",
+        "job_id": job_id,
+        "cancelled_candidates": cancelled_candidates,
+    }
+
+
 @app.post("/api/jobs/{job_id}/move-to-queue")
 def move_job_to_queue(job_id: str):
     try:

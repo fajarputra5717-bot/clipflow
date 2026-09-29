@@ -68,6 +68,16 @@ thumbnails, an optional Submagic pass, and a watermark asset library.
   `completed` → `queued_apply`→`applying`→`applied`. Never touches
   `status`/`final_path` until the explicit `use-as-final` step.
 
+## Cancellation (R-08)
+
+`POST /api/jobs/{id}/cancel` sets `cancelled`; the worker's
+`CancelWatch` (2 s DB poll) kills the running subprocess and raises
+`JobCancelled` at the next `check_cancelled()` (stage boundaries, each
+Whisper segment, after `run_command`). New long-running code: go
+through `run_command`, call `check_cancelled()` in loops, and put
+`except JobCancelled: raise` before any broad `except Exception`.
+`update_job`/`update_candidate` never overwrite a cancelled row.
+
 ## Subtitle style — dual storage, don't forget either half
 
 `jobs.subtitle_style` JSONB = `{style, font, size, animation, bold,
