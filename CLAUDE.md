@@ -122,6 +122,12 @@ fallback only. The real source of truth is `watermark_assets` table +
 `resolve_watermark_path()` in worker.py — never read `WATERMARK_PATH`
 directly in new code, call the resolver.
 
+Per-job override (R-05): `jobs.watermark_width` / `watermark_opacity`
+(NULL = global setting), set via `PATCH /api/jobs/{id}/render-options`.
+Resolve with `job_watermark(job)` once per render and pass the same
+values to `make_ass()` and `render_vertical()`. Submagic output gets the
+watermark in the `applying` step (`apply_watermark_overlay()`).
+
 ## Version history
 
 `candidate_versions` table logs a snapshot every time an edit is

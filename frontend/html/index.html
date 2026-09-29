@@ -589,6 +589,8 @@ button.primary:hover:not(:disabled),.analyze-ready:hover:not(:disabled){backgrou
 .edit-section:first-of-type{padding-top:2px}
 .edit-section:last-of-type{border-bottom:none;padding-bottom:2px}
 .edit-section-head{display:flex;align-items:center;gap:8px;margin-bottom:7px}
+.wm-size-bar{height:6px;margin:8px 0 2px;border-radius:3px;background:rgba(127,127,127,.18);overflow:hidden}
+.wm-size-bar span{display:block;height:100%;margin:0 auto;border-radius:3px;background:var(--accent,#0a84ff)}
 .edit-section-num{
   width:18px;height:18px;flex:none;border-radius:6px;background:rgba(0,113,227,.10);color:#0071e3;
   font-size:9.5px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;
@@ -769,10 +771,12 @@ button.primary:hover:not(:disabled),.analyze-ready:hover:not(:disabled){backgrou
 <div class="container">
   <header class="brand">
     <div class="logo">R</div>
-    <div><h1>ClipFlow <button class="version-badge" id="versionBadge" type="button" aria-expanded="false">BETA · v2.1101</button></h1><p>Video clipping workspace · import → queue → publish</p>
+    <div><h1>ClipFlow <button class="version-badge" id="versionBadge" type="button" aria-expanded="false">BETA · v2.1102</button></h1><p>Video clipping workspace · import → queue → publish</p>
       <div class="version-popover" id="versionPopover" role="dialog" aria-hidden="true">
-        <div class="version-popover-title">What's new in v2.1101</div>
+        <div class="version-popover-title">What's new in v2.1102</div>
         <ul>
+          <li>Per-job watermark size and opacity in the edit panel</li>
+          <li>Edit panel now shows the job's real subtitle style (Apply no longer resets it)</li>
           <li>API key required: asked once per browser session</li>
           <li>Settings now take effect without a restart and only changed fields are saved</li>
           <li>Rebuilt on the new server (v2.1100 baseline)</li>
@@ -1277,7 +1281,7 @@ async function submagicUseAsFinal(jid,cid){
   try{await api(`/api/jobs/${jid}/candidates/${cid}/submagic/use-as-final`,{method:"POST"});await openQueueJob(jid);watchSubmagic(jid,cid)}
   catch(e){alert("Couldn't apply Submagic render: "+e.message)}
 }
-function renderCandidate(c,jid,platform){
+function renderCandidate(c,jid,platform,job={}){
   const preview=(c.preview_url||c.preview_path)?mediaUrl(`${API}/api/jobs/${jid}/candidates/${c.id}/preview`):null;
   const final=(c.final_url||c.final_path||c.render_path)?mediaUrl(`${API}/api/jobs/${jid}/candidates/${c.id}/render`):null;
   const cacheBust=c.updated_at?`?t=${encodeURIComponent(c.updated_at)}`:"";
@@ -1287,10 +1291,14 @@ function renderCandidate(c,jid,platform){
   const title=c.manual_title||c.title||c.generated_title||hookTitle(sub)||"AI-Generated Highlight";
   const type=c.content_type||"Reality";
   const rating=Math.max(1,Math.min(10,Number(c.rating||5)));
-  const styleName=typeof c.subtitle_style==="object"?(c.subtitle_style.style||"outline"):(c.subtitle_style||"outline");
-  const fontName=c.subtitle_font||c.subtitle_style?.font||"Liberation Sans Bold";
-  const size=Number(c.subtitle_size||c.subtitle_style?.size||42);
-  const animName=(typeof c.subtitle_style==="object"?c.subtitle_style.animation:null)||c.subtitle_animation||"karaoke";
+  // Subtitle style is job-level (jobs.subtitle_*); candidate rows don't carry it.
+  const ss=c.subtitle_style??job.subtitle_style;
+  const styleName=typeof ss==="object"&&ss?(ss.style||"outline"):(ss||"outline");
+  const fontName=c.subtitle_font||job.subtitle_font||ss?.font||"Liberation Sans Bold";
+  const size=Number(c.subtitle_size||job.subtitle_size||ss?.size||42);
+  const animName=(typeof ss==="object"&&ss?ss.animation:null)||c.subtitle_animation||job.subtitle_animation||"karaoke";
+  const wmW=Number(job.watermark_width??settingsCache.WATERMARK_WIDTH?.value??630)||630;
+  const wmPct=Math.round(100*Number(job.watermark_opacity??settingsCache.WATERMARK_OPACITY?.value??1));
   const busy=isBusy(c.status);
   const thumbOptions=Array.isArray(c.thumbnail_options)?c.thumbnail_options:[];
   const pickedIdx=thumbSelection[c.id];
@@ -1387,6 +1395,20 @@ function renderCandidate(c,jid,platform){
           <div class="hint">Slide to browse, tap the one you want to pick it — then hit Apply changes.</div>`;
           })()
           :`<div class="hint">${busy&&c.status==="thumbnail_rendering"?"AI thumbnails are being generated…":"No AI thumbnails yet — generate 3 options above."}</div>`}
+        </div>
+
+        <div class="edit-section">
+          <div class="edit-section-head">
+            <span class="edit-section-num">4</span>
+            <h4>Watermark</h4>
+          </div>
+          <label class="edit-subtle-label">Shared by every clip of this job · ${job.watermark_width==null&&job.watermark_opacity==null?"global default":"custom for this job"}</label>
+          <div class="edit-style-row">
+            <div><label>Size <span id="wmwVal-${esc(c.id)}">${wmW}px</span></label><input id="wmw-${esc(c.id)}" type="range" min="200" max="900" step="10" value="${wmW}" data-initial="${wmW}"></div>
+            <div><label>Opacity <span id="wmoVal-${esc(c.id)}">${wmPct}%</span></label><input id="wmo-${esc(c.id)}" type="range" min="10" max="100" step="5" value="${wmPct}" data-initial="${wmPct}"></div>
+          </div>
+          <div class="wm-size-bar" aria-hidden="true"><span id="wmBar-${esc(c.id)}" style="width:${(wmW/1080*100).toFixed(1)}%;opacity:${wmPct/100}"></span></div>
+          <div class="hint">Width in pixels on the 1080-wide video; the bar shows its share of the frame. Applied on the next preview and final render.</div>
         </div>
 
         <div class="edit-section">
@@ -1538,7 +1560,22 @@ function thumbSlideTo(cid,idx){
 document.addEventListener("input",e=>{
   const m=e.target.id&&e.target.id.match(/^(style|font|size|anim|sub)-(.+)$/);
   if(m)updateCaptionPreview(m[2]);
+  const w=e.target.id&&e.target.id.match(/^wm([wo])-(.+)$/);
+  if(w)updateWatermarkIndicator(w[2]);
 });
+function updateWatermarkIndicator(cid){
+  const w=Number($("wmw-"+cid)?.value||630),o=Number($("wmo-"+cid)?.value||100);
+  if($("wmwVal-"+cid))$("wmwVal-"+cid).textContent=w+"px";
+  if($("wmoVal-"+cid))$("wmoVal-"+cid).textContent=o+"%";
+  const bar=$("wmBar-"+cid);if(bar){bar.style.width=(w/1080*100).toFixed(1)+"%";bar.style.opacity=o/100}
+}
+function changedRenderOptions(cid){
+  // Only send what the user moved: an untouched job keeps NULL (= global default).
+  const out={},w=$("wmw-"+cid),o=$("wmo-"+cid);
+  if(w&&w.value!==w.dataset.initial)out.watermark_width=Number(w.value);
+  if(o&&o.value!==o.dataset.initial)out.watermark_opacity=Number(o.value)/100;
+  return out;
+}
 document.addEventListener("change",e=>{
   const m=e.target.id&&e.target.id.match(/^(style|font|size|anim|sub)-(.+)$/);
   if(m)updateCaptionPreview(m[2]);
@@ -1555,7 +1592,7 @@ function renderDetail(j){
     </div>
     <div class="muted" style="margin-top:7px">${esc(j.youtube_url||"")}</div>
   </div>
-  <div class="candidate-pair">${candidates.map(c=>renderCandidate(c,j.id,j.platform)).join("")||`<div class="panel empty">No candidates are stored for this job.</div>`}</div>`;
+  <div class="candidate-pair">${candidates.map(c=>renderCandidate(c,j.id,j.platform,j)).join("")||`<div class="panel empty">No candidates are stored for this job.</div>`}</div>`;
 }
 
 async function loadCurrentJobs(){
@@ -1666,6 +1703,8 @@ async function applyEdits(jid,cid){
   try{
     await api(`/api/jobs/${jid}/candidates/${cid}`,{method:"PATCH",body:JSON.stringify(patch)});
     await api(`/api/jobs/${jid}/subtitle-style`,{method:"PATCH",body:JSON.stringify({subtitle_style:style,subtitle_font:font,subtitle_size:size,subtitle_animation:animation})});
+    const renderOpts=changedRenderOptions(cid);
+    if(Object.keys(renderOpts).length)await api(`/api/jobs/${jid}/render-options`,{method:"PATCH",body:JSON.stringify(renderOpts)});
     await api(`/api/jobs/${jid}/candidates/${cid}/regenerate-preview`,{method:"POST"});
     delete thumbSelection[cid];
     watchCandidate(jid,cid);
@@ -1702,7 +1741,7 @@ function watchCandidate(jid,cid){
       const detail=document.getElementById("queueDetail"),card=document.getElementById("candidate-"+cid);
       if(currentTab==="queue"&&detail&&card){
         const wasEditing=card.classList.contains("editing");
-        const tmp=document.createElement("div");tmp.innerHTML=renderCandidate(c,jid,j.platform);const next=tmp.firstElementChild;
+        const tmp=document.createElement("div");tmp.innerHTML=renderCandidate(c,jid,j.platform,j);const next=tmp.firstElementChild;
         if(wasEditing)next.classList.add("editing");
         card.replaceWith(next);
         updateCaptionPreview(cid);

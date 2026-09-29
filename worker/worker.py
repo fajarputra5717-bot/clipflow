@@ -2381,6 +2381,7 @@ def make_ass(
     canvas_height,
     split_ratio=70,
     animation="karaoke",
+    watermark_width=None,
 ):
 
     # IMPORTANT:
@@ -2525,7 +2526,7 @@ def make_ass(
         wm_natural_w, wm_natural_h = wm_size
 
         wm_render_w = (
-            setting_int("WATERMARK_WIDTH")
+            (watermark_width or setting_int("WATERMARK_WIDTH"))
             * canvas_width / FINAL_WIDTH
         )
 
@@ -2798,6 +2799,85 @@ def make_ass(
 # VIDEO RENDER
 # ============================================================
 
+def job_watermark(job):
+    """(width_px_at_1080, opacity) for a job: jobs.watermark_width /
+    watermark_opacity when set (R-05), else the global settings.
+    Read once per render so the ASS margin and the overlay agree."""
+    width = job.get("watermark_width")
+    opacity = job.get("watermark_opacity")
+    if not width:
+        width = setting_int("WATERMARK_WIDTH")
+    if opacity is None:
+        opacity = setting_float("WATERMARK_OPACITY")
+    return (
+        max(50, min(FINAL_WIDTH, int(width))),
+        max(0.0, min(1.0, float(opacity))),
+    )
+
+
+def apply_watermark_overlay(
+    source_path,
+    output_path,
+    *,
+    watermark_width,
+    watermark_opacity,
+):
+    """One overlay pass on an already-rendered vertical video (used
+    after the Submagic download, R-05): same centered geometry as
+    render_vertical(), audio copied."""
+
+    watermark = resolve_watermark_path()
+
+    if not watermark.exists():
+        raise RuntimeError(
+            "Required watermark missing: " + str(watermark)
+        )
+
+    cap = cv2.VideoCapture(str(source_path))
+    video_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH) or FINAL_WIDTH)
+    cap.release()
+
+    wm_width = max(2, int(watermark_width * video_width / FINAL_WIDTH))
+
+    run_command(
+        [
+            "ffmpeg",
+            "-y",
+            "-hwaccel",
+            "none",
+            "-i",
+            str(source_path),
+            "-loop",
+            "1",
+            "-i",
+            str(watermark),
+            "-filter_complex",
+            (
+                f"[1:v]scale={wm_width}:-1,format=rgba,"
+                f"colorchannelmixer=aa={watermark_opacity}[wm];"
+                "[0:v][wm]overlay=(W-w)/2:(H-h)/2:shortest=1[video]"
+            ),
+            "-map",
+            "[video]",
+            "-map",
+            "0:a?",
+            "-c:v",
+            "libx264",
+            "-preset",
+            setting("FFMPEG_PRESET"),
+            "-crf",
+            setting("FFMPEG_CRF"),
+            "-pix_fmt",
+            "yuv420p",
+            "-c:a",
+            "copy",
+            "-movflags",
+            "+faststart",
+            str(output_path),
+        ]
+    )
+
+
 def render_vertical(
     source_path,
     output_path,
@@ -2809,6 +2889,8 @@ def render_vertical(
     subtitle_path,
     preview=False,
     size=None,
+    watermark_width=None,
+    watermark_opacity=None,
 ):
 
     if preview:
@@ -2912,8 +2994,16 @@ def render_vertical(
             + str(watermark)
         )
 
+    # Per-job values (R-05) come from job_watermark(); None falls
+    # back to the global settings.
+    if watermark_width is None or watermark_opacity is None:
+        default_width, default_opacity = job_watermark({})
+        watermark_width = watermark_width or default_width
+        if watermark_opacity is None:
+            watermark_opacity = default_opacity
+
     wm_width = int(
-        setting_int("WATERMARK_WIDTH")
+        watermark_width
         * width
         / FINAL_WIDTH
     )
@@ -2924,7 +3014,7 @@ def render_vertical(
             f"scale={wm_width}:-1,"
             "format=rgba,"
             "colorchannelmixer="
-            f"aa={setting_float('WATERMARK_OPACITY')}"
+            f"aa={watermark_opacity}"
             "[wm];"
         )
     )
@@ -3121,6 +3211,9 @@ def create_preview(
         or 70
     )
 
+    # Read once: the ASS caption margin and the overlay must agree.
+    wm_width, wm_opacity = job_watermark(job)
+
     preview_width, preview_height = preview_size()
 
     preview_bottom = (
@@ -3188,6 +3281,7 @@ def create_preview(
         preview_height,
         split_ratio=split_ratio,
         animation=normalize_subtitle_animation(job),
+        watermark_width=wm_width,
     )
 
     # --------------------------------------------------------
@@ -3212,6 +3306,8 @@ def create_preview(
         subtitle_path=subtitle_file,
         preview=True,
         size=(preview_width, preview_height),
+        watermark_width=wm_width,
+        watermark_opacity=wm_opacity,
     )
 
     # A locked thumbnail (an AI option or a manual upload the user
@@ -3393,6 +3489,9 @@ def render_final_candidate(
         or 70
     )
 
+    # Read once: the ASS caption margin and the overlay must agree.
+    wm_width, wm_opacity = job_watermark(job)
+
     final_bottom = (
         FINAL_HEIGHT
         - int(
@@ -3441,6 +3540,7 @@ def render_final_candidate(
         FINAL_HEIGHT,
         split_ratio=split_ratio,
         animation=normalize_subtitle_animation(job),
+        watermark_width=wm_width,
     )
 
     output_path = (
@@ -3460,6 +3560,8 @@ def render_final_candidate(
         split_ratio=split_ratio,
         subtitle_path=subtitle_file,
         preview=False,
+        watermark_width=wm_width,
+        watermark_opacity=wm_opacity,
     )
 
     # Same rule as the preview: don't clobber a thumbnail the user
@@ -4540,6 +4642,8 @@ def claim_candidate_task():
                 j.subtitle_size,
                 j.subtitle_animation,
                 j.layout,
+                j.watermark_width,
+                j.watermark_opacity,
                 j.transcript_segments,
                 sv.source_path
             FROM clip_candidates c
@@ -4640,6 +4744,12 @@ def process_candidate_task(
 
             "layout":
                 task.get("layout") or "auto",
+
+            "watermark_width":
+                task.get("watermark_width"),
+
+            "watermark_opacity":
+                task.get("watermark_opacity"),
 
             "transcript_segments":
                 task["transcript_segments"],
@@ -4799,7 +4909,8 @@ def claim_submagic_task():
 
         row = conn.execute(
             """
-            SELECT c.*, sv.source_path
+            SELECT c.*, sv.source_path,
+                   j.watermark_width, j.watermark_opacity
             FROM clip_candidates c
             JOIN jobs j ON j.id = c.job_id
             JOIN source_videos sv ON sv.id = j.source_video_id
@@ -5000,16 +5111,35 @@ def process_submagic_task(candidate):
                 FINAL_DIR / (str(candidate_id) + "_submagic.mp4")
             )
 
+            # Download raw, then burn our watermark on top (R-05):
+            # Submagic renders from a clean plate (R-06), and a
+            # watermark baked into the upload would be cropped by
+            # its Magic Zooms.
+            raw_path = (
+                FINAL_DIR / (str(candidate_id) + "_submagic_raw.mp4")
+            )
+
             with _requests.get(
                 download_url, stream=True, timeout=300
             ) as resp:
 
                 resp.raise_for_status()
 
-                with open(output_path, "wb") as fh:
+                with open(raw_path, "wb") as fh:
                     for chunk in resp.iter_content(chunk_size=1 << 20):
                         if chunk:
                             fh.write(chunk)
+
+            wm_width, wm_opacity = job_watermark(candidate)
+
+            apply_watermark_overlay(
+                raw_path,
+                output_path,
+                watermark_width=wm_width,
+                watermark_opacity=wm_opacity,
+            )
+
+            raw_path.unlink(missing_ok=True)
 
             thumbnail_locked = bool(candidate.get("thumbnail_locked"))
             update_fields = {

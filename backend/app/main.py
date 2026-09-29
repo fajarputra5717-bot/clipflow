@@ -227,6 +227,9 @@ def ensure_schema():
         """,
         # R-22: which AI provider produced this candidate's hook.
         "ALTER TABLE clip_candidates ADD COLUMN IF NOT EXISTS hook_provider TEXT",
+        # R-05: per-job watermark; NULL = global WATERMARK_* setting.
+        "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS watermark_width INT",
+        "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS watermark_opacity REAL",
     ]
 
     try:
@@ -267,6 +270,13 @@ DEFAULT_SUBTITLE_STYLE = {
 }
 
 # Keep this in sync with the ANIMATIONS catalog in worker.py's make_ass().
+# Preset names make_ass() knows (worker.py `styles`), mirrored by
+# SUBTITLE_STYLES in index.html. Keep all three in sync.
+SUBTITLE_STYLE_PRESETS = {
+    "bold", "outline", "clean", "boxed", "hormozi",
+    "neon", "minimal", "impact", "pastel", "gold",
+}
+
 SUBTITLE_ANIMATIONS = {
     "karaoke",
     "word_pop",
@@ -293,8 +303,14 @@ def normalize_subtitle_style(
 
         value_lower = value.strip().lower()
 
+        # The edit panel's "Font style" select sends a preset name
+        # as a plain string. The baseline treated it as a font name,
+        # so the preset never changed on Apply (fixed with R-05).
+        if value_lower in SUBTITLE_STYLE_PRESETS:
+            style["style"] = value_lower
+
         # Compatibility with old frontend values
-        if value_lower == "bold":
+        elif value_lower == "bold":
             style["bold"] = True
 
         elif value_lower == "normal":
@@ -428,6 +444,13 @@ class CandidateUpdate(BaseModel):
 
 class JobUpdate(BaseModel):
     custom_title: Optional[str] = None
+
+
+class RenderOptionsUpdate(BaseModel):
+    # Only fields present in the request body are written; an
+    # explicit null resets to the global default.
+    watermark_width: Optional[int] = Field(default=None, ge=100, le=1080)
+    watermark_opacity: Optional[float] = Field(default=None, ge=0.0, le=1.0)
 
 
 class SubtitleStyleUpdate(BaseModel):
@@ -733,7 +756,9 @@ def list_jobs(
                         j.subtitle_style,
                         j.subtitle_font,
                         j.subtitle_size,
-                        j.subtitle_animation
+                        j.subtitle_animation,
+                        j.watermark_width,
+                        j.watermark_opacity
                     FROM jobs j
                     LEFT JOIN source_videos sv
                         ON sv.id = j.source_video_id
@@ -805,7 +830,9 @@ def get_job(job_id: str):
                         j.subtitle_style,
                         j.subtitle_font,
                         j.subtitle_size,
-                        j.subtitle_animation
+                        j.subtitle_animation,
+                        j.watermark_width,
+                        j.watermark_opacity
                     FROM jobs j
                     LEFT JOIN source_videos sv
                         ON sv.id = j.source_video_id
@@ -1160,6 +1187,40 @@ def update_candidate(
 # ============================================================
 # UPDATE SUBTITLE STYLE
 # ============================================================
+
+@app.patch("/api/jobs/{job_id}/render-options")
+def update_render_options(job_id: str, req: RenderOptionsUpdate):
+    """Job-level render options shared by every candidate of the job
+    (R-05 watermark). Takes effect on the next preview/final render."""
+
+    fields = sorted(req.model_fields_set)
+
+    with get_db() as conn:
+
+        with conn.cursor() as cur:
+
+            if fields:
+                cur.execute(
+                    "UPDATE jobs SET "
+                    + ", ".join(f"{name} = %s" for name in fields)
+                    + " WHERE id = %s RETURNING id",
+                    [getattr(req, name) for name in fields] + [job_id],
+                )
+            else:
+                cur.execute(
+                    "SELECT id FROM jobs WHERE id = %s", (job_id,),
+                )
+
+            if not cur.fetchone():
+                raise HTTPException(
+                    status_code=404,
+                    detail="Job not found",
+                )
+
+        conn.commit()
+
+    return {"ok": True, "updated": fields}
+
 
 @app.patch(
     "/api/jobs/{job_id}/subtitle-style"
