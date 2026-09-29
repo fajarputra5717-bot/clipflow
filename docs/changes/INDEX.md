@@ -8,3 +8,4 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 
 <!-- entries start; append below this line -->
 000 · 2026-09-26 · Rebuild baseline after VM loss (v2.1100 code, rebuilt infra + schema) · all (R-01 re-verified 2026-09-29)
+001 · 2026-09-29 · R-02 runtime settings: DB→env→default everywhere, 5 s cache, dead settings wired · shared/settings.py, main.py, worker.py, index.html

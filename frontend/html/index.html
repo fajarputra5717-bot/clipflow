@@ -1103,8 +1103,9 @@ async function createJob(){
   $("createStatus").innerHTML=`<div class="status-title">Creating job…</div><div class="status-message">Starting the AI pipeline.</div>`;
   try{
     const j=await api("/api/jobs",{method:"POST",body:JSON.stringify({
+      // subtitle style/font/size omitted: the backend fills them from the DEFAULT_SUBTITLE_* settings
       youtube_url:url,custom_title:customTitle||null,layout:selectedLayout,platform:selectedPlatform,split_ratio:selectedSplit,
-      subtitle_style:"outline",subtitle_font:"Liberation Sans Bold",subtitle_size:42,subtitle_animation:"karaoke"
+      subtitle_animation:"karaoke"
     })});
     const id=j.job_id||j.id;if(!id)throw new Error("Backend did not return a job ID.");
     saveActive(id);
@@ -2046,7 +2047,9 @@ async function loadSettings(){
   }catch(e){$("settingsPanel").innerHTML=`<div class="error-box">${esc(e.message)}</div>`}
 }
 async function saveSettings(){
-  const values={};document.querySelectorAll("[data-setting]").forEach(i=>{const v=i.value.trim();if(v&&v!=="••••••••")values[i.dataset.setting]=v});
+  // Send only fields the user changed: the form shows effective values (DB → env → default), and
+  // echoing them back would pin env/default values into the DB, which wins over .env.
+  const values={};document.querySelectorAll("[data-setting]").forEach(i=>{const v=i.value.trim(),prev=String((settingsCache[i.dataset.setting]||{}).value||"");if(v&&v!=="••••••••"&&v!==prev)values[i.dataset.setting]=v});
   try{await api("/api/settings",{method:"PUT",body:JSON.stringify({values})});await loadSettings();alert("Settings saved.")}catch(e){alert("Settings save failed: "+e.message)}
 }
 

@@ -19,6 +19,8 @@ import whisper
 from google import genai
 from psycopg.rows import dict_row
 
+from shared.settings import RuntimeSettings
+
 
 # ============================================================
 # CONFIGURATION
@@ -64,64 +66,20 @@ for directory in [
 FINAL_WIDTH = 1080
 FINAL_HEIGHT = 1920
 
-PREVIEW_WIDTH = int(
-    os.getenv(
-        "PREVIEW_WIDTH",
-        "540",
-    )
-)
-
-PREVIEW_HEIGHT = int(
-    PREVIEW_WIDTH * 16 / 9
-)
+# PREVIEW_WIDTH, CLIP_COUNT, CLIP_*_DURATION, FACE_*, WATERMARK_*,
+# FFMPEG_* are runtime settings: read them through setting_int() /
+# setting_float() at use time, never as import-time constants (the
+# baseline froze them from env, so the settings UI had no effect).
 
 
-CLIP_COUNT = int(
-    os.getenv(
-        "CLIP_COUNT",
-        "2",
-    )
-)
-
-CLIP_TARGET_DURATION = int(
-    os.getenv(
-        "CLIP_TARGET_DURATION",
-        "35",
-    )
-)
-
-CLIP_MIN_DURATION = int(
-    os.getenv(
-        "CLIP_MIN_DURATION",
-        "20",
-    )
-)
-
-CLIP_MAX_DURATION = int(
-    os.getenv(
-        "CLIP_MAX_DURATION",
-        "55",
-    )
-)
+def preview_size():
+    width = setting_int("PREVIEW_WIDTH")
+    return width, int(width * 16 / 9)
 
 
 # ============================================================
 # FACE DETECTION
 # ============================================================
-
-FACE_SAMPLE_COUNT = int(
-    os.getenv(
-        "FACE_DETECTION_SAMPLE_COUNT",
-        "16",
-    )
-)
-
-FACE_CONFIDENCE = float(
-    os.getenv(
-        "FACE_CONFIDENCE_THRESHOLD",
-        "0.6",
-    )
-)
 
 
 FACE_MODEL_DIR = Path("/app/models")
@@ -143,27 +101,6 @@ FACE_MODEL_PATH = (
 
 WATERMARK_PATH = Path(
     "/app/assets/watermark.png"
-)
-
-WATERMARK_WIDTH = int(
-    os.getenv(
-        "WATERMARK_WIDTH",
-        # Bumped up twice now — 342 read as small/faint on busy
-        # gameplay footage, and 480 was still judged too subtle.
-        # ~630/1080 of canvas width is a genuinely prominent, hard-
-        # to-miss center mark, matching how real clipping/highlight
-        # channels brand their output rather than a faint corner bug.
-        "630",
-    )
-)
-
-WATERMARK_OPACITY = float(
-    os.getenv(
-        "WATERMARK_OPACITY",
-        # Fully opaque — the watermark image is used exactly as
-        # authored, with no transparency adjustment applied on top.
-        "1.0",
-    )
 )
 
 
@@ -224,10 +161,6 @@ def _watermark_pixel_size():
 # GEMINI
 # ============================================================
 
-GEMINI_API_KEY = os.getenv(
-    "GEMINI_API_KEY"
-)
-
 # IMPORTANT:
 # This application intentionally uses ONLY Gemini 3.6 Flash.
 GEMINI_MODEL = "gemini-3.6-flash"
@@ -241,21 +174,6 @@ CONTENT_TYPES = {
     "Educational",
 }
 
-SECRET_SETTING_KEYS = {
-    "GEMINI_API_KEY",
-    "YOUTUBE_CLIENT_SECRET",
-    "YOUTUBE_REFRESH_TOKEN",
-    "TIKTOK_CLIENT_SECRET",
-    "TIKTOK_ACCESS_TOKEN",
-    "INSTAGRAM_ACCESS_TOKEN",
-}
-
-GEMINI_MAX_ATTEMPTS = int(
-    os.getenv(
-        "GEMINI_MAX_ATTEMPTS",
-        "4",
-    )
-)
 
 
 # ============================================================
@@ -264,10 +182,6 @@ GEMINI_MAX_ATTEMPTS = int(
 # ============================================================
 
 SUBMAGIC_API_BASE = "https://api.submagic.co/v1"
-
-SUBMAGIC_API_KEY_ENV = os.getenv(
-    "SUBMAGIC_API_KEY"
-)
 
 
 def submagic_request(
@@ -355,27 +269,31 @@ def db():
 
 
 def load_app_settings():
-    """
-    Read runtime settings from PostgreSQL. Environment variables remain
-    the fallback, so the worker can start even before the settings UI
-    has been configured.
-    """
-    try:
-        with db() as conn:
-            rows = conn.execute(
-                "SELECT key, value FROM app_settings"
-            ).fetchall()
-        return {row["key"]: row["value"] for row in rows}
-    except Exception as exc:
-        log("Could not load app_settings: " + str(exc))
-        return {}
+    with db() as conn:
+        rows = conn.execute(
+            "SELECT key, value FROM app_settings"
+        ).fetchall()
+    return {row["key"]: row["value"] for row in rows}
+
+
+# DB wins, then env, then DEFAULT_SETTINGS (shared/settings.py).
+# Cached 5 s, so a UI change lands within one cache window.
+_settings = RuntimeSettings(
+    load_app_settings,
+    log=lambda msg: log(msg),
+)
 
 
 def setting(name, default=None):
-    value = load_app_settings().get(name)
-    if value not in (None, ""):
-        return value
-    return os.getenv(name, default)
+    return _settings.get(name, default)
+
+
+def setting_int(name, default=None):
+    return _settings.get_int(name, default)
+
+
+def setting_float(name, default=None):
+    return _settings.get_float(name, default)
 
 
 def update_job(
@@ -686,7 +604,7 @@ def normalize_video(
 
 def validate_gemini():
 
-    if not setting("GEMINI_API_KEY", GEMINI_API_KEY):
+    if not setting("GEMINI_API_KEY"):
 
         raise RuntimeError(
             "GEMINI_API_KEY missing"
@@ -710,9 +628,14 @@ def gemini_call(fn):
 
     last_error = None
 
+    max_attempts = max(
+        1,
+        setting_int("GEMINI_MAX_ATTEMPTS"),
+    )
+
     for attempt in range(
         1,
-        GEMINI_MAX_ATTEMPTS + 1,
+        max_attempts + 1,
     ):
 
         try:
@@ -734,7 +657,7 @@ def gemini_call(fn):
 
             if (
                 not retryable
-                or attempt >= GEMINI_MAX_ATTEMPTS
+                or attempt >= max_attempts
             ):
 
                 raise
@@ -751,7 +674,7 @@ def gemini_call(fn):
             log(
                 "Gemini retry "
                 f"{attempt}/"
-                f"{GEMINI_MAX_ATTEMPTS} "
+                f"{max_attempts} "
                 f"in {delay:.1f}s"
             )
 
@@ -893,26 +816,22 @@ def extract_audio(
 # WHISPER
 # ============================================================
 
-# Default transcription language for RIFTSTORM.
-# Override with WHISPER_LANGUAGE in the environment if needed.
-WHISPER_LANGUAGE = os.getenv(
-    "WHISPER_LANGUAGE",
-    "id",
-)
-
+# WHISPER_MODEL / WHISPER_LANGUAGE are runtime settings (default
+# base / id). The model is cached per process and reloaded only when
+# the WHISPER_MODEL setting changes.
 _whisper_model = None
+_whisper_model_name = None
 
 
 def whisper_model():
 
-    global _whisper_model
+    global _whisper_model, _whisper_model_name
 
-    if _whisper_model is None:
+    name = setting("WHISPER_MODEL")
 
-        name = os.getenv(
-            "WHISPER_MODEL",
-            "base",
-        )
+    if _whisper_model is None or name != _whisper_model_name:
+
+        _whisper_model = None
 
         log(
             "Loading Whisper model: "
@@ -924,6 +843,8 @@ def whisper_model():
                 name
             )
         )
+
+        _whisper_model_name = name
 
     return _whisper_model
 
@@ -940,7 +861,7 @@ def transcribe(
         whisper_model()
         .transcribe(
             str(audio_path),
-            language=WHISPER_LANGUAGE,
+            language=setting("WHISPER_LANGUAGE"),
             task="transcribe",
             word_timestamps=True,
         )
@@ -1025,6 +946,7 @@ def analyze_hooks(
     transcript,
     segments,
     platform="youtube_shorts",
+    clip_count=None,
 ):
 
     validate_gemini()
@@ -1035,9 +957,15 @@ def analyze_hooks(
             "No transcript segments available"
         )
 
-    api_key = setting("GEMINI_API_KEY", GEMINI_API_KEY)
+    api_key = setting("GEMINI_API_KEY")
     model = setting("GEMINI_ANALYSIS_MODEL", GEMINI_MODEL)
-    max_attempts = int(setting("GEMINI_MAX_ATTEMPTS", str(GEMINI_MAX_ATTEMPTS)) or GEMINI_MAX_ATTEMPTS)
+
+    if clip_count is None:
+        clip_count = setting_int("CLIP_COUNT")
+
+    clip_target_duration = setting_int("CLIP_TARGET_DURATION")
+    clip_min_duration = setting_int("CLIP_MIN_DURATION")
+    clip_max_duration = setting_int("CLIP_MAX_DURATION")
 
     if not api_key:
         raise RuntimeError("GEMINI_API_KEY missing")
@@ -1063,7 +991,7 @@ def analyze_hooks(
 You are an expert short-form gaming video editor.
 
 Analyze the timestamped transcript and choose EXACTLY
-{CLIP_COUNT} DIFFERENT moments with the highest probability
+{clip_count} DIFFERENT moments with the highest probability
 of working as a {platform} short-form clip.
 
 Important:
@@ -1073,9 +1001,9 @@ Important:
   mechanics, or punchlines.
 - Do not select boring setup.
 - Avoid duplicate or overlapping moments.
-- Target approximately {CLIP_TARGET_DURATION} seconds.
-- Minimum duration {CLIP_MIN_DURATION} seconds.
-- Maximum duration {CLIP_MAX_DURATION} seconds.
+- Target approximately {clip_target_duration} seconds.
+- Minimum duration {clip_min_duration} seconds.
+- Maximum duration {clip_max_duration} seconds.
 - Keep start/end inside the transcript.
 - Create an Indonesian title when the content is Indonesian.
 - Title must be truthful and maximum 90 characters.
@@ -1267,7 +1195,7 @@ Transcript:
     )
 
     return results[
-        :CLIP_COUNT
+        :clip_count
     ]
 
 
@@ -1715,6 +1643,10 @@ def detect_faces(
 
     network = face_net()
 
+    min_confidence = setting_float(
+        "FACE_CONFIDENCE_THRESHOLD"
+    )
+
     height, width = (
         image.shape[:2]
     )
@@ -1758,7 +1690,7 @@ def detect_faces(
             ]
         )
 
-        if confidence < FACE_CONFIDENCE:
+        if confidence < min_confidence:
 
             continue
 
@@ -1941,7 +1873,7 @@ def detect_face_for_clip(
 
     samples = max(
         6,
-        FACE_SAMPLE_COUNT,
+        setting_int("FACE_DETECTION_SAMPLE_COUNT"),
     )
 
     clip_duration = max(
@@ -2189,12 +2121,7 @@ def calculate_face_crop(
     # Face should fill roughly 62% of the crop's height for a
     # tight, centered facecam look. Raising this fraction shrinks
     # the crop area around the face (more zoomed in).
-    face_fill_ratio = float(
-        os.environ.get(
-            "FACE_ZOOM_RATIO",
-            "0.62",
-        )
-    )
+    face_fill_ratio = setting_float("FACE_ZOOM_RATIO")
 
     desired_crop_height = (
         float(face["h"])
@@ -2590,7 +2517,8 @@ def make_ass(
         wm_natural_w, wm_natural_h = wm_size
 
         wm_render_w = (
-            WATERMARK_WIDTH * canvas_width / FINAL_WIDTH
+            setting_int("WATERMARK_WIDTH")
+            * canvas_width / FINAL_WIDTH
         )
 
         wm_render_h = (
@@ -2872,37 +2800,27 @@ def render_vertical(
     split_ratio,
     subtitle_path,
     preview=False,
+    size=None,
 ):
 
     if preview:
 
-        width = PREVIEW_WIDTH
-        height = PREVIEW_HEIGHT
+        # create_preview passes the size it computed the crop and
+        # ASS for, so a settings change mid-render can't split them.
+        width, height = size or preview_size()
 
-        preset = os.getenv(
-            "FFMPEG_PREVIEW_PRESET",
-            "ultrafast",
-        )
+        preset = setting("FFMPEG_PREVIEW_PRESET")
 
-        crf = os.getenv(
-            "FFMPEG_PREVIEW_CRF",
-            "30",
-        )
+        crf = setting("FFMPEG_PREVIEW_CRF")
 
     else:
 
         width = FINAL_WIDTH
         height = FINAL_HEIGHT
 
-        preset = os.getenv(
-            "FFMPEG_PRESET",
-            "veryfast",
-        )
+        preset = setting("FFMPEG_PRESET")
 
-        crf = os.getenv(
-            "FFMPEG_CRF",
-            "23",
-        )
+        crf = setting("FFMPEG_CRF")
 
     top_height = int(
         height
@@ -2987,7 +2905,7 @@ def render_vertical(
         )
 
     wm_width = int(
-        WATERMARK_WIDTH
+        setting_int("WATERMARK_WIDTH")
         * width
         / FINAL_WIDTH
     )
@@ -2998,7 +2916,7 @@ def render_vertical(
             f"scale={wm_width}:-1,"
             "format=rgba,"
             "colorchannelmixer="
-            f"aa={WATERMARK_OPACITY}"
+            f"aa={setting_float('WATERMARK_OPACITY')}"
             "[wm];"
         )
     )
@@ -3195,10 +3113,12 @@ def create_preview(
         or 70
     )
 
+    preview_width, preview_height = preview_size()
+
     preview_bottom = (
-        PREVIEW_HEIGHT
+        preview_height
         - int(
-            PREVIEW_HEIGHT
+            preview_height
             * split_ratio
             / 100
         )
@@ -3209,7 +3129,7 @@ def create_preview(
             info["width"],
             info["height"],
             face,
-            PREVIEW_WIDTH,
+            preview_width,
             preview_bottom,
         )
     )
@@ -3232,7 +3152,7 @@ def create_preview(
             normalize_subtitle_size(
                 job
             )
-            * PREVIEW_WIDTH
+            * preview_width
             / FINAL_WIDTH
         ),
     )
@@ -3256,8 +3176,8 @@ def create_preview(
         subtitle_font,
         preview_font_size,
         subtitle_style,
-        PREVIEW_WIDTH,
-        PREVIEW_HEIGHT,
+        preview_width,
+        preview_height,
         split_ratio=split_ratio,
         animation=normalize_subtitle_animation(job),
     )
@@ -3283,6 +3203,7 @@ def create_preview(
         split_ratio=split_ratio,
         subtitle_path=subtitle_file,
         preview=True,
+        size=(preview_width, preview_height),
     )
 
     # A locked thumbnail (an AI option or a manual upload the user
@@ -3850,20 +3771,25 @@ def process_analysis_job(
             ),
         )
 
+        # Read once: the prompt, the "enough clips" check and the
+        # final review/partial decision must agree for this job.
+        clip_count = setting_int("CLIP_COUNT")
+
         highlights = (
             analyze_hooks(
                 transcript,
                 segments,
                 job.get("platform", "youtube_shorts"),
+                clip_count=clip_count,
             )
         )
 
-        if len(highlights) < CLIP_COUNT:
+        if len(highlights) < clip_count:
 
             raise RuntimeError(
                 f"Gemini returned only "
                 f"{len(highlights)} usable clips; "
-                f"{CLIP_COUNT} required"
+                f"{clip_count} required"
             )
 
         # ----------------------------------------------------
@@ -4053,7 +3979,7 @@ def process_analysis_job(
 
         if (
             successful_candidates
-            == CLIP_COUNT
+            == clip_count
         ):
 
             update_job(
@@ -4094,7 +4020,7 @@ def process_analysis_job(
                 progress=100,
                 message=(
                     f"{successful_candidates}/"
-                    f"{CLIP_COUNT} previews ready; "
+                    f"{clip_count} previews ready; "
                     f"{failed_candidates} failed"
                 ),
                 error_stage=
@@ -4109,7 +4035,7 @@ def process_analysis_job(
                 f"JOB PARTIAL FAILURE: "
                 f"{job_id} "
                 f"({successful_candidates}/"
-                f"{CLIP_COUNT})"
+                f"{clip_count})"
             )
 
         else:
@@ -4965,7 +4891,7 @@ def _submagic_candidate_title(candidate):
 def process_submagic_task(candidate):
 
     candidate_id = candidate["id"]
-    api_key = setting("SUBMAGIC_API_KEY", SUBMAGIC_API_KEY_ENV)
+    api_key = setting("SUBMAGIC_API_KEY")
 
     if not api_key:
         update_candidate(
@@ -5009,7 +4935,7 @@ def process_submagic_task(candidate):
                     data={
                         "title": hook_text,
                         "language": setting(
-                            "WHISPER_LANGUAGE", WHISPER_LANGUAGE
+                            "WHISPER_LANGUAGE"
                         ),
                         "templateName": setting(
                             "SUBMAGIC_TEMPLATE", "Hormozi 2"
@@ -5112,7 +5038,7 @@ def process_submagic_task(candidate):
 def process_submagic_poll(candidate):
 
     candidate_id = candidate["id"]
-    api_key = setting("SUBMAGIC_API_KEY", SUBMAGIC_API_KEY_ENV)
+    api_key = setting("SUBMAGIC_API_KEY")
     project_id = candidate.get("submagic_project_id")
 
     if not api_key or not project_id:

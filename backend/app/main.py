@@ -12,6 +12,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
+from shared.settings import (
+    DEFAULT_SETTINGS,
+    SECRET_SETTING_KEYS,
+    RuntimeSettings,
+)
+
 
 # ============================================================
 # CONFIG
@@ -334,56 +340,8 @@ SUPPORTED_LAYOUTS = {
     "right",
 }
 
-SECRET_SETTING_KEYS = {
-    "GEMINI_API_KEY",
-    "RUNWAY_API_KEY",
-    "YOUTUBE_CLIENT_SECRET",
-    "YOUTUBE_REFRESH_TOKEN",
-    "TIKTOK_CLIENT_SECRET",
-    "TIKTOK_ACCESS_TOKEN",
-    "INSTAGRAM_ACCESS_TOKEN",
-    "SUBMAGIC_API_KEY",
-}
-
-DEFAULT_SETTINGS = {
-    "GEMINI_ANALYSIS_MODEL": "gemini-3.6-flash",
-    "GEMINI_MAX_ATTEMPTS": "4",
-    "CLIP_COUNT": "2",
-    "CLIP_TARGET_DURATION": "35",
-    "CLIP_MIN_DURATION": "20",
-    "CLIP_MAX_DURATION": "55",
-    "FACE_DETECTION_SAMPLE_COUNT": "16",
-    "FACE_CONFIDENCE_THRESHOLD": "0.60",
-    "FACE_ZOOM_RATIO": "0.62",
-    "PREVIEW_WIDTH": "540",
-    "FFMPEG_PREVIEW_PRESET": "ultrafast",
-    "FFMPEG_PREVIEW_CRF": "30",
-    "FFMPEG_PRESET": "veryfast",
-    "FFMPEG_CRF": "23",
-    "WATERMARK_WIDTH": "480",
-    "WATERMARK_OPACITY": "1.0",
-    "DEFAULT_SUBTITLE_STYLE": "outline",
-    "DEFAULT_SUBTITLE_FONT": "Liberation Sans Bold",
-    "DEFAULT_SUBTITLE_SIZE": "42",
-    "HASHTAGS": "",
-    "CAMPAIGN_NAME": "",
-    "GEMINI_API_KEY": "",
-    "RUNWAY_API_KEY": "",
-    "RUNWAY_MODEL": "gen4_image_turbo",
-    "YOUTUBE_CLIENT_ID": "",
-    "YOUTUBE_CLIENT_SECRET": "",
-    "YOUTUBE_REFRESH_TOKEN": "",
-    "TIKTOK_CLIENT_KEY": "",
-    "TIKTOK_CLIENT_SECRET": "",
-    "TIKTOK_ACCESS_TOKEN": "",
-    "INSTAGRAM_ACCESS_TOKEN": "",
-    "INSTAGRAM_BUSINESS_ACCOUNT_ID": "",
-    "SUBMAGIC_API_KEY": "",
-    "SUBMAGIC_TEMPLATE": "Hormozi 2",
-    "SUBMAGIC_MAGIC_ZOOMS": "true",
-    "SUBMAGIC_MAGIC_BROLLS": "true",
-    "ACTIVE_WATERMARK_ID": "",
-}
+# DEFAULT_SETTINGS (whitelist + defaults) and SECRET_SETTING_KEYS live
+# in shared/settings.py so backend and worker agree on both.
 
 class SettingsUpdate(BaseModel):
     values: dict[str, str]
@@ -446,10 +404,20 @@ def create_job(req: ClipRequest):
             detail="layout must be auto, left, or right",
         )
 
+    # DEFAULT_SUBTITLE_* settings apply only to fields the client
+    # didn't send (the Import form omits them on purpose).
+    sent = req.model_fields_set
+
     style = normalize_subtitle_style(
-        req.subtitle_style,
-        req.subtitle_font,
-        req.subtitle_size,
+        req.subtitle_style
+        if "subtitle_style" in sent
+        else {"style": runtime_setting("DEFAULT_SUBTITLE_STYLE")},
+        req.subtitle_font
+        if "subtitle_font" in sent
+        else runtime_setting("DEFAULT_SUBTITLE_FONT"),
+        req.subtitle_size
+        if "subtitle_size" in sent
+        else _settings.get_int("DEFAULT_SUBTITLE_SIZE"),
         req.subtitle_animation,
     )
 
@@ -526,8 +494,8 @@ def create_job(req: ClipRequest):
                         req.platform,
                         req.split_ratio,
                         json_param(style),
-                        req.subtitle_font,
-                        req.subtitle_size,
+                        style["font"],
+                        style["size"],
                         style["animation"],
                     ),
                 )
@@ -1272,36 +1240,30 @@ def approve_candidate(
 # RUNTIME SETTINGS
 # ============================================================
 
+def _load_app_settings() -> dict:
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT key, value FROM app_settings")
+            return {row[0]: row[1] for row in cur.fetchall()}
+
+
+_settings = RuntimeSettings(
+    _load_app_settings,
+    log=lambda msg: print("[backend]", msg),
+)
+
+
 def runtime_setting(
     key: str,
     fallback: str | None = None,
 ) -> str | None:
     """
-    Prefer process environment values, then fall back to the
-    editable app_settings table. This keeps UI-configured
-    secrets usable by API actions such as Get Another Hook.
+    Same rule as the worker's setting(): app_settings (DB) wins,
+    then env, then fallback / DEFAULT_SETTINGS. 5 s cache; PUT
+    /api/settings invalidates it. Env-only keys (CLIPFLOW_API_KEY)
+    never come from the DB.
     """
-    value = os.getenv(key)
-    if value:
-        return value
-
-    try:
-        with get_db() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    "SELECT value FROM app_settings WHERE key = %s",
-                    (key,),
-                )
-                row = cur.fetchone()
-
-        if row and row[0]:
-            return str(row[0])
-
-    except Exception:
-        # Settings table may not exist on an older installation.
-        pass
-
-    return fallback
+    return _settings.get(key, fallback)
 
 
 # ============================================================
@@ -1395,8 +1357,8 @@ def new_hook(
             if r[1] is not None and r[2] is not None
         )
 
-        clip_duration = os.getenv(
-            "CLIP_TARGET_DURATION", "35"
+        clip_duration = runtime_setting(
+            "CLIP_TARGET_DURATION"
         )
 
         prompt = (
@@ -2691,9 +2653,9 @@ def upload_to_youtube(
     candidate_id: str,
 ):
 
-    client_id = os.getenv("YOUTUBE_CLIENT_ID")
-    client_secret = os.getenv("YOUTUBE_CLIENT_SECRET")
-    refresh_token = os.getenv("YOUTUBE_REFRESH_TOKEN")
+    client_id = runtime_setting("YOUTUBE_CLIENT_ID")
+    client_secret = runtime_setting("YOUTUBE_CLIENT_SECRET")
+    refresh_token = runtime_setting("YOUTUBE_REFRESH_TOKEN")
 
     if not (client_id and client_secret and refresh_token):
 
@@ -3042,22 +3004,24 @@ def get_candidate_thumbnail(
 @app.get("/api/settings")
 def get_settings():
     try:
-        with get_db() as conn:
-            with conn.cursor() as cur:
-                cur.execute("SELECT key, value FROM app_settings")
-                rows = cur.fetchall()
-
-        stored = {row[0]: row[1] for row in rows}
+        # Effective value (DB -> env -> default), i.e. what the
+        # worker will actually use, plus where it came from.
+        _settings.invalidate()
         result = {}
 
-        for key, default in DEFAULT_SETTINGS.items():
-            value = stored.get(key, default)
+        for key in DEFAULT_SETTINGS:
+            value, source = _settings.resolve(key)
             if key in SECRET_SETTING_KEYS and value:
-                result[key] = {"value": "••••••••", "configured": True}
+                result[key] = {
+                    "value": "••••••••",
+                    "configured": True,
+                    "source": source,
+                }
             else:
                 result[key] = {
                     "value": value,
                     "configured": bool(value),
+                    "source": source,
                 }
 
         return result
@@ -3093,6 +3057,8 @@ def update_settings(req: SettingsUpdate):
                         (key, str(value)),
                     )
             conn.commit()
+
+        _settings.invalidate()
 
         return {"status": "ok"}
 

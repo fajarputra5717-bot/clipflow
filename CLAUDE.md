@@ -153,14 +153,25 @@ throttle (via `updated_at`). `autoRender:false` on upload, explicit
 
 ## Runtime settings
 
-`DEFAULT_SETTINGS` dict (main.py) is the whitelist — `PUT /api/settings`
-rejects any key not in it. `SECRET_SETTING_KEYS` controls masking in
-the UI. Worker reads via `setting(name, default)` (DB app_settings
-table wins over env var); main.py via `runtime_setting(key, fallback)`
-(env wins over DB — **the precedence is reversed between the two
-files** in the baseline). REBUILD.md R-02 unifies both to DB-wins with
-a 5 s cache; update this paragraph when R-02 lands. `CLIPFLOW_API_KEY`
-is env-only, never a setting.
+One rule, one implementation: `shared/settings.py` (`RuntimeSettings`).
+Precedence, first non-empty wins: **app_settings (DB) → env → caller
+default / `DEFAULT_SETTINGS`**, cached 5 s per process (PUT
+`/api/settings` invalidates the backend cache; the worker picks a change
+up within 5 s, no restart). Worker reads via `setting()` /
+`setting_int()` / `setting_float()`, main.py via `runtime_setting()`.
+`DEFAULT_SETTINGS` (the PUT whitelist **and** the single source of
+defaults) and `SECRET_SETTING_KEYS` live in `shared/settings.py`.
+Never add an import-time `X = os.getenv("X")` constant for a setting:
+read it at use time (the baseline did that and half the settings UI was
+dead). Read once per job/render where values must agree (e.g.
+`clip_count` in `process_analysis_job`, `size=` passed from
+`create_preview` to `render_vertical`). `GET /api/settings` returns the
+*effective* value plus `source` (db/env/default); the UI saves only
+fields the user changed, because echoing values back would pin them in
+the DB above `.env`. An empty DB value means "unset" (falls through to
+env). `ENV_ONLY_KEYS` (`CLIPFLOW_API_KEY`, `CORS_ALLOWED_ORIGINS`,
+`DATABASE_URL`) are never read from the DB. Still env-only by design:
+`TELEGRAM_*`.
 
 ## Conventions worth copying, not reinventing
 
