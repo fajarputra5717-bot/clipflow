@@ -216,7 +216,7 @@ must be added to `MEDIA_PATH_RE`** and its frontend URL wrapped in
 CORS middleware must stay added *after* the auth middleware (outermost),
 or preflights get 401.
 
-## Frontend shell (R-11/R-12/R-13; badge v2.1105 after the lane merge)
+## Frontend shell (R-11/R-12/R-13; badge v2.1106)
 
 - **Layout:** `.app-shell` grid = left `<aside id="sidebar">` (Quick
   actions, Editing tips, Settings disclosures; element IDs unchanged) +
@@ -248,6 +248,9 @@ or preflights get 401.
   `editMoreOpen["<cid>:desc|thumb"]` (capture `toggle` listener) so
   re-renders keep it. Apply/Final render sit in the sticky `.edit-actions`.
   Glass only on the drawer and that row, never over the video.
+- **Status badges:** `badgeClass()` → idle (queued, `*_queued`) / running / attention (review,
+  partial_failure) / completed / failed / cancelled. Colours are `--badge-*` tokens in both
+  theme blocks, each pair measured ≥4.5:1 on `--panel` incl. the shimmer peak. Re-measure on change.
 - **Reduced motion:** the CSS rule can't stop JS. Guard JS-driven motion
   with `REDUCED_MOTION.matches` (caption preview loop) and use
   `scrollMode()` for `scrollTo`/`scrollIntoView`.
