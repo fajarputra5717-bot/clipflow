@@ -248,11 +248,17 @@ or preflights get 401.
   opacity from `--p` — transform/opacity only. Don't add another scroll
   driver. ≤600 px: `#tabbar` bottom tab bar (same `[data-nav]`). Sidebar nav
   is the navigation; there are no `role=tab` elements any more.
-- **Job island:** its own fixed-width capsule, absolutely positioned,
-  never in the tabs' flow. It drops below the tabs via a `@container
-  topbar` query. `updateJobIsland()` only toggles `.is-visible` + text; the
-  progress bar is `scaleX`. No JS width measuring. `#jobIslandLive` is
-  the aria-live region.
+- **Dynamic Island (073):** `#island` (fixed, top 8 px, centred, z 1000,
+  black in both themes) is driven only by `updateJobIsland()` (same name
+  as before; every caller still works). `hidden` when nothing runs. Modes
+  compact (248×36, 150 on ≤600) / expanded (≤380, radius 28) via
+  `setIslandMode()`; size morphs are WAAPI width/height/radius with
+  spring curves from `springEasing()` (emitted as CSS `linear()`), content
+  layers cross-fade (+60 ms, staggered). Events: busy → review/completed
+  = ✓ auto-expand 2.5 s; → failed = red expand, then red compact until
+  seen. "+N" split only in compact; it opens `#jobOverlay`. Cancel shows
+  only if a global `cancelJob(jobId)` exists. Reduced motion: opacity
+  cross-fade only. Sheets make `#appShell`, `#tabbar`, `#island` inert.
 - **Busy state:** every async button/upload label goes through
   `setBusy(el, busy, label?)`. It disables the control, sets `aria-busy` and
   `.is-busy` (spinner), and restores the label. Don't hand-swap `textContent`.

@@ -93,10 +93,6 @@ html[data-theme="dark"]{color-scheme:dark}
 [data-theme="dark"] .tabs:before{box-shadow:0 10px 30px rgba(0,0,0,.35)}
 [data-theme="dark"] .tabs:after{box-shadow:0 12px 28px rgba(0,0,0,.5),0 2px 6px rgba(0,0,0,.3)}
 [data-theme="dark"] .tab-indicator{background:#3a3a3c;box-shadow:0 1px 4px rgba(0,0,0,.3),0 0 0 1px rgba(255,255,255,.06)}
-[data-theme="dark"] .job-island{background:rgba(28,28,30,.84);border-color:rgba(10,132,255,.35)!important;box-shadow:0 12px 30px rgba(0,0,0,.4),0 4px 14px rgba(10,132,255,.14),inset 0 1px 0 rgba(255,255,255,.08)}
-[data-theme="dark"] .job-island.is-visible:hover:not(:disabled){background:rgba(28,28,30,.84)}
-[data-theme="dark"] .job-island-pct,[data-theme="dark"] .job-island-more{color:#409cff}
-[data-theme="dark"] .job-island-track{background:#3a3a3c}
 [data-theme="dark"] .topbar-logo,[data-theme="dark"] .theme-toggle-float{background:rgba(28,28,30,.78);border-color:rgba(255,255,255,.1);box-shadow:0 10px 26px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.08)}
 [data-theme="dark"] .topbar-logo:hover,[data-theme="dark"] .topbar-logo:focus-visible,[data-theme="dark"] .topbar-logo.expanded{box-shadow:0 14px 30px rgba(0,0,0,.45),0 0 0 1px rgba(10,132,255,.12),inset 0 1px 0 rgba(255,255,255,.08)}
 [data-theme="dark"] input,[data-theme="dark"] select,[data-theme="dark"] textarea{background:var(--input);border-color:rgba(255,255,255,.14);color:var(--text)}
@@ -197,43 +193,6 @@ a{color:inherit}
 .version-popover-title{font-size:11.5px;font-weight:700;color:var(--text);margin-bottom:8px}
 .version-popover ul{margin:0;padding-left:16px;display:flex;flex-direction:column;gap:5px}
 .version-popover li{font-size:11px;color:var(--muted);line-height:1.4}
-.job-island{
-  position:absolute;left:0;top:50%;
-  width:min(240px,calc(50cqi - var(--tabs-half,100px) - 16px));min-width:0;min-height:44px;
-  padding:7px 12px 7px 10px;border-radius:999px;
-  display:flex;align-items:center;gap:9px;text-align:left;cursor:pointer;overflow:hidden;white-space:nowrap;
-  color:var(--text);
-  background:rgba(255,255,255,.84);
-  backdrop-filter:var(--material-blur);-webkit-backdrop-filter:var(--material-blur);
-  border:1px solid rgba(0,113,227,.28)!important;
-  box-shadow:0 12px 30px rgba(0,0,0,.10),0 4px 14px rgba(0,113,227,.10),inset 0 1px 0 rgba(255,255,255,.9);
-  opacity:0;visibility:hidden;pointer-events:none;
-  transform:translate(-8px,-50%) scale(.92);transform-origin:left center;
-  transition:opacity var(--dur-2) ease-in,transform var(--dur-2) cubic-bezier(.4,0,1,1),visibility 0s linear var(--dur-2);
-}
-.job-island.is-visible{
-  opacity:1;visibility:visible;pointer-events:auto;
-  transform:translate(0,-50%) scale(1);
-  transition:opacity var(--dur-3) ease-out,transform var(--dur-4) cubic-bezier(.2,.9,.3,1.12),visibility 0s linear 0s;
-}
-.job-island.is-visible:hover:not(:disabled){transform:translate(0,-50%) scale(1.02);filter:none;box-shadow:0 14px 34px rgba(0,0,0,.12),0 4px 14px rgba(0,113,227,.14),inset 0 1px 0 rgba(255,255,255,.9)}
-.job-island.is-visible:active:not(:disabled){transform:translate(0,-50%) scale(var(--press))}
-.job-island:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.job-island-live{width:7px;height:7px;flex:0 0 7px;border-radius:50%;background:#0071e3;box-shadow:0 0 0 4px rgba(0,113,227,.12);animation:pulse 2.2s cubic-bezier(.45,0,.55,1) infinite}
-.job-island-main{display:flex;flex-direction:column;gap:4px;min-width:0;flex:1;line-height:1.15}
-.job-island-top{display:flex;align-items:baseline;gap:6px;min-width:0}
-.job-island-title{font-size:11px;font-weight:700;letter-spacing:-.005em;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1}
-.job-island-pct{font-size:10px;color:#0071e3;font-weight:700;font-variant-numeric:tabular-nums;flex:none}
-.job-island-sub{display:flex;align-items:center;gap:6px;min-width:0}
-.job-island-stage{font-size:9.5px;color:var(--muted);font-weight:600;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1}
-.job-island-more{font-size:9px;font-weight:700;color:#0071e3;background:rgba(0,113,227,.1);border-radius:99px;padding:1px 6px;flex:none}
-.job-island-more:empty{display:none}
-.job-island-track{display:block;height:3px;border-radius:99px;overflow:hidden;background:#e5e5ea}
-.job-island-bar{
-  display:block;height:100%;width:100%;border-radius:99px;transform:scaleX(0);transform-origin:left center;
-  background:linear-gradient(90deg,#0071e3,#2997ff,#64b5ff,#2997ff,#0071e3);background-size:200% 100%;
-  transition:transform var(--dur-4) cubic-bezier(.22,1,.36,1);animation:flow 3.2s linear infinite;
-}
 .sr-only{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
 
 /* Theme toggle — a plain small icon button beside the main header logo,
@@ -929,16 +888,9 @@ img.topbar-logo-icon{background:none;padding:0;object-fit:cover}
   transform:translateY(calc((1 - var(--p)) * 46px)) scale(calc(1 - var(--p) * .5));
 }
 .title-spacer{height:52px}
-.toolbar-center{position:absolute;left:50%;top:0;height:100%;display:flex;align-items:center;transform:translateX(-50%);pointer-events:none}
-.toolbar-center > *{pointer-events:auto}
 .toolbar-trail{margin-left:auto;display:flex;align-items:center;gap:4px}
 .version-wrap{position:relative}
 .version-wrap .version-popover{left:auto;right:0}
-/* job island parks in the bar's centre until 073 rebuilds it */
-.toolbar .job-island{position:relative;left:auto;top:auto;width:min(260px,36vw);transform:scale(.92)}
-.toolbar .job-island.is-visible{transform:none}
-.toolbar .job-island.is-visible:hover:not(:disabled){transform:scale(1.02)}
-.toolbar .job-island.is-visible:active:not(:disabled){transform:scale(var(--press))}
 .tabbar{display:none}
 @media(max-width:600px){
   .page-title{font-size:30px}
@@ -963,6 +915,75 @@ img.topbar-logo-icon{background:none;padding:0;object-fit:cover}
   .tabbar-item[aria-current] .nav-icon{transform:scale(1.08)}
   .toast{bottom:calc(76px + env(safe-area-inset-bottom))}
 }
+
+/* ===== 073: Dynamic Island ===== */
+.island{position:fixed;top:8px;left:50%;z-index:1000;display:flex;align-items:flex-start;gap:6px;width:max-content;transform:translateX(-50%);
+  transition:opacity var(--dur-2) var(--ease)}
+.island.fading{opacity:0}
+.island-main{
+  position:relative;flex:none;overflow:hidden;contain:layout paint;width:12px;height:12px;border-radius:6px;cursor:pointer;
+  background:#000;color:#fff;box-shadow:inset 0 0 0 1px rgba(255,255,255,.08),0 8px 24px rgba(0,0,0,.28);
+  -webkit-tap-highlight-color:transparent;outline-offset:3px;
+}
+.island.is-failed .island-main{background:#2a0706;box-shadow:inset 0 0 0 1px rgba(255,69,58,.35),0 8px 24px rgba(0,0,0,.28)}
+.isl-layer{position:absolute;left:0;top:0;opacity:0;pointer-events:none;transition:opacity var(--dur-1) var(--ease)}
+.isl-layer.on{opacity:1;pointer-events:auto;transition:opacity var(--dur-2) var(--ease) 60ms}
+.isl-compact{display:flex;align-items:center;gap:8px;height:36px;width:100%;padding:0 8px 0 8px}
+.island-main{--cw:248px}
+.isl-compact{width:var(--cw)}
+@media(max-width:600px){.isl-compact{--cw:150px;width:150px}}
+.isl-lead{width:20px;height:20px;flex:none;display:grid;place-items:center}
+.isl-lead img,.isl-x-icon img{width:20px;height:20px;border-radius:50%;object-fit:cover;display:block}
+.isl-spinner{width:16px;height:16px;border-radius:50%;border:2px solid rgba(255,255,255,.25);border-top-color:#fff;animation:spin .9s linear infinite}
+.isl-dot{width:10px;height:10px;border-radius:50%}
+.isl-dot.ready{background:#30d158}.isl-dot.failed{background:#ff453a}
+.isl-title{flex:1;min-width:0;font-size:12.5px;font-weight:600;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.isl-ring{width:22px;height:22px;flex:none;transform:rotate(-90deg)}
+.isl-ring circle{fill:none;stroke-width:3}
+.isl-ring-track{stroke:rgba(255,255,255,.18)}
+.isl-ring-fill{stroke:#0a84ff;stroke-linecap:round;transition:stroke-dashoffset 2200ms linear,stroke var(--dur-2) var(--ease)} /* spans one poll: glides, never jumps */
+.island.is-ready .isl-ring-fill{stroke:#30d158}
+.isl-expanded{width:min(380px,calc(100vw - 16px));padding:16px 18px 14px}
+.isl-expanded > *{opacity:0;transform:translateY(-4px);transition:opacity var(--dur-1) var(--ease),transform var(--dur-1) var(--ease)}
+.isl-expanded.on > *{opacity:1;transform:none;transition:opacity var(--dur-2) var(--ease),transform var(--dur-3) var(--ease-out)}
+.isl-expanded.on > :nth-child(1){transition-delay:60ms}
+.isl-expanded.on > :nth-child(2){transition-delay:100ms}
+.isl-expanded.on > :nth-child(3){transition-delay:140ms}
+.isl-x-head{display:flex;align-items:center;gap:12px}
+.isl-x-icon{width:36px;height:36px;flex:none;border-radius:10px;display:grid;place-items:center;background:rgba(255,255,255,.1);overflow:hidden}
+.isl-x-icon img{width:36px;height:36px;border-radius:10px}
+.isl-x-icon.ready{background:#30d158;color:#fff;border-radius:50%;animation:savedPop var(--dur-3) var(--ease-spring) both}
+.isl-x-icon.failed{background:#ff453a;color:#fff;border-radius:50%}
+.isl-x-icon svg{width:20px;height:20px}
+.isl-x-text{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.isl-x-title{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.isl-x-stage{font-size:12px;color:rgba(255,255,255,.62)}
+.island.is-failed .isl-x-stage{color:#ff8a82}
+.island.is-ready .isl-x-stage{color:#63e18b}
+.isl-x-pct{font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;color:rgba(255,255,255,.85)}
+.isl-bar{height:4px;margin-top:12px;border-radius:4px;background:rgba(255,255,255,.16);overflow:hidden}
+.isl-bar-fill{display:block;height:100%;background:#0a84ff;border-radius:4px;transform:scaleX(0);transform-origin:left center;transition:transform 2200ms linear}
+.island.is-ready .isl-bar-fill{background:#30d158;transition-duration:var(--dur-3)}
+.isl-x-actions{display:flex;justify-content:flex-end;margin-top:10px;min-height:0}
+.isl-x-actions:has(.isl-cancel[hidden]){margin-top:0}
+.isl-cancel{min-height:36px;padding:6px 16px;background:rgba(255,255,255,.14);border:0;color:#fff;box-shadow:none;position:relative}
+.isl-cancel::after{content:"";position:absolute;inset:-4px}
+.isl-cancel:hover:not(:disabled){background:rgba(255,69,58,.85);box-shadow:none;filter:none}
+[data-theme="dark"] .isl-cancel{background:rgba(255,255,255,.14);border-color:transparent!important}
+.island-more{
+  flex:none;width:36px;height:36px;min-height:36px;padding:0;border-radius:50%;border:0;background:#000;color:#fff;font-size:11.5px;font-weight:700;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.08),0 8px 24px rgba(0,0,0,.28);position:relative;
+  opacity:0;transform:translateX(-24px) scale(.4);transition:opacity var(--dur-2) var(--ease),transform var(--dur-3) var(--ease-spring);
+}
+.island-more::after{content:"";position:absolute;inset:-4px}
+.island-more.on{opacity:1;transform:none}
+.island-more:not(.on){pointer-events:none}
+.island.is-failed .isl-bar{display:none}
+[data-theme="dark"] .island-more{background:#000;border-color:transparent!important}
+.island-more:hover:not(:disabled){background:#1c1c1e;filter:none}
+.island-main:focus-visible{outline:2px solid var(--accent)}
+.job-overlay{left:50%;right:auto;top:56px;transform-origin:top center;z-index:990} /* 073: hangs under the island's "+N" */
+.job-overlay{transform:translate(-50%,-16px) scale(.82)}.job-overlay.open{transform:translate(-50%,0) scale(1)}
 </style>
 </head>
 <body>
@@ -1008,26 +1029,12 @@ img.topbar-logo-icon{background:none;padding:0;object-fit:cover}
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="15" rx="3"/><path d="M9.5 4.5v15"/></svg>
     </button>
       <h1 class="page-title" id="pageTitle">Import</h1>
-      <div class="toolbar-center"><button id="jobIsland" class="job-island" type="button" aria-label="Show running jobs" aria-hidden="true" aria-controls="jobOverlay" aria-expanded="false" disabled>
-      <span class="job-island-live" aria-hidden="true"></span>
-      <span class="job-island-main" aria-hidden="true">
-        <span class="job-island-top">
-          <span id="jobIslandTitle" class="job-island-title"></span>
-          <span id="jobIslandPct" class="job-island-pct">0%</span>
-        </span>
-        <span class="job-island-sub">
-          <span id="jobIslandStage" class="job-island-stage"></span>
-          <span id="jobIslandMore" class="job-island-more"></span>
-        </span>
-        <span class="job-island-track"><span id="jobIslandBar" class="job-island-bar"></span></span>
-      </span>
-    </button>
-    <span id="jobIslandLive" class="sr-only" role="status" aria-live="polite"></span></div>
       <div class="toolbar-trail">
         <div class="version-wrap"><button class="version-badge" id="versionBadge" type="button" aria-expanded="false">Beta · v2.1107</button>
         <div class="version-popover" id="versionPopover" role="dialog" aria-hidden="true">
         <div class="version-popover-title">What's new in v2.1107</div>
         <ul>
+          <li>Dynamic Island: live job status at the top, springs open on hover or tap, celebrates when clips are ready</li>
           <li>Large page title that glides into a slim toolbar as you scroll; bottom tab bar on phones</li>
           <li>Watermark library: preview tiles, drag-and-drop upload, delete with undo</li>
           <li>Import: Analyze enables only for a valid YouTube link, with an instant thumbnail preview</li>
@@ -1128,6 +1135,24 @@ img.topbar-logo-icon{background:none;padding:0;object-fit:cover}
 </div>
 </div>
 
+<!-- Dynamic Island (073). Not rendered (hidden) while nothing runs. #islandMain is the black shape whose
+     size is spring-morphed; its two content layers cross-fade. #islandMore is the detached "+N" circle. -->
+<div class="island" id="island" hidden>
+  <div class="island-main" id="islandMain" role="button" tabindex="0" aria-expanded="false" aria-label="Running jobs">
+    <div class="isl-layer isl-compact" id="islCompact">
+      <span class="isl-lead" id="islLead"></span>
+      <span class="isl-title" id="islTitleC"></span>
+      <svg class="isl-ring" viewBox="0 0 24 24" aria-hidden="true"><circle class="isl-ring-track" cx="12" cy="12" r="9.5"/><circle class="isl-ring-fill" id="islRing" cx="12" cy="12" r="9.5"/></svg>
+    </div>
+    <div class="isl-layer isl-expanded" id="islExpanded">
+      <div class="isl-x-head"><span class="isl-x-icon" id="islIcon"></span><div class="isl-x-text"><strong class="isl-x-title" id="islTitleX"></strong><span class="isl-x-stage" id="islStage"></span></div><span class="isl-x-pct" id="islPct"></span></div>
+      <div class="isl-bar"><span class="isl-bar-fill" id="islBar"></span></div>
+      <div class="isl-x-actions"><button class="isl-cancel" id="islCancel" type="button" hidden>Cancel</button></div>
+    </div>
+  </div>
+  <button class="island-more" id="islandMore" type="button" hidden aria-label="Show all running jobs"></button>
+  <span class="sr-only" id="islandLive" role="status" aria-live="polite"></span>
+</div>
 <nav class="tabbar" id="tabbar" aria-label="Main"><button class="tabbar-item" type="button" data-nav="current"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v10.5M8 10.5l4 4 4-4"/><path d="M4.5 15v2.5A2.5 2.5 0 0 0 7 20h10a2.5 2.5 0 0 0 2.5-2.5V15"/></svg><span>Import</span></button><button class="tabbar-item" type="button" data-nav="queue"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.5 3.5 10 14"/><path d="M20.5 3.5 14 20.5l-4-6.5-6.5-4z"/></svg><span>Publish</span></button><button class="tabbar-item" type="button" data-nav="watermarks" aria-haspopup="dialog"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="3"/><path d="m3.5 15.5 4.5-4.5 4 4"/><path d="M14.5 16h3"/></svg><span>Watermarks</span></button><button class="tabbar-item" type="button" data-nav="settings" aria-haspopup="dialog"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg><span>Settings</span></button></nav>
 <!-- Sheets (068): Settings and Watermarks open as centred dialogs from the sidebar. Closed = visibility:hidden + pointer-events:none. -->
 <div class="sheet-layer" id="settingsSheet" aria-hidden="true">
@@ -2148,7 +2173,6 @@ async function uploadCandidate(jid,cid){
 // task's title, plain-language stage and %, plus "+N" for the rest.
 // Nothing here measures or animates width — entrance/exit and progress
 // are pure opacity/transform (see the .job-island CSS).
-let jobIslandAnnounced="";
 // Merges job-level pipeline jobs (import/download/transcribe/analyze)
 // with candidate-level actions (preview regen, final render, AI hook/
 // typo/thumbnail/caption work) into one list the island/overlay can
@@ -2157,39 +2181,139 @@ function allActiveTasks(){
   const jobItems=runningJobs.map(j=>({id:j.id,jobId:j.id,kind:"job",platform:j.platform,status:j.status,progress:j.progress,message:j.message,custom_title:j.custom_title,source_title:j.source_title}));
   return [...jobItems,...Object.values(candidateActiveTasks)];
 }
-function updateJobIsland(){
-  const b=$("jobIsland"),wrap=$("topbarWrap");
-  const items=allActiveTasks();
-  // Job-level pipeline jobs stay hidden while on the Import tab (that
-  // job's own full progress card is already on screen there — showing
-  // the island too would be redundant). Candidate-level actions have no
-  // such duplicate anywhere else once you're not looking at that exact
-  // candidate, so those always surface the island regardless of tab.
-  const candidateCount=Object.keys(candidateActiveTasks).length;
-  const shouldShow=(candidateCount>0 || (currentTab==="queue" && runningJobs.length>0)) && items.length>0 && !overlayOpen;
-  b.setAttribute("aria-expanded",String(overlayOpen));
-  if(!shouldShow){
-    b.classList.remove("is-visible");wrap?.classList.remove("has-job");
-    b.setAttribute("aria-hidden","true");b.disabled=true;
-    if(!items.length)jobIslandAnnounced="";
+// ---- Dynamic Island (073) ----------------------------------------------------------------
+// Springs: a damped harmonic oscillator integrated once per preset and emitted as a CSS
+// linear() easing (sampled at 60 Hz), so WAAPI runs real spring physics off the main thread's
+// per-frame JS. grow = slight overshoot; settle = near-critically damped (no wobble on collapse).
+function springEasing(stiffness,damping,mass=1){
+  let x=0,v=0,t=0;const dt=1/600,pts=[0];let next=1/60;
+  while(t<2){const a=(-stiffness*(x-1)-damping*v)/mass;v+=a*dt;x+=v*dt;t+=dt;
+    if(t>=next){pts.push(+x.toFixed(4));next+=1/60;if(t>.12&&Math.abs(1-x)<.0015&&Math.abs(v)<.02)break}}
+  pts[pts.length-1]=1;return{easing:`linear(${pts.join(",")})`,duration:Math.round(t*1000)};
+}
+const SPRING={grow:springEasing(260,20),settle:springEasing(300,34),pop:springEasing(420,18)};
+const ISL={mode:"hidden",pinned:false,hover:false,event:null,eventTimer:null,failSeen:true,lastStatus:new Map(),announced:"",lead:null,morph:null};
+let jobIslandAnnounced=""; // kept for older callers
+const ISL_BUSY=s=>BUSY.includes(s)||s==="processing";
+function islandItems(){return allActiveTasks().filter(t=>t.kind==="candidate"||ISL_BUSY(t.status)||!TERMINAL.includes(t.status))}
+function islandSize(mode){
+  const narrow=window.innerWidth<=600,vw=window.innerWidth;
+  if(mode==="compact")return{w:narrow?150:248,h:36,r:18};
+  if(mode==="expanded"){const w=Math.min(380,vw-16);const h=Math.ceil($("islExpanded").scrollHeight)||132;return{w,h,r:28}}
+  return{w:12,h:12,r:6};
+}
+function islandMorph(to,{spring="grow",fade=false}={}){
+  const el=$("islandMain"),from=el.getBoundingClientRect(),fromR=parseFloat(getComputedStyle(el).borderRadius)||to.r;
+  ISL.morph?.cancel();
+  el.style.width=to.w+"px";el.style.height=to.h+"px";el.style.borderRadius=to.r+"px";
+  if(REDUCED_MOTION.matches){el.animate([{opacity:fade?0:.35},{opacity:1}],{duration:200});return} // reduced motion: a cross-fade, no size motion
+  if(!from.width)return;
+  const sp=SPRING[spring];
+  ISL.morph=el.animate([{width:from.width+"px",height:from.height+"px",borderRadius:fromR+"px"},{width:to.w+"px",height:to.h+"px",borderRadius:to.r+"px"}],{duration:sp.duration,easing:sp.easing});
+}
+function islandShowLayer(mode){
+  const c=$("islCompact"),x=$("islExpanded"),on=mode==="expanded"?x:c,off=mode==="expanded"?c:x;
+  if(on.classList.contains("on"))return;
+  off.classList.remove("on");on.classList.add("on"); // CSS: size morph first, content fades in after 60 ms, children staggered
+}
+function setIslandMode(mode,opts={}){
+  const isl=$("island"),prev=ISL.mode;if(mode===prev&&!opts.force){if(mode==="expanded")islandMorph(islandSize("expanded"),{spring:"settle"});return}
+  ISL.mode=mode;$("islandMain").setAttribute("aria-expanded",String(mode==="expanded"));
+  if(mode==="hidden"){
+    if(prev==="hidden")return;
+    $("islCompact").classList.remove("on");$("islExpanded").classList.remove("on");$("islandMore").classList.remove("on");
+    const done=()=>{if(ISL.mode==="hidden"){isl.hidden=true;$("islandMain").style.cssText=""}};
+    if(REDUCED_MOTION.matches){isl.classList.add("fading");setTimeout(()=>{isl.classList.remove("fading");done()},200);return}
+    islandMorph({w:12,h:12,r:6},{spring:"settle"});isl.classList.add("fading");
+    setTimeout(()=>{isl.classList.remove("fading");done()},Math.min(SPRING.settle.duration,420));return;
+  }
+  if(prev==="hidden"){ // birth: a 12 px pill at centre grows with overshoot, content follows ~60 ms later
+    isl.hidden=false;const el=$("islandMain");el.style.width="12px";el.style.height="12px";el.style.borderRadius="6px";void el.offsetWidth;
+  }
+  islandShowLayer(mode);
+  islandMorph(islandSize(mode),{spring:mode==="expanded"||prev==="hidden"?"grow":"settle",fade:prev==="hidden"});
+}
+function islandThumb(item){
+  const job=item.kind==="job"?runningJobs.find(j=>String(j.id)===String(item.jobId)):null;
+  const id=job?.youtube_url?youtubeId(job.youtube_url):"";
+  return id?`<img src="https://i.ytimg.com/vi/${id}/default.jpg" alt="" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'isl-spinner'}))">`:`<span class="isl-spinner"></span>`;
+}
+function islandTitle(t){return t.kind==="candidate"?(t.title||"Clip"):(t.custom_title||t.source_title||platformLabel(t.platform))}
+function paintIsland(){
+  const items=islandItems(),ev=ISL.event,isl=$("island");
+  isl.classList.toggle("is-ready",ev?.type==="ready");isl.classList.toggle("is-failed",ev?.type==="failed"||!ISL.failSeen);
+  const more=$("islandMore"),extra=ev?items.length:Math.max(0,items.length-1);
+  more.textContent=extra?`+${extra}`:"";
+  // The split only exists in compact mode: it merges into the island while expanded (so the expanded
+  // shape stays centred and never overflows a phone), and springs back out afterwards.
+  requestAnimationFrame(()=>{const want=!!extra&&ISL.mode==="compact";
+    if(!want){more.classList.remove("on");more.hidden=true;return}
+    if(more.hidden){more.hidden=false;void more.offsetWidth}more.classList.add("on")});
+  if(ev){
+    $("islIcon").className="isl-x-icon "+ev.type;$("islIcon").innerHTML=ev.type==="ready"?'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m6 12.5 4 4 8-9"/></svg>':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M12 7v6M12 17h.01"/></svg>';
+    $("islTitleX").textContent=ev.title;$("islStage").textContent=ev.type==="ready"?"Ready for review":`Failed · ${ev.stage}`;
+    $("islPct").textContent=ev.type==="ready"?"100%":"";$("islBar").style.transform=`scaleX(${ev.type==="ready"?1:0})`;
+    $("islCancel").hidden=true;
+    $("islTitleC").textContent=ev.type==="ready"?"Ready for review":`Failed · ${ev.stage}`;
+    $("islLead").innerHTML=`<span class="isl-dot ${ev.type}"></span>`;$("islLead").dataset.key="";setRing(ev.type==="ready"?100:0);
     return;
   }
-  const lead=items[0],p=pct(lead.progress);
-  const title=lead.kind==="candidate"?(lead.title||"Candidate"):(lead.custom_title||lead.source_title||platformLabel(lead.platform));
-  const stage=lead.actionLabel||stageLabel(lead.status);
-  $("jobIslandTitle").textContent=title;
-  $("jobIslandStage").textContent=stage;
-  $("jobIslandMore").textContent=items.length>1?`+${items.length-1}`:"";
-  $("jobIslandPct").textContent=p+"%";
-  $("jobIslandBar").style.transform=`scaleX(${p/100})`;
-  const more=items.length>1?` (and ${items.length-1} more)`:"";
-  b.setAttribute("aria-label",`${title}: ${stage}, ${p}%${more}. Show running jobs`);
-  // Announce stage changes and each 25% step, not every poll tick.
-  const said=`${title}: ${stage}, ${Math.floor(p/25)*25}%${more}`;
-  if(said!==jobIslandAnnounced){jobIslandAnnounced=said;$("jobIslandLive").textContent=said}
-  b.classList.add("is-visible");wrap?.classList.add("has-job");
-  b.setAttribute("aria-hidden","false");b.disabled=false;
+  const lead=items[0];if(!lead)return;ISL.lead=lead;
+  const p=pct(lead.progress),stage=lead.actionLabel||stageLabel(lead.status),title=islandTitle(lead);
+  $("islTitleC").textContent=title;$("islTitleX").textContent=title;$("islStage").textContent=stage;$("islPct").textContent=p+"%";
+  $("islBar").style.transform=`scaleX(${p/100})`;setRing(p);
+  $("islIcon").className="isl-x-icon";$("islIcon").innerHTML=islandThumb(lead);
+  if($("islLead").dataset.key!==String(lead.id)){$("islLead").dataset.key=String(lead.id);$("islLead").innerHTML=islandThumb(lead)}
+  $("islCancel").hidden=!(lead.kind==="job"&&typeof window.cancelJob==="function");
+  $("islandMain").setAttribute("aria-label",`${title}: ${stage}, ${p}%${items.length>1?` (and ${items.length-1} more)`:""}`);
+  const said=`${title}: ${stage}, ${Math.floor(p/25)*25}%`;if(said!==ISL.announced){ISL.announced=said;$("islandLive").textContent=said}
 }
+function setRing(p){const c=$("islRing"),L=2*Math.PI*9.5;c.style.strokeDasharray=L;c.style.strokeDashoffset=L*(1-Math.max(0,Math.min(100,p))/100)}
+function updateJobIsland(){
+  trackIslandEvents();
+  const items=islandItems();paintIsland();
+  let mode="hidden";
+  if(ISL.event)mode="expanded";
+  else if(items.length||!ISL.failSeen)mode=(ISL.pinned||ISL.hover)&&items.length?"expanded":"compact";
+  if(!items.length&&!ISL.event&&ISL.failSeen){ISL.pinned=false;ISL.hover=false}
+  setIslandMode(mode);
+}
+// Ready/failed events: a busy job that turns terminal (or vanishes from the running list) fires once.
+function trackIslandEvents(){
+  const seen=new Set();
+  for(const j of runningJobs){const id=String(j.id),was=ISL.lastStatus.get(id);seen.add(id);
+    if(was&&ISL_BUSY(was)&&!ISL_BUSY(j.status))fireIslandEvent(j);ISL.lastStatus.set(id,j.status)}
+  for(const [id,was] of [...ISL.lastStatus]){if(seen.has(id))continue;ISL.lastStatus.delete(id);
+    if(ISL_BUSY(was))api("/api/jobs/"+id).then(j=>{if(j&&!ISL_BUSY(j.status)){fireIslandEvent(j);updateJobIsland()}}).catch(()=>{})}
+}
+function fireIslandEvent(j){
+  const st=j.status,title=j.custom_title||j.source_title||platformLabel(j.platform);
+  let type=null;if(st==="review"||st==="completed")type="ready";else if(st==="failed"||st==="partial_failure")type="failed";
+  if(!type)return;
+  clearTimeout(ISL.eventTimer);
+  ISL.event={type,title,jobId:j.id,stage:j.error_stage?stageLabel(j.error_stage):stageLabel(st)};
+  if(type==="failed")ISL.failSeen=false;
+  ISL.eventTimer=setTimeout(()=>{ISL.event=null;if(type==="failed")ISL.failTitle=`Failed · ${title}`;updateJobIsland()},2500);
+}
+function islandToggle(){
+  if(ISL.event){clearTimeout(ISL.eventTimer);ISL.event=null;ISL.failSeen=true;return updateJobIsland()}
+  if(!ISL.failSeen){ISL.failSeen=true;return updateJobIsland()}
+  ISL.pinned=!ISL.pinned;updateJobIsland();
+}
+function islandCollapse(){if(ISL.pinned||ISL.hover){ISL.pinned=false;ISL.hover=false;updateJobIsland()}}
+(function wireIsland(){
+  const m=$("islandMain");let hoverT=null;
+  m.addEventListener("click",e=>{e.stopPropagation();islandToggle()});
+  m.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();islandToggle()}});
+  const fine=matchMedia("(hover:hover) and (pointer:fine)");
+  $("island").addEventListener("mouseenter",()=>{if(!fine.matches)return;clearTimeout(hoverT);hoverT=setTimeout(()=>{ISL.hover=true;if(!ISL.failSeen)ISL.failSeen=true;updateJobIsland()},120)});
+  $("island").addEventListener("mouseleave",()=>{if(!fine.matches)return;clearTimeout(hoverT);hoverT=setTimeout(()=>{ISL.hover=false;updateJobIsland()},220)});
+  $("islandMore").addEventListener("click",e=>{e.stopPropagation();overlayOpen?closeJobOverlay():openJobOverlay()});
+  $("islCancel").addEventListener("click",e=>{e.stopPropagation();const l=ISL.lead;if(l&&typeof window.cancelJob==="function")window.cancelJob(l.jobId)});
+  document.addEventListener("click",e=>{if(!e.target.closest("#island"))islandCollapse()});
+  document.addEventListener("keydown",e=>{if(e.key==="Escape")islandCollapse()});
+  window.addEventListener("resize",()=>{if(ISL.mode!=="hidden")setIslandMode(ISL.mode,{force:true})},{passive:true});
+})();
 function renderJobOverlay(){
   const overlay=$("jobOverlay");overlay.classList.toggle("open",overlayOpen);overlay.setAttribute("aria-hidden",String(!overlayOpen));
   const items=allActiveTasks();
@@ -2424,7 +2548,7 @@ document.addEventListener("click",e=>{
 });
 
 document.addEventListener("click",e=>{
-  if(overlayOpen && !e.target.closest("#jobOverlay") && !e.target.closest("#jobIsland")){
+  if(overlayOpen && !e.target.closest("#jobOverlay") && !e.target.closest("#island")){
     closeJobOverlay();
   }
   if(e.target.closest("[data-sidebar-toggle]"))return toggleSidebar();
@@ -2525,7 +2649,6 @@ document.addEventListener("click",e=>{
   if(!e.target.closest("#versionPopover")&&!e.target.closest("#versionBadge"))closeVersionPopover();
 });
 $("youtubeUrl").addEventListener("input",updateAnalyzeReady);
-$("jobIsland").addEventListener("click",e=>{e.preventDefault();e.stopPropagation();overlayOpen?closeJobOverlay():openJobOverlay()});
 $("jobOverlayClose").addEventListener("click",e=>{e.preventDefault();e.stopPropagation();closeJobOverlay()});
 
 window.addEventListener("load",async()=>{
@@ -2592,7 +2715,7 @@ function openSheet(id,opener){
   if(openSheetId)closeSheet(false);
   openSheetId=id;sheetOpener=opener||document.activeElement;
   layer.classList.add("open");layer.setAttribute("aria-hidden","false");
-  $("appShell").inert=true;
+  ["appShell","tabbar","island"].forEach(id=>{const el=$(id);if(el)el.inert=true}); // everything behind a modal sheet
   syncNav();
   requestAnimationFrame(()=>(layer.querySelector(".sheet-body input,.sheet-body button,.sheet-body summary")||layer.querySelector(".sheet-close"))?.focus({preventScroll:true}));
 }
@@ -2600,7 +2723,7 @@ function closeSheet(restoreFocus=true){
   if(!openSheetId)return false;
   const layer=$(openSheetId);openSheetId=null;
   layer.classList.remove("open");layer.setAttribute("aria-hidden","true");
-  $("appShell").inert=false;
+  ["appShell","tabbar","island"].forEach(id=>{const el=$(id);if(el)el.inert=false});
   syncNav();
   if(restoreFocus&&sheetOpener&&document.contains(sheetOpener))sheetOpener.focus({preventScroll:true});
   return true;
