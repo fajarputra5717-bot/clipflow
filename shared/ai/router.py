@@ -17,7 +17,9 @@ import time
 
 from shared.errors import AIError, classify_exception, is_transient_gemini_error
 
-from . import gemini
+from . import claude, gemini
+
+PROVIDERS = {gemini.NAME: gemini, claude.NAME: claude}
 
 _setting = None
 _log = print
@@ -36,7 +38,8 @@ def _max_attempts():
         return 4
 
 
-def ai_generate_json(prompt, schema, *, task, max_tokens, attempts=None):
+def ai_generate_json(prompt, schema, *, task, max_tokens, attempts=None,
+                     provider="gemini"):
     if _setting is None:
         raise RuntimeError("shared.ai.router.configure() was not called")
 
@@ -44,7 +47,7 @@ def ai_generate_json(prompt, schema, *, task, max_tokens, attempts=None):
 
     for attempt in range(1, max_attempts + 1):
         try:
-            data, _model = gemini.generate_json(
+            data, _model = PROVIDERS[provider].generate_json(
                 prompt, schema, task=task, max_tokens=max_tokens,
                 setting=_setting,
             )
@@ -57,6 +60,8 @@ def ai_generate_json(prompt, schema, *, task, max_tokens, attempts=None):
             ):
                 raise
             delay = 2 ** (attempt - 1) + random.uniform(0, 1)
+            if provider != "gemini":
+                raise
             _log(f"Gemini retry {attempt}/{max_attempts} in {delay:.1f}s")
             time.sleep(delay)
 

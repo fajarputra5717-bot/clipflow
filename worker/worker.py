@@ -1010,7 +1010,8 @@ Transcript:
         prompt,
         HOOKS_SCHEMA,
         task="hooks",
-        max_tokens=4096,
+        # Claude's adaptive thinking counts against this.
+        max_tokens=16000,
     )
 
     if not isinstance(

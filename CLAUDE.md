@@ -161,6 +161,10 @@ and raise only `shared/errors.py` types: `AITransientError`
 (429/5xx/timeout) or `AIPermanentError` (4xx/malformed/no key). Never
 import an AI SDK in main.py/worker.py. google-genai 2.x closes a
 garbage-collected `Client`: keep it in a variable while calling.
+Claude (`shared/ai/claude.py`) returns structured output via a strict
+tool; Sonnet 5.5 / Opus 5.5 reject forced `tool_choice`, so it forces
+only where the model accepts it. Claude model IDs live only in
+`DEFAULT_SETTINGS` (`CLAUDE_MODEL_ANALYSIS`, `CLAUDE_MODEL_UTILITY`).
 
 ## Runtime settings
 

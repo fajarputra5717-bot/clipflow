@@ -54,6 +54,11 @@ DEFAULT_SETTINGS = {
     "HASHTAGS": "",
     "CAMPAIGN_NAME": "",
     "GEMINI_API_KEY": "",
+    # Claude (R-21). Model IDs live only here; check them against
+    # Anthropic's model list when bumping.
+    "ANTHROPIC_API_KEY": "",
+    "CLAUDE_MODEL_ANALYSIS": "claude-sonnet-5-5",
+    "CLAUDE_MODEL_UTILITY": "claude-haiku-4-5",
     "RUNWAY_API_KEY": "",
     "RUNWAY_MODEL": "gen4_image_turbo",
     "YOUTUBE_CLIENT_ID": "",
@@ -75,6 +80,7 @@ DEFAULT_SETTINGS = {
 
 SECRET_SETTING_KEYS = {
     "GEMINI_API_KEY",
+    "ANTHROPIC_API_KEY",
     "RUNWAY_API_KEY",
     "YOUTUBE_CLIENT_SECRET",
     "YOUTUBE_REFRESH_TOKEN",
