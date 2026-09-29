@@ -1,0 +1,32 @@
+[Script Info]
+ScriptType: v4.00+
+PlayResX: 1080
+PlayResY: 1920
+WrapStyle: 2
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Liberation Sans,64,&H00FFFFFF,&H00808080,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,3,0,7,40,40,40,1
+Style: Box,Liberation Sans,64,&H00000000,&H00000000,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 1,0:00:00.00,0:00:03.00,Default,,0,0,0,,{\pos(420,40)\fnInter Bold\b0\fs64\bord0\shad0}HOOK Weight 88
+Dialogue: 1,0:00:00.00,0:00:03.00,Default,,0,0,0,,{\pos(420,140)\fnInter\b1\fs64\bord0\shad0}HOOK Weight 88
+Dialogue: 1,0:00:00.00,0:00:03.00,Default,,0,0,0,,{\pos(420,240)\fnInter Bold\b1\fs64\bord0\shad0}HOOK Weight 88
+Dialogue: 1,0:00:00.00,0:00:03.00,Default,,0,0,0,,{\pos(420,340)\fnInter Black\b0\fs64\bord0\shad0}HOOK Weight 88
+Dialogue: 1,0:00:00.00,0:00:03.00,Default,,0,0,0,,{\pos(420,440)\fnInter Black\b900\fs64\bord0\shad0}HOOK Weight 88
+Dialogue: 1,0:00:00.00,0:00:03.00,Default,,0,0,0,,{\pos(420,540)\fnInter\b900\fs64\bord0\shad0}HOOK Weight 88
+Dialogue: 1,0:00:00.00,0:00:03.00,Default,,0,0,0,,{\pos(420,640)\fnMontserrat Bold\b0\fs64\bord0\shad0}HOOK Weight 88
+Dialogue: 1,0:00:00.00,0:00:03.00,Default,,0,0,0,,{\pos(420,740)\fnMontserrat\b1\fs64\bord0\shad0}HOOK Weight 88
+Dialogue: 1,0:00:00.00,0:00:03.00,Default,,0,0,0,,{\pos(420,840)\fnMontserrat Black\b0\fs64\bord0\shad0}HOOK Weight 88
+Dialogue: 1,0:00:00.00,0:00:03.00,Default,,0,0,0,,{\pos(420,940)\fnMontserrat\b900\fs64\bord0\shad0}HOOK Weight 88
+Dialogue: 1,0:00:00.00,0:00:03.00,Default,,0,0,0,,{\pos(420,1040)\fnMontserrat Black\b900\fs64\bord0\shad0}HOOK Weight 88
+Dialogue: 1,0:00:00.00,0:00:03.00,Default,,0,0,0,,{\pos(420,1140)\fnOswald Bold\b0\fs64\bord0\shad0}HOOK Weight 88
+Dialogue: 1,0:00:00.00,0:00:03.00,Default,,0,0,0,,{\pos(420,1240)\fnOswald\b1\fs64\bord0\shad0}HOOK Weight 88
+Dialogue: 1,0:00:00.00,0:00:03.00,Default,,0,0,0,,{\pos(420,1340)\fnPoppins\b1\fs64\bord0\shad0}HOOK Weight 88
+Dialogue: 1,0:00:00.00,0:00:03.00,Default,,0,0,0,,{\pos(420,1440)\fnPoppins\b0\fs64\bord0\shad0}HOOK Weight 88
+Dialogue: 1,0:00:00.00,0:00:03.00,Default,,0,0,0,,{\pos(420,1540)\fnAnton\b1\fs64\bord0\shad0}HOOK Weight 88
+Dialogue: 1,0:00:00.00,0:00:03.00,Default,,0,0,0,,{\pos(420,1640)\fnAnton\b0\fs64\bord0\shad0}HOOK Weight 88
+Dialogue: 1,0:00:00.00,0:00:03.00,Default,,0,0,0,,{\pos(420,1740)\fnArchivo Black\b1\fs64\bord0\shad0}HOOK Weight 88
