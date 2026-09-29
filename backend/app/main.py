@@ -9,6 +9,7 @@ import traceback
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import urlsplit
 from typing import Any, Optional
 
 import psycopg
@@ -488,6 +489,47 @@ SUPPORTED_LAYOUTS = {
     "right",
 }
 
+# yt-dlp fetches whatever it is given (SSRF) and parses a leading "-"
+# as one of its own options (audit-001 F4), so only https YouTube URLs
+# reach the worker.
+YOUTUBE_URL_HOSTS = {
+    "youtube.com",
+    "www.youtube.com",
+    "m.youtube.com",
+    "music.youtube.com",
+    "youtu.be",
+}
+
+
+def validate_youtube_url(raw):
+    url = (raw or "").strip()
+    error = (
+        "youtube_url must be an https:// link on youtube.com, "
+        "www/m/music.youtube.com or youtu.be"
+    )
+
+    if not url or url.startswith("-") or any(
+        ch.isspace() or ord(ch) < 32 for ch in url
+    ):
+        raise HTTPException(status_code=400, detail=error)
+
+    try:
+        parts = urlsplit(url)
+        port = parts.port
+    except ValueError:
+        raise HTTPException(status_code=400, detail=error)
+
+    if (
+        parts.scheme.lower() != "https"
+        or (parts.hostname or "").lower() not in YOUTUBE_URL_HOSTS
+        or parts.username is not None
+        or parts.password is not None
+        or port not in (None, 443)
+    ):
+        raise HTTPException(status_code=400, detail=error)
+
+    return url
+
 # DEFAULT_SETTINGS (whitelist + defaults) and SECRET_SETTING_KEYS live
 # in shared/settings.py so backend and worker agree on both.
 
@@ -557,6 +599,7 @@ def create_job(req: ClipRequest):
             status_code=400,
             detail="layout must be auto, left, or right",
         )
+    req.youtube_url = validate_youtube_url(req.youtube_url)
 
     # DEFAULT_SUBTITLE_* settings apply only to fields the client
     # didn't send (the Import form omits them on purpose).
@@ -2055,6 +2098,77 @@ def get_thumbnail_option(
 
 THUMBNAIL_UPLOAD_MAX_BYTES = 8 * 1024 * 1024
 
+# Decompression-bomb guard for both image uploads (audit-001 F5):
+# 40 MP is ~5x a 4K frame, far above any real thumbnail/watermark.
+UPLOAD_MAX_PIXELS = 40_000_000
+
+
+def reencode_uploaded_image(raw, fmt):
+    """Decode an upload with Pillow and return freshly encoded bytes.
+
+    Anything Pillow can't open/verify (SVG, HTML, truncated files) or
+    whose pixel count exceeds UPLOAD_MAX_PIXELS is rejected with a 400;
+    the raw upload bytes are never written to disk.
+    """
+    import io
+    import warnings
+
+    from PIL import Image
+
+    # Pillow's own bomb check (warning > limit, error > 2x) is armed
+    # at our limit too, so it fires before any pixel data is decoded.
+    Image.MAX_IMAGE_PIXELS = UPLOAD_MAX_PIXELS
+
+    invalid = HTTPException(
+        status_code=400,
+        detail="Uploaded file is not a readable image (PNG, JPEG, WebP or GIF)",
+    )
+
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", Image.DecompressionBombWarning)
+
+            with Image.open(io.BytesIO(raw)) as probe:
+                width, height = probe.size
+                if width * height > UPLOAD_MAX_PIXELS:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=(
+                            f"Image is too large ({width}x{height}); "
+                            f"max {UPLOAD_MAX_PIXELS // 1_000_000} megapixels"
+                        ),
+                    )
+                probe.verify()
+
+            # verify() leaves the image unusable; decode a fresh copy.
+            with Image.open(io.BytesIO(raw)) as img:
+                img.load()
+                if fmt == "PNG":
+                    out_img = img.convert("RGBA")
+                    save_kwargs = {}
+                else:
+                    out_img = img.convert("RGB")
+                    save_kwargs = {"quality": 92}
+
+        buf = io.BytesIO()
+        out_img.save(buf, fmt, **save_kwargs)
+        return buf.getvalue(), out_img.size
+
+    except HTTPException:
+        raise
+
+    except (Image.DecompressionBombError, Image.DecompressionBombWarning):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Image is too large; max "
+                f"{UPLOAD_MAX_PIXELS // 1_000_000} megapixels"
+            ),
+        )
+
+    except Exception:
+        raise invalid
+
 
 @app.post(
     "/api/jobs/{job_id}/candidates/{candidate_id}/thumbnail-upload"
@@ -2087,6 +2201,9 @@ async def upload_manual_thumbnail(
                 detail="Image is too large (max 8MB)",
             )
 
+        # Decode + re-encode before touching the DB; rejects non-images.
+        jpeg_bytes, _ = reencode_uploaded_image(raw, "JPEG")
+
         with get_db() as conn:
             with conn.cursor() as cur:
                 cur.execute(
@@ -2115,18 +2232,9 @@ async def upload_manual_thumbnail(
             / f"{candidate_id}_manual_{uuid.uuid4().hex[:8]}.jpg"
         )
 
-        # Re-encode to JPEG (matching every other thumbnail option) via
-        # Pillow when it's available; otherwise fall back to writing
-        # the raw bytes as-is so the upload still works.
-        try:
-            from PIL import Image
-            import io
-
-            img = Image.open(io.BytesIO(raw)).convert("RGB")
-            img.save(out_path, "JPEG", quality=92)
-
-        except Exception:
-            out_path.write_bytes(raw)
+        # Always the re-encoded JPEG (matching every other thumbnail
+        # option), never the client's bytes.
+        out_path.write_bytes(jpeg_bytes)
 
         relative_path = str(out_path.relative_to(DATA_ROOT))
         options.append(relative_path)
@@ -2252,28 +2360,16 @@ async def upload_watermark_asset(file: UploadFile = File(...)):
                 status_code=400, detail="Image is too large (max 5MB)"
             )
 
+        # PNG keeps alpha transparency, which matters for a watermark
+        # overlay. Rejects anything Pillow can't decode.
+        png_bytes, (width, height) = reencode_uploaded_image(raw, "PNG")
+
         asset_id = str(uuid.uuid4())
         wm_dir = DATA_ROOT / "watermarks"
         wm_dir.mkdir(parents=True, exist_ok=True)
         out_path = wm_dir / f"{asset_id}.png"
 
-        width = height = None
-
-        # PNG keeps alpha transparency, which matters for a watermark
-        # overlay — re-encode with Pillow when available, matching the
-        # manual-thumbnail-upload behavior; fall back to raw bytes
-        # (still works if the source was already a PNG).
-        try:
-            from PIL import Image
-            import io
-
-            img = Image.open(io.BytesIO(raw))
-            img = img.convert("RGBA")
-            width, height = img.size
-            img.save(out_path, "PNG")
-
-        except Exception:
-            out_path.write_bytes(raw)
+        out_path.write_bytes(png_bytes)
 
         with get_db() as conn:
             with conn.cursor() as cur:

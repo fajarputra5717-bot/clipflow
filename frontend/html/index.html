@@ -27,6 +27,15 @@
      the same smooth, considered motion system instead of many
      independently-tuned animations. */
   --ease:cubic-bezier(.22,1,.36,1);
+  /* Status badges: tinted fill + matching text. Each fg/bg pair is
+     measured >= 4.5:1 (WCAG AA, 9.5px text) on --panel incl. the
+     running shimmer peak; re-measure if you change one (052/061). */
+  --badge-idle-fg:#545458;--badge-idle-bg:rgba(120,120,128,.12);--badge-idle-line:rgba(120,120,128,.24);
+  --badge-run-fg:#0058b0;--badge-run-bg:rgba(0,113,227,.09);--badge-run-line:rgba(0,113,227,.22);
+  --badge-warn-fg:#8f4a00;--badge-warn-bg:rgba(255,149,0,.13);--badge-warn-line:rgba(255,149,0,.3);
+  --badge-good-fg:#137035;--badge-good-bg:rgba(30,184,90,.11);--badge-good-line:rgba(30,184,90,.26);
+  --badge-bad-fg:#b3000f;--badge-bad-bg:rgba(255,59,48,.09);--badge-bad-line:rgba(255,59,48,.24);
+  --badge-shimmer-peak:rgba(255,255,255,.55);
 }
 html{color-scheme:light}
 html[data-theme="dark"]{color-scheme:dark}
@@ -35,6 +44,12 @@ html[data-theme="dark"]{color-scheme:dark}
   --line:rgba(255,255,255,.11);--line2:rgba(255,255,255,.17);--text:#f5f5f7;--muted:#98989d;
   --muted2:#8e8e93;--accent:#0a84ff;--accent2:#409cff;--lux:#0a84ff;--lux2:#409cff;
   --good:#30d158;--bad:#ff453a;--warn:#ff9f0a;
+  --badge-idle-fg:#c7c7cc;--badge-idle-bg:rgba(142,142,147,.18);--badge-idle-line:rgba(142,142,147,.3);
+  --badge-run-fg:#6cb2ff;--badge-run-bg:rgba(10,132,255,.17);--badge-run-line:rgba(10,132,255,.36);
+  --badge-warn-fg:#ffb340;--badge-warn-bg:rgba(255,159,10,.15);--badge-warn-line:rgba(255,159,10,.32);
+  --badge-good-fg:#4cd97b;--badge-good-bg:rgba(48,209,88,.14);--badge-good-line:rgba(48,209,88,.3);
+  --badge-bad-fg:#ff8a82;--badge-bad-bg:rgba(255,69,58,.16);--badge-bad-line:rgba(255,69,58,.34);
+  --badge-shimmer-peak:rgba(255,255,255,.07);
 }
 /* Dark-mode overrides for the surfaces styled with hardcoded light
    colors rather than the palette variables above (glass panels,
@@ -474,9 +489,16 @@ button.primary:hover:not(:disabled),.analyze-ready:hover:not(:disabled){backgrou
   display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:5px 8px;font-size:9.5px;font-weight:700;
   background:rgba(0,0,0,.045);border:1px solid rgba(0,0,0,.07);white-space:nowrap;color:var(--text)
 }
-.badge.running{background:rgba(0,113,227,.08);border-color:rgba(0,113,227,.2);color:#0071e3}
-.badge.review{background:rgba(255,149,0,.1);border-color:rgba(255,149,0,.22);color:#c76a00}.badge.completed{background:rgba(30,184,90,.1);border-color:rgba(30,184,90,.22);color:#1a8f47}
-.badge.failed{background:rgba(255,59,48,.09);border-color:rgba(255,59,48,.22);color:#d70015}.badge.cancelled{background:rgba(134,134,139,.1);border-color:rgba(134,134,139,.22);color:#6e6e73}
+.badge.idle{background:var(--badge-idle-bg);border-color:var(--badge-idle-line);color:var(--badge-idle-fg)}
+.badge.running{background:var(--badge-run-bg);border-color:var(--badge-run-line);color:var(--badge-run-fg);position:relative;overflow:hidden;isolation:isolate}
+.badge.running::after{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;background:linear-gradient(100deg,transparent 30%,var(--badge-shimmer-peak) 50%,transparent 70%) no-repeat;background-size:250% 100%;animation:badgeShimmer 1.8s linear infinite}
+@keyframes badgeShimmer{0%{background-position:150% 0}100%{background-position:-50% 0}}
+@media (prefers-reduced-motion:reduce){.badge.running::after{animation:none;display:none}}
+.badge.attention{background:var(--badge-warn-bg);border-color:var(--badge-warn-line);color:var(--badge-warn-fg)}
+.badge.completed{background:var(--badge-good-bg);border-color:var(--badge-good-line);color:var(--badge-good-fg)}
+.badge.failed{background:var(--badge-bad-bg);border-color:var(--badge-bad-line);color:var(--badge-bad-fg)}
+/* Cancelled shares idle's grey (neither needs action) but drops the fill so it doesn't read as "waiting". */
+.badge.cancelled{background:transparent;border-color:var(--badge-idle-line);color:var(--badge-idle-fg)}
 .progress-combo{display:flex;align-items:center;gap:10px;margin-top:11px}
 .progress-ring{position:relative;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto}
 .progress-ring svg{display:block;width:100%;height:100%;transform:rotate(-90deg);overflow:visible}
@@ -522,7 +544,7 @@ body.sidebar-collapsed .sidebar{transform:translateX(-100%);visibility:hidden;tr
   display:grid;place-items:center;color:var(--muted);background:transparent;border-color:transparent!important;box-shadow:none;
   transition:background .15s ease,color .15s ease;
 }
-.sidebar-collapse svg,.sidebar-open-btn svg{width:18px;height:18px}
+.sidebar-collapse svg,.sidebar-open-btn svg{width:16px;height:16px;stroke-width:2.7}
 .sidebar-collapse:hover:not(:disabled),.sidebar-open-btn:hover:not(:disabled){background:var(--line);color:var(--text);transform:none;box-shadow:none}
 .sidebar-open-btn{display:none}
 [data-theme="dark"] .sidebar-collapse,[data-theme="dark"] .sidebar-open-btn{background:transparent;border-color:transparent!important}
@@ -546,7 +568,7 @@ body.sidebar-collapsed .sidebar-open-btn{display:grid}
 /* Simplified Import: composition / facecam / platform live in one
    "Options" disclosure with a live one-line summary. */
 .import-options{margin-top:14px;border:1px solid var(--line);border-radius:16px;padding:0 14px;background:var(--panel2)}
-.import-options > summary{display:flex;align-items:center;gap:8px;min-height:44px;cursor:pointer;list-style:none;font-size:12px;font-weight:600}
+.import-options > summary{display:flex;align-items:center;gap:8px;cursor:pointer;list-style:none;font-size:12px;font-weight:600}
 .import-options > summary::-webkit-details-marker{display:none}
 .import-options > summary .muted{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500}
 .import-options[open]{padding-bottom:14px}
@@ -555,11 +577,14 @@ body.sidebar-collapsed .sidebar-open-btn{display:grid}
   -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 6l4 4 4-4' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat;
           mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 6l4 4 4-4' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat}
 details[open] > summary > .chev{transform:rotate(180deg)}
+/* One disclosure affordance (UI-QA T5): every <summary> is a 44px full-width row, chevron on the trailing edge. */
+.import-options > summary,.edit-more > summary,.version-history > summary,.settings summary{min-height:44px}
+summary > .chev{margin-left:auto}
 .rail-title{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}.rail-section{border-top:1px solid rgba(0,0,0,.07);padding-top:12px;margin-top:12px}
 .rail-actions{display:grid;grid-template-columns:1fr 1fr;gap:7px}
 .rail-actions button{font-size:10.5px;min-height:34px}
-.settings details{border-top:1px solid rgba(0,0,0,.06);padding:9px 0}.settings summary{cursor:pointer;font-size:11px;font-weight:700;color:var(--text);list-style:none}.settings summary::-webkit-details-marker{display:none}
-.settings summary:after{content:"＋";float:right;color:var(--muted)}.settings details[open] > summary:after{content:"−"}.settings summary .muted{margin-left:4px}
+.settings details{border-top:1px solid rgba(0,0,0,.06)}.settings details[open]{padding-bottom:9px}.settings summary{display:flex;align-items:center;gap:8px;cursor:pointer;font-size:11px;font-weight:700;color:var(--text);list-style:none}.settings summary::-webkit-details-marker{display:none}
+.settings summary .muted{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500}
 .settings-grid{display:grid;gap:8px;margin-top:8px}.settings-grid label{font-size:9.5px;color:var(--muted)}.settings-grid input{font-size:10.5px;padding:8px 9px}.hint{font-size:9px;color:var(--muted2);margin-top:3px}
 .hidden{display:none!important}
 .queue-list{display:grid;gap:10px}
@@ -604,7 +629,7 @@ details[open] > summary > .chev{transform:rotate(180deg)}
 .watermark-item-actions button{flex:1;font-size:9px;padding:3px 4px;min-height:0}
 .watermark-item-actions .chip-active{flex:1;text-align:center;font-size:9px;padding:3px 4px;background:var(--accent,#0a84ff);color:#fff;border-radius:6px}
 .watermark-upload-btn{cursor:pointer}
-.version-history summary{cursor:pointer;font-size:11px;font-weight:600;padding:4px 0}
+.version-history summary{cursor:pointer;font-size:11px;font-weight:600}
 .version-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 0;border-top:1px solid var(--border,rgba(127,127,127,.15))}
 .version-row-head{display:flex;flex-direction:column;gap:2px;font-size:11px}
 .version-row-head .muted{font-size:9.5px}
@@ -652,7 +677,7 @@ details[open] > summary > .chev{transform:rotate(180deg)}
 }
 .edit-actions button{flex:1 1 auto}
 .edit-more{padding:0;border-bottom:1px solid rgba(0,0,0,.06)}
-.edit-more > summary{display:flex;align-items:center;gap:8px;min-height:42px;cursor:pointer;list-style:none}
+.edit-more > summary{display:flex;align-items:center;gap:8px;cursor:pointer;list-style:none}
 .edit-more > summary::-webkit-details-marker{display:none}
 .edit-more > summary h4{margin:0;font-size:11.5px;font-weight:700;color:var(--text)}
 .edit-more > summary .muted{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:9.5px}
@@ -661,7 +686,6 @@ details[open] > summary > .chev{transform:rotate(180deg)}
 .edit-more-body > .edit-section-tools{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
 .version-history > summary{display:flex;align-items:center;gap:8px;list-style:none}
 .version-history > summary::-webkit-details-marker{display:none}
-.version-history > summary .chev{margin-left:auto}
 .edit-title{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}.edit-title strong{font-size:11px}.edit-title span{font-size:9px;color:var(--muted)}
 .edit-section{padding:13px 0;border-bottom:1px solid rgba(0,0,0,.06)}
 .edit-section:first-of-type{padding-top:2px}
@@ -868,7 +892,7 @@ details[open] > summary > .chev{transform:rotate(180deg)}
     <div class="rail-title">Settings</div>
     <div class="settings">
       <details>
-        <summary>Advanced settings <span class="muted">· system / publishing</span></summary>
+        <summary aria-expanded="false">Advanced settings <span class="muted">· system / publishing</span><span class="chev" aria-hidden="true"></span></summary>
         <div id="settingsPanel"></div>
         <div class="rail-actions" style="margin-top:9px">
           <button class="secondary" id="reloadSettings" type="button">Reload</button>
@@ -879,7 +903,7 @@ details[open] > summary > .chev{transform:rotate(180deg)}
     </div>
     <div class="settings">
       <details>
-        <summary>Watermark <span class="muted">· asset library</span></summary>
+        <summary aria-expanded="false">Watermark <span class="muted">· asset library</span><span class="chev" aria-hidden="true"></span></summary>
         <div id="watermarkPanel"></div>
         <label class="secondary watermark-upload-btn" style="margin-top:9px;display:block;text-align:center">Upload watermark image<input type="file" accept="image/png,image/webp" id="watermarkUploadInput" hidden></label>
       </details>
@@ -893,10 +917,12 @@ details[open] > summary > .chev{transform:rotate(180deg)}
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="15" rx="3"/><path d="M9.5 4.5v15"/></svg>
     </button>
     <div class="logo">R</div>
-    <div><h1>ClipFlow <button class="version-badge" id="versionBadge" type="button" aria-expanded="false">BETA · v2.1105</button></h1><p>Video clipping workspace · import → queue → publish</p>
+    <div><h1>ClipFlow <button class="version-badge" id="versionBadge" type="button" aria-expanded="false">BETA · v2.1106</button></h1><p>Video clipping workspace · import → queue → publish</p>
       <div class="version-popover" id="versionPopover" role="dialog" aria-hidden="true">
-        <div class="version-popover-title">What's new in v2.1105</div>
+        <div class="version-popover-title">What's new in v2.1106</div>
         <ul>
+          <li>Every expandable section uses the same chevron that turns when it opens</li>
+          <li>Status badges: clearer colours (grey waiting, blue working, amber needs you) that pass contrast in light and dark</li>
           <li>Per-job watermark size and opacity in the edit panel</li>
           <li>Edit panel now shows the job's real subtitle style (Apply no longer resets it)</li>
           <li>Polish: calmer motion, one loading style for every button, tidier edit drawer with sticky Apply</li>
@@ -968,7 +994,7 @@ details[open] > summary > .chev{transform:rotate(180deg)}
           </div>
 
           <details class="import-options" id="importOptions">
-            <summary>Options <span class="muted" id="importOptionsSummary"></span><span class="chev" aria-hidden="true"></span></summary>
+            <summary aria-expanded="false">Options <span class="muted" id="importOptionsSummary"></span><span class="chev" aria-hidden="true"></span></summary>
             <div class="field">
               <label>Face / content composition</label>
               <div class="choice-grid">
@@ -1157,9 +1183,10 @@ function mediaUrl(u){return u&&mediaToken?u+(u.includes("?")?"&":"?")+"mt="+enco
 function saveActive(id){activeJobId=id||null;if(id)localStorage.setItem(STORAGE_KEY,String(id));else localStorage.removeItem(STORAGE_KEY)}
 function loadActive(){return activeJobId||localStorage.getItem(STORAGE_KEY)||null}
 function isBusy(s){return BUSY.includes(s)}
-function stageLabel(s){return({queued:"Queued",processing:"Processing",downloading:"Downloading video",download:"Downloading video",transcribing:"Transcribing audio",analyzing:"AI analyzing viral hooks",analysis:"AI analyzing viral hooks",preview_queued:"Preview queued",preview_rendering:"Rendering preview",preview:"Rendering preview",review:"Ready for review",render_queued:"Final render queued",rendering:"Rendering final",thumbnail_queued:"Thumbnail queue",thumbnail_rendering:"Generating AI thumbnails",completed:"Completed",failed:"Failed",cancelled:"Cancelled",partial_failure:"Partial failure"})[s]||s||"Processing"}
-function badgeClass(s){if(s==="completed")return"completed";if(s==="review")return"review";if(s==="failed")return"failed";if(s==="cancelled")return"cancelled";return"running"}
-function stageColor(s){return({running:"#0071e3",review:"#ff9500",completed:"#1eb85a",failed:"#ff3b30",cancelled:"#86868b"})[badgeClass(s)]}
+function stageLabel(s){return({queued:"Queued",processing:"Processing",downloading:"Downloading video",download:"Downloading video",transcribing:"Transcribing audio",analyzing:"AI analyzing viral hooks",analysis:"AI analyzing viral hooks",preview_queued:"Preview queued",preview_rendering:"Rendering preview",preview:"Rendering preview",review:"Ready for review",render_queued:"Final render queued",rendering:"Rendering final",thumbnail_queued:"Thumbnail queued",thumbnail_rendering:"Generating AI thumbnails",completed:"Completed",failed:"Failed",cancelled:"Cancelled",partial_failure:"Partial failure",candidate:"Candidate"})[s]||(s?String(s).replace(/_/g," ").replace(/^./,m=>m.toUpperCase()):"Processing")}
+// idle grey · running blue · attention amber · completed green · failed red; cancelled = grey outline.
+function badgeClass(s){if(s==="completed")return"completed";if(s==="review"||s==="partial_failure")return"attention";if(s==="failed")return"failed";if(s==="cancelled")return"cancelled";if(s==="queued"||s==="candidate"||/_queued$/.test(s))return"idle";return"running"}
+function stageColor(s){return({idle:"#86868b",running:"#0071e3",attention:"#ff9500",completed:"#1eb85a",failed:"#ff3b30",cancelled:"#86868b"})[badgeClass(s)]}
 let ringIdSeq=0;
 function miniProgressBar(p,color){
   const v=pct(p);
@@ -1472,7 +1499,7 @@ function renderCandidate(c,jid,platform,job={}){
         </div>
 
         <details class="edit-more" data-edit-more="desc" data-cid="${esc(c.id)}" ${editMoreOpen[c.id+":desc"]?"open":""}>
-          <summary><span class="edit-section-num">2</span><h4>Description</h4><span class="muted">${esc(c.description?String(c.description).slice(0,60):"Not written yet")}</span><span class="chev" aria-hidden="true"></span></summary>
+          <summary aria-expanded="${editMoreOpen[c.id+":desc"]?"true":"false"}"><span class="edit-section-num">2</span><h4>Description</h4><span class="muted">${esc(c.description?String(c.description).slice(0,60):"Not written yet")}</span><span class="chev" aria-hidden="true"></span></summary>
           <div class="edit-more-body">
             <div class="edit-section-tools">
               <button class="mini-ai-btn ai-highlight" data-gen-desc="${esc(jid)}" data-cid="${esc(c.id)}" type="button" ${busy?"disabled":""}>Generate description (AI)</button>
@@ -1483,7 +1510,7 @@ function renderCandidate(c,jid,platform,job={}){
         </details>
 
         <details class="edit-more" data-edit-more="thumb" data-cid="${esc(c.id)}" ${editMoreOpen[c.id+":thumb"]?"open":""}>
-          <summary><span class="edit-section-num">3</span><h4>Thumbnail</h4><span class="muted">${thumbOptions.length?`${thumbOptions.length} option${thumbOptions.length===1?"":"s"}${c.thumbnail_locked?" · picked":""}`:"No options yet"}</span><span class="chev" aria-hidden="true"></span></summary>
+          <summary aria-expanded="${editMoreOpen[c.id+":thumb"]?"true":"false"}"><span class="edit-section-num">3</span><h4>Thumbnail</h4><span class="muted">${thumbOptions.length?`${thumbOptions.length} option${thumbOptions.length===1?"":"s"}${c.thumbnail_locked?" · picked":""}`:"No options yet"}</span><span class="chev" aria-hidden="true"></span></summary>
           <div class="edit-more-body">
             <div class="thumb-head-actions edit-section-tools">
               <button class="mini-ai-btn ai-highlight" data-gen-thumbs="${esc(jid)}" data-cid="${esc(c.id)}" type="button" ${busy?"disabled":""}>${busy&&c.status==="thumbnail_rendering"?"Generating…":"Generate thumbnails (AI)"}</button>
@@ -1518,7 +1545,7 @@ function renderCandidate(c,jid,platform,job={}){
         </details>
 
         <details class="edit-more" data-edit-more="wm" data-cid="${esc(c.id)}" ${editMoreOpen[c.id+":wm"]?"open":""}>
-          <summary><span class="edit-section-num">4</span><h4>Watermark</h4><span class="muted">${wmW}px · ${wmPct}%${job.watermark_width==null&&job.watermark_opacity==null?" · default":""}</span><span class="chev" aria-hidden="true"></span></summary>
+          <summary aria-expanded="${editMoreOpen[c.id+":wm"]?"true":"false"}"><span class="edit-section-num">4</span><h4>Watermark</h4><span class="muted">${wmW}px · ${wmPct}%${job.watermark_width==null&&job.watermark_opacity==null?" · default":""}</span><span class="chev" aria-hidden="true"></span></summary>
           <div class="edit-more-body">
             <label class="edit-subtle-label">Shared by every clip of this job · ${job.watermark_width==null&&job.watermark_opacity==null?"global default":"custom for this job"}</label>
             <div class="edit-style-row">
@@ -1532,7 +1559,7 @@ function renderCandidate(c,jid,platform,job={}){
 
         <div class="edit-section">
           <details class="version-history" data-versions-toggle="${esc(jid)}" data-cid="${esc(c.id)}">
-            <summary>Version history<span class="chev" aria-hidden="true"></span></summary>
+            <summary aria-expanded="false">Version history<span class="chev" aria-hidden="true"></span></summary>
             <div id="versionsPanel-${esc(c.id)}" class="hint">Loading…</div>
           </details>
         </div>
@@ -2182,7 +2209,7 @@ async function loadSettings(){
       PUBLISHING:["HASHTAGS","CAMPAIGN_NAME"]
     };
     $("settingsPanel").innerHTML=Object.entries(groups).map(([g,keys])=>`
-      <details><summary>${g}<span class="muted">${keys.length} settings</span></summary>
+      <details><summary aria-expanded="false">${g}<span class="muted">${keys.length} settings</span><span class="chev" aria-hidden="true"></span></summary>
       <div class="settings-grid">${keys.map(k=>{const s=settingsCache[k]||{value:"",configured:false};return `<div><label>${esc(k)}</label><input data-setting="${esc(k)}" type="${/KEY|TOKEN|SECRET|PASSWORD/i.test(k)?"password":"text"}" value="${esc(s.value||"")}" placeholder="${s.configured?"Configured / masked":"Not configured"}"><div class="hint">${s.configured?"Configured":"Not configured"}</div></div>`}).join("")}</div>
       </details>`).join("");
   }catch(e){$("settingsPanel").innerHTML=`<div class="error-box">${esc(e.message)}</div>`}
@@ -2261,7 +2288,7 @@ document.addEventListener("keydown",e=>{
   if(e.target.closest("#topbarLogo")&&(e.key==="Enter"||e.key===" ")){e.preventDefault();e.target.closest("#topbarLogo").click()}
   if(e.key==="Escape"){closeJobOverlay();closeVersionPopover();collapseTopbarLogo();closeSidebarDrawer(true)}
 });
-document.addEventListener("toggle",e=>{const d=e.target;if(d.matches?.("[data-edit-more]"))editMoreOpen[d.dataset.cid+":"+d.dataset.editMore]=d.open},true);
+document.addEventListener("toggle",e=>{const d=e.target;if(d.tagName!=="DETAILS")return;d.querySelector(":scope > summary")?.setAttribute("aria-expanded",String(d.open));if(d.matches("[data-edit-more]"))editMoreOpen[d.dataset.cid+":"+d.dataset.editMore]=d.open},true);
 // Sidebar: desktop = collapsible column (remembered), narrow = drawer.
 const SIDEBAR_MQ=window.matchMedia("(max-width:999px)");
 const SIDEBAR_STORAGE="clipflow_sidebar_collapsed_v1";

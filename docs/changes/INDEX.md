@@ -23,3 +23,10 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 050 · 2026-09-29 · R-12 Left sidebar (collapsible column / mobile drawer) replaces right rail; Import options in one disclosure · index.html (v2.1102)
 051 · 2026-09-29 · R-13 ui-audit.md; tabs pill docks via transform/opacity with 64/48 hysteresis (one scroll handler); job island is its own capsule with stage + % · index.html (v2.1103)
 052 · 2026-09-29 · R-11 Motion 100–200/300–500 ms, setBusy() for every async button, edit drawer progressive disclosure + sticky glass action row, reduced-motion covers JS loops, keyboard tabs · index.html (v2.1104)
+060 · 2026-09-29 · Security audit 001: threat model + findings (TASKS-4-SECURITY T1, lane B) · docs only
+061 · 2026-09-29 · Status badges: semantic colours, WCAG AA in both themes (UI-QA T6, lane B) · index.html
+062 · 2026-09-29 · One rotating chevron + aria-expanded for every disclosure (UI-QA T5, lane B) · index.html
+063 · 2026-09-29 · YouTube URL allowlist + strict upload re-encode (audit-001 F4/F5, lane B) · main.py
+064 · 2026-09-29 · R-19 prep: SIL-OFL caption fonts in worker/fonts (files only, lane B) · worker/fonts
+065 · 2026-09-29 · libass spike = R-18 done: effects + variable-font weights, tests/libass-spike (lane B) · tests
+066 · 2026-09-29 · Telegram notifier service, outbound-only (lane B; compose wiring in main) · notifier/

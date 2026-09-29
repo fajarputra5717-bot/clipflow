@@ -1,0 +1,54 @@
+[Script Info]
+ScriptType: v4.00+
+PlayResX: 1080
+PlayResY: 1920
+WrapStyle: 2
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Liberation Sans,64,&H00FFFFFF,&H00808080,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,3,0,7,40,40,40,1
+Style: Box,Liberation Sans,64,&H00000000,&H00000000,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 1,0:00:00.00,0:00:03.00,Default,,0,0,0,,{\pos(30,60)\fs30\fnLiberation Sans\b0\bord0}Liberation ref
+Dialogue: 1,0:00:00.00,0:00:03.00,Default,,0,0,0,,{\pos(420,40)\fnLiberation Sans\b0\fs64\bord0\shad0}HOOK Weight 88
+Dialogue: 1,0:00:00.00,0:00:03.00,Default,,0,0,0,,{\pos(30,152)\fs30\fnLiberation Sans\b0\bord0}Montserrat b0
+Dialogue: 1,0:00:00.00,0:00:03.00,Default,,0,0,0,,{\pos(420,132)\fnMontserrat\b0\fs64\bord0\shad0}HOOK Weight 88
+Dialogue: 1,0:00:00.00,0:00:03.00,Default,,0,0,0,,{\pos(30,244)\fs30\fnLiberation Sans\b0\bord0}Montserrat b1
+Dialogue: 1,0:00:00.00,0:00:03.00,Default,,0,0,0,,{\pos(420,224)\fnMontserrat\b1\fs64\bord0\shad0}HOOK Weight 88
+Dialogue: 1,0:00:00.00,0:00:03.00,Default,,0,0,0,,{\pos(30,336)\fs30\fnLiberation Sans\b0\bord0}Montserrat b700
+Dialogue: 1,0:00:00.00,0:00:03.00,Default,,0,0,0,,{\pos(420,316)\fnMontserrat\b700\fs64\bord0\shad0}HOOK Weight 88
+Dialogue: 1,0:00:00.00,0:00:03.00,Default,,0,0,0,,{\pos(30,428)\fs30\fnLiberation Sans\b0\bord0}Montserrat b800
+Dialogue: 1,0:00:00.00,0:00:03.00,Default,,0,0,0,,{\pos(420,408)\fnMontserrat\b800\fs64\bord0\shad0}HOOK Weight 88
+Dialogue: 1,0:00:00.00,0:00:03.00,Default,,0,0,0,,{\pos(30,520)\fs30\fnLiberation Sans\b0\bord0}Montserrat b900
+Dialogue: 1,0:00:00.00,0:00:03.00,Default,,0,0,0,,{\pos(420,500)\fnMontserrat\b900\fs64\bord0\shad0}HOOK Weight 88
+Dialogue: 1,0:00:00.00,0:00:03.00,Default,,0,0,0,,{\pos(30,612)\fs30\fnLiberation Sans\b0\bord0}'Montserrat ExtraBold'
+Dialogue: 1,0:00:00.00,0:00:03.00,Default,,0,0,0,,{\pos(420,592)\fnMontserrat ExtraBold\b0\fs64\bord0\shad0}HOOK Weight 88
+Dialogue: 1,0:00:00.00,0:00:03.00,Default,,0,0,0,,{\pos(30,704)\fs30\fnLiberation Sans\b0\bord0}'Montserrat Black'
+Dialogue: 1,0:00:00.00,0:00:03.00,Default,,0,0,0,,{\pos(420,684)\fnMontserrat Black\b0\fs64\bord0\shad0}HOOK Weight 88
+Dialogue: 1,0:00:00.00,0:00:03.00,Default,,0,0,0,,{\pos(30,796)\fs30\fnLiberation Sans\b0\bord0}Oswald b0
+Dialogue: 1,0:00:00.00,0:00:03.00,Default,,0,0,0,,{\pos(420,776)\fnOswald\b0\fs64\bord0\shad0}HOOK Weight 88
+Dialogue: 1,0:00:00.00,0:00:03.00,Default,,0,0,0,,{\pos(30,888)\fs30\fnLiberation Sans\b0\bord0}Oswald b1
+Dialogue: 1,0:00:00.00,0:00:03.00,Default,,0,0,0,,{\pos(420,868)\fnOswald\b1\fs64\bord0\shad0}HOOK Weight 88
+Dialogue: 1,0:00:00.00,0:00:03.00,Default,,0,0,0,,{\pos(30,980)\fs30\fnLiberation Sans\b0\bord0}Inter b0
+Dialogue: 1,0:00:00.00,0:00:03.00,Default,,0,0,0,,{\pos(420,960)\fnInter\b0\fs64\bord0\shad0}HOOK Weight 88
+Dialogue: 1,0:00:00.00,0:00:03.00,Default,,0,0,0,,{\pos(30,1072)\fs30\fnLiberation Sans\b0\bord0}Inter b1
+Dialogue: 1,0:00:00.00,0:00:03.00,Default,,0,0,0,,{\pos(420,1052)\fnInter\b1\fs64\bord0\shad0}HOOK Weight 88
+Dialogue: 1,0:00:00.00,0:00:03.00,Default,,0,0,0,,{\pos(30,1164)\fs30\fnLiberation Sans\b0\bord0}Inter b900
+Dialogue: 1,0:00:00.00,0:00:03.00,Default,,0,0,0,,{\pos(420,1144)\fnInter\b900\fs64\bord0\shad0}HOOK Weight 88
+Dialogue: 1,0:00:00.00,0:00:03.00,Default,,0,0,0,,{\pos(30,1256)\fs30\fnLiberation Sans\b0\bord0}'Inter Black'
+Dialogue: 1,0:00:00.00,0:00:03.00,Default,,0,0,0,,{\pos(420,1236)\fnInter Black\b0\fs64\bord0\shad0}HOOK Weight 88
+Dialogue: 1,0:00:00.00,0:00:03.00,Default,,0,0,0,,{\pos(30,1348)\fs30\fnLiberation Sans\b0\bord0}Poppins b1
+Dialogue: 1,0:00:00.00,0:00:03.00,Default,,0,0,0,,{\pos(420,1328)\fnPoppins\b1\fs64\bord0\shad0}HOOK Weight 88
+Dialogue: 1,0:00:00.00,0:00:03.00,Default,,0,0,0,,{\pos(30,1440)\fs30\fnLiberation Sans\b0\bord0}Poppins b800
+Dialogue: 1,0:00:00.00,0:00:03.00,Default,,0,0,0,,{\pos(420,1420)\fnPoppins\b800\fs64\bord0\shad0}HOOK Weight 88
+Dialogue: 1,0:00:00.00,0:00:03.00,Default,,0,0,0,,{\pos(30,1532)\fs30\fnLiberation Sans\b0\bord0}'Poppins ExtraBold'
+Dialogue: 1,0:00:00.00,0:00:03.00,Default,,0,0,0,,{\pos(420,1512)\fnPoppins ExtraBold\b0\fs64\bord0\shad0}HOOK Weight 88
+Dialogue: 1,0:00:00.00,0:00:03.00,Default,,0,0,0,,{\pos(30,1624)\fs30\fnLiberation Sans\b0\bord0}Anton b0
+Dialogue: 1,0:00:00.00,0:00:03.00,Default,,0,0,0,,{\pos(420,1604)\fnAnton\b0\fs64\bord0\shad0}HOOK Weight 88
+Dialogue: 1,0:00:00.00,0:00:03.00,Default,,0,0,0,,{\pos(30,1716)\fs30\fnLiberation Sans\b0\bord0}Bebas Neue b0
+Dialogue: 1,0:00:00.00,0:00:03.00,Default,,0,0,0,,{\pos(420,1696)\fnBebas Neue\b0\fs64\bord0\shad0}HOOK Weight 88
+Dialogue: 1,0:00:00.00,0:00:03.00,Default,,0,0,0,,{\pos(30,1808)\fs30\fnLiberation Sans\b0\bord0}Archivo Black b0
+Dialogue: 1,0:00:00.00,0:00:03.00,Default,,0,0,0,,{\pos(420,1788)\fnArchivo Black\b0\fs64\bord0\shad0}HOOK Weight 88
