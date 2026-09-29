@@ -2886,12 +2886,17 @@ def render_vertical(
     duration,
     face_crop,
     split_ratio,
-    subtitle_path,
+    subtitle_path=None,
     preview=False,
     size=None,
     watermark_width=None,
     watermark_opacity=None,
+    watermark=True,
 ):
+    """Stack content (top) + facecam (bottom), then optionally the
+    watermark and burned-in subtitles. subtitle_path=None skips the
+    subtitles (R-06 clean plate, R-09 burn-in off); watermark=False
+    skips the overlay and its input (R-06 clean plate)."""
 
     if preview:
 
@@ -2980,76 +2985,90 @@ def render_vertical(
     last = "stacked"
 
     # --------------------------------------------------------
-    # WATERMARK
+    # WATERMARK (optional)
     # --------------------------------------------------------
 
-    watermark = (
-        resolve_watermark_path()
-    )
+    watermark_path = None
 
-    if not watermark.exists():
+    if watermark:
 
-        raise RuntimeError(
-            "Required watermark missing: "
-            + str(watermark)
+        watermark_path = (
+            resolve_watermark_path()
         )
 
-    # Per-job values (R-05) come from job_watermark(); None falls
-    # back to the global settings.
-    if watermark_width is None or watermark_opacity is None:
-        default_width, default_opacity = job_watermark({})
-        watermark_width = watermark_width or default_width
-        if watermark_opacity is None:
-            watermark_opacity = default_opacity
+        if not watermark_path.exists():
 
-    wm_width = int(
-        watermark_width
-        * width
-        / FINAL_WIDTH
-    )
+            raise RuntimeError(
+                "Required watermark missing: "
+                + str(watermark_path)
+            )
 
-    filters.append(
-        (
-            "[1:v]"
-            f"scale={wm_width}:-1,"
-            "format=rgba,"
-            "colorchannelmixer="
-            f"aa={watermark_opacity}"
-            "[wm];"
+        # Per-job values (R-05) come from job_watermark(); None falls
+        # back to the global settings.
+        if watermark_width is None or watermark_opacity is None:
+            default_width, default_opacity = job_watermark({})
+            watermark_width = watermark_width or default_width
+            if watermark_opacity is None:
+                watermark_opacity = default_opacity
+
+        wm_width = int(
+            watermark_width
+            * width
+            / FINAL_WIDTH
         )
-    )
 
-    filters.append(
-        (
-            f"[{last}][wm]"
-            "overlay="
-            "(W-w)/2:"
-            "(H-h)/2:"
-            "shortest=1"
-            "[watermarked];"
+        filters.append(
+            (
+                "[1:v]"
+                f"scale={wm_width}:-1,"
+                "format=rgba,"
+                "colorchannelmixer="
+                f"aa={watermark_opacity}"
+                "[wm];"
+            )
         )
-    )
 
-    last = "watermarked"
+        filters.append(
+            (
+                f"[{last}][wm]"
+                "overlay="
+                "(W-w)/2:"
+                "(H-h)/2:"
+                "shortest=1"
+                "[watermarked];"
+            )
+        )
+
+        last = "watermarked"
 
     # --------------------------------------------------------
-    # SUBTITLE
+    # SUBTITLE (optional)
     # --------------------------------------------------------
 
-    escaped_subtitle = str(
-        subtitle_path
-    ).replace(
-        "'",
-        r"\'",
-    )
+    if subtitle_path:
 
-    filters.append(
-        (
-            f"[{last}]"
-            "subtitles="
-            f"'{escaped_subtitle}'"
-            "[video]"
+        escaped_subtitle = str(
+            subtitle_path
+        ).replace(
+            "'",
+            r"\'",
         )
+
+        filters.append(
+            (
+                f"[{last}]"
+                "subtitles="
+                f"'{escaped_subtitle}'"
+                "[subtitled];"
+            )
+        )
+
+        last = "subtitled"
+
+    # Every optional stage above ends in ";" and names its output;
+    # the graph's final label must be [video] whichever stages ran.
+    filters.append(
+        f"[{last}]null[video]"
     )
 
     # --------------------------------------------------------
@@ -3075,11 +3094,10 @@ def render_vertical(
         "-i",
         str(source_path),
 
-        "-loop",
-        "1",
-
-        "-i",
-        str(watermark),
+        *(
+            ["-loop", "1", "-i", str(watermark_path)]
+            if watermark_path else []
+        ),
 
         "-t",
         str(
@@ -3135,6 +3153,70 @@ def render_vertical(
 # CREATE PREVIEW
 # ============================================================
 
+def clean_plate_path(candidate_id):
+    return PREVIEW_DIR / (str(candidate_id) + "_clean.mp4")
+
+
+def render_clean_plate(
+    candidate,
+    job,
+    video_path,
+):
+    """Full-size stacked render with NO subtitles and NO watermark
+    (R-06): what Submagic gets, so its captions are the only ones and
+    our watermark goes on after its render (R-05). Cached as
+    <candidate_id>_clean.mp4; create_preview() deletes it, so any
+    edit that re-renders the preview (new hook, trims) invalidates it."""
+
+    output_path = clean_plate_path(candidate["id"])
+
+    if output_path.exists() and output_path.stat().st_size > 0:
+        log(f"Clean plate cached: {output_path.name}")
+        return output_path
+
+    start = float(candidate["start_time"])
+    end = float(candidate["end_time"])
+
+    face = detect_face_for_clip(
+        video_path,
+        start,
+        end,
+        layout=job.get("layout", "auto"),
+    )
+
+    info = metadata(video_path)
+
+    split_ratio = int(job.get("split_ratio", 70) or 70)
+
+    face_crop = calculate_face_crop(
+        info["width"],
+        info["height"],
+        face,
+        FINAL_WIDTH,
+        FINAL_HEIGHT - int(FINAL_HEIGHT * split_ratio / 100),
+    )
+
+    # Render to a temp name so a crash never leaves a truncated file
+    # that the cache check above would trust.
+    tmp_path = output_path.with_suffix(".tmp.mp4")
+
+    render_vertical(
+        video_path,
+        tmp_path,
+        start=start,
+        duration=end - start,
+        face_crop=face_crop,
+        split_ratio=split_ratio,
+        subtitle_path=None,
+        preview=False,
+        watermark=False,
+    )
+
+    tmp_path.replace(output_path)
+
+    return output_path
+
+
 def create_preview(
     candidate,
     job,
@@ -3144,6 +3226,10 @@ def create_preview(
     candidate_id = (
         candidate["id"]
     )
+
+    # Any preview re-render means the clip may have changed (new
+    # hook, new times): drop the cached Submagic clean plate (R-06).
+    clean_plate_path(candidate_id).unlink(missing_ok=True)
 
     start = float(
         candidate["start_time"]
@@ -4910,7 +4996,8 @@ def claim_submagic_task():
         row = conn.execute(
             """
             SELECT c.*, sv.source_path,
-                   j.watermark_width, j.watermark_opacity
+                   j.watermark_width, j.watermark_opacity,
+                   j.split_ratio, j.layout
             FROM clip_candidates c
             JOIN jobs j ON j.id = c.job_id
             JOIN source_videos sv ON sv.id = j.source_video_id
@@ -5031,17 +5118,28 @@ def process_submagic_task(candidate):
 
         if action == "uploading":
 
-            preview_path = candidate.get("preview_path")
+            # R-06: upload a clean plate (no burned-in subtitles, no
+            # watermark), not the preview. The preview has our ASS
+            # captions baked in, so Submagic's captions doubled up.
+            source_path = candidate.get("source_path")
 
-            if not preview_path or not Path(preview_path).exists():
+            if not source_path or not Path(source_path).exists():
                 raise RuntimeError(
-                    "No preview render available yet — generate a "
-                    "preview first"
+                    "Source video missing: " + str(source_path)
                 )
+
+            upload_path = render_clean_plate(
+                candidate,
+                {
+                    "split_ratio": candidate.get("split_ratio"),
+                    "layout": candidate.get("layout") or "auto",
+                },
+                Path(source_path),
+            )
 
             hook_text = _submagic_candidate_title(candidate)
 
-            with open(preview_path, "rb") as fh:
+            with open(upload_path, "rb") as fh:
 
                 resp = submagic_request(
                     "POST",
