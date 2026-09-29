@@ -14,8 +14,8 @@ from pathlib import Path
 
 import cv2
 import psycopg
-import whisper
 
+from faster_whisper import WhisperModel
 from psycopg.rows import dict_row
 
 from shared.ai import router as ai_router
@@ -661,6 +661,18 @@ def validate_ai():
 # DOWNLOAD
 # ============================================================
 
+# R-07: the 1080x1920 render never needs more than 1080p, and an AV1
+# stream forces normalize_video() to re-encode the whole file. Prefer
+# H.264 <=1080p, then any codec <=1080p, then anything at all.
+YTDLP_FORMAT = (
+    "bv*[height<=1080][vcodec^=avc1]+ba[ext=m4a]"
+    "/bv*[height<=1080][vcodec^=avc1]+ba"
+    "/bv*[height<=1080]+ba"
+    "/b[height<=1080]"
+    "/bv*+ba/b"
+)
+
+
 def download_video(
     youtube_url,
     job_id,
@@ -703,7 +715,7 @@ def download_video(
             "mp4",
 
             "-f",
-            "bv*+ba/b",
+            YTDLP_FORMAT,
 
             "-o",
             template,
@@ -788,9 +800,12 @@ def extract_audio(
 # WHISPER
 # ============================================================
 
+# faster-whisper (CTranslate2) since R-07; was openai-whisper.
 # WHISPER_MODEL / WHISPER_LANGUAGE are runtime settings (default
-# base / id). The model is cached per process and reloaded only when
+# medium / id). The model is cached per process and reloaded only when
 # the WHISPER_MODEL setting changes.
+WHISPER_COMPUTE_TYPE = "int8"
+
 _whisper_model = None
 _whisper_model_name = None
 
@@ -808,12 +823,16 @@ def whisper_model():
         log(
             "Loading Whisper model: "
             + name
+            + f" (faster-whisper, {WHISPER_COMPUTE_TYPE}, CPU)"
         )
 
-        _whisper_model = (
-            whisper.load_model(
-                name
-            )
+        # Downloaded from the HF hub into HF_HOME on first use; that
+        # path is the hf_cache volume, so rebuilds don't redownload.
+        _whisper_model = WhisperModel(
+            name,
+            device="cpu",
+            compute_type=WHISPER_COMPUTE_TYPE,
+            cpu_threads=os.cpu_count() or 4,
         )
 
         _whisper_model_name = name
@@ -829,30 +848,35 @@ def transcribe(
         "Transcribing audio locally"
     )
 
-    result = (
-        whisper_model()
-        .transcribe(
-            str(audio_path),
-            language=setting("WHISPER_LANGUAGE"),
-            task="transcribe",
-            word_timestamps=True,
-        )
+    raw_segments, _info = whisper_model().transcribe(
+        str(audio_path),
+        language=setting("WHISPER_LANGUAGE"),
+        task="transcribe",
+        word_timestamps=True,
     )
 
-    transcript = (
-        result.get(
-            "text",
-            "",
-        )
-        .strip()
-    )
+    # The generator does the actual decoding; materialize it once.
+    raw_segments = list(raw_segments)
+
+    transcript = "".join(
+        segment.text for segment in raw_segments
+    ).strip()
 
     segments = []
 
-    for segment in result.get(
-        "segments",
-        [],
-    ):
+    for raw in raw_segments:
+
+        # Same dict shape openai-whisper produced, so everything
+        # downstream (jobs.transcript_segments, make_ass) is unchanged.
+        segment = {
+            "start": raw.start,
+            "end": raw.end,
+            "text": raw.text,
+            "words": [
+                {"word": w.word, "start": w.start, "end": w.end}
+                for w in (raw.words or [])
+            ],
+        }
 
         words = []
 
@@ -3772,6 +3796,43 @@ def claim_analysis_job():
 # ANALYSIS PIPELINE
 # ============================================================
 
+class StageTimer:
+    """Logs how long each analysis stage took (R-07: measure before
+    optimizing). start(name) closes the previous stage and returns
+    the name, so `stage = timer.start("download")` keeps the existing
+    error_stage bookkeeping."""
+
+    def __init__(self, job_id):
+        self.job_id = job_id
+        self.started = time.monotonic()
+        self.current = None
+        self.current_started = None
+        self.done = []
+
+    def start(self, name):
+        self._close()
+        self.current = name
+        self.current_started = time.monotonic()
+        return name
+
+    def _close(self):
+        if self.current is None:
+            return
+        elapsed = time.monotonic() - self.current_started
+        self.done.append((self.current, elapsed))
+        log(f"Stage {self.current}: {elapsed:.1f}s")
+        self.current = None
+
+    def summary(self):
+        self._close()
+        total = time.monotonic() - self.started
+        log(
+            f"Stage timings job {self.job_id}: "
+            + " | ".join(f"{n} {t:.1f}s" for n, t in self.done)
+            + f" | total {total:.1f}s"
+        )
+
+
 def process_analysis_job(
     job
 ):
@@ -3780,7 +3841,10 @@ def process_analysis_job(
 
     source_id = job["source_id"]
 
-    stage = "initialization"
+    # R-07: per-stage wall time, one summary line per job.
+    timer = StageTimer(job_id)
+
+    stage = timer.start("initialization")
 
     try:
 
@@ -3814,7 +3878,7 @@ def process_analysis_job(
 
         if job["original_status"] == "queued":
 
-            stage = "download"
+            stage = timer.start("download")
 
             update_job(
                 job_id,
@@ -3833,7 +3897,7 @@ def process_analysis_job(
             # AV1 NORMALIZATION
             # ------------------------------------------------
 
-            stage = "video_normalization"
+            stage = timer.start("video_normalization")
 
             update_job(
                 job_id,
@@ -3865,7 +3929,7 @@ def process_analysis_job(
 
                 conn.commit()
 
-            stage = "audio_extraction"
+            stage = timer.start("audio_extraction")
 
             update_job(
                 job_id,
@@ -3880,7 +3944,7 @@ def process_analysis_job(
                 )
             )
 
-            stage = "transcription"
+            stage = timer.start("transcription")
 
             update_job(
                 job_id,
@@ -3921,7 +3985,7 @@ def process_analysis_job(
             # Reanalysis should use existing source path.
             if source_path:
 
-                stage = "video_normalization"
+                stage = timer.start("video_normalization")
 
                 source_path = (
                     normalize_video(
@@ -3957,7 +4021,7 @@ def process_analysis_job(
         # GEMINI
         # ----------------------------------------------------
 
-        stage = "ai_analysis"
+        stage = timer.start("ai_analysis")
 
         update_job(
             job_id,
@@ -4106,7 +4170,7 @@ def process_analysis_job(
 
                 conn.commit()
 
-            stage = (
+            stage = timer.start(
                 f"preview_{index + 1}"
             )
 
@@ -4290,6 +4354,10 @@ def process_analysis_job(
                 + detail[-8000:]
             ),
         )
+
+    finally:
+
+        timer.summary()
 
 
 # ============================================================

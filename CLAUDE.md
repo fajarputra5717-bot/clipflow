@@ -12,7 +12,7 @@ docker-compose.yml   project name "riftstorm" → volume riftstorm_postgres_data
 .env                 secrets (gitignored; never print, never commit)
 db/init.sql          base tables, runs once on an empty volume
 backend/app/main.py  FastAPI  (container riftstorm-backend, :8000, 127.0.0.1 only)
-worker/worker.py     worker   (riftstorm-worker; models in /app/models, fonts in worker/fonts)
+worker/worker.py     worker   (riftstorm-worker; face model in /app/models, Whisper in hf_cache volume, fonts in worker/fonts)
 frontend/html/       index.html served by riftstorm-frontend (nginx :80)
 frontend/conf.d/     nginx conf (dynamic resolver, see comments)
 shared/              python package copied into backend+worker images at /app/shared
@@ -88,6 +88,15 @@ exported video by `make_ass()` in worker.py, not CSS-only preview
 fluff. The frontend's `SUBTITLE_STYLE_PREVIEW` / `SUBTITLE_ANIMATIONS`
 in index.html are a *hand-maintained mirror* for the live CSS
 preview — keep them in sync manually if you change the ASS side.
+
+## Transcription (R-07)
+
+faster-whisper (int8, CPU) via `whisper_model()` / `transcribe()` in
+worker.py; model = `WHISPER_MODEL` setting (default medium; this box
+has it as an app_setting because `.env` pins base). Models live in the
+`hf_cache` volume (`HF_HOME=/cache/huggingface`). `transcribe()` must
+keep returning per-word `{word,start,end}`: karaoke depends on it.
+Every analysis stage is timed (`StageTimer`, one summary log line).
 
 ## Facecam layout hint
 

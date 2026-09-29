@@ -1,6 +1,5 @@
-# torch is installed separately in the Dockerfile from the CPU-only index
-# (the default wheel pulls ~2GB of CUDA libraries this box can't use).
-openai-whisper>=20240930
+# Transcription (R-07): CTranslate2 int8 on CPU, word-level timestamps.
+faster-whisper>=1.2,<2
 # <5: OpenCV 5 removed cv2.dnn.readNetFromCaffe (our res10 face detector).
 opencv-python-headless>=4.10,<5
 numpy>=1.26

@@ -29,7 +29,9 @@ CACHE_TTL_SECONDS = 5.0
 DEFAULT_SETTINGS = {
     "GEMINI_ANALYSIS_MODEL": "gemini-3.6-flash",
     "GEMINI_MAX_ATTEMPTS": "4",
-    "WHISPER_MODEL": "base",
+    # faster-whisper model name (R-07): tiny|base|small|medium|large-v3.
+    # medium int8 on CPU ≈ the old openai-whisper base speed.
+    "WHISPER_MODEL": "medium",
     "WHISPER_LANGUAGE": "id",
     "CLIP_COUNT": "2",
     "CLIP_TARGET_DURATION": "35",

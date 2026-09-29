@@ -17,8 +17,7 @@ RUN curl -fsSL -o /tmp/deno.zip \
         https://github.com/denoland/deno/releases/latest/download/deno-x86_64-unknown-linux-gnu.zip \
     && unzip -o /tmp/deno.zip -d /usr/local/bin && rm /tmp/deno.zip && deno --version
 
-# CPU-only torch first, then the rest
-RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
+# No torch: transcription is faster-whisper (CTranslate2) since R-07.
 COPY requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
 

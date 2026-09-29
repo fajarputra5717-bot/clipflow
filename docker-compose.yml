@@ -58,10 +58,14 @@ services:
     container_name: riftstorm-worker
     restart: unless-stopped
     env_file: .env
-    environment: *app-env
+    environment:
+      <<: *app-env
+      # faster-whisper models come from the Hugging Face hub; the cache
+      # lives in a named volume so image rebuilds don't redownload (R-07).
+      HF_HOME: /cache/huggingface
     volumes:
       - /data:/data
-      - whisper_cache:/root/.cache/whisper
+      - hf_cache:/cache/huggingface
     depends_on:
       postgres: { condition: service_healthy }
     logging: *logging
@@ -99,5 +103,5 @@ services:
 
 volumes:
   postgres_data:
-  whisper_cache:
+  hf_cache:
   n8n_data:
