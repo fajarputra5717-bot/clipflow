@@ -197,60 +197,6 @@ a{color:inherit}
 .version-popover-title{font-size:11.5px;font-weight:700;color:var(--text);margin-bottom:8px}
 .version-popover ul{margin:0;padding-left:16px;display:flex;flex-direction:column;gap:5px}
 .version-popover li{font-size:11px;color:var(--muted);line-height:1.4}
-/* Tabs pill + job island (R-13). Two independent capsules in one sticky
-   row; neither ever changes its layout size.
-   - Tabs: constant size (equal-width grid columns, so the indicator only
-     translates). Docking on scroll = transform:scale on the whole pill
-     plus an opacity cross-fade between two shadow layers (::before bar,
-     ::after docked). No width/padding/radius/gap ever transitions, so
-     nothing relayouts and the children never reflow mid-morph.
-   - One scroll handler (initTopbarDock) owns .condensed, with
-     hysteresis (dock > 64px, undock < 48px). Dock is a touch slower than
-     undock (asymmetric). will-change is set only while moving.
-   - Job island: separate capsule, absolutely positioned at the row's
-     leading edge (never shifts the tabs), fixed width capped so it
-     cannot reach the centered tabs; below the tabs when the row is
-     narrow (container query). Enter/exit = opacity + transform. */
-.topbar{
-  position:sticky;top:10px;z-index:50;margin:0 0 14px;
-  display:flex;align-items:center;justify-content:center;min-height:48px;
-  container:topbar/inline-size;
-}
-.tabs{
-  --dock-scale:1;
-  position:relative;display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:4px;flex:0 0 auto;
-  padding:5px;border-radius:999px;
-  border:1px solid rgba(0,0,0,.08);
-  background:rgba(255,255,255,.72);
-  backdrop-filter:var(--material-blur);-webkit-backdrop-filter:var(--material-blur);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.9);
-  transform:scale(var(--dock-scale));transform-origin:50% 0;
-  transition:transform var(--dur-3) cubic-bezier(.2,.9,.3,1.06);
-}
-.tabs.is-moving{will-change:transform}
-.tabs:before,.tabs:after{
-  content:"";position:absolute;inset:-1px;border-radius:inherit;pointer-events:none;z-index:-1;
-}
-.tabs:before{box-shadow:0 10px 30px rgba(0,0,0,.08);opacity:1;transition:opacity var(--dur-3) ease-out}
-.tabs:after{box-shadow:0 12px 28px rgba(0,0,0,.16),0 2px 6px rgba(0,0,0,.06);opacity:0;transition:opacity var(--dur-3) ease-out}
-.topbar.condensed .tabs{--dock-scale:.88;transition-duration:var(--dur-4);transition-timing-function:cubic-bezier(.22,1,.36,1)}
-.topbar.condensed .tabs:before{opacity:0;transition-duration:var(--dur-4)}
-.topbar.condensed .tabs:after{opacity:1;transition-duration:var(--dur-4)}
-.tab-indicator{
-  position:absolute;top:5px;left:0;height:calc(100% - 10px);width:0;
-  border-radius:999px;background:#fff;
-  box-shadow:0 1px 4px rgba(0,0,0,.12),0 0 0 1px rgba(0,0,0,.04);
-  transform:translateX(0);
-  transition:transform var(--dur-3) cubic-bezier(.22,1,.36,1);
-  pointer-events:none;z-index:0;
-}
-.tab{
-  position:relative;z-index:1;padding:10px 16px;border-radius:999px;color:var(--muted);font-size:12px;font-weight:600;
-  text-align:center;white-space:nowrap;cursor:pointer;transition:color var(--dur-1) ease;
-}
-.tab:hover{color:var(--text)}.tab.active{color:var(--text)}
-.tab:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-
 .job-island{
   position:absolute;left:0;top:50%;
   width:min(240px,calc(50cqi - var(--tabs-half,100px) - 16px));min-width:0;min-height:44px;
@@ -288,69 +234,7 @@ a{color:inherit}
   background:linear-gradient(90deg,#0071e3,#2997ff,#64b5ff,#2997ff,#0071e3);background-size:200% 100%;
   transition:transform var(--dur-4) cubic-bezier(.22,1,.36,1);animation:flow 3.2s linear infinite;
 }
-@container topbar (max-width:600px){
-  .job-island{
-    left:50%;top:calc(100% + 6px);width:min(280px,calc(100cqi - 16px));
-    transform:translate(-50%,-6px) scale(.94);transform-origin:center top;
-  }
-  .job-island.is-visible{transform:translate(-50%,0) scale(1)}
-  .job-island.is-visible:hover:not(:disabled){transform:translate(-50%,0) scale(1.02)}
-  .job-island.is-visible:active:not(:disabled){transform:translate(-50%,0) scale(var(--press))}
-}
 .sr-only{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
-
-/* Floating brand chip: hidden while the real header + logo are on
-   screen. Once the header scrolls away (the same moment the topbar
-   condenses into its small pill) a mini "R" logo fades in, pinned to
-   the right edge of the sticky bar — a stand-in for the logo you can
-   no longer see above. It stays in a tiny idle/collapsed state until
-   the pointer rests on it or it's tapped, then eases open to reveal
-   the brand name; tapping it scrolls back up to the real header,
-   which makes the chip fade out again on its own (initTopbarDock owns
-   .condensed). */
-.topbar-logo{
-  position:absolute;right:2px;top:50%;
-  display:flex;align-items:center;gap:0;
-  padding:6px;border-radius:999px;cursor:pointer;overflow:hidden;white-space:nowrap;
-  max-width:34px;
-  background:rgba(255,255,255,.78);
-  border:1px solid rgba(0,0,0,.08);
-  backdrop-filter:var(--material-blur);-webkit-backdrop-filter:var(--material-blur);
-  box-shadow:0 10px 26px rgba(0,0,0,.10),inset 0 1px 0 rgba(255,255,255,.9);
-  opacity:0;visibility:hidden;pointer-events:none;
-  transform:translateY(-50%) scale(.75);
-  transition:
-    opacity var(--dur-4) ease,
-    transform var(--dur-4) var(--ease),
-    visibility 0s linear var(--dur-4),
-    max-width var(--dur-4) var(--ease),
-    padding var(--dur-4) var(--ease),
-    gap var(--dur-4) var(--ease),
-    box-shadow var(--dur-3) ease,border-color var(--dur-3) ease;
-}
-.topbar.condensed .topbar-logo{
-  opacity:1;visibility:visible;pointer-events:auto;
-  transform:translateY(-50%) scale(1);
-  transition-delay:0s;
-}
-.topbar-logo:hover,.topbar-logo:focus-visible,.topbar-logo.expanded{
-  max-width:150px;padding:6px 14px 6px 6px;gap:8px;
-  border-color:rgba(0,113,227,.3);
-  box-shadow:0 14px 30px rgba(0,0,0,.12),0 0 0 1px rgba(0,113,227,.06),inset 0 1px 0 rgba(255,255,255,.9);
-}
-.topbar-logo:active{transform:translateY(-50%) scale(var(--press));transition-duration:var(--dur-1)}.topbar-logo-icon{
-  width:22px;height:22px;flex:0 0 22px;border-radius:8px;display:grid;place-items:center;
-  font-weight:700;font-size:11px;color:#fff;
-  background:linear-gradient(145deg,#0071e3,#42a1ff);box-shadow:inset 0 1px 0 rgba(255,255,255,.3);
-}
-.topbar-logo-text{
-  font-size:10.5px;font-weight:600;letter-spacing:-.005em;color:var(--text);
-  opacity:0;max-width:0;overflow:hidden;
-  transition:opacity var(--dur-3) ease var(--dur-1),max-width var(--dur-4) var(--ease);
-}
-.topbar-logo:hover .topbar-logo-text,.topbar-logo:focus-visible .topbar-logo-text,.topbar-logo.expanded .topbar-logo-text{
-  opacity:1;max-width:110px;
-}
 
 /* Theme toggle — a plain small icon button beside the main header logo,
    plus a floating twin beside the condensed topbar-logo chip. Both
@@ -373,37 +257,6 @@ a{color:inherit}
 .theme-icon-moon{opacity:0;transform:rotate(-90deg) scale(.5)}
 [data-theme="dark"] .theme-icon-sun{opacity:0;transform:rotate(90deg) scale(.5)}
 [data-theme="dark"] .theme-icon-moon{opacity:1;transform:rotate(0) scale(1)}
-/* Floating twin, positioned to sit just left of the condensed
-   topbar-logo chip. Its exact `right` offset is set from JS
-   (syncThemeToggleFloatPosition) using the logo's real measured width
-   in each state, not a guessed constant — the logo's "expanded" width
-   is content-fit (shorter than its own CSS max-width cap), so a fixed
-   guess consistently left too big a gap. The transition below is what
-   makes that JS-driven move animate smoothly instead of jumping. */
-.theme-toggle-float{
-  position:absolute;right:42px;top:50%;
-  width:30px;height:30px;border-radius:50%;padding:0;
-  display:flex;align-items:center;justify-content:center;cursor:pointer;
-  background:rgba(255,255,255,.78);border:1px solid rgba(0,0,0,.08);color:var(--text);
-  backdrop-filter:var(--material-blur);-webkit-backdrop-filter:var(--material-blur);
-  box-shadow:0 10px 26px rgba(0,0,0,.10),inset 0 1px 0 rgba(255,255,255,.9);
-  opacity:0;visibility:hidden;pointer-events:none;
-  transform:translateY(-50%) scale(.75);
-  transition:
-    right var(--dur-4) var(--ease),
-    opacity var(--dur-4) ease,
-    transform var(--dur-4) var(--ease),
-    visibility 0s linear var(--dur-4),
-    background var(--dur-3) ease,border-color var(--dur-3) ease,box-shadow var(--dur-3) ease;
-}
-.theme-toggle-float .theme-icon-sun,.theme-toggle-float .theme-icon-moon{width:15px;height:15px}
-.topbar.condensed .theme-toggle-float{
-  opacity:1;visibility:visible;pointer-events:auto;
-  transform:translateY(-50%) scale(1);
-  transition-delay:0s;
-}
-.theme-toggle-float:hover{transform:translateY(-50%) scale(1.08)}
-.theme-toggle-float:active{transform:translateY(-50%) scale(var(--press));transition-duration:var(--dur-1)}
 
 /* Smooth iOS-style paging transition between tabs */
 .view-section{
@@ -1057,6 +910,59 @@ img.topbar-logo-icon{background:none;padding:0;object-fit:cover}
 .toast-action::after{content:"";position:absolute;inset:-6px}
 .toast-action:hover:not(:disabled){background:rgba(255,255,255,.22);box-shadow:none}
 [data-theme="dark"] .toast-action{background:rgba(255,255,255,.14);border-color:transparent!important}
+
+/* ===== 072: large-title toolbar + bottom tab bar ===== */
+.container{margin-top:0}
+.toolbar{
+  --p:0;position:sticky;top:0;z-index:60;height:52px;margin:0 calc(-1 * var(--sp-2));padding:0 var(--sp-2);
+}
+.toolbar-bg{position:absolute;inset:0;pointer-events:none;opacity:var(--p);
+  background:var(--material);backdrop-filter:var(--material-blur);-webkit-backdrop-filter:var(--material-blur)}
+/* hairline + scroll-edge fade: content dissolves into the bar instead of meeting a hard edge */
+.toolbar-bg::before{content:"";position:absolute;left:0;right:0;bottom:0;height:1px;background:var(--hairline)}
+.toolbar-bg::after{content:"";position:absolute;left:0;right:0;top:100%;height:14px;
+  background:linear-gradient(to bottom,color-mix(in srgb,var(--bg) 75%,transparent),transparent)}
+.toolbar-row{position:relative;display:flex;align-items:center;gap:var(--sp-1);height:100%}
+.page-title{
+  margin:0;flex:none;font-family:var(--font-display);font-size:34px;font-weight:700;letter-spacing:-.025em;line-height:1.1;white-space:nowrap;
+  transform-origin:left center;will-change:transform;
+  transform:translateY(calc((1 - var(--p)) * 46px)) scale(calc(1 - var(--p) * .5));
+}
+.title-spacer{height:52px}
+.toolbar-center{position:absolute;left:50%;top:0;height:100%;display:flex;align-items:center;transform:translateX(-50%);pointer-events:none}
+.toolbar-center > *{pointer-events:auto}
+.toolbar-trail{margin-left:auto;display:flex;align-items:center;gap:4px}
+.version-wrap{position:relative}
+.version-wrap .version-popover{left:auto;right:0}
+/* job island parks in the bar's centre until 073 rebuilds it */
+.toolbar .job-island{position:relative;left:auto;top:auto;width:min(260px,36vw);transform:scale(.92)}
+.toolbar .job-island.is-visible{transform:none}
+.toolbar .job-island.is-visible:hover:not(:disabled){transform:scale(1.02)}
+.toolbar .job-island.is-visible:active:not(:disabled){transform:scale(var(--press))}
+.tabbar{display:none}
+@media(max-width:600px){
+  .page-title{font-size:30px}
+  .version-wrap{display:none}
+  body{padding-bottom:calc(64px + env(safe-area-inset-bottom))}
+  .tabbar{
+    position:fixed;left:0;right:0;bottom:0;z-index:90;display:grid;grid-template-columns:repeat(4,1fr);
+    padding:4px 4px calc(4px + env(safe-area-inset-bottom));
+    background:var(--material);backdrop-filter:var(--material-blur);-webkit-backdrop-filter:var(--material-blur);
+    border-top:1px solid var(--hairline);
+  }
+  .tabbar-item{
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-height:52px;padding:4px 0;
+    border:0;border-radius:12px;background:transparent;box-shadow:none;color:var(--muted);font-size:10.5px;font-weight:500;
+    transition:color var(--dur-2) var(--ease),transform var(--dur-1) var(--ease);
+  }
+  [data-theme="dark"] .tabbar-item{background:transparent;border-color:transparent!important}
+  .tabbar-item:hover:not(:disabled){background:transparent;box-shadow:none;filter:none}
+  .tabbar-item:active:not(:disabled){transform:scale(var(--press))}
+  .tabbar-item .nav-icon{width:24px;height:24px;transition:transform var(--dur-3) var(--ease-spring)}
+  .tabbar-item[aria-current]{color:var(--accent)}
+  .tabbar-item[aria-current] .nav-icon{transform:scale(1.08)}
+  .toast{bottom:calc(76px + env(safe-area-inset-bottom))}
+}
 </style>
 </head>
 <body>
@@ -1093,15 +999,36 @@ img.topbar-logo-icon{background:none;padding:0;object-fit:cover}
 </aside>
 
 <div class="container">
-  <header class="brand">
-    <button class="sidebar-open-btn" type="button" data-sidebar-toggle aria-controls="sidebar" aria-expanded="true" aria-label="Show sidebar">
+  <!-- 072: iOS large-title toolbar. #pageTitle is one element: large under the bar at scroll 0, shrinking into the
+       bar as you scroll. applyToolbarProgress() maps scrollY -> --p (0..1) every frame (transform/opacity only). -->
+  <header class="toolbar" id="toolbar">
+    <div class="toolbar-bg" aria-hidden="true"></div>
+    <div class="toolbar-row">
+      <button class="sidebar-open-btn" type="button" data-sidebar-toggle aria-controls="sidebar" aria-expanded="true" aria-label="Show sidebar">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="15" rx="3"/><path d="M9.5 4.5v15"/></svg>
     </button>
-    <img class="logo" src="clipflow-mark.svg" alt="" width="44" height="44">
-    <div><h1>ClipFlow <button class="version-badge" id="versionBadge" type="button" aria-expanded="false">Beta · v2.1107</button></h1><p>Video clipping workspace · import → queue → publish</p>
-      <div class="version-popover" id="versionPopover" role="dialog" aria-hidden="true">
+      <h1 class="page-title" id="pageTitle">Import</h1>
+      <div class="toolbar-center"><button id="jobIsland" class="job-island" type="button" aria-label="Show running jobs" aria-hidden="true" aria-controls="jobOverlay" aria-expanded="false" disabled>
+      <span class="job-island-live" aria-hidden="true"></span>
+      <span class="job-island-main" aria-hidden="true">
+        <span class="job-island-top">
+          <span id="jobIslandTitle" class="job-island-title"></span>
+          <span id="jobIslandPct" class="job-island-pct">0%</span>
+        </span>
+        <span class="job-island-sub">
+          <span id="jobIslandStage" class="job-island-stage"></span>
+          <span id="jobIslandMore" class="job-island-more"></span>
+        </span>
+        <span class="job-island-track"><span id="jobIslandBar" class="job-island-bar"></span></span>
+      </span>
+    </button>
+    <span id="jobIslandLive" class="sr-only" role="status" aria-live="polite"></span></div>
+      <div class="toolbar-trail">
+        <div class="version-wrap"><button class="version-badge" id="versionBadge" type="button" aria-expanded="false">Beta · v2.1107</button>
+        <div class="version-popover" id="versionPopover" role="dialog" aria-hidden="true">
         <div class="version-popover-title">What's new in v2.1107</div>
         <ul>
+          <li>Large page title that glides into a slim toolbar as you scroll; bottom tab bar on phones</li>
           <li>Watermark library: preview tiles, drag-and-drop upload, delete with undo</li>
           <li>Import: Analyze enables only for a valid YouTube link, with an instant thumbnail preview</li>
           <li>Settings sheet: grouped lists, search, show/hide secrets, Save confirms inline</li>
@@ -1118,37 +1045,12 @@ img.topbar-logo-icon{background:none;padding:0;object-fit:cover}
           <li>Settings now take effect without a restart and only changed fields are saved</li>
           <li>Rebuilt on the new server (v2.1100 baseline)</li>
         </ul>
+      </div></div>
+        <button class="icon-btn refresh-btn" id="refreshView" type="button" aria-label="Refresh"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3"/><path d="M19.5 4.5v4h-4"/></svg></button>
       </div>
     </div>
-    <button class="icon-btn refresh-btn" id="refreshView" type="button" aria-label="Refresh"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3"/><path d="M19.5 4.5v4h-4"/></svg></button>
   </header>
-
-  <div class="topbar" id="topbarWrap">
-    <nav class="tabs" id="tabsNav" role="tablist" aria-label="Sections">
-      <div class="tab-indicator" id="tabIndicator"></div>
-      <div id="tabCurrent" class="tab active" data-tab="current" role="tab" tabindex="0" aria-selected="true" aria-controls="currentSection">Import</div>
-      <div id="tabQueue" class="tab" data-tab="queue" role="tab" tabindex="-1" aria-selected="false" aria-controls="queueSection">Publish</div>
-    </nav>
-    <button id="jobIsland" class="job-island" type="button" aria-label="Show running jobs" aria-hidden="true" aria-controls="jobOverlay" aria-expanded="false" disabled>
-      <span class="job-island-live" aria-hidden="true"></span>
-      <span class="job-island-main" aria-hidden="true">
-        <span class="job-island-top">
-          <span id="jobIslandTitle" class="job-island-title"></span>
-          <span id="jobIslandPct" class="job-island-pct">0%</span>
-        </span>
-        <span class="job-island-sub">
-          <span id="jobIslandStage" class="job-island-stage"></span>
-          <span id="jobIslandMore" class="job-island-more"></span>
-        </span>
-        <span class="job-island-track"><span id="jobIslandBar" class="job-island-bar"></span></span>
-      </span>
-    </button>
-    <span id="jobIslandLive" class="sr-only" role="status" aria-live="polite"></span>
-    <div class="topbar-logo" id="topbarLogo" role="button" tabindex="0" aria-label="ClipFlow — scroll to top">
-      <img class="topbar-logo-icon" src="clipflow-mark.svg" alt="">
-      <span class="topbar-logo-text">ClipFlow</span>
-    </div>
-  </div>
+  <div class="title-spacer" aria-hidden="true"></div>
 
   <div class="layout">
     <main>
@@ -1226,6 +1128,7 @@ img.topbar-logo-icon{background:none;padding:0;object-fit:cover}
 </div>
 </div>
 
+<nav class="tabbar" id="tabbar" aria-label="Main"><button class="tabbar-item" type="button" data-nav="current"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v10.5M8 10.5l4 4 4-4"/><path d="M4.5 15v2.5A2.5 2.5 0 0 0 7 20h10a2.5 2.5 0 0 0 2.5-2.5V15"/></svg><span>Import</span></button><button class="tabbar-item" type="button" data-nav="queue"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.5 3.5 10 14"/><path d="M20.5 3.5 14 20.5l-4-6.5-6.5-4z"/></svg><span>Publish</span></button><button class="tabbar-item" type="button" data-nav="watermarks" aria-haspopup="dialog"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="3"/><path d="m3.5 15.5 4.5-4.5 4 4"/><path d="M14.5 16h3"/></svg><span>Watermarks</span></button><button class="tabbar-item" type="button" data-nav="settings" aria-haspopup="dialog"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg><span>Settings</span></button></nav>
 <!-- Sheets (068): Settings and Watermarks open as centred dialogs from the sidebar. Closed = visibility:hidden + pointer-events:none. -->
 <div class="sheet-layer" id="settingsSheet" aria-hidden="true">
   <div class="sheet-backdrop" data-sheet-close></div>
@@ -2314,33 +2217,12 @@ async function refreshRunningJobs(){
 function startJobMonitor(){if(jobMonitorTimer)clearInterval(jobMonitorTimer);refreshRunningJobs();jobMonitorTimer=setInterval(refreshRunningJobs,POLL_INTERVAL)}
 function stopJobMonitor(){if(jobMonitorTimer){clearInterval(jobMonitorTimer);jobMonitorTimer=null}}
 
-function moveTabIndicator(){
-  const nav=$("tabsNav"),ind=$("tabIndicator");
-  const active=currentTab==="current"?$("tabCurrent"):$("tabQueue");
-  // offset* are layout values, unaffected by the dock transform:scale.
-  ind.style.width=active.offsetWidth+"px";
-  ind.style.transform=`translateX(${active.offsetLeft}px)`;
-  $("topbarWrap").style.setProperty("--tabs-half",(nav.offsetWidth/2)+"px");
-}
+function syncPageTitle(){const t=$("pageTitle");if(t)t.textContent=currentTab==="queue"?"Publish":"Import"}
 
-// Scrolls fully back up so the real header (and its logo) come back
-// into view — this is also what makes the floating logo chip and the
-// docked pill undock, since initTopbarDock drives both via .condensed.
-function scrollToHeader(){
-  window.scrollTo({top:0,behavior:scrollMode()});
-}
-
-// "Freeze pane" behavior: when a tab is clicked while scrolled past the
-// header, snap the page up just enough that the sticky topbar settles
-// at its docked offset and the section content starts immediately
-// beneath it — like a spreadsheet's frozen header row — instead of
-// leaving the view wherever it happened to be scrolled to.
+// Switching views while scrolled keeps the large title collapsed and puts the new section's top right
+// under the toolbar (instead of leaving it wherever the old view was scrolled to).
 function freezeUnderHeader(){
-  const wrap=$("topbarWrap");
-  if(!wrap || !wrap.classList.contains("condensed"))return;
-  const stickyTop=parseFloat(getComputedStyle(wrap).top)||10;
-  const targetY=window.scrollY+wrap.getBoundingClientRect().top-stickyTop;
-  if(targetY>4)window.scrollTo({top:targetY,behavior:scrollMode()});
+  if(window.scrollY>TITLE_RANGE)window.scrollTo({top:TITLE_RANGE,behavior:scrollMode()});
 }
 
 async function showTab(tab){
@@ -2369,10 +2251,7 @@ async function showTab(tab){
   next.style.setProperty("--slide-in",forward?"22px":"-22px");
 
   currentTab=tab;
-  $("tabCurrent").classList.toggle("active",tab==="current");
-  $("tabQueue").classList.toggle("active",tab==="queue");
-  [["tabCurrent","current"],["tabQueue","queue"]].forEach(([id,t])=>{$(id).setAttribute("aria-selected",String(tab===t));$(id).tabIndex=tab===t?0:-1});
-  moveTabIndicator();syncNav();
+  syncPageTitle();syncNav();
 
   prev.classList.remove("switching-in");
   prev.classList.add("switching-out");
@@ -2550,7 +2429,6 @@ document.addEventListener("click",e=>{
   }
   if(e.target.closest("[data-sidebar-toggle]"))return toggleSidebar();
   if(e.target.closest("#sidebarScrim"))return closeSidebarDrawer();
-  const t=e.target.closest(".tab");if(t)return showTab(t.dataset.tab);
   const tt=e.target.closest(".theme-toggle");if(tt)return toggleTheme();
   const sp=e.target.closest("[data-split]");if(sp)return selectSplit(sp.dataset.split);
   const pl=e.target.closest("[data-platform]");if(pl)return selectPlatform(pl.dataset.platform);
@@ -2601,11 +2479,7 @@ document.addEventListener("click",e=>{
 document.addEventListener("keydown",e=>{
   const el=e.target.closest("[data-split],[data-platform],[data-layout]");
   if(el&&(e.key==="Enter"||e.key===" ")){e.preventDefault();if(el.dataset.split)selectSplit(el.dataset.split);if(el.dataset.platform)selectPlatform(el.dataset.platform);if(el.dataset.layout)selectLayout(el.dataset.layout)}
-  const tb=e.target.closest(".tab");
-  if(tb&&(e.key==="Enter"||e.key===" ")){e.preventDefault();showTab(tb.dataset.tab)}
-  if(tb&&(e.key==="ArrowLeft"||e.key==="ArrowRight")){e.preventDefault();const next=tb.dataset.tab==="current"?"queue":"current";showTab(next);$(next==="current"?"tabCurrent":"tabQueue").focus()}
-  if(e.target.closest("#topbarLogo")&&(e.key==="Enter"||e.key===" ")){e.preventDefault();e.target.closest("#topbarLogo").click()}
-  if(e.key==="Escape"){closeJobOverlay();closeVersionPopover();collapseTopbarLogo();closeSidebarDrawer(true)}
+  if(e.key==="Escape"){closeJobOverlay();closeVersionPopover();closeSidebarDrawer(true)}
 });
 document.addEventListener("toggle",e=>{const d=e.target;if(d.tagName!=="DETAILS")return;d.querySelector(":scope > summary")?.setAttribute("aria-expanded",String(d.open));if(d.matches("[data-edit-more]"))editMoreOpen[d.dataset.cid+":"+d.dataset.editMore]=d.open},true);
 // Sidebar: desktop = collapsible column (remembered), narrow = drawer.
@@ -2654,64 +2528,8 @@ $("youtubeUrl").addEventListener("input",updateAnalyzeReady);
 $("jobIsland").addEventListener("click",e=>{e.preventDefault();e.stopPropagation();overlayOpen?closeJobOverlay():openJobOverlay()});
 $("jobOverlayClose").addEventListener("click",e=>{e.preventDefault();e.stopPropagation();closeJobOverlay()});
 
-// Floating logo chip: first tap/click reveals the "ClipFlow" label
-// (the idle → active reveal — hovering does the same thing for a
-// mouse, via CSS :hover); tapping again while it's already open
-// scrolls back up to the real header, which makes the chip itself
-// fade away once the header is back in view.
-//
-// The theme toggle beside it needs to slide over in sync. The logo's
-// "expanded" CSS state only sets a max-width *cap* (150px) — the actual
-// rendered width is whatever "ClipFlow" actually needs, which is
-// narrower — so a hardcoded guess for the toggle's offset consistently
-// left too big a gap. Measuring both real states once (cheap: the icon
-// and text never change at runtime) and caching them fixes that.
-let logoWidths=null;
-function measureLogoWidths(){
-  const logo=$("topbarLogo");
-  if(!logo)return{collapsed:34,expanded:108};
-  const prevTransition=logo.style.transition;
-  const wasExpanded=logo.classList.contains("expanded");
-  logo.style.transition="none";
-  logo.classList.remove("expanded");
-  const collapsed=logo.getBoundingClientRect().width;
-  logo.classList.add("expanded");
-  const expanded=logo.getBoundingClientRect().width;
-  logo.classList.toggle("expanded",wasExpanded);
-  void logo.offsetWidth;
-  logo.style.transition=prevTransition;
-  return{collapsed,expanded};
-}
-function setThemeToggleFloatExpanded(expanded){
-  const toggle=$("themeToggleFloat");
-  if(!toggle)return;
-  if(!logoWidths)logoWidths=measureLogoWidths();
-  const w=expanded?logoWidths.expanded:logoWidths.collapsed;
-  toggle.style.right=(2+w+8)+"px";
-}
-function collapseTopbarLogo(){$("topbarLogo")?.classList.remove("expanded");setThemeToggleFloatExpanded(false)}
-$("topbarLogo").addEventListener("mouseenter",()=>setThemeToggleFloatExpanded(true));
-$("topbarLogo").addEventListener("mouseleave",()=>setThemeToggleFloatExpanded($("topbarLogo").classList.contains("expanded")));
-$("topbarLogo").addEventListener("focus",()=>setThemeToggleFloatExpanded(true));
-$("topbarLogo").addEventListener("blur",()=>setThemeToggleFloatExpanded($("topbarLogo").classList.contains("expanded")));
-$("topbarLogo").addEventListener("click",e=>{
-  e.preventDefault();e.stopPropagation();
-  const chip=e.currentTarget;
-  if(chip.classList.contains("expanded")){
-    collapseTopbarLogo();
-    scrollToHeader();
-  }else{
-    chip.classList.add("expanded");
-    setThemeToggleFloatExpanded(true);
-  }
-});
-window.addEventListener("resize",()=>{logoWidths=null;setThemeToggleFloatExpanded($("topbarLogo")?.classList.contains("expanded"))});
-setThemeToggleFloatExpanded(false);
-document.addEventListener("click",e=>{
-  if(!e.target.closest("#topbarLogo"))collapseTopbarLogo();
-});
 window.addEventListener("load",async()=>{
-  selectSplit(70);selectPlatform("youtube_shorts");overlayOpen=false;updateAnalyzeReady();updateJobIsland();moveTabIndicator();syncNav();
+  selectSplit(70);selectPlatform("youtube_shorts");overlayOpen=false;updateAnalyzeReady();updateJobIsland();syncPageTitle();syncNav();
   // Key + media token first, so the first render already has working <img>/<video> URLs.
   // Token is stable for 12 h and valid 12-24 h; refresh hourly.
   await refreshMediaToken();setInterval(refreshMediaToken,60*60*1000);
@@ -2737,35 +2555,27 @@ window.addEventListener("resize",()=>{
   clearTimeout(_resizeSettleTimer);
   _resizeSettleTimer=setTimeout(()=>{
     document.body.classList.remove("resizing");
-    moveTabIndicator();
+    syncNav();
   },140);
 },{passive:true});
 window.addEventListener("beforeunload",()=>{stopPolling();stopJobMonitor()});
 
-// Tabs dock (R-13): the ONE owner of .condensed. rAF-throttled passive
-// scroll handler with hysteresis, so a short scroll around the threshold
-// can't flicker. will-change:transform is set only while the pill moves.
-(function initTopbarDock(){
-  const wrap=$("topbarWrap"),tabs=$("tabsNav");
-  if(!wrap||!tabs)return;
-  const DOCK_AT=64,UNDOCK_AT=48;
-  let docked=false,ticking=false,settleTimer=null;
-  function apply(next){
-    if(next===docked)return;
-    docked=next;
-    tabs.classList.add("is-moving");
-    clearTimeout(settleTimer);settleTimer=setTimeout(()=>tabs.classList.remove("is-moving"),600);
-    wrap.classList.toggle("condensed",docked);
-    if(!docked)collapseTopbarLogo();
-  }
-  function onScroll(){
+// Toolbar (072): the ONE scroll driver. scrollY maps continuously onto --p (0 = large title under the
+// bar, 1 = small title in the bar, material + hairline fully in). rAF-throttled, passive, and only
+// writes when the rounded value changes; CSS turns --p into transform/opacity only (no layout).
+const TITLE_RANGE=48;
+(function initToolbar(){
+  const bar=$("toolbar");if(!bar)return;
+  let ticking=false,last=-1;
+  function apply(){
     ticking=false;
-    const y=window.scrollY;
-    apply(docked?y>UNDOCK_AT:y>DOCK_AT);
+    const p=Math.min(1,Math.max(0,window.scrollY/TITLE_RANGE)),q=Math.round(p*1000)/1000;
+    if(q===last)return;last=q;
+    bar.style.setProperty("--p",q);bar.classList.toggle("is-collapsed",q>=1);
   }
-  tabs.addEventListener("transitionend",e=>{if(e.target===tabs&&e.propertyName==="transform"){clearTimeout(settleTimer);tabs.classList.remove("is-moving")}});
-  window.addEventListener("scroll",()=>{if(!ticking){ticking=true;requestAnimationFrame(onScroll)}},{passive:true});
-  onScroll();
+  window.addEventListener("scroll",()=>{if(!ticking){ticking=true;requestAnimationFrame(apply)}},{passive:true});
+  window.addEventListener("resize",()=>{last=-1;apply()},{passive:true});
+  apply();
 })();
 
 // ---- Sidebar navigation + sheets (068) ----

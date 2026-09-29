@@ -240,12 +240,14 @@ or preflights get 401.
   a stray layer once made the whole app unclickable. Import options
   (split/facecam/platform) live in `<details id="importOptions">`;
   `updateImportOptionsSummary()` runs from the `select*()` fns.
-- **Tabs pill:** constant layout size. Docking = `transform:scale` +
-  shadow cross-fade only. Never transition width/padding/gap on the scroll
-  path. `initTopbarDock()` is the **only** owner of `.topbar.condensed`
-  (rAF scroll handler, hysteresis dock >64 / undock <48 px). The old
-  `#headerSentinel` IntersectionObserver is gone. Don't add a second
-  scroll/observer driver. Tabs are `role=tab` with a roving tabindex.
+- **Toolbar (072, replaces the tabs pill):** sticky `#toolbar` with ONE title
+  element `#pageTitle` ("Import"/"Publish", `syncPageTitle()`). `initToolbar()`
+  is the **only** scroll driver: rAF, passive, maps `scrollY/TITLE_RANGE(48)` →
+  `--p` 0..1 continuously (no threshold/hysteresis); CSS derives title
+  translate/scale and `.toolbar-bg` (material + hairline + scroll-edge fade)
+  opacity from `--p` — transform/opacity only. Don't add another scroll
+  driver. ≤600 px: `#tabbar` bottom tab bar (same `[data-nav]`). Sidebar nav
+  is the navigation; there are no `role=tab` elements any more.
 - **Job island:** its own fixed-width capsule, absolutely positioned,
   never in the tabs' flow. It drops below the tabs via a `@container
   topbar` query. `updateJobIsland()` only toggles `.is-visible` + text; the
