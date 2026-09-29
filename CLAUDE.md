@@ -98,6 +98,15 @@ has it as an app_setting because `.env` pins base). Models live in the
 keep returning per-word `{word,start,end}`: karaoke depends on it.
 Every analysis stage is timed (`StageTimer`, one summary log line).
 
+## Caption fonts (R-19)
+
+`shared/fonts.py` `CAPTION_FONTS` is the whitelist (backend normaliser
++ worker `make_ass()`); index.html mirrors it by hand. Display fonts
+select weight by name ("Montserrat Black") with ASS Bold=0 — never add
+`\b`/Bold on top (libass faux bold). Unknown font → default + log line.
+Captions strip emoji (libass can't draw them). Files: `worker/fonts/`,
+also served to the browser at `/fonts/` (nginx alias).
+
 ## Facecam layout hint
 
 `jobs.layout` ∈ `auto|left|right`, set once at job creation (Import

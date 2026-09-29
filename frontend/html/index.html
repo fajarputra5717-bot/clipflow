@@ -16,6 +16,15 @@
 </script>
 <title>ClipFlow — Video Clipper</title>
 <style>
+/* Caption display fonts (R-19): worker/fonts mounted read-only at /fonts/ by nginx. */
+@font-face{font-family:"CF Montserrat";src:url("/fonts/montserrat/Montserrat%5Bwght%5D.ttf") format("truetype");font-weight:100 900;font-display:swap}
+@font-face{font-family:"CF Inter";src:url("/fonts/inter/Inter%5Bopsz,wght%5D.ttf") format("truetype");font-weight:100 900;font-display:swap}
+@font-face{font-family:"CF Oswald";src:url("/fonts/oswald/Oswald%5Bwght%5D.ttf") format("truetype");font-weight:200 700;font-display:swap}
+@font-face{font-family:"CF Poppins";src:url("/fonts/poppins/Poppins-Bold.ttf") format("truetype");font-weight:700;font-display:swap}
+@font-face{font-family:"CF Poppins";src:url("/fonts/poppins/Poppins-ExtraBold.ttf") format("truetype");font-weight:800;font-display:swap}
+@font-face{font-family:"CF Anton";src:url("/fonts/anton/Anton-Regular.ttf") format("truetype");font-display:swap}
+@font-face{font-family:"CF Bebas Neue";src:url("/fonts/bebas-neue/BebasNeue-Regular.ttf") format("truetype");font-display:swap}
+@font-face{font-family:"CF Archivo Black";src:url("/fonts/archivo-black/ArchivoBlack-Regular.ttf") format("truetype");font-display:swap}
 *{box-sizing:border-box}
  :root{
   --bg:#f5f5f7;--panel:#ffffff;--panel2:#fbfbfd;--input:#ffffff;
@@ -917,10 +926,11 @@ summary > .chev{margin-left:auto}
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="15" rx="3"/><path d="M9.5 4.5v15"/></svg>
     </button>
     <div class="logo">R</div>
-    <div><h1>ClipFlow <button class="version-badge" id="versionBadge" type="button" aria-expanded="false">BETA · v2.1106</button></h1><p>Video clipping workspace · import → queue → publish</p>
+    <div><h1>ClipFlow <button class="version-badge" id="versionBadge" type="button" aria-expanded="false">BETA · v2.1107</button></h1><p>Video clipping workspace · import → queue → publish</p>
       <div class="version-popover" id="versionPopover" role="dialog" aria-hidden="true">
-        <div class="version-popover-title">What's new in v2.1106</div>
+        <div class="version-popover-title">What's new in v2.1107</div>
         <ul>
+          <li>11 new caption fonts (Montserrat, Inter, Oswald, Poppins, Anton, Bebas Neue, Archivo Black), shown in their own typeface</li>
           <li>Every expandable section uses the same chevron that turns when it opens</li>
           <li>Status badges: clearer colours (grey waiting, blue working, amber needs you) that pass contrast in light and dark</li>
           <li>Per-job watermark size and opacity in the edit panel</li>
@@ -1082,7 +1092,10 @@ const SUBTITLE_STYLE_PREVIEW={
   pastel:{resting:"#FFF6EC",highlight:"#FFB4C6",weight:700,outline:1.5,shadow:true,box:false,sizeMult:.95,letterSpacing:"0"},
   gold:{resting:"#fff",highlight:"#FFC300",weight:800,outline:.5,shadow:false,box:true,sizeMult:1,letterSpacing:"0"}
 };
-const SUBTITLE_FONTS=["Liberation Sans Bold","Liberation Sans","Noto Sans Bold","Noto Sans","DejaVu Sans Bold","DejaVu Sans"];
+// Mirrors shared/fonts.py CAPTION_FONTS (exact names go into the ASS Style line).
+const SUBTITLE_FONTS=["Liberation Sans Bold","Liberation Sans","Noto Sans Bold","Noto Sans","DejaVu Sans Bold","DejaVu Sans",
+  "Montserrat Black","Montserrat ExtraBold","Montserrat Bold","Inter Black","Inter Bold","Oswald Bold",
+  "Poppins ExtraBold","Poppins Bold","Anton","Bebas Neue","Archivo Black"];
 // None of these exact server-rendered fonts are installed in a
 // browser, so mapping the live preview straight to font-family:"Noto
 // Sans Bold" (etc.) silently falls back to the same generic sans for
@@ -1097,7 +1110,23 @@ const SUBTITLE_FONT_PREVIEW_STACK={
   "Noto Sans":'"Segoe UI",Roboto,"Helvetica Neue",sans-serif',
   "DejaVu Sans Bold":'Verdana,Tahoma,Geneva,sans-serif',
   "DejaVu Sans":'Verdana,Tahoma,Geneva,sans-serif',
+  // Display fonts (R-19) are the real files, served from /fonts/ (worker/fonts), so the
+  // preview and the dropdown show the actual typeface.
+  "Montserrat Black":'"CF Montserrat",sans-serif',
+  "Montserrat ExtraBold":'"CF Montserrat",sans-serif',
+  "Montserrat Bold":'"CF Montserrat",sans-serif',
+  "Inter Black":'"CF Inter",sans-serif',
+  "Inter Bold":'"CF Inter",sans-serif',
+  "Oswald Bold":'"CF Oswald",sans-serif',
+  "Poppins ExtraBold":'"CF Poppins",sans-serif',
+  "Poppins Bold":'"CF Poppins",sans-serif',
+  "Anton":'"CF Anton",Impact,sans-serif',
+  "Bebas Neue":'"CF Bebas Neue",Impact,sans-serif',
+  "Archivo Black":'"CF Archivo Black",sans-serif',
 };
+// Display fonts carry their weight in the name; it overrides the style preset's weight.
+const SUBTITLE_FONT_WEIGHT={"Montserrat Black":900,"Montserrat ExtraBold":800,"Montserrat Bold":700,"Inter Black":900,
+  "Inter Bold":700,"Oswald Bold":700,"Poppins ExtraBold":800,"Poppins Bold":700,"Anton":400,"Bebas Neue":400,"Archivo Black":400};
 // Mirrors the ANIMATIONS catalog in worker.py's make_ass() — these
 // are real, distinct entrance effects baked into the exported video
 // (ASS override tags), not just a UI flourish. The "mode" here only
@@ -1488,7 +1517,7 @@ function renderCandidate(c,jid,platform,job={}){
           <textarea id="sub-${esc(c.id)}">${esc(sub)}</textarea>
           <div class="edit-style-row">
             <div><label>Font style</label><select id="style-${esc(c.id)}">${SUBTITLE_STYLES.map(([v,l])=>`<option value="${v}" ${v===styleName?"selected":""}>${l}</option>`).join("")}</select></div>
-            <div><label>Font</label><select id="font-${esc(c.id)}">${SUBTITLE_FONTS.map(x=>`<option ${x===fontName?"selected":""}>${esc(x)}</option>`).join("")}</select></div>
+            <div><label>Font</label><select id="font-${esc(c.id)}">${SUBTITLE_FONTS.map(x=>`<option ${x===fontName?"selected":""} style="font-family:${esc(SUBTITLE_FONT_PREVIEW_STACK[x]||"inherit")};font-weight:${SUBTITLE_FONT_WEIGHT[x]||700}">${esc(x)}</option>`).join("")}</select></div>
             <div><label>Size</label><input id="size-${esc(c.id)}" type="number" min="12" max="120" value="${esc(size)}"></div>
             <div><label>Animation</label><select id="anim-${esc(c.id)}">${SUBTITLE_ANIMATIONS.map(([v,l])=>`<option value="${v}" ${v===animName?"selected":""}>${l}</option>`).join("")}</select></div>
           </div>
@@ -1587,7 +1616,7 @@ function updateCaptionPreview(cid){
 
   textEl.style.setProperty("--cap-resting",cfg.resting);
   textEl.style.setProperty("--cap-highlight",cfg.highlight);
-  textEl.style.setProperty("--cap-weight",cfg.weight);
+  textEl.style.setProperty("--cap-weight",SUBTITLE_FONT_WEIGHT[fontSel?.value]||cfg.weight);
   textEl.style.setProperty("--cap-outline",cfg.outline+"px");
   textEl.style.setProperty("--cap-shadow",cfg.shadow?"0 2px 4px rgba(0,0,0,.55)":"none");
   textEl.style.fontFamily=SUBTITLE_FONT_PREVIEW_STACK[fontSel?.value]||'Arial,Helvetica,sans-serif';

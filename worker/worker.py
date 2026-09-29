@@ -19,6 +19,7 @@ from faster_whisper import WhisperModel
 from psycopg.rows import dict_row
 
 from shared.ai import router as ai_router
+from shared.fonts import caption_font_bold, normalize_caption_font
 from shared.settings import RuntimeSettings
 
 
@@ -1473,6 +1474,15 @@ def normalize_subtitle_font(
     )
 
 
+def resolve_caption_font(requested):
+    """Catalog name the ASS Style line will use (R-19). Unknown names
+    fall back to the default with a log line instead of silently."""
+    font, known = normalize_caption_font(requested)
+    if not known:
+        log(f"Unknown caption font {requested!r}; using {font}")
+    return font
+
+
 def normalize_subtitle_size(
     job,
     default=42,
@@ -2369,6 +2379,12 @@ def ass_time(
 # combined with any animation. All are pure ASS override tags — no
 # \move/\pos math, so they stay correct regardless of alignment/
 # margins.
+# Each chunk/word is its own Dialogue event and every tag string below
+# starts by setting its own base values before any \t. Keep it that
+# way: libass carries an override (\t included) over to every later
+# word in the SAME event, so an in-line per-word effect must reset each
+# word's base values (\fscx100\fscy100\c...) before its \t (libass
+# spike, docs/changes/065).
 ANIMATION_ENTRANCE_TAGS = {
 
     # No per-word/per-line entrance effect at all — captions simply
@@ -2441,6 +2457,26 @@ ANIMATIONS = {
 }
 
 
+# Pictographs, dingbats, flags, keycap/variation selectors, ZWJ.
+# libass can't draw colour emoji (docs/changes/065), so captions drop
+# them instead of showing tofu or a monochrome outline (R-19).
+_EMOJI_RE = re.compile(
+    "["
+    "\U0001F000-\U0001FAFF"  # emoji, pictographs, symbols, flags
+    "\u2600-\u27BF"          # misc symbols + dingbats (☀ ✅ ❤)
+    "\u2B00-\u2BFF"          # arrows/stars (⭐ ⬆)
+    "\u2300-\u23FF"          # technical (⌚ ⏰ ⏩)
+    "\uFE00-\uFE0F"          # variation selectors
+    "\u200D"                  # zero-width joiner
+    "\u20E3"                  # keycap
+    "]+"
+)
+
+
+def strip_emoji(text):
+    return re.sub(r"[ \t]{2,}", " ", _EMOJI_RE.sub("", text or ""))
+
+
 def make_ass(
     segments,
     path,
@@ -2464,6 +2500,10 @@ def make_ass(
     animation = (animation or "karaoke").strip().lower()
     if animation not in ANIMATIONS:
         animation = "karaoke"
+
+    # The exact catalog name goes into the Style line (R-19): the
+    # family name selects the weight (e.g. "Montserrat Black").
+    font = resolve_caption_font(font)
 
     anim = ANIMATIONS[animation]
 
@@ -2660,7 +2700,7 @@ def make_ass(
             f"{to_ass_color(setting['resting'])},"
             "&H00000000,"
             f"{to_ass_color(setting['back'])},"
-            f"{setting['bold']},"
+            f"{caption_font_bold(font, setting['bold'])},"
             "0,0,0,"
             "100,100,0,0,"
             f"{setting['border_style']},"
@@ -2682,6 +2722,12 @@ def make_ass(
     ]
 
     def esc(raw_text):
+        # Emoji can't render in libass (tofu / monochrome outline /
+        # blank, see docs/changes/065), so they're dropped from
+        # captions entirely (R-19).
+        # Every caller passes a whole line or one word, so trimming the
+        # edge left by a removed emoji is safe (keeps lines centered).
+        raw_text = strip_emoji(raw_text).strip()
         return (
             raw_text
             .replace("\\", r"\\")

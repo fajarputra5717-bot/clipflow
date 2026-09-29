@@ -20,6 +20,7 @@ from pydantic import BaseModel, Field
 
 from shared.ai import router as ai_router
 from shared.errors import AINotConfiguredError
+from shared.fonts import normalize_caption_font
 from shared.settings import (
     DEFAULT_SETTINGS,
     SECRET_SETTING_KEYS,
@@ -338,10 +339,18 @@ def normalize_subtitle_style(
     if style["animation"] not in SUBTITLE_ANIMATIONS:
         style["animation"] = "karaoke"
 
-    # Sanitize fields
-    style["font"] = str(
-        style.get("font", "Liberation Sans Bold")
+    # Sanitize fields. The font must be one the worker can render
+    # (shared/fonts.py); an unknown name falls back to the default,
+    # loudly, so a dropped font choice shows up in the logs (R-19).
+    style["font"], known_font = normalize_caption_font(
+        style.get("font")
     )
+
+    if not known_font:
+        print(
+            "[backend] unknown subtitle font "
+            f"{str(font or value)[:60]!r}; using {style['font']}"
+        )
 
     try:
         style["size"] = int(style.get("size", 42))

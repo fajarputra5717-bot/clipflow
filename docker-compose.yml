@@ -81,6 +81,11 @@ services:
     volumes:
       - ./frontend/html:/usr/share/nginx/html:ro
       - ./frontend/conf.d:/etc/nginx/conf.d:ro
+      # Caption fonts for the edit panel's preview/dropdown (R-19): the
+      # same OFL files the worker renders with, not a second copy.
+      # Outside the read-only html root (a nested mountpoint can't be
+      # created there); served by `location /fonts/` in default.conf.
+      - ./worker/fonts:/usr/share/nginx/fonts:ro
     depends_on:
       - backend
     logging: *logging
