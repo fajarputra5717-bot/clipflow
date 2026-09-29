@@ -49,13 +49,13 @@ html[data-theme="dark"]{color-scheme:dark}
 [data-theme="dark"] button.secondary:hover:not(:disabled){background:#2c2c2e}
 [data-theme="dark"] button.ghost{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.1)}
 [data-theme="dark"] .version-popover{background:rgba(28,28,30,.92);border-color:rgba(255,255,255,.1);box-shadow:0 20px 50px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.06)}
-[data-theme="dark"] .tabs{background:rgba(28,28,30,.68);border-color:rgba(255,255,255,.09);box-shadow:0 10px 30px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.08)}
-[data-theme="dark"] .tabs:before{background:linear-gradient(90deg,transparent,rgba(255,255,255,.2),transparent)}
-[data-theme="dark"] .topbar.condensed .tabs{box-shadow:0 8px 24px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.08)}
+[data-theme="dark"] .tabs{background:rgba(28,28,30,.68);border-color:rgba(255,255,255,.09);box-shadow:inset 0 1px 0 rgba(255,255,255,.08)}
+[data-theme="dark"] .tabs:before{box-shadow:0 10px 30px rgba(0,0,0,.35)}
+[data-theme="dark"] .tabs:after{box-shadow:0 12px 28px rgba(0,0,0,.5),0 2px 6px rgba(0,0,0,.3)}
 [data-theme="dark"] .tab-indicator{background:#3a3a3c;box-shadow:0 1px 4px rgba(0,0,0,.3),0 0 0 1px rgba(255,255,255,.06)}
-[data-theme="dark"] .job-island{background:linear-gradient(180deg,rgba(10,132,255,.14) 0%,rgba(28,28,30,.82) 42%,rgba(28,28,30,.82) 100%)}
-[data-theme="dark"] .job-island.is-visible{border-color:rgba(10,132,255,.35);box-shadow:0 14px 34px rgba(0,0,0,.4),0 6px 18px rgba(10,132,255,.14),inset 0 1px 0 rgba(255,255,255,.08)}
-[data-theme="dark"] .job-island.is-visible:hover{box-shadow:0 16px 36px rgba(0,0,0,.45),0 6px 18px rgba(10,132,255,.18),inset 0 1px 0 rgba(255,255,255,.08)}
+[data-theme="dark"] .job-island{background:rgba(28,28,30,.84);border-color:rgba(10,132,255,.35)!important;box-shadow:0 12px 30px rgba(0,0,0,.4),0 4px 14px rgba(10,132,255,.14),inset 0 1px 0 rgba(255,255,255,.08)}
+[data-theme="dark"] .job-island.is-visible:hover:not(:disabled){background:rgba(28,28,30,.84)}
+[data-theme="dark"] .job-island-pct,[data-theme="dark"] .job-island-more{color:#409cff}
 [data-theme="dark"] .job-island-track{background:#3a3a3c}
 [data-theme="dark"] .topbar-logo,[data-theme="dark"] .theme-toggle-float{background:rgba(28,28,30,.78);border-color:rgba(255,255,255,.1);box-shadow:0 10px 26px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.08)}
 [data-theme="dark"] .topbar-logo:hover,[data-theme="dark"] .topbar-logo:focus-visible,[data-theme="dark"] .topbar-logo.expanded{box-shadow:0 14px 30px rgba(0,0,0,.45),0 0 0 1px rgba(10,132,255,.12),inset 0 1px 0 rgba(255,255,255,.08)}
@@ -143,128 +143,107 @@ a{color:inherit}
 .version-popover-title{font-size:11.5px;font-weight:700;color:var(--text);margin-bottom:8px}
 .version-popover ul{margin:0;padding-left:16px;display:flex;flex-direction:column;gap:5px}
 .version-popover li{font-size:11px;color:var(--muted);line-height:1.4}
-/* The tabs pill and the job island are two independent "capsules" that
-   live inside one sticky, horizontally-centered row. Centering the row
-   (rather than the tabs pill alone) is what makes the whole cluster
-   re-center itself, as a group, the moment the job island pops in or
-   out — mirroring how iPhone's Dynamic Island nudges surrounding
-   content as it grows, rather than the tabs staying pinned in place. */
+/* Tabs pill + job island (R-13). Two independent capsules in one sticky
+   row; neither ever changes its layout size.
+   - Tabs: constant size (equal-width grid columns, so the indicator only
+     translates). Docking on scroll = transform:scale on the whole pill
+     plus an opacity cross-fade between two shadow layers (::before bar,
+     ::after docked). No width/padding/radius/gap ever transitions, so
+     nothing relayouts and the children never reflow mid-morph.
+   - One scroll handler (initTopbarDock) owns .condensed, with
+     hysteresis (dock > 64px, undock < 48px). Dock is a touch slower than
+     undock (asymmetric). will-change is set only while moving.
+   - Job island: separate capsule, absolutely positioned at the row's
+     leading edge (never shifts the tabs), fixed width capped so it
+     cannot reach the centered tabs; below the tabs when the row is
+     narrow (container query). Enter/exit = opacity + transform. */
 .topbar{
-  position:sticky;top:10px;z-index:50;
-  display:flex;align-items:center;justify-content:center;
-  gap:0;margin:0 0 14px;
-  transition:gap .5s var(--ease),margin .5s var(--ease);
+  position:sticky;top:10px;z-index:50;margin:0 0 14px;
+  display:flex;align-items:center;justify-content:center;min-height:48px;
+  container:topbar/inline-size;
 }
-.topbar.has-job{gap:10px}
-.topbar.condensed{gap:0}
-.topbar.condensed.has-job{gap:7px}
 .tabs{
-  position:relative;display:flex;align-items:center;gap:5px;flex:0 0 auto;
-  padding:5px;border:1px solid rgba(0,0,0,.08);border-radius:20px;
-  /* Apple "Liquid Glass"-style material: mostly-transparent frosted
-     glass with a saturated blur and a thin specular highlight along
-     the top edge, rather than a flat panel. */
+  --dock-scale:1;
+  position:relative;display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:4px;flex:0 0 auto;
+  padding:5px;border-radius:999px;
+  border:1px solid rgba(0,0,0,.08);
   background:rgba(255,255,255,.72);
   backdrop-filter:blur(28px) saturate(190%);-webkit-backdrop-filter:blur(28px) saturate(190%);
-  box-shadow:0 10px 30px rgba(0,0,0,.08),inset 0 1px 0 rgba(255,255,255,.9);
-  max-width:100%;
-  transition:
-    max-width .5s var(--ease),
-    padding .5s var(--ease),
-    gap .5s var(--ease),
-    border-radius .5s var(--ease),
-    background .4s var(--ease),
-    box-shadow .4s var(--ease);
-  will-change:max-width,padding;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.9);
+  transform:scale(var(--dock-scale));transform-origin:50% 0;
+  transition:transform .32s cubic-bezier(.2,.9,.3,1.06);
 }
-.tabs:before{
-  content:"";position:absolute;left:12%;right:12%;top:0;height:1px;pointer-events:none;
-  background:linear-gradient(90deg,transparent,rgba(255,255,255,.9),transparent);
-  transition:opacity .4s ease;
+.tabs.is-moving{will-change:transform}
+.tabs:before,.tabs:after{
+  content:"";position:absolute;inset:-1px;border-radius:inherit;pointer-events:none;z-index:-1;
 }
-.topbar.condensed .tabs{
-  max-width:min(340px,86vw);padding:4px;gap:3px;border-radius:999px;
-  box-shadow:0 8px 24px rgba(0,0,0,.12),inset 0 1px 0 rgba(255,255,255,.9);
-}
-.topbar.condensed .tab{padding:7px 11px;font-size:10.5px}
-.topbar.condensed .job-island.is-visible{min-width:0;max-width:130px;padding:5px 9px}
-.topbar.condensed .job-island-label{display:none}
-.topbar.condensed .job-island-track{width:34px}
-.topbar.condensed .job-island-main{gap:1px}
+.tabs:before{box-shadow:0 10px 30px rgba(0,0,0,.08);opacity:1;transition:opacity .32s ease-out}
+.tabs:after{box-shadow:0 12px 28px rgba(0,0,0,.16),0 2px 6px rgba(0,0,0,.06);opacity:0;transition:opacity .32s ease-out}
+.topbar.condensed .tabs{--dock-scale:.88;transition-duration:.42s;transition-timing-function:cubic-bezier(.22,1,.36,1)}
+.topbar.condensed .tabs:before{opacity:0;transition-duration:.42s}
+.topbar.condensed .tabs:after{opacity:1;transition-duration:.42s}
 .tab-indicator{
   position:absolute;top:5px;left:0;height:calc(100% - 10px);width:0;
-  border-radius:14px;
-  background:#fff;
+  border-radius:999px;background:#fff;
   box-shadow:0 1px 4px rgba(0,0,0,.12),0 0 0 1px rgba(0,0,0,.04);
   transform:translateX(0);
-  transition:transform .5s var(--ease),width .5s var(--ease);
+  transition:transform .3s cubic-bezier(.22,1,.36,1);
   pointer-events:none;z-index:0;
 }
 .tab{
-  position:relative;z-index:1;padding:10px 14px;border-radius:14px;color:var(--muted);font-size:12px;font-weight:600;
-  cursor:pointer;transition:color .4s var(--ease),transform .4s var(--ease);
+  position:relative;z-index:1;padding:10px 16px;border-radius:999px;color:var(--muted);font-size:12px;font-weight:600;
+  text-align:center;white-space:nowrap;cursor:pointer;transition:color .15s ease;
 }
 .tab:hover{color:var(--text)}.tab.active{color:var(--text)}
- .job-island{
-  position:relative;flex:0 0 auto;min-height:36px;min-width:0;width:0;max-width:0;
-  padding:6px 0;border-radius:999px;display:flex;align-items:center;gap:7px;
-  cursor:pointer;overflow:hidden;white-space:nowrap;
-  opacity:0;visibility:hidden;pointer-events:none;
-  transform:translateY(-6px) scale(.86);
-  transform-origin:center center;
-  /* Same frosted "Liquid Glass" material as the tabs bar, tinted with a
-     touch of Apple blue so the island still reads as its own distinct
-     capsule sitting next to it, rather than a mismatched flat panel. */
-  background:linear-gradient(180deg,rgba(0,113,227,.08) 0%,rgba(255,255,255,.85) 42%,rgba(255,255,255,.85) 100%);
+.tab:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.job-island{
+  position:absolute;left:0;top:50%;
+  width:min(240px,calc(50cqi - var(--tabs-half,100px) - 16px));min-width:0;min-height:44px;
+  padding:7px 12px 7px 10px;border-radius:999px;
+  display:flex;align-items:center;gap:9px;text-align:left;cursor:pointer;overflow:hidden;white-space:nowrap;
+  color:var(--text);
+  background:rgba(255,255,255,.84);
   backdrop-filter:blur(28px) saturate(190%);-webkit-backdrop-filter:blur(28px) saturate(190%);
-  border:1px solid transparent;
-  box-shadow:0 8px 28px rgba(0,0,0,0),inset 0 1px 0 rgba(255,255,255,0);
-  /* A single, calmer spring-like curve (no overshoot) shared by every
-     dimension so the island morphs as one continuous, fluid shape rather
-     than several parts easing at slightly different rates. */
-  transition:
-    width .5s var(--ease),
-    max-width .5s var(--ease),
-    min-width .5s var(--ease),
-    padding .5s var(--ease),
-    border-radius .5s var(--ease),
-    opacity .34s ease,
-    visibility 0s linear .5s,
-    transform .5s var(--ease),
-    border-color .4s ease,
-    background .4s ease,
-    box-shadow .5s ease;
-  will-change:width,transform,border-radius;
-}
-.job-island:before{
-  content:"";position:absolute;left:14%;right:14%;top:0;height:1px;pointer-events:none;
-  background:linear-gradient(90deg,transparent,rgba(0,113,227,.5),transparent);
-  opacity:0;transition:opacity .4s ease;
+  border:1px solid rgba(0,113,227,.28)!important;
+  box-shadow:0 12px 30px rgba(0,0,0,.10),0 4px 14px rgba(0,113,227,.10),inset 0 1px 0 rgba(255,255,255,.9);
+  opacity:0;visibility:hidden;pointer-events:none;
+  transform:translate(-8px,-50%) scale(.92);transform-origin:left center;
+  transition:opacity .2s ease-in,transform .24s cubic-bezier(.4,0,1,1),visibility 0s linear .24s;
 }
 .job-island.is-visible{
-  min-width:90px;max-width:220px;padding:6px 10px;
   opacity:1;visibility:visible;pointer-events:auto;
-  transform:translateY(0) scale(1);
-  border-color:rgba(0,113,227,.28);
-  box-shadow:0 14px 34px rgba(0,0,0,.10),0 6px 18px rgba(0,113,227,.10),inset 0 1px 0 rgba(255,255,255,.9);
-  transition-delay:0s;
+  transform:translate(0,-50%) scale(1);
+  transition:opacity .3s ease-out,transform .42s cubic-bezier(.2,.9,.3,1.12),visibility 0s linear 0s;
 }
-.job-island.is-visible:before{opacity:1}
-.job-island.is-visible:hover{
-  transform:translateY(-1px) scale(1.02);
-  box-shadow:0 16px 36px rgba(0,0,0,.12),0 6px 18px rgba(0,113,227,.14),inset 0 1px 0 rgba(255,255,255,.9);
-  transition-duration:.3s;
-}
-.job-island.is-visible:active{transform:translateY(0) scale(.975);transition-duration:.18s}
-.job-island[hidden]{display:flex}
+.job-island.is-visible:hover:not(:disabled){transform:translate(0,-50%) scale(1.02);filter:none;box-shadow:0 14px 34px rgba(0,0,0,.12),0 4px 14px rgba(0,113,227,.14),inset 0 1px 0 rgba(255,255,255,.9)}
+.job-island.is-visible:active:not(:disabled){transform:translate(0,-50%) scale(.98)}
+.job-island:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .job-island-live{width:7px;height:7px;flex:0 0 7px;border-radius:50%;background:#0071e3;box-shadow:0 0 0 4px rgba(0,113,227,.12);animation:pulse 2.2s cubic-bezier(.45,0,.55,1) infinite}
-.job-island-main{display:flex;flex-direction:column;gap:2px;min-width:0;line-height:1}
-.job-island-top{display:flex;align-items:center;gap:4px;white-space:nowrap}
-.job-island-count{font-size:11px;font-weight:700;letter-spacing:-.005em;color:var(--text);transition:opacity .3s ease}
-.job-island-label{font-size:9px;color:var(--muted);font-weight:600}
-.job-island-pct{margin-left:auto;font-size:9px;color:#0071e3;font-weight:700;transition:opacity .3s ease}
-.job-island-track{width:72px;height:3px;border-radius:99px;overflow:hidden;background:#e5e5ea}
-.job-island-bar{height:100%;width:0;border-radius:99px;background:linear-gradient(90deg,#0071e3,#2997ff,#64b5ff,#2997ff,#0071e3);background-size:200% 100%;box-shadow:0 0 8px rgba(0,113,227,.35);transition:width .8s var(--ease);animation:flow 3.2s linear infinite}
+.job-island-main{display:flex;flex-direction:column;gap:4px;min-width:0;flex:1;line-height:1.15}
+.job-island-top{display:flex;align-items:baseline;gap:6px;min-width:0}
+.job-island-title{font-size:11px;font-weight:700;letter-spacing:-.005em;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1}
+.job-island-pct{font-size:10px;color:#0071e3;font-weight:700;font-variant-numeric:tabular-nums;flex:none}
+.job-island-sub{display:flex;align-items:center;gap:6px;min-width:0}
+.job-island-stage{font-size:9.5px;color:var(--muted);font-weight:600;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1}
+.job-island-more{font-size:9px;font-weight:700;color:#0071e3;background:rgba(0,113,227,.1);border-radius:99px;padding:1px 6px;flex:none}
+.job-island-more:empty{display:none}
+.job-island-track{display:block;height:3px;border-radius:99px;overflow:hidden;background:#e5e5ea}
+.job-island-bar{
+  display:block;height:100%;width:100%;border-radius:99px;transform:scaleX(0);transform-origin:left center;
+  background:linear-gradient(90deg,#0071e3,#2997ff,#64b5ff,#2997ff,#0071e3);background-size:200% 100%;
+  transition:transform .4s cubic-bezier(.22,1,.36,1);animation:flow 3.2s linear infinite;
+}
+@container topbar (max-width:600px){
+  .job-island{
+    left:50%;top:calc(100% + 6px);width:min(280px,calc(100cqi - 16px));
+    transform:translate(-50%,-6px) scale(.94);transform-origin:center top;
+  }
+  .job-island.is-visible{transform:translate(-50%,0) scale(1)}
+  .job-island.is-visible:hover:not(:disabled){transform:translate(-50%,0) scale(1.02)}
+  .job-island.is-visible:active:not(:disabled){transform:translate(-50%,0) scale(.98)}
+}
+.sr-only{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
 
 /* Floating brand chip: hidden while the real header + logo are on
    screen. Once the header scrolls away (the same moment the topbar
@@ -273,8 +252,8 @@ a{color:inherit}
    no longer see above. It stays in a tiny idle/collapsed state until
    the pointer rests on it or it's tapped, then eases open to reveal
    the brand name; tapping it scrolls back up to the real header,
-   which makes the chip fade out again on its own (same observer that
-   drives .condensed). */
+   which makes the chip fade out again on its own (initTopbarDock owns
+   .condensed). */
 .topbar-logo{
   position:absolute;right:2px;top:50%;
   display:flex;align-items:center;gap:0;
@@ -397,7 +376,7 @@ a{color:inherit}
   to{opacity:1;transform:translate3d(0,0,0) scale(1);filter:blur(0)}
 }
 @media (prefers-reduced-motion:reduce){
-  .job-island,.job-island-bar,.tab,.tab-indicator,.view-section,
+  .job-island,.job-island-bar,.tab,.tabs,.tabs:before,.tabs:after,.tab-indicator,.view-section,
   .job-card,.queue-card,.queue-thumb,.queue-thumb:empty,.thumb-option{transition:none!important;animation:none!important}
 }
 body.resizing .topbar,body.resizing .tabs,body.resizing .job-island,
@@ -802,8 +781,7 @@ details[open] > summary > .chev{transform:rotate(180deg)}
 @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.72)}}@keyframes bars{to{transform:scaleY(.55);opacity:.55}}@keyframes analyzeGlow{0%,100%{box-shadow:0 4px 14px rgba(0,113,227,.20),0 0 0 1px rgba(0,113,227,.10)}50%{box-shadow:0 8px 26px rgba(0,113,227,.38),0 0 0 1px rgba(0,113,227,.24)}}@keyframes shine{from{background-position:180% 0}to{background-position:-20% 0}}@keyframes sweep{from{background-position:180% 0}to{background-position:-20% 0}}@keyframes flow{from{background-position:0 0}to{background-position:180% 0}}@keyframes viewIn{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}@keyframes viewOut{from{opacity:1;transform:none}to{opacity:0;transform:translateY(-5px)}}
 @media(max-width:760px){
   .container{width:calc(100% - 14px);margin-top:10px}.brand{margin-bottom:10px}.brand h1{font-size:16px}.logo{width:40px;height:40px;border-radius:13px}
-  .topbar{top:5px}.tab{flex:1;text-align:center;padding:9px 8px;font-size:10px}.job-island.is-visible{min-width:78px}.job-island-track{width:52px}.job-island-label{display:none}
-  .topbar.condensed .tabs{max-width:min(280px,90vw)}.topbar.condensed .tab{flex:none;padding:6px 9px}
+  .topbar{top:5px}.tab{padding:9px 14px;font-size:11px}
   .grid-url{grid-template-columns:1fr}.grid-url #analyzeButton{width:100%}.choice-grid,.platform-grid{grid-template-columns:1fr 1fr}.candidate-pair{grid-template-columns:1fr}
   .panel{padding:13px;border-radius:17px}.preview-frame{width:min(300px,78vw)}.edit-grid{grid-template-columns:1fr}.edit-grid .full{grid-column:auto}
   .job-url{max-width:60vw}.job-overlay{top:58px;right:7px;width:calc(100vw - 14px)}
@@ -873,10 +851,11 @@ details[open] > summary > .chev{transform:rotate(180deg)}
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="15" rx="3"/><path d="M9.5 4.5v15"/></svg>
     </button>
     <div class="logo">R</div>
-    <div><h1>ClipFlow <button class="version-badge" id="versionBadge" type="button" aria-expanded="false">BETA · v2.1102</button></h1><p>Video clipping workspace · import → queue → publish</p>
+    <div><h1>ClipFlow <button class="version-badge" id="versionBadge" type="button" aria-expanded="false">BETA · v2.1103</button></h1><p>Video clipping workspace · import → queue → publish</p>
       <div class="version-popover" id="versionPopover" role="dialog" aria-hidden="true">
-        <div class="version-popover-title">What's new in v2.1102</div>
+        <div class="version-popover-title">What's new in v2.1103</div>
         <ul>
+          <li>Smoother tabs pill on scroll; running-job island is its own capsule with stage and progress</li>
           <li>Left sidebar for quick actions and settings; Import options folded into one disclosure</li>
           <li>API key required: asked once per browser session</li>
           <li>Settings now take effect without a restart and only changed fields are saved</li>
@@ -889,7 +868,6 @@ details[open] > summary > .chev{transform:rotate(180deg)}
       <svg class="theme-icon-moon" viewBox="0 0 24 24" fill="currentColor"><path d="M20.4 14.7A8.3 8.3 0 0 1 9.3 3.6a.6.6 0 0 0-.7-.8A9.5 9.5 0 1 0 21.2 15.4a.6.6 0 0 0-.8-.7Z"/></svg>
     </button>
   </header>
-  <div id="headerSentinel" aria-hidden="true" style="height:1px"></div>
 
   <div class="topbar" id="topbarWrap">
     <nav class="tabs" id="tabsNav">
@@ -897,17 +875,21 @@ details[open] > summary > .chev{transform:rotate(180deg)}
       <div id="tabCurrent" class="tab active" data-tab="current">Import</div>
       <div id="tabQueue" class="tab" data-tab="queue">Publish</div>
     </nav>
-    <button id="jobIsland" class="job-island" type="button" aria-label="Show running jobs" aria-hidden="true" disabled>
-      <span class="job-island-live"></span>
-      <span class="job-island-main">
+    <button id="jobIsland" class="job-island" type="button" aria-label="Show running jobs" aria-hidden="true" aria-controls="jobOverlay" aria-expanded="false" disabled>
+      <span class="job-island-live" aria-hidden="true"></span>
+      <span class="job-island-main" aria-hidden="true">
         <span class="job-island-top">
-          <span id="jobIslandCount" class="job-island-count">0</span>
-          <span class="job-island-label">running</span>
+          <span id="jobIslandTitle" class="job-island-title"></span>
           <span id="jobIslandPct" class="job-island-pct">0%</span>
+        </span>
+        <span class="job-island-sub">
+          <span id="jobIslandStage" class="job-island-stage"></span>
+          <span id="jobIslandMore" class="job-island-more"></span>
         </span>
         <span class="job-island-track"><span id="jobIslandBar" class="job-island-bar"></span></span>
       </span>
     </button>
+    <span id="jobIslandLive" class="sr-only" role="status" aria-live="polite"></span>
     <button class="theme-toggle-float theme-toggle" id="themeToggleFloat" type="button" aria-label="Toggle dark mode">
       <svg class="theme-icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.6M12 18.9v2.6M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M2.5 12h2.6M18.9 12h2.6M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"/></svg>
       <svg class="theme-icon-moon" viewBox="0 0 24 24" fill="currentColor"><path d="M20.4 14.7A8.3 8.3 0 0 1 9.3 3.6a.6.6 0 0 0-.7-.8A9.5 9.5 0 1 0 21.2 15.4a.6.6 0 0 0-.8-.7Z"/></svg>
@@ -1874,46 +1856,17 @@ async function uploadCandidate(jid,cid){
   }catch(e){alert("Upload to YouTube failed: "+e.message)}
 }
 
-// --- Dynamic width helpers ---------------------------------------------
-// The island's width is no longer a fixed CSS value: it is measured from
-// its actual content (job count digits, % digits, label) so it always
-// fits snugly, then animated with a FLIP-style transition so growing or
-// shrinking (jobs appearing/disappearing, count changing) is smooth.
-function jobIslandNaturalWidth(el){
-  const prev=el.style.width;
-  el.style.width="auto";
-  const w=el.getBoundingClientRect().width;
-  el.style.width=prev;
-  return w;
-}
-function jobIslandSettleWidth(el){
-  // Once the width transition finishes, release back to "auto" so the
-  // pill stays perfectly fit to its content (e.g. on window resize)
-  // without needing another measurement pass.
-  const onEnd=(ev)=>{
-    if(ev.propertyName!=="width")return;
-    el.removeEventListener("transitionend",onEnd);
-    if(el.classList.contains("is-visible"))el.style.width="auto";
-  };
-  el.addEventListener("transitionend",onEnd);
-}
-function jobIslandAnimateWidth(el,target){
-  const current=el.getBoundingClientRect().width;
-  if(Math.abs(current-target)<0.5){el.style.width="auto";return}
-  el.style.width=current+"px";
-  void el.offsetWidth; // lock the starting point before changing it
-  requestAnimationFrame(()=>{
-    el.style.width=target+"px";
-    jobIslandSettleWidth(el);
-  });
-}
-
+// Job island (R-13): its own fixed-width capsule. Shows the first active
+// task's title, plain-language stage and %, plus "+N" for the rest.
+// Nothing here measures or animates width — entrance/exit and progress
+// are pure opacity/transform (see the .job-island CSS).
+let jobIslandAnnounced="";
 // Merges job-level pipeline jobs (import/download/transcribe/analyze)
 // with candidate-level actions (preview regen, final render, AI hook/
 // typo/thumbnail/caption work) into one list the island/overlay can
 // render identically regardless of which kind of work it actually is.
 function allActiveTasks(){
-  const jobItems=runningJobs.map(j=>({id:j.id,jobId:j.id,kind:"job",platform:j.platform,status:j.status,progress:j.progress,message:j.message}));
+  const jobItems=runningJobs.map(j=>({id:j.id,jobId:j.id,kind:"job",platform:j.platform,status:j.status,progress:j.progress,message:j.message,custom_title:j.custom_title,source_title:j.source_title}));
   return [...jobItems,...Object.values(candidateActiveTasks)];
 }
 function updateJobIsland(){
@@ -1926,52 +1879,28 @@ function updateJobIsland(){
   // candidate, so those always surface the island regardless of tab.
   const candidateCount=Object.keys(candidateActiveTasks).length;
   const shouldShow=(candidateCount>0 || (currentTab==="queue" && runningJobs.length>0)) && items.length>0 && !overlayOpen;
-
+  b.setAttribute("aria-expanded",String(overlayOpen));
   if(!shouldShow){
-    if(b.classList.contains("is-visible")){
-      const current=b.getBoundingClientRect().width;
-      b.style.width=current+"px";
-      void b.offsetWidth;
-      b.classList.remove("is-visible");
-      wrap?.classList.remove("has-job");
-      requestAnimationFrame(()=>{b.style.width="0px"});
-    }else{
-      b.classList.remove("is-visible");
-      wrap?.classList.remove("has-job");
-      b.style.width="0px";
-    }
-    b.setAttribute("aria-hidden","true");
-    b.disabled=true;
+    b.classList.remove("is-visible");wrap?.classList.remove("has-job");
+    b.setAttribute("aria-hidden","true");b.disabled=true;
+    if(!items.length)jobIslandAnnounced="";
     return;
   }
-
-  const avg=Math.round(
-    items.reduce((sum,j)=>sum+pct(j.progress),0)/items.length
-  );
-  $("jobIslandCount").textContent=items.length;
-  $("jobIslandPct").textContent=avg+"%";
-  $("jobIslandBar").style.width=avg+"%";
-
-  const wasVisible=b.classList.contains("is-visible");
-  b.classList.add("is-visible");
-  wrap?.classList.add("has-job");
-  b.setAttribute("aria-hidden","false");
-  b.disabled=false;
-
-  const target=jobIslandNaturalWidth(b);
-  if(!wasVisible){
-    // Fresh appearance: pop open from 0 → natural width.
-    b.style.width="0px";
-    void b.offsetWidth;
-    requestAnimationFrame(()=>{
-      b.style.width=target+"px";
-      jobIslandSettleWidth(b);
-    });
-  }else{
-    // Already showing: re-fit width if content size changed (e.g. job
-    // count or % went from 1 digit to 2, or a job finished/started).
-    jobIslandAnimateWidth(b,target);
-  }
+  const lead=items[0],p=pct(lead.progress);
+  const title=lead.kind==="candidate"?(lead.title||"Candidate"):(lead.custom_title||lead.source_title||platformLabel(lead.platform));
+  const stage=lead.actionLabel||stageLabel(lead.status);
+  $("jobIslandTitle").textContent=title;
+  $("jobIslandStage").textContent=stage;
+  $("jobIslandMore").textContent=items.length>1?`+${items.length-1}`:"";
+  $("jobIslandPct").textContent=p+"%";
+  $("jobIslandBar").style.transform=`scaleX(${p/100})`;
+  const more=items.length>1?` (and ${items.length-1} more)`:"";
+  b.setAttribute("aria-label",`${title}: ${stage}, ${p}%${more}. Show running jobs`);
+  // Announce stage changes and each 25% step, not every poll tick.
+  const said=`${title}: ${stage}, ${Math.floor(p/25)*25}%${more}`;
+  if(said!==jobIslandAnnounced){jobIslandAnnounced=said;$("jobIslandLive").textContent=said}
+  b.classList.add("is-visible");wrap?.classList.add("has-job");
+  b.setAttribute("aria-hidden","false");b.disabled=false;
 }
 function renderJobOverlay(){
   const overlay=$("jobOverlay");overlay.classList.toggle("open",overlayOpen);overlay.setAttribute("aria-hidden",String(!overlayOpen));
@@ -2003,14 +1932,15 @@ function stopJobMonitor(){if(jobMonitorTimer){clearInterval(jobMonitorTimer);job
 function moveTabIndicator(){
   const nav=$("tabsNav"),ind=$("tabIndicator");
   const active=currentTab==="current"?$("tabCurrent"):$("tabQueue");
-  const navRect=nav.getBoundingClientRect(),aRect=active.getBoundingClientRect();
-  ind.style.width=aRect.width+"px";
-  ind.style.transform=`translateX(${aRect.left-navRect.left}px)`;
+  // offset* are layout values, unaffected by the dock transform:scale.
+  ind.style.width=active.offsetWidth+"px";
+  ind.style.transform=`translateX(${active.offsetLeft}px)`;
+  $("topbarWrap").style.setProperty("--tabs-half",(nav.offsetWidth/2)+"px");
 }
 
 // Scrolls fully back up so the real header (and its logo) come back
 // into view — this is also what makes the floating logo chip and the
-// condensed pill fade back out, since both watch the same sentinel.
+// docked pill undock, since initTopbarDock drives both via .condensed.
 function scrollToHeader(){
   window.scrollTo({top:0,behavior:"smooth"});
 }
@@ -2331,8 +2261,7 @@ window.addEventListener("load",async()=>{
   if(id)startPolling(id);
   startJobMonitor();
 });
-// The topbar/job-island/tab-indicator all animate width, padding and
-// backdrop-filter with a .5s transition. A plain resize listener
+// Transitions are suppressed during a resize burst. A plain resize listener
 // firing moveTabIndicator() on every single resize event (which can
 // fire dozens of times per second while dragging a window edge) kept
 // re-triggering those transitions mid-flight, which is what actually
@@ -2350,22 +2279,30 @@ window.addEventListener("resize",()=>{
 },{passive:true});
 window.addEventListener("beforeunload",()=>{stopPolling();stopJobMonitor()});
 
-// Condense the sticky tabs bar into a small centered pill (mirroring the
-// job-island's own contracted shape) once the header has scrolled out of
-// view, and smoothly expand it back when the header scrolls back in.
-(function initHeaderCondense(){
-  const sentinel=$("headerSentinel"),topbarWrap=$("topbarWrap"),tabsNav=$("tabsNav");
-  if(!sentinel||!topbarWrap||typeof IntersectionObserver==="undefined")return;
-  const io=new IntersectionObserver(
-    entries=>{entries.forEach(entry=>{
-      topbarWrap.classList.toggle("condensed",!entry.isIntersecting);
-      if(entry.isIntersecting)collapseTopbarLogo();
-      requestAnimationFrame(moveTabIndicator);
-    })},
-    {root:null,threshold:0,rootMargin:"-4px 0px 0px 0px"}
-  );
-  io.observe(sentinel);
-  tabsNav?.addEventListener("transitionend",e=>{if(e.propertyName==="padding"||e.propertyName==="max-width")moveTabIndicator()});
+// Tabs dock (R-13): the ONE owner of .condensed. rAF-throttled passive
+// scroll handler with hysteresis, so a short scroll around the threshold
+// can't flicker. will-change:transform is set only while the pill moves.
+(function initTopbarDock(){
+  const wrap=$("topbarWrap"),tabs=$("tabsNav");
+  if(!wrap||!tabs)return;
+  const DOCK_AT=64,UNDOCK_AT=48;
+  let docked=false,ticking=false,settleTimer=null;
+  function apply(next){
+    if(next===docked)return;
+    docked=next;
+    tabs.classList.add("is-moving");
+    clearTimeout(settleTimer);settleTimer=setTimeout(()=>tabs.classList.remove("is-moving"),600);
+    wrap.classList.toggle("condensed",docked);
+    if(!docked)collapseTopbarLogo();
+  }
+  function onScroll(){
+    ticking=false;
+    const y=window.scrollY;
+    apply(docked?y>UNDOCK_AT:y>DOCK_AT);
+  }
+  tabs.addEventListener("transitionend",e=>{if(e.target===tabs&&e.propertyName==="transform"){clearTimeout(settleTimer);tabs.classList.remove("is-moving")}});
+  window.addEventListener("scroll",()=>{if(!ticking){ticking=true;requestAnimationFrame(onScroll)}},{passive:true});
+  onScroll();
 })();
 
 </script>
