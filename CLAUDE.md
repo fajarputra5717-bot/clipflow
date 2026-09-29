@@ -151,6 +151,17 @@ variant without re-checking that assumption. No webhooks either;
 throttle (via `updated_at`). `autoRender:false` on upload, explicit
 `/export` call is the billable step — never auto-trigger it.
 
+## AI calls (R-20)
+
+Every AI call goes through `shared/ai/router.py`
+`ai_generate_json(prompt, schema, *, task, max_tokens)` — worker
+(`analyze_hooks`, task `hooks`) and main.py (`new_hook`,
+`subtitle_fix`, `description`). Providers live in `shared/ai/<name>.py`
+and raise only `shared/errors.py` types: `AITransientError`
+(429/5xx/timeout) or `AIPermanentError` (4xx/malformed/no key). Never
+import an AI SDK in main.py/worker.py. google-genai 2.x closes a
+garbage-collected `Client`: keep it in a variable while calling.
+
 ## Runtime settings
 
 One rule, one implementation: `shared/settings.py` (`RuntimeSettings`).

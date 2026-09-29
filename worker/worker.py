@@ -16,9 +16,9 @@ import cv2
 import psycopg
 import whisper
 
-from google import genai
 from psycopg.rows import dict_row
 
+from shared.ai import router as ai_router
 from shared.settings import RuntimeSettings
 
 
@@ -174,6 +174,30 @@ CONTENT_TYPES = {
     "Educational",
 }
 
+# Expected shape of analyze_hooks() output: a JSON array of clips.
+HOOKS_SCHEMA = {
+    "type": "array",
+    "items": {
+        "type": "object",
+        "properties": {
+            "start": {"type": "number"},
+            "end": {"type": "number"},
+            "title": {"type": "string"},
+            "reason": {"type": "string"},
+            "score": {"type": "integer"},
+            "content_type": {
+                "type": "string",
+                "enum": sorted(CONTENT_TYPES),
+            },
+            "rating": {"type": "integer"},
+        },
+        "required": [
+            "start", "end", "title", "reason",
+            "score", "content_type", "rating",
+        ],
+    },
+}
+
 
 
 # ============================================================
@@ -294,6 +318,10 @@ def setting_int(name, default=None):
 
 def setting_float(name, default=None):
     return _settings.get_float(name, default)
+
+
+# Every AI call goes through shared/ai/router.py (R-20).
+ai_router.configure(setting, log)
 
 
 def update_job(
@@ -624,67 +652,6 @@ def validate_gemini():
         )
 
 
-def gemini_call(fn):
-
-    last_error = None
-
-    max_attempts = max(
-        1,
-        setting_int("GEMINI_MAX_ATTEMPTS"),
-    )
-
-    for attempt in range(
-        1,
-        max_attempts + 1,
-    ):
-
-        try:
-
-            return fn()
-
-        except Exception as exc:
-
-            last_error = exc
-
-            message = str(exc)
-
-            retryable = (
-                "429" in message
-                or "503" in message
-                or "UNAVAILABLE" in message
-                or "RESOURCE_EXHAUSTED" in message
-            )
-
-            if (
-                not retryable
-                or attempt >= max_attempts
-            ):
-
-                raise
-
-            delay = (
-                2 ** (attempt - 1)
-            )
-
-            delay += random.uniform(
-                0,
-                1,
-            )
-
-            log(
-                "Gemini retry "
-                f"{attempt}/"
-                f"{max_attempts} "
-                f"in {delay:.1f}s"
-            )
-
-            time.sleep(
-                delay
-            )
-
-    raise last_error
-
-
 # ============================================================
 # DOWNLOAD
 # ============================================================
@@ -958,7 +925,6 @@ def analyze_hooks(
         )
 
     api_key = setting("GEMINI_API_KEY")
-    model = setting("GEMINI_ANALYSIS_MODEL", GEMINI_MODEL)
 
     if clip_count is None:
         clip_count = setting_int("CLIP_COUNT")
@@ -969,10 +935,6 @@ def analyze_hooks(
 
     if not api_key:
         raise RuntimeError("GEMINI_API_KEY missing")
-
-    client = genai.Client(
-        api_key=api_key
-    )
 
     timed_transcript = "\n".join(
         (
@@ -1044,20 +1006,11 @@ Transcript:
 {timed_transcript}
 """
 
-    response = gemini_call(
-        lambda:
-        client.models.generate_content(
-            model=model,
-            contents=prompt,
-            config={
-                "response_mime_type":
-                    "application/json"
-            },
-        )
-    )
-
-    raw = json.loads(
-        response.text
+    raw = ai_router.ai_generate_json(
+        prompt,
+        HOOKS_SCHEMA,
+        task="hooks",
+        max_tokens=4096,
     )
 
     if not isinstance(

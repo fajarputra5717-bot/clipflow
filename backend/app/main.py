@@ -17,6 +17,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 
+from shared.ai import router as ai_router
+from shared.errors import AINotConfiguredError
 from shared.settings import (
     DEFAULT_SETTINGS,
     SECRET_SETTING_KEYS,
@@ -1393,6 +1395,10 @@ def runtime_setting(
     return _settings.get(key, fallback)
 
 
+# Every AI call goes through shared/ai/router.py (R-20).
+ai_router.configure(runtime_setting, lambda msg: print("[backend]", msg))
+
+
 # ============================================================
 # NEW HOOK (ask Gemini to pick a different moment for this
 # candidate, avoiding time ranges already used by sibling
@@ -1454,24 +1460,6 @@ def new_hook(
                 detail="No transcript available for this job",
             )
 
-        api_key = runtime_setting("GEMINI_API_KEY")
-
-        if not api_key:
-
-            raise HTTPException(
-                status_code=503,
-                detail="GEMINI_API_KEY is not configured",
-            )
-
-        from google import genai
-
-        client = genai.Client(api_key=api_key)
-
-        model = runtime_setting(
-            "GEMINI_ANALYSIS_MODEL",
-            "gemini-3.6-flash",
-        )
-
         transcript_with_times = "\n".join(
             f"[{seg.get('start', 0):.1f}-{seg.get('end', 0):.1f}] "
             f"{seg.get('text', '')}"
@@ -1501,15 +1489,9 @@ def new_hook(
             f"Transcript:\n{transcript_with_times}"
         )
 
-        response = client.models.generate_content(
-            model=model,
-            contents=prompt,
-            config={
-                "response_mime_type": "application/json"
-            },
+        data = ai_generate_json(
+            prompt, NEW_HOOK_SCHEMA, task="new_hook", max_tokens=1024,
         )
-
-        data = json.loads(response.text)
 
         new_start = float(data["start"])
         new_end = float(data["end"])
@@ -1593,37 +1575,47 @@ def new_hook(
 
 
 # ============================================================
-# SHARED GEMINI HELPER (used by new-hook, subtitle fix, and
+# SHARED AI HELPER (used by new-hook, subtitle fix, and
 # description copywriting)
 # ============================================================
 
-def gemini_generate_json(prompt: str) -> dict:
-    api_key = runtime_setting("GEMINI_API_KEY")
+NEW_HOOK_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "start": {"type": "number"},
+        "end": {"type": "number"},
+        "title": {"type": "string"},
+        "reason": {"type": "string"},
+    },
+    "required": ["start", "end", "title", "reason"],
+}
 
-    if not api_key:
-        raise HTTPException(
-            status_code=503,
-            detail="GEMINI_API_KEY is not configured",
+SUBTITLE_FIX_SCHEMA = {
+    "type": "object",
+    "properties": {"fixed": {"type": "string"}},
+    "required": ["fixed"],
+}
+
+DESCRIPTION_SCHEMA = {
+    "type": "object",
+    "properties": {"description": {"type": "string"}},
+    "required": ["description"],
+}
+
+
+def ai_generate_json(prompt: str, schema: dict, *, task: str,
+                     max_tokens: int):
+    """shared/ai/router.py call for request handlers. A missing key
+    is a 503 (as before); every other AI error propagates to the
+    handler's generic 500 with its original message. attempts=1:
+    the baseline backend never retried (R-22 changes this)."""
+    try:
+        return ai_router.ai_generate_json(
+            prompt, schema, task=task, max_tokens=max_tokens,
+            attempts=1,
         )
-
-    from google import genai
-
-    client = genai.Client(api_key=api_key)
-
-    model = runtime_setting(
-        "GEMINI_ANALYSIS_MODEL",
-        "gemini-3.6-flash",
-    )
-
-    response = client.models.generate_content(
-        model=model,
-        contents=prompt,
-        config={
-            "response_mime_type": "application/json"
-        },
-    )
-
-    return json.loads(response.text)
+    except AINotConfiguredError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
 
 
 # ============================================================
@@ -1683,7 +1675,10 @@ def fix_subtitle_ai(job_id: str, candidate_id: str):
             f"\n\nSubtitle:\n{current_text}"
         )
 
-        data = gemini_generate_json(prompt)
+        data = ai_generate_json(
+            prompt, SUBTITLE_FIX_SCHEMA, task="subtitle_fix",
+            max_tokens=2048,
+        )
         fixed_text = str(data.get("fixed", "")).strip()
 
         if not fixed_text:
@@ -1808,7 +1803,10 @@ def generate_description(job_id: str, candidate_id: str):
             '{"description": "<the caption>"}'
         )
 
-        data = gemini_generate_json(prompt)
+        data = ai_generate_json(
+            prompt, DESCRIPTION_SCHEMA, task="description",
+            max_tokens=1024,
+        )
         description = str(data.get("description", "")).strip()
 
         if not description:
