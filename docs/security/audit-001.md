@@ -37,8 +37,8 @@ itself, so the tailnet reaches it through a subnet router or the host. That is t
 | F1 | No authentication on `/api/*` | was Critical | **Closed** by R-03 |
 | F2 | CORS `*` + credentials | was Medium | **Closed** by R-03 |
 | F3 | `.env.swp` editor swap file leaked secrets | was Critical | **Closed** (purged, keys rotated) |
-| F4 | yt-dlp URL: option injection + SSRF, no validation | **Medium** | Open → T3 |
-| F5 | Upload fallback stores raw bytes when Pillow fails (bombs, SVG, junk) | **Medium** | Open → T3 |
+| F4 | yt-dlp URL: option injection + SSRF, no validation | **Medium** | **Mitigated** (063: API allowlist); worker `--` still open |
+| F5 | Upload fallback stores raw bytes when Pillow fails (bombs, SVG, junk) | **Medium** | **Fixed** (063) |
 | F6 | No rate limits or spend caps on paid routes | **Medium** | Open → T4 |
 | F7 | API key and media tokens travel over plain HTTP on the LAN | Low | Open (accepted?) |
 | F8 | Error bodies leak `str(exc)` and absolute paths | Low | Open → T3 |
@@ -95,6 +95,13 @@ last argv element to `yt-dlp` **without a `--` separator**.
 - **Fix (T3):** a host allowlist (`youtube.com`, `www.youtube.com`, `m.youtube.com`, `youtu.be`), `https` only,
   put `--` before the URL, and stop echoing raw tool output into `error_message`.
 - Not executed live: that would run in the shared worker.
+- **Status 2026-09-29 (063): mitigated at the API.** `create_job` runs `validate_youtube_url()`: `https` only,
+  host ∈ {youtube.com, www., m., music.youtube.com, youtu.be}, no userinfo, port 443 or none, no whitespace or
+  control characters, no leading `-`. It returns a 400 with a clear message and stores the stripped URL. Tested with 21
+  inputs (6 valid, 15 hostile: `--batch-file=…`, `http://`, `youtube.com.evil.com`, `youtube.com@10.10.10.1`, `:8443`,
+  IP literals, embedded newline). **Still open:** `worker.py` must put `--` before the URL in the yt-dlp argv
+  (defence in depth, Lane A). Rows created before 063 were not validated; a re-run of such a job skips this check.
+  Echoing raw tool output into `error_message` is unchanged.
 
 ### F5 — Uploads fall back to raw bytes (ASVS V12.1/V12.2, A04) — Medium · verified by code reading
 Thumbnail (`…/thumbnail-upload`) and watermark (`/api/assets/watermarks`) uploads:
@@ -112,6 +119,12 @@ Thumbnail (`…/thumbnail-upload`) and watermark (`/api/assets/watermarks`) uplo
   bounds memory per request, but it is not a streaming limit.
 - **Fix (T3):** reject on Pillow failure (never the raw fallback), magic-byte check, set `Image.MAX_IMAGE_PIXELS`
   explicitly and treat the warning as an error, and stream with a limit.
+- **Status 2026-09-29 (063): fixed.** Both handlers call `reencode_uploaded_image()` before any DB or disk write. It
+  runs Pillow `open` + `verify`, then a fresh decode. It enforces a 40 MP cap (explicit check, plus
+  `Image.MAX_IMAGE_PIXELS` with `DecompressionBombWarning` raised as an error) and re-encodes (thumbnail → JPEG q92,
+  watermark → RGBA PNG). Every failure → 400, and the raw bytes are never written. Pillow's decoder acts as the
+  magic-byte check. Tested: SVG sent as `image/png`, HTML, truncated PNG, 100 MP bomb (12 KB file), and 45 MP → 400.
+  A valid PNG passes. **Still open:** the body is read fully before the size check (bounded by nginx's 64 MB).
 
 ### F6 — No rate limiting or spend guards (ASVS V11.1.4, A04) — Medium · verified by code reading
 There are no per-route limits, no daily caps and no concurrency cap on job creation. The paid paths are:
