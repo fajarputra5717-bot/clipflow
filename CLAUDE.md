@@ -186,3 +186,9 @@ is env-only, never a setting.
   `render_vertical`, `create_preview`, `render_final_candidate`
 - Frontend button wiring → `grep -n "data-yourthing" index.html`
   (markup + handler both show up)
+
+## Token discipline (always)
+- Never read main.py / worker.py / index.html whole. `grep -n` the function, then read only ~60 lines around it.
+- Logs: `docker compose logs --tail=50 <service>`, never unbounded. Build output: pipe through `tail -30`.
+- Don't paste full diffs back in reports; summarise per REBUILD.md's report format.
+- RTK is installed: if compressed output hides something you need, run `rtk recall <id>` instead of re-running with bigger output.
