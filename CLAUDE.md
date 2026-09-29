@@ -260,8 +260,13 @@ or preflights get 401.
 - **Status badges:** `badgeClass()` → idle (queued, `*_queued`) / running / attention (review,
   partial_failure) / completed / failed / cancelled. Colours are `--badge-*` tokens in both
   theme blocks, each pair measured ≥4.5:1 on `--panel` incl. the shimmer peak. Re-measure on change.
+- **Motion & detail tokens (067):** curves `--ease-out` (.32,.72,0,1; `--ease` aliases it),
+  `--ease-spring` (overshoot), `--ease-in-out`; durations `--dur-1..4` = 120/200/320/450 ms;
+  press `scale(var(--press))` (.97); spacing `--sp-*` (8pt, 4pt half-step); `--hit` 44 px;
+  `--font-text`/`--font-display`; materials `--material[-thin|-thick]` + `--material-blur`.
+  Use tokens, not literals. Caption-preview `cpw-*` keyframes keep their own timings (they mirror ASS).
 - **Reduced motion:** the CSS rule can't stop JS. Guard JS-driven motion
-  with `REDUCED_MOTION.matches` (caption preview loop) and use
+  with `REDUCED_MOTION.matches` / `motionMs(ms)` (animation waits → 0) (caption preview loop) and use
   `scrollMode()` for `scrollTo`/`scrollIntoView`.
 
 ## Conventions worth copying, not reinventing
