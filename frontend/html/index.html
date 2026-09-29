@@ -18,6 +18,7 @@
 <link rel="icon" href="clipflow-mark.svg" type="image/svg+xml">
 <style>
 *{box-sizing:border-box}
+[hidden]{display:none!important} /* author display rules must never un-hide [hidden] (070) */
  :root{
   --bg:#f5f5f7;--panel:#ffffff;--panel2:#fbfbfd;--input:#ffffff;
   --line:rgba(0,0,0,.08);--line2:rgba(0,0,0,.13);--text:#1d1d1f;--muted:#6e6e73;
@@ -460,8 +461,8 @@ textarea{min-height:130px;resize:vertical;line-height:1.35}button{
 }
 button:hover:not(:disabled){border-color:rgba(0,0,0,.1)!important;background:#ececee;box-shadow:0 4px 14px rgba(0,0,0,.08)}
 button:active:not(:disabled){transform:scale(var(--press));transition-duration:var(--dur-1)}
-button.primary,.analyze-ready{background:#0071e3!important;color:#fff;border-color:#0071e3!important;box-shadow:0 6px 18px rgba(0,113,227,.28)}
-button.primary:hover:not(:disabled),.analyze-ready:hover:not(:disabled){background:#0077ed!important}
+button.primary{background:#0071e3!important;color:#fff;border-color:#0071e3!important;box-shadow:0 6px 18px rgba(0,113,227,.28)}
+button.primary:hover:not(:disabled){background:#0077ed!important}
 
 .choice-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 .layout-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
@@ -479,8 +480,7 @@ button.primary:hover:not(:disabled),.analyze-ready:hover:not(:disabled){backgrou
 .status-box{margin-top:var(--sp-1);padding:12px;border:1px solid rgba(0,0,0,.06);border-radius:15px;background:var(--panel2);transition:opacity var(--dur-3) ease}
 .status-box.fading{opacity:0}
 .status-title{font-size:12px;font-weight:700}.status-message{font-size:11px;color:var(--muted);margin-top:3px}
-.analyze-wrap{position:relative}.analyze-ready{animation:analyzeGlow 2s ease-in-out infinite}
-.analyze-ready:after{content:"";position:absolute;inset:1px;border-radius:980px;pointer-events:none;background:linear-gradient(105deg,transparent 15%,rgba(255,255,255,.45) 50%,transparent 85%);background-size:220% 100%;animation:shine 2.4s linear infinite}
+.analyze-wrap{position:relative}
 .job-auto-queue{display:flex;align-items:center;gap:7px;margin-top:10px;color:var(--muted);font-size:10.5px;font-weight:600;padding:7px 9px;border-radius:11px;background:rgba(0,113,227,.05);border:1px solid rgba(0,113,227,.10)}
 .auto-queue-dot{width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 9px rgba(0,113,227,.4)}
 .job-card.processing .auto-queue-dot{background:var(--accent);box-shadow:0 0 10px rgba(0,113,227,.5);animation:pulse 1.3s infinite}
@@ -993,6 +993,21 @@ img.topbar-logo-icon{background:none;padding:0;object-fit:cover}
   .row-control{width:100%}
   .sheet-foot{border-radius:0}
 }
+
+/* ===== 070: import card ===== */
+#analyzeButton{min-width:120px}
+#analyzeButton:disabled{opacity:1;background:var(--line)!important;border-color:transparent!important;color:var(--muted);box-shadow:none}
+.url-hint{margin-top:6px;font-size:11.5px;color:var(--muted);transition:color var(--dur-2) var(--ease)}
+.url-hint.is-error{color:var(--bad)}
+#youtubeUrl[aria-invalid="true"]{border-color:rgba(255,59,48,.55)}
+.url-preview{display:flex;align-items:center;gap:12px;margin-top:var(--sp-1);padding:var(--sp-1);border:1px solid var(--line);border-radius:14px;background:var(--panel2);
+  opacity:0;transform:translateY(-4px);transition:opacity var(--dur-3) var(--ease),transform var(--dur-3) var(--ease)}
+.url-preview.is-loaded{opacity:1;transform:none}
+.url-preview img{width:120px;height:68px;object-fit:cover;border-radius:10px;background:var(--line);flex:none}
+.url-preview-meta{display:flex;flex-direction:column;gap:2px;min-width:0;font-size:12px}
+.url-preview-meta span{color:var(--muted);font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:11px}
+.import-empty{display:flex;flex-direction:column;align-items:center;gap:4px;margin-top:var(--sp-2);border-style:dashed;background:transparent;box-shadow:none}
+.empty-icon{width:32px;height:32px;color:var(--muted2);margin-bottom:4px}
 </style>
 </head>
 <body>
@@ -1038,6 +1053,7 @@ img.topbar-logo-icon{background:none;padding:0;object-fit:cover}
       <div class="version-popover" id="versionPopover" role="dialog" aria-hidden="true">
         <div class="version-popover-title">What's new in v2.1107</div>
         <ul>
+          <li>Import: Analyze enables only for a valid YouTube link, with an instant thumbnail preview</li>
           <li>Settings sheet: grouped lists, search, show/hide secrets, Save confirms inline</li>
           <li>Sidebar is now navigation: Import, Publish, Watermarks, Settings (as sheets), appearance in the footer</li>
           <li>One motion system: calmer curves, a consistent press, larger tap targets, sentence-case labels</li>
@@ -1089,16 +1105,17 @@ img.topbar-logo-icon{background:none;padding:0;object-fit:cover}
       <section id="currentSection" class="view-section">
         <div class="panel">
           <div class="job-header">
-            <div><h2>Import a new job</h2><div class="muted">Add a source, choose the format, and start processing.</div></div>
-            <span class="badge">AI</span>
+            <div><h2>Import a new job</h2><div class="muted">Paste a YouTube link. AI finds the strongest hooks and cuts them into vertical clips.</div></div>
           </div>
 
           <div class="field">
             <label for="youtubeUrl">YouTube URL</label>
             <div class="grid-url">
-              <input id="youtubeUrl" autocomplete="off" placeholder="https://www.youtube.com/watch?v=...">
-              <div class="analyze-wrap"><button id="analyzeButton" type="button">Analyze Video</button></div>
+              <input id="youtubeUrl" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://www.youtube.com/watch?v=…" aria-describedby="youtubeUrlHint">
+              <div class="analyze-wrap"><button class="primary" id="analyzeButton" type="button" disabled>Analyze</button></div>
             </div>
+            <div class="url-hint" id="youtubeUrlHint">youtube.com, m./music.youtube.com or youtu.be · https only</div>
+            <div class="url-preview" id="urlPreview" hidden><img id="urlPreviewImg" alt="" width="160" height="90"><div class="url-preview-meta"><strong>YouTube video</strong><span id="urlPreviewId"></span></div></div>
           </div>
 
           <div class="field">
@@ -1145,7 +1162,7 @@ img.topbar-logo-icon{background:none;padding:0;object-fit:cover}
               <div class="muted">Indonesian · ALL CAPS · bold white · heavy outline + subtle shadow · positioned higher to protect the creator face.</div>
             </div>
           </details>
-          <div id="createStatus" class="status-box"><div class="status-title">Ready.</div><div class="status-message">Enter a YouTube URL to begin the import.</div></div>
+          <div id="createStatus" class="status-box" role="status" hidden></div>
           <div id="currentJobs"></div>
         </div>
       </section>
@@ -1409,8 +1426,40 @@ function updateImportOptionsSummary(){
   const lay={auto:"Auto facecam",left:"Facecam left",right:"Facecam right"}[selectedLayout]||"Auto facecam";
   el.textContent=`${selectedSplit} : ${100-selectedSplit} · ${lay} · ${platformLabel(selectedPlatform)}`;
 }
-function validYouTube(v){try{const u=new URL(v),h=u.hostname.toLowerCase();return (h==="youtube.com"||h.endsWith(".youtube.com")||h==="youtu.be"||h.endsWith(".youtu.be"))&&(h==="youtu.be"||u.searchParams.has("v")||u.pathname.startsWith("/shorts/")||u.pathname.startsWith("/live/"))}catch{return false}}
-function updateAnalyzeReady(){const b=$("analyzeButton"),ok=validYouTube($("youtubeUrl").value.trim())&&!b.disabled;b.classList.toggle("analyze-ready",ok)}
+// Same rules as the backend's validate_youtube_url() (063): https only, exact host allowlist, no
+// userinfo/odd port, no whitespace/control chars, no leading "-". On top of that the link must
+// name a video, so the thumbnail preview and the Analyze button agree.
+const YT_HOSTS=["youtube.com","www.youtube.com","m.youtube.com","music.youtube.com","youtu.be"];
+function youtubeUrlProblem(raw){
+  const v=(raw||"").trim();
+  if(!v)return"empty";
+  if(v.startsWith("-")||/[\s\x00-\x1f\\]/.test(v)||!/^https:\/\//i.test(v))return"Use an https:// YouTube link.";
+  let u;try{u=new URL(v)}catch{return"That doesn't look like a link."}
+  if(!YT_HOSTS.includes(u.hostname.toLowerCase()))return"Only youtube.com, m./music.youtube.com or youtu.be links.";
+  if(u.username||u.password||(u.port&&u.port!=="443"))return"Only plain YouTube links (no login or port).";
+  if(!youtubeId(v))return"Link to a specific video (watch, shorts or youtu.be).";
+  return"";
+}
+function youtubeId(v){
+  try{const u=new URL(v.trim()),h=u.hostname.toLowerCase(),seg=u.pathname.split("/").filter(Boolean);
+    const id=h==="youtu.be"?seg[0]:(u.searchParams.get("v")||(["shorts","live","embed"].includes(seg[0])?seg[1]:""));
+    return /^[A-Za-z0-9_-]{11}$/.test(id||"")?id:""}catch{return""}
+}
+function validYouTube(v){return !youtubeUrlProblem(v)}
+let urlPreviewId="";
+function updateAnalyzeReady(){
+  const b=$("analyzeButton"),input=$("youtubeUrl"),raw=input.value,problem=youtubeUrlProblem(raw),ok=!problem;
+  if(!b.classList.contains("is-busy"))b.disabled=!ok;
+  const bad=problem&&problem!=="empty";
+  input.setAttribute("aria-invalid",bad?"true":"false");
+  const hint=$("youtubeUrlHint");hint.textContent=bad?problem:"youtube.com, m./music.youtube.com or youtu.be · https only";hint.classList.toggle("is-error",!!bad);
+  const id=ok?youtubeId(raw):"",pv=$("urlPreview"),img=$("urlPreviewImg");
+  if(id!==urlPreviewId){
+    urlPreviewId=id;pv.classList.remove("is-loaded");
+    if(id){pv.hidden=false;$("urlPreviewId").textContent=id;img.onload=()=>{if(urlPreviewId===id)pv.classList.add("is-loaded")};img.onerror=()=>{if(urlPreviewId===id)pv.hidden=true};img.src=`https://i.ytimg.com/vi/${id}/mqdefault.jpg`}
+    else{pv.hidden=true;img.removeAttribute("src")}
+  }
+}
 
 async function createJob(){
   const url=$("youtubeUrl").value.trim();
@@ -1418,8 +1467,8 @@ async function createJob(){
   if(!url)return alert("Please enter a YouTube URL.");
   if(!validYouTube(url))return alert("Please enter a valid YouTube URL.");
   clearTimeout(window._createStatusResetTimer);
-  $("createStatus").classList.remove("fading");
-  const b=$("analyzeButton");setBusy(b,true,"Analyzing…");b.classList.remove("analyze-ready");
+  $("createStatus").classList.remove("fading");$("createStatus").hidden=false;
+  const b=$("analyzeButton");setBusy(b,true,"Analyzing…");
   $("createStatus").innerHTML=`<div class="status-title">Creating job…</div><div class="status-message">Starting the AI pipeline.</div>`;
   try{
     const j=await api("/api/jobs",{method:"POST",body:JSON.stringify({
@@ -1440,7 +1489,7 @@ async function createJob(){
       if(!box)return;
       box.classList.add("fading");
       setTimeout(()=>{
-        box.innerHTML=`<div class="status-title">Ready.</div><div class="status-message">Enter a YouTube URL to begin the import.</div>`;
+        box.innerHTML="";box.hidden=true;
         box.classList.remove("fading");
       },motionMs(340));
     },2400);
@@ -1892,7 +1941,7 @@ function renderDetail(j){
 async function loadCurrentJobs(){
   try{
     const d=await api("/api/jobs?scope=current"),jobs=Array.isArray(d)?d:(d?.jobs||d?.items||[]);
-    $("currentJobs").innerHTML=jobs.length?jobs.map((j,i)=>renderCurrentJob(j,i)).join(""):`<div class="panel empty">No active jobs.</div>`;
+    $("currentJobs").innerHTML=jobs.length?jobs.map((j,i)=>renderCurrentJob(j,i)).join(""):`<div class="panel empty import-empty"><svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="3"/><path d="m10 9.5 4.5 2.5-4.5 2.5z"/></svg><div class="empty-title">Nothing importing</div><div class="empty-tip">Paste a YouTube link above and press Analyze. Jobs show their progress here, then move to Publish when the clips are ready.</div></div>`;
     const stored=loadActive();
     if(stored&&jobs.some(j=>String(j.id)===String(stored)))activeJobId=stored;
     else if(!activeJobId&&jobs[0])saveActive(jobs[0].id);
