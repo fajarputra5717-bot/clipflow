@@ -7,3 +7,9 @@ __pycache__/
 /backups/
 node_modules/
 tests/output/
+
+# editor swap/backup files (never commit)
+*.swp
+*.swo
+.*.sw?
+*~
