@@ -15,6 +15,7 @@
 })();
 </script>
 <title>ClipFlow — Video Clipper</title>
+<link rel="icon" href="clipflow-mark.svg" type="image/svg+xml">
 <style>
 *{box-sizing:border-box}
  :root{
@@ -879,6 +880,74 @@ summary > .chev{margin-left:auto}
 }
 @media(max-width:440px){.choice-grid,.platform-grid{grid-template-columns:1fr}.actions button{flex:1 1 auto}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+
+/* ===== 068: sidebar = navigation, sheets ===== */
+.brand-mark{width:28px;height:28px;flex:none;border-radius:7px}
+img.logo{padding:0;background:none;display:block;box-shadow:0 8px 20px rgba(10,132,255,.25);border-radius:12px}
+img.topbar-logo-icon{background:none;padding:0;object-fit:cover}
+.sidebar-head{padding:0 0 var(--sp-1)}
+.side-nav{position:relative;display:flex;flex-direction:column;gap:2px;padding:var(--sp-1) 0}
+.nav-item{
+  position:relative;z-index:1;display:flex;align-items:center;gap:12px;width:100%;
+  min-height:var(--hit);padding:0 12px;border-radius:12px;border:0;box-shadow:none;
+  background:transparent;color:var(--text);font-size:13px;font-weight:500;letter-spacing:-.01em;text-align:left;
+  transition:color var(--dur-2) var(--ease),background var(--dur-2) var(--ease),transform var(--dur-1) var(--ease);
+}
+.nav-item:hover:not(:disabled){background:var(--line);filter:none;box-shadow:none}
+.nav-item:active:not(:disabled){transform:scale(var(--press))}
+.nav-item[aria-current]{color:var(--accent);font-weight:600}
+.nav-item[aria-current]:hover{background:transparent}
+.nav-icon{width:20px;height:20px;flex:none}
+.nav-icon-stack{position:relative;width:20px;height:20px;flex:none}
+.nav-icon-stack .theme-icon-sun,.nav-icon-stack .theme-icon-moon{width:20px;height:20px}
+.nav-value{margin-left:auto;color:var(--muted);font-weight:400;font-size:12px}
+.nav-indicator{
+  position:absolute;left:0;right:0;top:0;height:var(--hit);border-radius:12px;pointer-events:none;
+  background:rgba(0,113,227,.1);opacity:0;
+  transform:translateY(var(--nav-y,0));
+  transition:transform var(--dur-3) var(--ease-spring),opacity var(--dur-2) var(--ease);
+}
+.nav-indicator.ready{opacity:1}
+[data-theme="dark"] .nav-indicator{background:rgba(10,132,255,.2)}
+[data-theme="dark"] .nav-item{background:transparent;border-color:transparent!important}
+[data-theme="dark"] .nav-item:hover:not(:disabled){background:var(--line)}
+.sidebar-foot{margin-top:auto;padding-top:var(--sp-1);border-top:1px solid var(--line)}
+.icon-btn{
+  width:var(--hit);height:var(--hit);min-height:var(--hit);padding:0;flex:none;display:grid;place-items:center;
+  border-radius:12px;background:transparent;border-color:transparent;box-shadow:none;color:var(--muted);
+}
+.icon-btn svg{width:20px;height:20px}
+.icon-btn:hover:not(:disabled){background:var(--line);color:var(--text);box-shadow:none;filter:none}
+[data-theme="dark"] .icon-btn{background:transparent;border-color:transparent!important}
+[data-theme="dark"] .icon-btn:hover:not(:disabled){background:var(--line)}
+.brand .refresh-btn{margin-left:auto}
+.refresh-btn.spinning svg{animation:spin var(--dur-4) var(--ease-out)}
+/* Sheets: centred dialog, scale + fade in over a blurred backdrop. */
+.sheet-layer{position:fixed;inset:0;z-index:200;display:grid;place-items:center;padding:var(--sp-2);visibility:hidden;pointer-events:none;transition:visibility 0s linear var(--dur-3)}
+.sheet-layer.open{visibility:visible;pointer-events:auto;transition:visibility 0s linear 0s}
+.sheet-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.28);backdrop-filter:blur(8px) saturate(120%);-webkit-backdrop-filter:blur(8px) saturate(120%);opacity:0;transition:opacity var(--dur-3) var(--ease)}
+.sheet-layer.open .sheet-backdrop{opacity:1}
+.sheet{
+  position:relative;width:min(640px,100%);max-height:min(760px,calc(100dvh - 2*var(--sp-2)));display:flex;flex-direction:column;
+  background:var(--material-thick);backdrop-filter:var(--material-blur);-webkit-backdrop-filter:var(--material-blur);
+  border:1px solid var(--hairline);border-radius:22px;box-shadow:0 30px 80px rgba(0,0,0,.28),0 2px 8px rgba(0,0,0,.08);
+  opacity:0;transform:scale(.96);transition:opacity var(--dur-2) var(--ease),transform var(--dur-3) var(--ease-out);
+}
+.sheet-layer.open .sheet{opacity:1;transform:scale(1)}
+.sheet-head{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-1);padding:var(--sp-2) var(--sp-2) var(--sp-1) var(--sp-3)}
+.sheet-head h2{margin:0;font-size:20px}
+.sheet-close{width:var(--hit);height:var(--hit);min-height:var(--hit);padding:0;display:grid;place-items:center;border-radius:50%;background:var(--line);border-color:transparent;color:var(--muted);box-shadow:none}
+.sheet-close svg{width:16px;height:16px}
+.sheet-close:hover:not(:disabled){background:var(--line2);color:var(--text);box-shadow:none;filter:none}
+[data-theme="dark"] .sheet-close{background:rgba(255,255,255,.1);border-color:transparent!important}
+.sheet-body{overflow:auto;overscroll-behavior:contain;padding:0 var(--sp-3) var(--sp-3)}
+.sheet-body.settings details:first-of-type{border-top:0}
+@media(max-width:600px){
+  .sheet-layer{place-items:end center;padding:0}
+  .sheet{width:100%;max-height:92dvh;border-radius:22px 22px 0 0;transform:translateY(24px)}
+  .sheet-layer.open .sheet{transform:none}
+}
+.empty-title{font-weight:600;color:var(--text);font-size:14px}.empty-tip{margin:6px auto 0;max-width:46ch;color:var(--muted);font-size:12px;line-height:1.5}
 </style>
 </head>
 <body>
@@ -897,42 +966,20 @@ summary > .chev{margin-left:auto}
 <div class="sidebar-scrim" id="sidebarScrim" aria-hidden="true"></div>
 <aside class="sidebar" id="sidebar" aria-label="Workspace">
   <div class="sidebar-head">
-    <div class="sidebar-brand"><span class="sidebar-brand-icon">R</span>Workspace</div>
+    <div class="sidebar-brand"><img class="brand-mark" src="clipflow-mark.svg" alt="" width="28" height="28">ClipFlow</div>
     <button class="sidebar-collapse" type="button" data-sidebar-toggle aria-controls="sidebar" aria-expanded="true" aria-label="Hide sidebar">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="15" rx="3"/><path d="M9.5 4.5v15"/></svg>
     </button>
   </div>
-  <div class="sidebar-group">
-    <div class="rail-title">Quick actions</div>
-    <div class="rail-actions">
-      <button class="secondary" id="refreshCurrent" type="button">Refresh import</button>
-      <button class="secondary" id="refreshQueue" type="button">Refresh queue</button>
-    </div>
-  </div>
-  <div class="sidebar-group">
-    <div class="rail-title">Editing tips</div>
-    <div class="muted" style="margin-top:4px">Open Edit on a candidate to adjust subtitle, font, style, title, rating, render, download, and publishing.</div>
-  </div>
-  <div class="sidebar-group">
-    <div class="rail-title">Settings</div>
-    <div class="settings">
-      <details>
-        <summary aria-expanded="false">Advanced settings <span class="muted">· system / publishing</span><span class="chev" aria-hidden="true"></span></summary>
-        <div id="settingsPanel"></div>
-        <div class="rail-actions" style="margin-top:9px">
-          <button class="secondary" id="reloadSettings" type="button">Reload</button>
-          <button id="saveSettings" type="button">Save</button>
-        </div>
-        <div class="hint">Secrets are masked. Leaving a masked value unchanged preserves the existing secret.</div>
-      </details>
-    </div>
-    <div class="settings">
-      <details>
-        <summary aria-expanded="false">Watermark <span class="muted">· asset library</span><span class="chev" aria-hidden="true"></span></summary>
-        <div id="watermarkPanel"></div>
-        <label class="secondary watermark-upload-btn" style="margin-top:9px;display:block;text-align:center">Upload watermark image<input type="file" accept="image/png,image/webp" id="watermarkUploadInput" hidden></label>
-      </details>
-    </div>
+  <nav class="side-nav" id="sideNav" aria-label="Main">
+    <span class="nav-indicator" id="navIndicator" aria-hidden="true"></span>
+    <button class="nav-item" type="button" data-nav="current" aria-current="page"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v10.5M8 10.5l4 4 4-4"/><path d="M4.5 15v2.5A2.5 2.5 0 0 0 7 20h10a2.5 2.5 0 0 0 2.5-2.5V15"/></svg><span>Import</span></button>
+    <button class="nav-item" type="button" data-nav="queue"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.5 3.5 10 14"/><path d="M20.5 3.5 14 20.5l-4-6.5-6.5-4z"/></svg><span>Publish</span></button>
+    <button class="nav-item" type="button" data-nav="watermarks" aria-haspopup="dialog" aria-controls="watermarkSheet"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="3"/><path d="m3.5 15.5 4.5-4.5 4 4"/><path d="M14.5 16h3"/></svg><span>Watermarks</span></button>
+    <button class="nav-item" type="button" data-nav="settings" aria-haspopup="dialog" aria-controls="settingsSheet"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg><span>Settings</span></button>
+  </nav>
+  <div class="sidebar-foot">
+    <button class="nav-item theme-toggle" id="themeToggleSide" type="button" aria-label="Switch appearance"><span class="nav-icon-stack"><svg class="theme-icon-sun nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2.2M12 19.3v2.2M4.9 4.9l1.6 1.6M17.5 17.5l1.6 1.6M2.5 12h2.2M19.3 12h2.2M4.9 19.1l1.6-1.6M17.5 6.5l1.6-1.6"/></svg><svg class="theme-icon-moon nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg></span><span>Appearance</span><span class="nav-value" id="themeValue">Light</span></button>
   </div>
 </aside>
 
@@ -941,11 +988,12 @@ summary > .chev{margin-left:auto}
     <button class="sidebar-open-btn" type="button" data-sidebar-toggle aria-controls="sidebar" aria-expanded="true" aria-label="Show sidebar">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="15" rx="3"/><path d="M9.5 4.5v15"/></svg>
     </button>
-    <div class="logo">R</div>
+    <img class="logo" src="clipflow-mark.svg" alt="" width="44" height="44">
     <div><h1>ClipFlow <button class="version-badge" id="versionBadge" type="button" aria-expanded="false">Beta · v2.1107</button></h1><p>Video clipping workspace · import → queue → publish</p>
       <div class="version-popover" id="versionPopover" role="dialog" aria-hidden="true">
         <div class="version-popover-title">What's new in v2.1107</div>
         <ul>
+          <li>Sidebar is now navigation: Import, Publish, Watermarks, Settings (as sheets), appearance in the footer</li>
           <li>One motion system: calmer curves, a consistent press, larger tap targets, sentence-case labels</li>
           <li>Every expandable section uses the same chevron that turns when it opens</li>
           <li>Status badges: clearer colours (grey waiting, blue working, amber needs you) that pass contrast in light and dark</li>
@@ -960,10 +1008,7 @@ summary > .chev{margin-left:auto}
         </ul>
       </div>
     </div>
-    <button class="theme-toggle-btn theme-toggle" id="themeToggleMain" type="button" aria-label="Toggle dark mode">
-      <svg class="theme-icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.6M12 18.9v2.6M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M2.5 12h2.6M18.9 12h2.6M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"/></svg>
-      <svg class="theme-icon-moon" viewBox="0 0 24 24" fill="currentColor"><path d="M20.4 14.7A8.3 8.3 0 0 1 9.3 3.6a.6.6 0 0 0-.7-.8A9.5 9.5 0 1 0 21.2 15.4a.6.6 0 0 0-.8-.7Z"/></svg>
-    </button>
+    <button class="icon-btn refresh-btn" id="refreshView" type="button" aria-label="Refresh"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3"/><path d="M19.5 4.5v4h-4"/></svg></button>
   </header>
 
   <div class="topbar" id="topbarWrap">
@@ -987,12 +1032,8 @@ summary > .chev{margin-left:auto}
       </span>
     </button>
     <span id="jobIslandLive" class="sr-only" role="status" aria-live="polite"></span>
-    <button class="theme-toggle-float theme-toggle" id="themeToggleFloat" type="button" aria-label="Toggle dark mode">
-      <svg class="theme-icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.6M12 18.9v2.6M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M2.5 12h2.6M18.9 12h2.6M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"/></svg>
-      <svg class="theme-icon-moon" viewBox="0 0 24 24" fill="currentColor"><path d="M20.4 14.7A8.3 8.3 0 0 1 9.3 3.6a.6.6 0 0 0-.7-.8A9.5 9.5 0 1 0 21.2 15.4a.6.6 0 0 0-.8-.7Z"/></svg>
-    </button>
     <div class="topbar-logo" id="topbarLogo" role="button" tabindex="0" aria-label="ClipFlow — scroll to top">
-      <span class="topbar-logo-icon">R</span>
+      <img class="topbar-logo-icon" src="clipflow-mark.svg" alt="">
       <span class="topbar-logo-text">ClipFlow</span>
     </div>
   </div>
@@ -1070,6 +1111,32 @@ summary > .chev{margin-left:auto}
     </main>
   </div>
 </div>
+</div>
+
+<!-- Sheets (068): Settings and Watermarks open as centred dialogs from the sidebar. Closed = visibility:hidden + pointer-events:none. -->
+<div class="sheet-layer" id="settingsSheet" aria-hidden="true">
+  <div class="sheet-backdrop" data-sheet-close></div>
+  <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="settingsSheetTitle">
+    <header class="sheet-head"><h2 id="settingsSheetTitle">Settings</h2><button class="sheet-close" type="button" data-sheet-close aria-label="Close settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></header>
+    <div class="sheet-body settings">
+      <div id="settingsPanel"></div>
+        <div class="rail-actions" style="margin-top:9px">
+          <button class="secondary" id="reloadSettings" type="button">Reload</button>
+          <button id="saveSettings" type="button">Save</button>
+        </div>
+      <div class="hint">Secrets are masked. Leaving a masked value unchanged preserves the existing secret.</div>
+    </div>
+  </section>
+</div>
+<div class="sheet-layer" id="watermarkSheet" aria-hidden="true">
+  <div class="sheet-backdrop" data-sheet-close></div>
+  <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="watermarkSheetTitle">
+    <header class="sheet-head"><h2 id="watermarkSheetTitle">Watermarks</h2><button class="sheet-close" type="button" data-sheet-close aria-label="Close watermarks"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></header>
+    <div class="sheet-body">
+      <div id="watermarkPanel"></div>
+      <label class="secondary watermark-upload-btn" style="margin-top:9px;display:block;text-align:center">Upload watermark image<input type="file" accept="image/png,image/webp" id="watermarkUploadInput" hidden></label>
+    </div>
+  </section>
 </div>
 
 <script>
@@ -1171,6 +1238,7 @@ function applyTheme(theme){
   const meta=document.querySelector('meta[name="theme-color"]');
   if(meta)meta.setAttribute("content",theme==="dark"?"#000000":"#f5f5f7");
   try{localStorage.setItem("clipflow-theme",theme)}catch(e){}
+  const tv=document.getElementById("themeValue");if(tv)tv.textContent=theme==="dark"?"Dark":"Light";
 }
 function toggleTheme(){
   applyTheme((document.documentElement.getAttribute("data-theme")||"light")==="dark"?"light":"dark");
@@ -1784,7 +1852,7 @@ async function loadCurrentJobs(){
 async function loadQueue(){
   try{
     const d=await api("/api/jobs?scope=queue"),jobs=Array.isArray(d)?d:(d?.jobs||d?.items||[]);
-    $("queueJobs").innerHTML=jobs.length?`<div class="queue-list">${jobs.map((j,i)=>renderQueueJob(j,i)).join("")}</div>`:`<div class="panel empty">No jobs in Publish yet.</div>`;
+    $("queueJobs").innerHTML=jobs.length?`<div class="queue-list">${jobs.map((j,i)=>renderQueueJob(j,i)).join("")}</div>`:`<div class="panel empty"><div class="empty-title">No jobs in Publish yet</div><div class="empty-tip">Finished imports land here. Open one and use <b>Edit</b> on a clip to adjust its subtitle, font, style, title and rating, then render, download or publish.</div></div>`;
   }catch(e){$("queueJobs").innerHTML=`<div class="panel error-box">Cannot load history: ${esc(e.message)}</div>`}
 }
 async function switchQueueView(showDetail){
@@ -2151,7 +2219,7 @@ async function showTab(tab){
   $("tabCurrent").classList.toggle("active",tab==="current");
   $("tabQueue").classList.toggle("active",tab==="queue");
   [["tabCurrent","current"],["tabQueue","queue"]].forEach(([id,t])=>{$(id).setAttribute("aria-selected",String(tab===t));$(id).tabIndex=tab===t?0:-1});
-  moveTabIndicator();
+  moveTabIndicator();syncNav();
 
   prev.classList.remove("switching-in");
   prev.classList.add("switching-out");
@@ -2263,8 +2331,6 @@ document.addEventListener("click",e=>{
   const pl=e.target.closest("[data-platform]");if(pl)return selectPlatform(pl.dataset.platform);
   const lo=e.target.closest("[data-layout]");if(lo)return selectLayout(lo.dataset.layout);
   if(e.target.closest("#analyzeButton"))return createJob();
-  if(e.target.closest("#refreshCurrent"))return loadCurrentJobs();
-  if(e.target.closest("#refreshQueue"))return loadQueue();
   const ce=e.target.closest("[data-edit]");if(ce)return toggleCandidateEdit(ce.dataset.edit);
   const rn=e.target.closest("[data-rename]");if(rn)return renameJob(rn.dataset.rename);
   const o=e.target.closest("[data-open]");if(o)return openAsCurrent(o.dataset.open);
@@ -2420,7 +2486,7 @@ document.addEventListener("click",e=>{
   if(!e.target.closest("#topbarLogo"))collapseTopbarLogo();
 });
 window.addEventListener("load",async()=>{
-  selectSplit(70);selectPlatform("youtube_shorts");overlayOpen=false;updateAnalyzeReady();updateJobIsland();moveTabIndicator();
+  selectSplit(70);selectPlatform("youtube_shorts");overlayOpen=false;updateAnalyzeReady();updateJobIsland();moveTabIndicator();syncNav();
   // Key + media token first, so the first render already has working <img>/<video> URLs.
   // Token is stable for 12 h and valid 12-24 h; refresh hourly.
   await refreshMediaToken();setInterval(refreshMediaToken,60*60*1000);
@@ -2476,6 +2542,57 @@ window.addEventListener("beforeunload",()=>{stopPolling();stopJobMonitor()});
   window.addEventListener("scroll",()=>{if(!ticking){ticking=true;requestAnimationFrame(onScroll)}},{passive:true});
   onScroll();
 })();
+
+// ---- Sidebar navigation + sheets (068) ----
+let openSheetId=null,sheetOpener=null;
+function selectedNav(){return openSheetId==="settingsSheet"?"settings":openSheetId==="watermarkSheet"?"watermarks":currentTab}
+function syncNav(){
+  const sel=selectedNav(),ind=$("navIndicator");
+  document.querySelectorAll("[data-nav]").forEach(b=>{if(b.dataset.nav===sel)b.setAttribute("aria-current",b.dataset.nav==="current"||b.dataset.nav==="queue"?"page":"true");else b.removeAttribute("aria-current")});
+  const item=document.querySelector(`.side-nav [data-nav="${sel}"]`);
+  if(ind&&item){ind.style.setProperty("--nav-y",item.offsetTop+"px");ind.style.height=item.offsetHeight+"px";ind.classList.add("ready")}
+}
+function openSheet(id,opener){
+  const layer=$(id);if(!layer||openSheetId===id)return;
+  if(openSheetId)closeSheet(false);
+  openSheetId=id;sheetOpener=opener||document.activeElement;
+  layer.classList.add("open");layer.setAttribute("aria-hidden","false");
+  $("appShell").inert=true;
+  syncNav();
+  requestAnimationFrame(()=>(layer.querySelector(".sheet-body input,.sheet-body button,.sheet-body summary")||layer.querySelector(".sheet-close"))?.focus({preventScroll:true}));
+}
+function closeSheet(restoreFocus=true){
+  if(!openSheetId)return false;
+  const layer=$(openSheetId);openSheetId=null;
+  layer.classList.remove("open");layer.setAttribute("aria-hidden","true");
+  $("appShell").inert=false;
+  syncNav();
+  if(restoreFocus&&sheetOpener&&document.contains(sheetOpener))sheetOpener.focus({preventScroll:true});
+  return true;
+}
+document.addEventListener("keydown",e=>{
+  if(!openSheetId)return;
+  if(e.key==="Escape"){e.stopImmediatePropagation();closeSheet();return}
+  if(e.key==="Tab"){ // keep focus inside the open sheet
+    const f=[...$(openSheetId).querySelectorAll('button,input,select,textarea,summary,label[tabindex],[tabindex]:not([tabindex="-1"])')].filter(el=>!el.disabled&&el.offsetParent!==null);
+    if(!f.length)return;const first=f[0],last=f[f.length-1];
+    if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus()}
+    else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus()}
+  }
+},true);
+document.addEventListener("click",e=>{
+  if(e.target.closest("[data-sheet-close]"))return closeSheet();
+  const nav=e.target.closest("[data-nav]");if(nav){
+    const v=nav.dataset.nav;
+    if(v==="settings"||v==="watermarks"){openSheet(v==="settings"?"settingsSheet":"watermarkSheet",nav);closeSidebarDrawer(false);return}
+    closeSheet(false);closeSidebarDrawer(false);showTab(v);
+  }
+  const rb=e.target.closest("#refreshView");if(rb){
+    if(!REDUCED_MOTION.matches){rb.classList.remove("spinning");void rb.offsetWidth;rb.classList.add("spinning");setTimeout(()=>rb.classList.remove("spinning"),450)}
+    if(currentTab==="current")loadCurrentJobs();else{loadQueue();refreshRunningJobs()}
+  }
+});
+window.addEventListener("resize",()=>requestAnimationFrame(syncNav),{passive:true});
 
 </script>
 </body>

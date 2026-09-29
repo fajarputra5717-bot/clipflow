@@ -227,9 +227,12 @@ or preflights get 401.
 
 ## Frontend shell (R-11/R-12/R-13; badge v2.1106)
 
-- **Layout:** `.app-shell` grid = left `<aside id="sidebar">` (Quick
-  actions, Editing tips, Settings disclosures; element IDs unchanged) +
-  `.container`. Desktop ≥1000 px: collapsible column
+- **Layout:** `.app-shell` grid = left `<aside id="sidebar">` (068: navigation
+  only: `[data-nav]` Import/Publish switch views via `showTab()`,
+  Watermarks/Settings open **sheets** `#watermarkSheet`/`#settingsSheet` via
+  `openSheet()`/`closeSheet()`; `syncNav()` owns `aria-current` + the
+  spring `#navIndicator`; theme toggle in `.sidebar-foot`) + `.container`.
+  Sheets sit outside `#appShell`, which goes `inert` while one is open. Desktop ≥1000 px: collapsible column
   (`body.sidebar-collapsed`, localStorage). Narrow: off-canvas drawer
   (`body.sidebar-open`) over `#sidebarScrim`. Toggles are
   `[data-sidebar-toggle]`; hidden sidebar gets `inert`. **Every closed
