@@ -57,4 +57,8 @@ The user picked faster-whisper medium int8.
   Indonesian instead of garbled text. Net: R-07 cuts download/normalization, not transcription; transcription got
   better, not faster. `small` would be the faster option if speed matters more.
 - A transient YouTube `HTTP 403` failed one job at download; no retry existed (fixed in the next commit).
+- Correction (after commit): on VgwaVaLaOVQ, which is **Spanish speech forced to `language=id`**, faster-whisper
+  medium runs slower than real time: 251.6 s for 136 s of audio (job 380184cc; RTF 1.85), from repeated
+  temperature-fallback decoding. So job 4b817c11's 623 s was ~450 s model download + ~175 s of that slow decoding,
+  not download alone. Indonesian audio measured RTF 0.2–0.31. Risk: non-Indonesian videos transcribe slowly.
 - NOT verified: karaoke/word-pop rendering on a faster-whisper transcript in a final render (words verified in DB).
