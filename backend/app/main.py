@@ -1,5 +1,10 @@
+import hashlib
+import hmac
 import json
 import os
+import re
+import secrets
+import time
 import traceback
 import uuid
 from datetime import datetime, timezone
@@ -7,9 +12,9 @@ from pathlib import Path
 from typing import Any, Optional
 
 import psycopg
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 
 from shared.settings import (
@@ -38,12 +43,128 @@ app = FastAPI(
 )
 
 
+# ============================================================
+# AUTH (R-03) — shared secret in X-ClipFlow-Key on every /api/*
+# request. /health and / stay open. The expected value is env-only
+# (CLIPFLOW_API_KEY), never app_settings: that table is served over
+# the API. Enforced as middleware rather than a route dependency so
+# unknown /api paths also get 401 (no route-existence leak).
+#
+# <img>/<video>/download links can't send headers, so the GET file
+# routes in MEDIA_PATH_RE also accept ?mt=<exp>.<hmac>, a read-only
+# media token from GET /api/media-token, HMAC'd with the API key.
+# Tokens are bucketed to MEDIA_TOKEN_WINDOW so media URLs stay stable
+# for hours (re-renders don't reload playing videos); every token is
+# valid for 12-24 h. Rotating CLIPFLOW_API_KEY revokes all of them.
+# ============================================================
+
+API_KEY_HEADER = "X-ClipFlow-Key"
+
+CLIPFLOW_API_KEY = os.getenv("CLIPFLOW_API_KEY", "").strip()
+
+MEDIA_TOKEN_PARAM = "mt"
+
+MEDIA_TOKEN_WINDOW = 12 * 3600
+
+MEDIA_PATH_RE = re.compile(
+    r"^/api/("
+    r"jobs/[^/]+/candidates/[^/]+/"
+    r"(preview|render|thumbnail|thumbnail-options/\d+)"
+    r"|assets/watermarks/[^/]+/file"
+    r")$"
+)
+
+if not CLIPFLOW_API_KEY:
+    print(
+        "[backend] CLIPFLOW_API_KEY is not set: every /api/* "
+        "request will be rejected with 401 (fail closed)."
+    )
+
+
+def _media_signature(exp: int) -> str:
+    return hmac.new(
+        CLIPFLOW_API_KEY.encode(),
+        f"media:{exp}".encode(),
+        hashlib.sha256,
+    ).hexdigest()
+
+
+def issue_media_token() -> dict:
+    exp = (
+        int(time.time()) // MEDIA_TOKEN_WINDOW + 2
+    ) * MEDIA_TOKEN_WINDOW
+    return {
+        "token": f"{exp}.{_media_signature(exp)}",
+        "expires_at": exp,
+    }
+
+
+def _media_token_valid(token: str) -> bool:
+    exp_raw, _, sig = token.partition(".")
+    try:
+        exp = int(exp_raw)
+    except ValueError:
+        return False
+    if exp <= time.time():
+        return False
+    return secrets.compare_digest(sig, _media_signature(exp))
+
+
+def _request_authorized(request: Request) -> bool:
+    if not CLIPFLOW_API_KEY:
+        return False
+
+    supplied = request.headers.get(API_KEY_HEADER, "")
+    if supplied and secrets.compare_digest(
+        supplied.encode(), CLIPFLOW_API_KEY.encode()
+    ):
+        return True
+
+    token = request.query_params.get(MEDIA_TOKEN_PARAM, "")
+    return bool(
+        token
+        and request.method in ("GET", "HEAD")
+        and MEDIA_PATH_RE.match(request.url.path)
+        and _media_token_valid(token)
+    )
+
+
+@app.middleware("http")
+async def require_api_key(request: Request, call_next):
+    path = request.url.path
+    if (
+        (path == "/api" or path.startswith("/api/"))
+        and not _request_authorized(request)
+    ):
+        return JSONResponse(
+            {"detail": "Unauthorized"},
+            status_code=401,
+        )
+    return await call_next(request)
+
+
+# CORS: explicit origin list from env CORS_ALLOWED_ORIGINS (comma
+# separated), never "*". No credentials: auth is a header, not a
+# cookie. Added AFTER the auth middleware so it wraps it: preflights
+# are answered here and 401s still carry CORS headers.
+def cors_allowed_origins() -> list[str]:
+    origins = [
+        o.strip().rstrip("/")
+        for o in os.getenv("CORS_ALLOWED_ORIGINS", "").split(",")
+        if o.strip()
+    ]
+    if "*" in origins:
+        print("[backend] CORS_ALLOWED_ORIGINS: '*' ignored")
+        origins = [o for o in origins if o != "*"]
+    return origins
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=cors_allowed_origins(),
+    allow_credentials=False,
+    allow_methods=["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"],
+    allow_headers=["Content-Type", API_KEY_HEADER],
 )
 
 
@@ -383,6 +504,12 @@ def health():
             status_code=500,
             detail=str(exc),
         )
+
+
+@app.get("/api/media-token")
+def media_token():
+    """Read-only token for <img>/<video> src URLs (see AUTH above)."""
+    return issue_media_token()
 
 
 # ============================================================

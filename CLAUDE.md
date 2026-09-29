@@ -173,6 +173,23 @@ env). `ENV_ONLY_KEYS` (`CLIPFLOW_API_KEY`, `CORS_ALLOWED_ORIGINS`,
 `DATABASE_URL`) are never read from the DB. Still env-only by design:
 `TELEGRAM_*`.
 
+## Auth + CORS (R-03)
+
+Every `/api/*` request needs header `X-ClipFlow-Key` = env
+`CLIPFLOW_API_KEY` (env-only, never app_settings; empty = fail closed).
+Enforced by the `require_api_key` **middleware** in main.py (not a route
+dependency) so unknown `/api` paths get the same 401 as real ones.
+`/health` and `/` are open. `<img>`/`<video>`/download URLs can't send
+headers: the GET file routes matched by `MEDIA_PATH_RE` also accept
+`?mt=` from `GET /api/media-token` (HMAC of the API key, stable per
+12 h bucket, valid 12-24 h, read-only). **A new file-serving GET route
+must be added to `MEDIA_PATH_RE`** and its frontend URL wrapped in
+`mediaUrl()`; every other frontend call goes through `api()` or
+`authFetch()` (uploads). Never a bare `fetch()`. CORS origins come from env
+`CORS_ALLOWED_ORIGINS` (comma list, `*` dropped, no credentials). The
+CORS middleware must stay added *after* the auth middleware (outermost),
+or preflights get 401.
+
 ## Conventions worth copying, not reinventing
 
 - New queue → new status enum + `claim_x_task()` with `FOR UPDATE

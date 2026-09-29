@@ -769,13 +769,13 @@ button.primary:hover:not(:disabled),.analyze-ready:hover:not(:disabled){backgrou
 <div class="container">
   <header class="brand">
     <div class="logo">R</div>
-    <div><h1>ClipFlow <button class="version-badge" id="versionBadge" type="button" aria-expanded="false">BETA · v2.1100</button></h1><p>Video clipping workspace · import → queue → publish</p>
+    <div><h1>ClipFlow <button class="version-badge" id="versionBadge" type="button" aria-expanded="false">BETA · v2.1101</button></h1><p>Video clipping workspace · import → queue → publish</p>
       <div class="version-popover" id="versionPopover" role="dialog" aria-hidden="true">
-        <div class="version-popover-title">What's new in v2.1100</div>
+        <div class="version-popover-title">What's new in v2.1101</div>
         <ul>
-          <li>Bigger, clearer watermark (harder to blur/crop out)</li>
-          <li>AI thumbnails via Runway — 3 picks, one click to apply</li>
-          <li>Liquid-glass tab bar that docks into a pill on scroll</li>
+          <li>API key required: asked once per browser session</li>
+          <li>Settings now take effect without a restart and only changed fields are saved</li>
+          <li>Rebuilt on the new server (v2.1100 baseline)</li>
         </ul>
       </div>
     </div>
@@ -1010,7 +1010,31 @@ let candidateActiveTasks={}; // candidateId -> {jobId,kind,actionLabel,status,pr
 const $=id=>document.getElementById(id);
 function esc(v){return v==null?"":String(v).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;")}
 function css(v){return CSS.escape(String(v))}
-function api(url,options={}){return fetch(API+url,{...options,headers:{"Content-Type":"application/json",...(options.headers||{})}}).then(async r=>{let d=null;try{d=await r.json()}catch{}if(!r.ok)throw new Error(d?.detail||`HTTP ${r.status}`);return d})}
+// Auth (R-03): API key asked once per browser session, sent as X-ClipFlow-Key. A 401 means a
+// wrong/rotated key: ask again (one shared prompt for all concurrent calls) and retry once.
+const KEY_STORAGE="clipflow_api_key_v1";
+let keyPromptPending=null;
+function apiKey(){try{return sessionStorage.getItem(KEY_STORAGE)||""}catch{return ""}}
+function askApiKey(message){
+  if(!keyPromptPending)keyPromptPending=Promise.resolve().then(()=>{
+    const k=(window.prompt(message||"ClipFlow API key (CLIPFLOW_API_KEY in .env):")||"").trim();
+    try{if(k)sessionStorage.setItem(KEY_STORAGE,k);else sessionStorage.removeItem(KEY_STORAGE)}catch{}
+    return k;
+  }).finally(()=>{keyPromptPending=null});
+  return keyPromptPending;
+}
+function authHeaders(){const k=apiKey();return k?{"X-ClipFlow-Key":k}:{}}
+async function authFetch(url,options={},retried=false){
+  if(!apiKey())await askApiKey();
+  const r=await fetch(API+url,{...options,headers:{...(options.headers||{}),...authHeaders()}});
+  if(r.status===401&&!retried){const k=await askApiKey("API key rejected. Enter the ClipFlow API key:");if(k)return authFetch(url,options,true)}
+  return r;
+}
+function api(url,options={}){return authFetch(url,{...options,headers:{"Content-Type":"application/json",...(options.headers||{})}}).then(async r=>{let d=null;try{d=await r.json()}catch{}if(!r.ok)throw new Error(d?.detail||`HTTP ${r.status}`);return d})}
+// <img>/<video>/download URLs can't carry headers: append the read-only media token instead.
+let mediaToken="";
+async function refreshMediaToken(){try{mediaToken=(await api("/api/media-token")).token||""}catch(e){console.warn("media token:",e.message)}}
+function mediaUrl(u){return u&&mediaToken?u+(u.includes("?")?"&":"?")+"mt="+encodeURIComponent(mediaToken):u}
 function saveActive(id){activeJobId=id||null;if(id)localStorage.setItem(STORAGE_KEY,String(id));else localStorage.removeItem(STORAGE_KEY)}
 function loadActive(){return activeJobId||localStorage.getItem(STORAGE_KEY)||null}
 function isBusy(s){return BUSY.includes(s)}
@@ -1154,7 +1178,7 @@ function renderCurrentJob(j,i=0){
 
 function renderQueueJob(j,i=0){
   const p=pct(j.progress),s=j.status||"completed",busy=isBusy(s),done=isDone(p,s);
-  const c=j.candidates?.[0],thumb=c?`${API}/api/jobs/${j.id}/candidates/${c.id}/thumbnail`:null;
+  const c=j.candidates?.[0],thumb=c?mediaUrl(`${API}/api/jobs/${j.id}/candidates/${c.id}/thumbnail`):null;
   return `<div class="panel queue-card" data-queue-open="${esc(j.id)}" style="--i:${i}">
     <div class="job-header">
       <div>
@@ -1254,10 +1278,10 @@ async function submagicUseAsFinal(jid,cid){
   catch(e){alert("Couldn't apply Submagic render: "+e.message)}
 }
 function renderCandidate(c,jid,platform){
-  const preview=(c.preview_url||c.preview_path)?`${API}/api/jobs/${jid}/candidates/${c.id}/preview`:null;
-  const final=(c.final_url||c.final_path||c.render_path)?`${API}/api/jobs/${jid}/candidates/${c.id}/render`:null;
+  const preview=(c.preview_url||c.preview_path)?mediaUrl(`${API}/api/jobs/${jid}/candidates/${c.id}/preview`):null;
+  const final=(c.final_url||c.final_path||c.render_path)?mediaUrl(`${API}/api/jobs/${jid}/candidates/${c.id}/render`):null;
   const cacheBust=c.updated_at?`?t=${encodeURIComponent(c.updated_at)}`:"";
-  const thumb=`${API}/api/jobs/${jid}/candidates/${c.id}/thumbnail${cacheBust}`;
+  const thumb=mediaUrl(`${API}/api/jobs/${jid}/candidates/${c.id}/thumbnail${cacheBust}`);
   const src=final||preview;
   const sub=String(c.subtitle_override??c.subtitle_text??"").toUpperCase();
   const title=c.manual_title||c.title||c.generated_title||hookTitle(sub)||"AI-Generated Highlight";
@@ -1349,7 +1373,7 @@ function renderCandidate(c,jid,platform){
                 const sel=(pickedIdx===i)||(pickedIdx===undefined&&c.thumbnail_path===thumbOptions[i]);
                 return `<div class="thumb-slide">
                   <button type="button" class="thumb-option ${sel?"selected":""}" data-pick-thumb="${esc(jid)}" data-cid="${esc(c.id)}" data-idx="${i}" aria-label="Use thumbnail option ${i+1}">
-                    <img src="${esc(API)}/api/jobs/${esc(jid)}/candidates/${esc(c.id)}/thumbnail-options/${i}${cacheBust}" alt="Thumbnail option ${i+1}" loading="lazy" onload="this.classList.add('loaded')" onerror="this.classList.add('broken');this.closest('.thumb-option')?.classList.add('has-broken')">
+                    <img src="${esc(mediaUrl(`${API}/api/jobs/${jid}/candidates/${c.id}/thumbnail-options/${i}${cacheBust}`))}" alt="Thumbnail option ${i+1}" loading="lazy" onload="this.classList.add('loaded')" onerror="this.classList.add('broken');this.closest('.thumb-option')?.classList.add('has-broken')">
                     <div class="thumb-option-footer">${platformIcon(platform,"sm")}</div>
                     <span class="thumb-broken-note">Preview unavailable</span>
                     <span class="thumb-check">✓</span>
@@ -1751,7 +1775,7 @@ async function uploadManualThumbnail(jid,cid,file){
   try{
     const form=new FormData();
     form.append("file",file);
-    const r=await fetch(`${API}/api/jobs/${jid}/candidates/${cid}/thumbnail-upload`,{method:"POST",body:form});
+    const r=await authFetch(`/api/jobs/${jid}/candidates/${cid}/thumbnail-upload`,{method:"POST",body:form});
     let d=null;try{d=await r.json()}catch{}
     if(!r.ok)throw new Error(d?.detail||`HTTP ${r.status}`);
     if(typeof d.index==="number")pickThumbnail(jid,cid,d.index);
@@ -1996,7 +2020,7 @@ async function loadWatermarkAssets(){
     }
     $("watermarkPanel").innerHTML=`<div class="watermark-grid">${assets.map(a=>`
       <div class="watermark-item ${a.active?"active":""}">
-        <img src="${API}/api/assets/watermarks/${esc(a.id)}/file" alt="${esc(a.filename)}" loading="lazy">
+        <img src="${esc(mediaUrl(`${API}/api/assets/watermarks/${a.id}/file`))}" alt="${esc(a.filename)}" loading="lazy">
         <div class="watermark-item-actions">
           ${a.active?`<span class="chip chip-active">Active</span>`:`<button type="button" class="secondary" data-watermark-activate="${esc(a.id)}">Use this</button>`}
           <button type="button" class="secondary" data-watermark-delete="${esc(a.id)}" aria-label="Delete watermark">✕</button>
@@ -2008,7 +2032,7 @@ async function uploadWatermarkAsset(file){
   const input=$("watermarkUploadInput");
   try{
     const form=new FormData();form.append("file",file);
-    const r=await fetch(`${API}/api/assets/watermarks`,{method:"POST",body:form});
+    const r=await authFetch(`/api/assets/watermarks`,{method:"POST",body:form});
     let d=null;try{d=await r.json()}catch{}
     if(!r.ok)throw new Error(d?.detail||`HTTP ${r.status}`);
     await loadWatermarkAssets();
@@ -2189,6 +2213,9 @@ document.addEventListener("click",e=>{
 });
 window.addEventListener("load",async()=>{
   selectSplit(70);selectPlatform("youtube_shorts");overlayOpen=false;updateAnalyzeReady();updateJobIsland();moveTabIndicator();
+  // Key + media token first, so the first render already has working <img>/<video> URLs.
+  // Token is stable for 12 h and valid 12-24 h; refresh hourly.
+  await refreshMediaToken();setInterval(refreshMediaToken,60*60*1000);
   await loadSettings();await loadWatermarkAssets();await loadCurrentJobs();await loadQueue();
 
   // Always start the lightweight running-job monitor, including when an
