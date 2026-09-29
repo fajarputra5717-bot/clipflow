@@ -454,7 +454,8 @@ input,select,textarea{
 }
 input:focus,select:focus,textarea:focus{border-color:#0071e3;box-shadow:0 0 0 4px rgba(0,113,227,.13);background:#fff}
 textarea{min-height:130px;resize:vertical;line-height:1.35}button{
-  border-radius:980px!important;border:1px solid rgba(0,0,0,.06)!important;
+  /* 071: was !important on both, which silently overrode every component's own radius/border */
+  border-radius:980px;border:1px solid rgba(0,0,0,.06);
   background:#f5f5f7;color:var(--text);
   box-shadow:none;
   transition:transform var(--dur-3) var(--ease),box-shadow var(--dur-3) var(--ease),border-color var(--dur-3) var(--ease),background var(--dur-3) var(--ease)
@@ -647,13 +648,6 @@ summary > .chev{margin-left:auto}
 .candidate-submagic-row .actions>*{flex:1}
 .candidate-submagic-row .hint{margin-top:6px}
 .error-text{color:#ff453a}
-.watermark-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:8px;margin-top:8px}
-.watermark-item{position:relative;border-radius:10px;overflow:hidden;background:repeating-conic-gradient(#2a2a2e 0% 25%,#232326 0% 50%) 50%/16px 16px;border:2px solid transparent}
-.watermark-item.active{border-color:var(--accent,#0a84ff)}
-.watermark-item img{width:100%;aspect-ratio:1/1;object-fit:contain;display:block}
-.watermark-item-actions{position:absolute;inset:auto 0 0 0;display:flex;gap:4px;padding:4px;background:linear-gradient(transparent,rgba(0,0,0,.65))}
-.watermark-item-actions button{flex:1;font-size:9px;padding:3px 4px;min-height:0}
-.watermark-item-actions .chip-active{flex:1;text-align:center;font-size:9px;padding:3px 4px;background:var(--accent,#0a84ff);color:#fff;border-radius:6px}
 .watermark-upload-btn{cursor:pointer}
 .version-history summary{cursor:pointer;font-size:11px;font-weight:600}
 .version-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 0;border-top:1px solid var(--border,rgba(127,127,127,.15))}
@@ -1008,6 +1002,61 @@ img.topbar-logo-icon{background:none;padding:0;object-fit:cover}
 .url-preview-meta span{color:var(--muted);font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:11px}
 .import-empty{display:flex;flex-direction:column;align-items:center;gap:4px;margin-top:var(--sp-2);border-style:dashed;background:transparent;box-shadow:none}
 .empty-icon{width:32px;height:32px;color:var(--muted2);margin-bottom:4px}
+
+/* ===== 071: watermark library ===== */
+:root{--checker-a:#ffffff;--checker-b:#e6e6ea}
+:root[data-theme="dark"]{--checker-a:#2c2c2e;--checker-b:#1f1f21}
+.sheet-lede{margin:0 0 var(--sp-2);color:var(--muted);font-size:13px}
+.wm-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+.wm-tile{position:relative;transition:opacity var(--dur-2) var(--ease),transform var(--dur-2) var(--ease)}
+.wm-tile.removing{opacity:0;transform:scale(.9)}
+.wm-select{
+  display:flex;flex-direction:column;align-items:stretch;gap:0;width:100%;min-height:0;padding:0;overflow:hidden;
+  border-radius:14px;background:var(--panel);border:1px solid var(--hairline);color:var(--text);box-shadow:none;text-align:left;
+  transition:box-shadow var(--dur-2) var(--ease),border-color var(--dur-2) var(--ease),transform var(--dur-1) var(--ease);
+}
+.wm-select:hover:not(:disabled){filter:none;box-shadow:0 4px 14px rgba(0,0,0,.08)}
+[data-theme="dark"] .wm-select{background:var(--panel2);border-color:var(--hairline)!important}
+.wm-tile.is-active .wm-select{border-color:var(--accent)!important;outline:2px solid var(--accent);outline-offset:-1px}
+.wm-preview{position:relative;display:block;aspect-ratio:16/10;
+  background:repeating-conic-gradient(var(--checker-a) 0% 25%,var(--checker-b) 0% 50%) 50%/14px 14px}
+.wm-preview img{position:absolute;inset:12px;width:calc(100% - 24px);height:calc(100% - 24px);object-fit:contain}
+.wm-name{display:block;padding:10px 12px;font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:var(--hit);line-height:24px}
+.wm-check{position:absolute;top:8px;left:8px;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;
+  background:var(--accent);color:#fff;box-shadow:0 2px 6px rgba(0,0,0,.25);opacity:0;transform:scale(.4);
+  transition:opacity var(--dur-2) var(--ease),transform var(--dur-3) var(--ease-spring)}
+.wm-check svg{width:14px;height:14px}
+.wm-tile.is-active .wm-check{opacity:1;transform:scale(1)}
+.wm-tile.pop .wm-check{animation:savedPop var(--dur-3) var(--ease-spring) both}
+.wm-delete{position:absolute;top:4px;right:4px;width:36px;height:36px;min-height:36px;border-radius:50%;
+  background:var(--material)!important;backdrop-filter:var(--material-blur);-webkit-backdrop-filter:var(--material-blur);color:var(--text);
+  opacity:0;transition:opacity var(--dur-2) var(--ease),color var(--dur-2) var(--ease)}
+.wm-delete::after{content:"";position:absolute;inset:-4px}
+.wm-delete svg{width:18px;height:18px}
+.wm-tile:hover .wm-delete,.wm-delete:focus-visible{opacity:1}
+.wm-delete:hover:not(:disabled){color:var(--bad)}
+@media(hover:none){.wm-delete{opacity:1}}
+.wm-empty{padding:var(--sp-3);text-align:center;color:var(--muted);font-size:13px;border:1px dashed var(--line2);border-radius:14px}
+.wm-drop{display:flex;align-items:center;gap:12px;margin-top:var(--sp-2);padding:var(--sp-2);border:1.5px dashed var(--line2);border-radius:14px;color:var(--muted);
+  transition:border-color var(--dur-2) var(--ease),background var(--dur-2) var(--ease),transform var(--dur-2) var(--ease-spring)}
+.wm-drop svg{width:28px;height:28px;flex:none}
+.wm-drop strong{display:block;color:var(--text);font-size:13px;font-weight:600}
+.wm-drop span{font-size:12px}
+.wm-drop.is-over{border-color:var(--accent);background:rgba(0,113,227,.07);transform:scale(1.01);color:var(--accent)}
+.wm-drop.is-busy-zone{opacity:.7}
+.wm-choose{color:var(--accent);font-weight:600;cursor:pointer;display:inline-block;padding:10px 0;margin:-10px 0}
+.wm-choose.is-busy{cursor:progress}
+/* Toast: bottom centre, above sheets. */
+.toast{position:fixed;left:50%;bottom:calc(var(--sp-3) + env(safe-area-inset-bottom));z-index:300;display:flex;align-items:center;gap:12px;
+  max-width:calc(100vw - 2*var(--sp-2));padding:6px 6px 6px 16px;min-height:var(--hit);border-radius:999px;color:#fff;font-size:13px;
+  background:rgba(28,28,30,.92);backdrop-filter:var(--material-blur);-webkit-backdrop-filter:var(--material-blur);box-shadow:0 10px 30px rgba(0,0,0,.25);
+  opacity:0;visibility:hidden;pointer-events:none;transform:translate(-50%,16px);
+  transition:opacity var(--dur-2) var(--ease),transform var(--dur-3) var(--ease-spring),visibility 0s linear var(--dur-3)}
+.toast.show{opacity:1;visibility:visible;pointer-events:auto;transform:translate(-50%,0);transition:opacity var(--dur-2) var(--ease),transform var(--dur-3) var(--ease-spring),visibility 0s}
+.toast-action{min-height:32px;padding:6px 14px;background:rgba(255,255,255,.14);border:0;color:#6cb2ff;font-weight:600;position:relative}
+.toast-action::after{content:"";position:absolute;inset:-6px}
+.toast-action:hover:not(:disabled){background:rgba(255,255,255,.22);box-shadow:none}
+[data-theme="dark"] .toast-action{background:rgba(255,255,255,.14);border-color:transparent!important}
 </style>
 </head>
 <body>
@@ -1053,6 +1102,7 @@ img.topbar-logo-icon{background:none;padding:0;object-fit:cover}
       <div class="version-popover" id="versionPopover" role="dialog" aria-hidden="true">
         <div class="version-popover-title">What's new in v2.1107</div>
         <ul>
+          <li>Watermark library: preview tiles, drag-and-drop upload, delete with undo</li>
           <li>Import: Analyze enables only for a valid YouTube link, with an instant thumbnail preview</li>
           <li>Settings sheet: grouped lists, search, show/hide secrets, Save confirms inline</li>
           <li>Sidebar is now navigation: Import, Publish, Watermarks, Settings (as sheets), appearance in the footer</li>
@@ -1199,12 +1249,17 @@ img.topbar-logo-icon{background:none;padding:0;object-fit:cover}
   <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="watermarkSheetTitle">
     <header class="sheet-head"><h2 id="watermarkSheetTitle">Watermarks</h2><button class="sheet-close" type="button" data-sheet-close aria-label="Close watermarks"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></header>
     <div class="sheet-body">
+      <p class="sheet-lede">The selected watermark is burned into every render. Transparent PNGs work best.</p>
       <div id="watermarkPanel"></div>
-      <label class="secondary watermark-upload-btn" style="margin-top:9px;display:block;text-align:center">Upload watermark image<input type="file" accept="image/png,image/webp" id="watermarkUploadInput" hidden></label>
+      <div class="wm-drop" id="wmDrop">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V4.5M8 8.5l4-4 4 4"/><path d="M4.5 14.5v3A2.5 2.5 0 0 0 7 20h10a2.5 2.5 0 0 0 2.5-2.5v-3"/></svg>
+        <div><strong>Drop a PNG or WebP here</strong><span>or <label class="wm-choose watermark-upload-btn" tabindex="0">choose a file<input type="file" accept="image/png,image/webp" id="watermarkUploadInput" hidden></label> · up to 5 MB</span></div>
+      </div>
     </div>
   </section>
 </div>
 
+<div class="toast" id="toast" role="status" aria-live="polite" aria-hidden="true"><span id="toastText"></span><button class="toast-action" id="toastAction" type="button"></button></div>
 <script>
 "use strict";
 
@@ -2347,45 +2402,76 @@ async function showTab(tab){
   setTimeout(()=>next.classList.remove("switching-in"),400);
 }
 
+let wmAssets=[],wmLastActive=null;const wmPendingDelete=new Map(); // id -> timer
+const TRASH='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 7h15M9.5 7V5h5v2M6.5 7l.8 12a1.5 1.5 0 0 0 1.5 1.4h6.4a1.5 1.5 0 0 0 1.5-1.4l.8-12"/></svg>';
+const CHECK='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 12.5 4 4 8-9"/></svg>';
 async function loadWatermarkAssets(){
-  try{
-    const r=await api("/api/assets/watermarks");
-    const assets=r.assets||[];
-    if(!assets.length){
-      $("watermarkPanel").innerHTML=`<div class="hint">No watermarks uploaded yet — the built-in default is used.</div>`;
-      return;
-    }
-    $("watermarkPanel").innerHTML=`<div class="watermark-grid">${assets.map(a=>`
-      <div class="watermark-item ${a.active?"active":""}">
-        <img src="${esc(mediaUrl(`${API}/api/assets/watermarks/${a.id}/file`))}" alt="${esc(a.filename)}" loading="lazy">
-        <div class="watermark-item-actions">
-          ${a.active?`<span class="chip chip-active">Active</span>`:`<button type="button" class="secondary" data-watermark-activate="${esc(a.id)}">Use this</button>`}
-          <button type="button" class="secondary" data-watermark-delete="${esc(a.id)}" aria-label="Delete watermark">✕</button>
-        </div>
-      </div>`).join("")}</div>`;
-  }catch(e){$("watermarkPanel").innerHTML=`<div class="error-box">${esc(e.message)}</div>`}
+  try{const r=await api("/api/assets/watermarks");wmAssets=r.assets||[];renderWatermarks()}
+  catch(e){$("watermarkPanel").innerHTML=`<div class="error-box">${esc(e.message)}</div>`}
+}
+function renderWatermarks(){
+  const list=wmAssets.filter(a=>!wmPendingDelete.has(a.id)),active=list.find(a=>a.active)?.id||null;
+  const popId=active&&active!==wmLastActive&&wmLastActive!==null?active:null;wmLastActive=active;
+  if(!list.length){$("watermarkPanel").innerHTML=`<div class="wm-empty">No watermarks yet: renders use the built-in default.</div>`;return}
+  $("watermarkPanel").innerHTML=`<div class="wm-grid">${list.map(a=>`
+    <div class="wm-tile${a.active?" is-active":""}${a.id===popId?" pop":""}" data-wm-id="${esc(a.id)}">
+      <button type="button" class="wm-select" ${a.active?"":`data-watermark-activate="${esc(a.id)}"`} aria-pressed="${a.active?"true":"false"}" aria-label="${a.active?"In use":"Use"}: ${esc(a.filename)}">
+        <span class="wm-preview"><img src="${esc(mediaUrl(`${API}/api/assets/watermarks/${a.id}/file`))}" alt="" loading="lazy"></span>
+        <span class="wm-name">${esc(a.filename)}</span>
+        <span class="wm-check">${CHECK}</span>
+      </button>
+      <button type="button" class="icon-btn wm-delete" data-watermark-delete="${esc(a.id)}" aria-label="Delete ${esc(a.filename)}">${TRASH}</button>
+    </div>`).join("")}</div>`;
 }
 async function uploadWatermarkAsset(file){
   const input=$("watermarkUploadInput"),label=input?.closest("label");
-  setBusy(label,true,"Uploading…");
+  if(file&&!/^image\/(png|webp)$/.test(file.type)){showToast("Use a PNG or WebP image.");return}
+  setBusy(label,true,"Uploading…");$("wmDrop").classList.add("is-busy-zone");
   try{
     const form=new FormData();form.append("file",file);
     const r=await authFetch(`/api/assets/watermarks`,{method:"POST",body:form});
     let d=null;try{d=await r.json()}catch{}
     if(!r.ok)throw new Error(d?.detail||`HTTP ${r.status}`);
-    await loadWatermarkAssets();
-  }catch(e){alert("Watermark upload failed: "+e.message)}
-  finally{if(input)input.value="";setBusy(label,false)}
+    await loadWatermarkAssets();showToast("Watermark uploaded.");
+  }catch(e){showToast("Upload failed: "+e.message)}
+  finally{if(input)input.value="";setBusy(label,false);$("wmDrop").classList.remove("is-busy-zone")}
 }
 async function activateWatermarkAsset(id){
-  try{await api(`/api/assets/watermarks/${id}/activate`,{method:"POST"});await loadWatermarkAssets()}
-  catch(e){alert("Couldn't activate watermark: "+e.message)}
+  const prev=wmAssets.map(a=>a.active);
+  wmAssets.forEach(a=>a.active=a.id===id);renderWatermarks(); // optimistic: the ✓ moves now
+  try{await api(`/api/assets/watermarks/${id}/activate`,{method:"POST"})}
+  catch(e){wmAssets.forEach((a,i)=>a.active=prev[i]);renderWatermarks();showToast("Couldn't switch watermark: "+e.message)}
 }
-async function deleteWatermarkAsset(id){
-  if(!confirm("Delete this watermark? Renders using it will fall back to the default."))return;
-  try{await api(`/api/assets/watermarks/${id}`,{method:"DELETE"});await loadWatermarkAssets()}
-  catch(e){alert("Couldn't delete watermark: "+e.message)}
+// Delete is deferred 5 s behind an Undo toast; the DELETE only goes out when the toast expires
+// (or the page is closing).
+function deleteWatermarkAsset(id){
+  const a=wmAssets.find(x=>x.id===id);if(!a||wmPendingDelete.has(id))return;
+  const tile=document.querySelector(`.wm-tile[data-wm-id="${CSS.escape(id)}"]`);
+  const finishRemove=()=>{wmPendingDelete.set(id,setTimeout(()=>commitWatermarkDelete(id),5000));renderWatermarks()};
+  if(tile&&!REDUCED_MOTION.matches){tile.classList.add("removing");setTimeout(finishRemove,200)}else finishRemove();
+  showToast(`Deleted “${a.filename}”.`,"Undo",()=>{clearTimeout(wmPendingDelete.get(id));wmPendingDelete.delete(id);renderWatermarks()},5000);
 }
+async function commitWatermarkDelete(id,keepalive=false){
+  if(!wmPendingDelete.has(id))return;wmPendingDelete.delete(id);
+  try{await api(`/api/assets/watermarks/${id}`,{method:"DELETE",keepalive});wmAssets=wmAssets.filter(a=>a.id!==id);if(!keepalive)await loadWatermarkAssets()}
+  catch(e){if(!keepalive){showToast("Couldn't delete watermark: "+e.message);await loadWatermarkAssets()}}
+}
+window.addEventListener("pagehide",()=>{[...wmPendingDelete.keys()].forEach(id=>{clearTimeout(wmPendingDelete.get(id));commitWatermarkDelete(id,true)})});
+// Drop zone: highlight while dragging a file over it; files dropped anywhere else in the sheet are ignored, not opened.
+["dragenter","dragover"].forEach(t=>document.addEventListener(t,e=>{if(!openSheetId||openSheetId!=="watermarkSheet")return;e.preventDefault();$("wmDrop").classList.toggle("is-over",!!e.target.closest?.("#wmDrop"))}));
+document.addEventListener("dragleave",e=>{if(e.target.closest?.("#wmDrop")&&!e.relatedTarget?.closest?.("#wmDrop"))$("wmDrop").classList.remove("is-over")});
+document.addEventListener("drop",e=>{if(openSheetId!=="watermarkSheet")return;e.preventDefault();$("wmDrop").classList.remove("is-over");const f=e.dataTransfer?.files?.[0];if(f&&e.target.closest?.("#wmDrop"))uploadWatermarkAsset(f)});
+document.addEventListener("keydown",e=>{if((e.key==="Enter"||e.key===" ")&&e.target.classList?.contains("wm-choose")){e.preventDefault();$("watermarkUploadInput").click()}});
+// Toast (071): one at a time, optional action, auto-hides.
+let toastTimer=null,toastFn=null;
+function showToast(text,actionLabel,onAction,ms=3200){
+  const t=$("toast");$("toastText").textContent=text;const btn=$("toastAction");
+  btn.textContent=actionLabel||"";btn.hidden=!actionLabel;toastFn=onAction||null;
+  t.classList.add("show");t.setAttribute("aria-hidden","false");
+  clearTimeout(toastTimer);toastTimer=setTimeout(hideToast,ms);
+}
+function hideToast(){const t=$("toast");t.classList.remove("show");t.setAttribute("aria-hidden","true");toastFn=null}
+document.addEventListener("click",e=>{if(e.target.closest("#toastAction")){const fn=toastFn;hideToast();fn&&fn()}});
 document.addEventListener("change",e=>{
   if(e.target.id==="watermarkUploadInput"&&e.target.files&&e.target.files[0])uploadWatermarkAsset(e.target.files[0]);
 });
