@@ -2068,6 +2068,10 @@ def detect_face_for_clip(
 # FACE CROP
 # ============================================================
 
+FACE_CROP_CENTER_FLOOR = 0.60
+FACE_CROP_MIN_HEIGHT_1080P = 120
+
+
 def calculate_face_crop(
     source_width,
     source_height,
@@ -2081,8 +2085,8 @@ def calculate_face_crop(
         / panel_height
     )
 
-    # Face should fill roughly 62% of the crop's height for a
-    # tight, centered facecam look. Raising this fraction shrinks
+    # Face should fill roughly FACE_ZOOM_RATIO (default 78%) of the
+    # crop's height for a tight, centered facecam look. Raising this fraction shrinks
     # the crop area around the face (more zoomed in).
     face_fill_ratio = setting_float("FACE_ZOOM_RATIO")
 
@@ -2091,9 +2095,18 @@ def calculate_face_crop(
         / face_fill_ratio
     )
 
+    # Minimum crop guards against a tiny (often false-positive)
+    # detection zooming into a few pixels. It was a flat 180px, which
+    # swallowed FACE_ZOOM_RATIO for typical corner-PIP webcams (a
+    # ~110px face asks for 142-179px). R-04: 120px at 1080p, scaled
+    # with the source height.
+    min_crop_height = int(
+        FACE_CROP_MIN_HEIGHT_1080P * source_height / 1080
+    )
+
     crop_height = int(
         max(
-            180,
+            min_crop_height,
             desired_crop_height,
         )
     )
@@ -2161,11 +2174,43 @@ def calculate_face_crop(
         ),
     )
 
-    crop_height = min(
+    requested_crop_height = crop_height
+
+    centered_crop_height = min(
         crop_height,
         int(2 * max_half_width / ratio),
         int(2 * max_half_height),
     )
+
+    # Floor (R-04): a face tight against a frame edge can collapse
+    # the centered crop to a sliver (huge upscale, face cut off).
+    # Below 60% of the requested height, keep 60% and accept that
+    # the edge clamp further down frames the face slightly
+    # off-center instead.
+    # Also never smaller than the face itself, or the pane shows a
+    # forehead-to-chin slice.
+    crop_height_floor = min(
+        requested_crop_height,
+        max(
+            int(requested_crop_height * FACE_CROP_CENTER_FLOOR),
+            int(face["h"]),
+        ),
+    )
+
+    if centered_crop_height < crop_height_floor:
+
+        log(
+            "Face crop: centering would shrink crop to "
+            f"{centered_crop_height}px (floor {crop_height_floor}px of "
+            f"requested {requested_crop_height}px); using the floor, "
+            "face framed off-center"
+        )
+
+        crop_height = crop_height_floor
+
+    else:
+
+        crop_height = centered_crop_height
 
     crop_height = max(
         crop_height,

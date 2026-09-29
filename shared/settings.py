@@ -37,7 +37,9 @@ DEFAULT_SETTINGS = {
     "CLIP_MAX_DURATION": "55",
     "FACE_DETECTION_SAMPLE_COUNT": "16",
     "FACE_CONFIDENCE_THRESHOLD": "0.60",
-    "FACE_ZOOM_RATIO": "0.62",
+    # Face height / crop height. 0.78 = face fills more of the bottom
+    # pane (R-04; baseline was 0.62).
+    "FACE_ZOOM_RATIO": "0.78",
     "PREVIEW_WIDTH": "540",
     "FFMPEG_PREVIEW_PRESET": "ultrafast",
     "FFMPEG_PREVIEW_CRF": "30",
