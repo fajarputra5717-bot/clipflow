@@ -3040,6 +3040,13 @@ def make_ass(
 # VIDEO RENDER
 # ============================================================
 
+def job_burn_subtitles(job):
+    """jobs.burn_subtitles (R-09). NULL/missing = True: burned-in
+    captions stay the default for every existing job."""
+    value = job.get("burn_subtitles")
+    return True if value is None else bool(value)
+
+
 def job_watermark(job):
     """(width_px_at_1080, opacity) for a job: jobs.watermark_width /
     watermark_opacity when set (R-05), else the global settings.
@@ -3574,6 +3581,9 @@ def create_preview(
         )
     )
 
+    if not job_burn_subtitles(job):
+        subtitle_file = None
+
     preview_font_size = max(
         18,
         int(
@@ -3598,18 +3608,21 @@ def create_preview(
         )
     )
 
-    make_ass(
-        clip_segments,
-        subtitle_file,
-        subtitle_font,
-        preview_font_size,
-        subtitle_style,
-        preview_width,
-        preview_height,
-        split_ratio=split_ratio,
-        animation=normalize_subtitle_animation(job),
-        watermark_width=wm_width,
-    )
+    # R-09: burn-in off -> no .ass at all, render without subtitles.
+    if subtitle_file:
+
+        make_ass(
+            clip_segments,
+            subtitle_file,
+            subtitle_font,
+            preview_font_size,
+            subtitle_style,
+            preview_width,
+            preview_height,
+            split_ratio=split_ratio,
+            animation=normalize_subtitle_animation(job),
+            watermark_width=wm_width,
+        )
 
     # --------------------------------------------------------
     # RENDER
@@ -3846,29 +3859,35 @@ def render_final_candidate(
         )
     )
 
-    make_ass(
-        clip_segments,
-        subtitle_file,
+    if not job_burn_subtitles(job):
+        subtitle_file = None
 
-        normalize_subtitle_font(
-            job
-        ),
+    # R-09: burn-in off -> no .ass at all, render without subtitles.
+    if subtitle_file:
 
-        normalize_subtitle_size(
-            job
-        ),
+        make_ass(
+            clip_segments,
+            subtitle_file,
 
-        job.get(
-            "subtitle_style"
+            normalize_subtitle_font(
+                job
+            ),
+
+            normalize_subtitle_size(
+                job
+            ),
+
+            job.get(
+                "subtitle_style"
+            )
+            or "outline",
+
+            FINAL_WIDTH,
+            FINAL_HEIGHT,
+            split_ratio=split_ratio,
+            animation=normalize_subtitle_animation(job),
+            watermark_width=wm_width,
         )
-        or "outline",
-
-        FINAL_WIDTH,
-        FINAL_HEIGHT,
-        split_ratio=split_ratio,
-        animation=normalize_subtitle_animation(job),
-        watermark_width=wm_width,
-    )
 
     output_path = (
         FINAL_DIR
@@ -5039,6 +5058,7 @@ def claim_candidate_task():
                 j.layout,
                 j.watermark_width,
                 j.watermark_opacity,
+                j.burn_subtitles,
                 j.transcript_segments,
                 sv.source_path
             FROM clip_candidates c
@@ -5151,6 +5171,9 @@ def _process_candidate_task(
 
             "watermark_opacity":
                 task.get("watermark_opacity"),
+
+            "burn_subtitles":
+                task.get("burn_subtitles"),
 
             "transcript_segments":
                 task["transcript_segments"],

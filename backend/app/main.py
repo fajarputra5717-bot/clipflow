@@ -232,6 +232,8 @@ def ensure_schema():
         # R-05: per-job watermark; NULL = global WATERMARK_* setting.
         "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS watermark_width INT",
         "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS watermark_opacity REAL",
+        # R-09: FALSE renders preview/final without burned-in captions.
+        "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS burn_subtitles BOOLEAN DEFAULT TRUE",
     ]
 
     try:
@@ -461,6 +463,8 @@ class RenderOptionsUpdate(BaseModel):
     # explicit null resets to the global default.
     watermark_width: Optional[int] = Field(default=None, ge=100, le=1080)
     watermark_opacity: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    # R-09. Only changes what gets rendered: subtitle text/style stay.
+    burn_subtitles: Optional[bool] = None
 
 
 class SubtitleStyleUpdate(BaseModel):
@@ -810,7 +814,8 @@ def list_jobs(
                         j.subtitle_size,
                         j.subtitle_animation,
                         j.watermark_width,
-                        j.watermark_opacity
+                        j.watermark_opacity,
+                        j.burn_subtitles
                     FROM jobs j
                     LEFT JOIN source_videos sv
                         ON sv.id = j.source_video_id
@@ -884,7 +889,8 @@ def get_job(job_id: str):
                         j.subtitle_size,
                         j.subtitle_animation,
                         j.watermark_width,
-                        j.watermark_opacity
+                        j.watermark_opacity,
+                        j.burn_subtitles
                     FROM jobs j
                     LEFT JOIN source_videos sv
                         ON sv.id = j.source_video_id
@@ -1243,7 +1249,8 @@ def update_candidate(
 @app.patch("/api/jobs/{job_id}/render-options")
 def update_render_options(job_id: str, req: RenderOptionsUpdate):
     """Job-level render options shared by every candidate of the job
-    (R-05 watermark). Takes effect on the next preview/final render."""
+    (R-05 watermark, R-09 burn_subtitles). Takes effect on the next
+    preview/final render."""
 
     fields = sorted(req.model_fields_set)
 

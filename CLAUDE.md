@@ -150,6 +150,7 @@ fallback only. The real source of truth is `watermark_assets` table +
 `resolve_watermark_path()` in worker.py — never read `WATERMARK_PATH`
 directly in new code, call the resolver.
 
+Burn-in toggle (R-09): `jobs.burn_subtitles` (NULL = on, `job_burn_subtitles()`); off = no `make_ass()`, `render_vertical(subtitle_path=None)`.
 Per-job override (R-05): `jobs.watermark_width` / `watermark_opacity`
 (NULL = global setting), set via `PATCH /api/jobs/{id}/render-options`.
 Resolve with `job_watermark(job)` once per render and pass the same

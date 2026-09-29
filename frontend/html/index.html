@@ -474,6 +474,8 @@ button.primary:hover:not(:disabled),.analyze-ready:hover:not(:disabled){backgrou
 .job-header{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
 .job-header-side{display:flex;align-items:center;gap:7px;flex:none}
 .cancel-job-btn{padding:5px 10px;font-size:11.5px;min-height:0}
+.burn-toggle{display:flex;align-items:center;gap:8px;margin:8px 0 2px;font-size:12px;font-weight:600;cursor:pointer}
+.burn-toggle input{width:16px;height:16px;margin:0}
 .job-id,.job-url{font-size:9.5px;color:var(--muted2);word-break:break-all;margin-top:3px}.job-url{max-width:75vw}
 .progress-msg{font-size:9.5px;color:var(--muted);margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:70vw}
 .job-header-side .progress-ring{margin:0 1px}
@@ -927,10 +929,11 @@ summary > .chev{margin-left:auto}
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="15" rx="3"/><path d="M9.5 4.5v15"/></svg>
     </button>
     <div class="logo">R</div>
-    <div><h1>ClipFlow <button class="version-badge" id="versionBadge" type="button" aria-expanded="false">BETA · v2.1108</button></h1><p>Video clipping workspace · import → queue → publish</p>
+    <div><h1>ClipFlow <button class="version-badge" id="versionBadge" type="button" aria-expanded="false">BETA · v2.1109</button></h1><p>Video clipping workspace · import → queue → publish</p>
       <div class="version-popover" id="versionPopover" role="dialog" aria-hidden="true">
-        <div class="version-popover-title">What's new in v2.1108</div>
+        <div class="version-popover-title">What's new in v2.1109</div>
         <ul>
+          <li>Turn burned-in subtitles off per job for a clean video (your subtitle text and style are kept)</li>
           <li>Cancel a running job (stops the download, transcription or render within seconds)</li>
           <li>11 new caption fonts (Montserrat, Inter, Oswald, Poppins, Anton, Bebas Neue, Archivo Black), shown in their own typeface</li>
           <li>Every expandable section uses the same chevron that turns when it opens</li>
@@ -1480,6 +1483,7 @@ function renderCandidate(c,jid,platform,job={}){
   const fontName=c.subtitle_font||job.subtitle_font||ss?.font||"Liberation Sans Bold";
   const size=Number(c.subtitle_size||job.subtitle_size||ss?.size||42);
   const animName=(typeof ss==="object"&&ss?ss.animation:null)||c.subtitle_animation||job.subtitle_animation||"karaoke";
+  const burnSubs=job.burn_subtitles!==false;  // R-09: NULL/missing = on
   const wmW=Number(job.watermark_width??settingsCache.WATERMARK_WIDTH?.value??630)||630;
   const wmPct=Math.round(100*Number(job.watermark_opacity??settingsCache.WATERMARK_OPACITY?.value??1));
   const busy=isBusy(c.status);
@@ -1506,7 +1510,7 @@ function renderCandidate(c,jid,platform,job={}){
           <div class="preview-badges-right"><span class="chip chip-rating">★ ${esc(rating)}/10</span></div>
           <div class="preview-footer">${platformIcon(platform,"sm")}</div>
         </div>
-        <div class="preview-note">Thumbnail appears before playback · subtitle is burned into the video itself.</div>
+        <div class="preview-note">Thumbnail appears before playback · ${burnSubs?"subtitle is burned into the video itself.":"subtitles are off for this job (clean video)."}</div>
       </div>`:`<div class="empty">Preview is not ready yet.</div>`}
     </div>
 
@@ -1522,6 +1526,7 @@ function renderCandidate(c,jid,platform,job={}){
           </div>
           <label class="edit-subtle-label">Indonesian · ALL CAPS · karaoke word-highlight</label>
           <textarea id="sub-${esc(c.id)}">${esc(sub)}</textarea>
+          <label class="burn-toggle"><input type="checkbox" id="burn-${esc(c.id)}" ${burnSubs?"checked":""} data-initial="${burnSubs?"1":"0"}"> Burn subtitles into video</label>
           <div class="edit-style-row">
             <div><label>Font style</label><select id="style-${esc(c.id)}">${SUBTITLE_STYLES.map(([v,l])=>`<option value="${v}" ${v===styleName?"selected":""}>${l}</option>`).join("")}</select></div>
             <div><label>Font</label><select id="font-${esc(c.id)}">${SUBTITLE_FONTS.map(x=>`<option ${x===fontName?"selected":""} style="font-family:${esc(SUBTITLE_FONT_PREVIEW_STACK[x]||"inherit")};font-weight:${SUBTITLE_FONT_WEIGHT[x]||700}">${esc(x)}</option>`).join("")}</select></div>
@@ -1759,6 +1764,8 @@ function changedRenderOptions(cid){
   const out={},w=$("wmw-"+cid),o=$("wmo-"+cid);
   if(w&&w.value!==w.dataset.initial)out.watermark_width=Number(w.value);
   if(o&&o.value!==o.dataset.initial)out.watermark_opacity=Number(o.value)/100;
+  const burn=$("burn-"+cid);
+  if(burn&&(burn.checked?"1":"0")!==burn.dataset.initial)out.burn_subtitles=burn.checked;
   return out;
 }
 document.addEventListener("change",e=>{
