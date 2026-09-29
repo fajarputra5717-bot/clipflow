@@ -165,6 +165,11 @@ Claude (`shared/ai/claude.py`) returns structured output via a strict
 tool; Sonnet 5.5 / Opus 5.5 reject forced `tool_choice`, so it forces
 only where the model accepts it. Claude model IDs live only in
 `DEFAULT_SETTINGS` (`CLAUDE_MODEL_ANALYSIS`, `CLAUDE_MODEL_UTILITY`).
+Failover (R-22): `CLIP_ANALYSIS_PROVIDER` / `TEXT_UTILITY_PROVIDER` ∈
+`gemini|claude|auto` (default auto = Gemini, then Claude on transient
+errors only). Circuit breaker 3 fails → 60 s, per process.
+`clip_candidates.hook_provider` records who produced each hook — set
+it on any new hook-producing path (pass `with_meta=True`).
 
 ## Runtime settings
 

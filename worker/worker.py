@@ -630,12 +630,17 @@ def normalize_video(
 # GEMINI
 # ============================================================
 
-def validate_gemini():
+def validate_ai():
 
-    if not setting("GEMINI_API_KEY"):
+    # R-22: fail only if NO provider can serve hook analysis.
+    if not any(
+        ai_router.PROVIDERS[name].is_configured(setting)
+        for name in ai_router.AUTO_ORDER
+    ):
 
         raise RuntimeError(
-            "GEMINI_API_KEY missing"
+            "No AI provider configured "
+            "(set GEMINI_API_KEY and/or ANTHROPIC_API_KEY)"
         )
 
     if "2.5" in GEMINI_MODEL.lower():
@@ -916,7 +921,7 @@ def analyze_hooks(
     clip_count=None,
 ):
 
-    validate_gemini()
+    validate_ai()
 
     if not segments:
 
@@ -924,17 +929,12 @@ def analyze_hooks(
             "No transcript segments available"
         )
 
-    api_key = setting("GEMINI_API_KEY")
-
     if clip_count is None:
         clip_count = setting_int("CLIP_COUNT")
 
     clip_target_duration = setting_int("CLIP_TARGET_DURATION")
     clip_min_duration = setting_int("CLIP_MIN_DURATION")
     clip_max_duration = setting_int("CLIP_MAX_DURATION")
-
-    if not api_key:
-        raise RuntimeError("GEMINI_API_KEY missing")
 
     timed_transcript = "\n".join(
         (
@@ -1006,12 +1006,19 @@ Transcript:
 {timed_transcript}
 """
 
-    raw = ai_router.ai_generate_json(
+    raw, ai_meta = ai_router.ai_generate_json(
         prompt,
         HOOKS_SCHEMA,
         task="hooks",
         # Claude's adaptive thinking counts against this.
         max_tokens=16000,
+        with_meta=True,
+    )
+
+    log(
+        f"Hooks produced by {ai_meta['provider']} "
+        f"({ai_meta['model']})"
+        + (" after failover" if ai_meta["failed_over"] else "")
     )
 
     if not isinstance(
@@ -1020,7 +1027,7 @@ Transcript:
     ):
 
         raise RuntimeError(
-            "Gemini did not return a list"
+            f"{ai_meta['provider']} did not return a list"
         )
 
     results = []
@@ -1133,13 +1140,15 @@ Transcript:
                 "content_type": content_type,
 
                 "rating": rating,
+
+                "provider": ai_meta["provider"],
             }
         )
 
     if len(results) < 1:
 
         raise RuntimeError(
-            "Gemini returned no usable clips"
+            f"{ai_meta['provider']} returned no usable clips"
         )
 
     results.sort(
@@ -3721,7 +3730,7 @@ def process_analysis_job(
             job_id,
             progress=45,
             message=(
-                "Gemini 3.6 Flash analysing viral hooks"
+                "AI analysing viral hooks"
             ),
         )
 
@@ -3741,7 +3750,7 @@ def process_analysis_job(
         if len(highlights) < clip_count:
 
             raise RuntimeError(
-                f"Gemini returned only "
+                f"AI returned only "
                 f"{len(highlights)} usable clips; "
                 f"{clip_count} required"
             )
@@ -3816,6 +3825,7 @@ def process_analysis_job(
                         subtitle_override,
                         content_type,
                         rating,
+                        hook_provider,
                         status,
                         progress,
                         message
@@ -3829,6 +3839,7 @@ def process_analysis_job(
                         %s,
                         %s,
                         %s::jsonb,
+                        %s,
                         %s,
                         %s,
                         %s,
@@ -3856,6 +3867,7 @@ def process_analysis_job(
                         initial_subtitle,
                         highlight.get("content_type", "Reality"),
                         int(highlight.get("rating", 5)),
+                        highlight.get("provider"),
                     ),
                 ).fetchone()
 
@@ -5049,21 +5061,25 @@ def main():
 
 
 
-    validate_gemini()
+    validate_ai()
 
     log(
         "AI Video Clipper Worker v4 started"
     )
 
     log(
-        "Gemini model: "
-        + GEMINI_MODEL
+        "AI providers: hooks="
+        + str(setting("CLIP_ANALYSIS_PROVIDER"))
+        + " utility="
+        + str(setting("TEXT_UTILITY_PROVIDER"))
+        + " health="
+        + json.dumps(ai_router.provider_health())
     )
 
     log(
         "Flow: "
         "download -> normalize -> transcript -> "
-        "Gemini 3.6 Flash -> preview -> "
+        "AI hooks (Gemini/Claude) -> preview -> "
         "human review -> final render"
     )
 

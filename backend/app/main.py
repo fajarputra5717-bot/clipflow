@@ -225,6 +225,8 @@ def ensure_schema():
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )
         """,
+        # R-22: which AI provider produced this candidate's hook.
+        "ALTER TABLE clip_candidates ADD COLUMN IF NOT EXISTS hook_provider TEXT",
     ]
 
     try:
@@ -1489,8 +1491,9 @@ def new_hook(
             f"Transcript:\n{transcript_with_times}"
         )
 
-        data = ai_generate_json(
-            prompt, NEW_HOOK_SCHEMA, task="new_hook", max_tokens=1024,
+        data, ai_meta = ai_generate_json(
+            prompt, NEW_HOOK_SCHEMA, task="new_hook", max_tokens=8000,
+            with_meta=True,
         )
 
         new_start = float(data["start"])
@@ -1516,6 +1519,7 @@ def new_hook(
                         title = %s,
                         ai_title = %s,
                         reason = %s,
+                        hook_provider = %s,
                         manual_title = NULL,
                         subtitle_override = NULL,
                         status = 'preview_queued',
@@ -1535,6 +1539,7 @@ def new_hook(
                         data.get("title", "Untitled"),
                         data.get("title", "Untitled"),
                         data.get("reason", ""),
+                        ai_meta["provider"],
                         candidate_id,
                         job_id,
                     ),
@@ -1604,15 +1609,16 @@ DESCRIPTION_SCHEMA = {
 
 
 def ai_generate_json(prompt: str, schema: dict, *, task: str,
-                     max_tokens: int):
+                     max_tokens: int, with_meta: bool = False):
     """shared/ai/router.py call for request handlers. A missing key
-    is a 503 (as before); every other AI error propagates to the
-    handler's generic 500 with its original message. attempts=1:
-    the baseline backend never retried (R-22 changes this)."""
+    is a 503; every other AI error propagates to the handler's
+    generic 500 with its original message. attempts=1 per provider:
+    a request handler fails over (auto) instead of sleeping on
+    backoff."""
     try:
         return ai_router.ai_generate_json(
             prompt, schema, task=task, max_tokens=max_tokens,
-            attempts=1,
+            attempts=1, with_meta=with_meta,
         )
     except AINotConfiguredError as exc:
         raise HTTPException(status_code=503, detail=str(exc))

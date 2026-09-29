@@ -57,6 +57,10 @@ DEFAULT_SETTINGS = {
     # Claude (R-21). Model IDs live only here; check them against
     # Anthropic's model list when bumping.
     "ANTHROPIC_API_KEY": "",
+    # Failover policy (R-22): gemini | claude | auto (Gemini first,
+    # Claude on transient errors). See shared/ai/router.py.
+    "CLIP_ANALYSIS_PROVIDER": "auto",
+    "TEXT_UTILITY_PROVIDER": "auto",
     "CLAUDE_MODEL_ANALYSIS": "claude-sonnet-5-5",
     "CLAUDE_MODEL_UTILITY": "claude-haiku-4-5",
     "RUNWAY_API_KEY": "",
