@@ -948,6 +948,51 @@ img.topbar-logo-icon{background:none;padding:0;object-fit:cover}
   .sheet-layer.open .sheet{transform:none}
 }
 .empty-title{font-weight:600;color:var(--text);font-size:14px}.empty-tip{margin:6px auto 0;max-width:46ch;color:var(--muted);font-size:12px;line-height:1.5}
+
+/* ===== 069: settings sheet — System Settings-style inset lists ===== */
+#settingsSheet .sheet{width:min(720px,100%);height:min(760px,calc(100dvh - 2*var(--sp-2)))}
+.sheet-search{position:relative;margin:0 var(--sp-3) var(--sp-1)}
+.sheet-search svg{position:absolute;left:12px;top:50%;width:16px;height:16px;transform:translateY(-50%);color:var(--muted);pointer-events:none}
+.sheet-search input{min-height:36px;padding-left:36px;border-radius:10px;background:var(--line);border-color:transparent}
+.sheet-search input:focus{background:var(--panel)}
+.settings-body{flex:1;padding-top:var(--sp-1)}
+.inset-group{margin-top:var(--sp-3)}
+.inset-group:first-child{margin-top:var(--sp-1)}
+.inset-title{margin:0 12px 6px;font-size:13px;font-weight:600;color:var(--muted);letter-spacing:-.005em}
+.inset-list{background:var(--panel);border:1px solid var(--hairline);border-radius:12px;overflow:hidden}
+.inset-row{position:relative;display:flex;align-items:center;gap:12px;min-height:var(--hit);padding:6px 8px 6px 14px;transition:background var(--dur-2) var(--ease)}
+.inset-row+.inset-row::before{content:"";position:absolute;top:0;left:14px;right:0;border-top:1px solid var(--line)}
+.inset-row.is-changed{background:rgba(0,113,227,.06)}
+[data-theme="dark"] .inset-row.is-changed{background:rgba(10,132,255,.12)}
+.row-label{flex:1;min-width:0;font-size:13px;font-weight:500;color:var(--text);cursor:default}
+.row-label small{display:block;margin-top:1px;font-size:11px;font-weight:400;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row-label code{font:inherit;font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:10.5px}
+.row-control{display:flex;align-items:center;gap:2px;width:min(300px,52%);flex:none}
+.row-control input{min-height:34px;padding:6px 10px;border-radius:8px;font-size:12.5px;text-align:left}
+.row-control:not(:has(.reveal-btn))::after{content:"";width:36px;flex:none}
+.reveal-btn{width:36px;height:36px;min-height:36px;border-radius:8px;position:relative}
+.reveal-btn::after{content:"";position:absolute;inset:-4px}
+.reveal-btn svg{width:18px;height:18px}
+.reveal-btn[aria-pressed="true"]{color:var(--accent)}
+.settings-nomatch{padding:var(--sp-4) 0;text-align:center;color:var(--muted);font-size:13px}
+.settings-hint{margin:var(--sp-2) 12px 0}
+.sheet-foot{
+  position:sticky;bottom:0;display:flex;align-items:center;gap:var(--sp-1);
+  padding:12px var(--sp-3);border-top:1px solid var(--hairline);
+  background:var(--material);backdrop-filter:var(--material-blur);-webkit-backdrop-filter:var(--material-blur);border-radius:0 0 22px 22px;
+}
+.sheet-foot-status{flex:1;min-width:0;font-size:12px;color:var(--muted);transition:color var(--dur-2) var(--ease)}
+.sheet-foot-status.is-error{color:var(--bad)}
+.sheet-foot button{min-width:96px}
+#saveSettings.is-saved{background:var(--good)!important;border-color:var(--good)!important;opacity:1}
+#saveSettings.is-saved::before{content:"✓";display:inline-block;margin-right:6px;animation:savedPop var(--dur-3) var(--ease-spring) both}
+@keyframes savedPop{from{transform:scale(.3);opacity:0}to{transform:scale(1);opacity:1}}
+@media(max-width:600px){
+  #settingsSheet .sheet{height:92dvh}
+  .inset-row{flex-wrap:wrap;padding-top:10px;padding-bottom:10px}
+  .row-control{width:100%}
+  .sheet-foot{border-radius:0}
+}
 </style>
 </head>
 <body>
@@ -993,6 +1038,7 @@ img.topbar-logo-icon{background:none;padding:0;object-fit:cover}
       <div class="version-popover" id="versionPopover" role="dialog" aria-hidden="true">
         <div class="version-popover-title">What's new in v2.1107</div>
         <ul>
+          <li>Settings sheet: grouped lists, search, show/hide secrets, Save confirms inline</li>
           <li>Sidebar is now navigation: Import, Publish, Watermarks, Settings (as sheets), appearance in the footer</li>
           <li>One motion system: calmer curves, a consistent press, larger tap targets, sentence-case labels</li>
           <li>Every expandable section uses the same chevron that turns when it opens</li>
@@ -1118,14 +1164,17 @@ img.topbar-logo-icon{background:none;padding:0;object-fit:cover}
   <div class="sheet-backdrop" data-sheet-close></div>
   <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="settingsSheetTitle">
     <header class="sheet-head"><h2 id="settingsSheetTitle">Settings</h2><button class="sheet-close" type="button" data-sheet-close aria-label="Close settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></header>
-    <div class="sheet-body settings">
+    <div class="sheet-search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg><input type="search" id="settingsSearch" placeholder="Search settings" autocomplete="off" aria-label="Search settings" aria-controls="settingsPanel"></div>
+    <div class="sheet-body settings-body">
       <div id="settingsPanel"></div>
-        <div class="rail-actions" style="margin-top:9px">
-          <button class="secondary" id="reloadSettings" type="button">Reload</button>
-          <button id="saveSettings" type="button">Save</button>
-        </div>
-      <div class="hint">Secrets are masked. Leaving a masked value unchanged preserves the existing secret.</div>
+      <div id="settingsNoMatch" class="settings-nomatch" hidden>No settings match “<span></span>”.</div>
+      <p class="hint settings-hint">Secrets are masked. Leaving a masked value unchanged keeps the saved secret.</p>
     </div>
+    <footer class="sheet-foot">
+      <span class="sheet-foot-status" id="settingsDirty" aria-live="polite"></span>
+      <button class="secondary" id="reloadSettings" type="button">Reload</button>
+      <button class="primary" id="saveSettings" type="button" disabled>Save</button>
+    </footer>
   </section>
 </div>
 <div class="sheet-layer" id="watermarkSheet" aria-hidden="true">
@@ -2291,33 +2340,74 @@ async function deleteWatermarkAsset(id){
 document.addEventListener("change",e=>{
   if(e.target.id==="watermarkUploadInput"&&e.target.files&&e.target.files[0])uploadWatermarkAsset(e.target.files[0]);
 });
+const SETTINGS_GROUPS=[
+  ["AI & transcription",["GEMINI_API_KEY","GEMINI_ANALYSIS_MODEL","GEMINI_MAX_ATTEMPTS","WHISPER_MODEL","WHISPER_LANGUAGE","RUNWAY_API_KEY","RUNWAY_MODEL"]],
+  ["Face detection",["FACE_DETECTION_SAMPLE_COUNT","FACE_CONFIDENCE_THRESHOLD","FACE_ZOOM_RATIO"]],
+  ["Clips & rendering",["CLIP_COUNT","CLIP_TARGET_DURATION","CLIP_MIN_DURATION","CLIP_MAX_DURATION","PREVIEW_WIDTH","WATERMARK_WIDTH","WATERMARK_OPACITY"]],
+  ["YouTube",["YOUTUBE_CLIENT_ID","YOUTUBE_CLIENT_SECRET","YOUTUBE_REFRESH_TOKEN"]],
+  ["TikTok",["TIKTOK_CLIENT_KEY","TIKTOK_CLIENT_SECRET","TIKTOK_ACCESS_TOKEN"]],
+  ["Instagram",["INSTAGRAM_ACCESS_TOKEN","INSTAGRAM_BUSINESS_ACCOUNT_ID"]],
+  ["Submagic",["SUBMAGIC_API_KEY","SUBMAGIC_TEMPLATE","SUBMAGIC_MAGIC_ZOOMS","SUBMAGIC_MAGIC_BROLLS"]],
+  ["Publishing",["HASHTAGS","CAMPAIGN_NAME"]]
+];
+const SETTING_LABELS={GEMINI_API_KEY:"Gemini API key",GEMINI_ANALYSIS_MODEL:"Gemini model",GEMINI_MAX_ATTEMPTS:"Gemini attempts",WHISPER_MODEL:"Whisper model",WHISPER_LANGUAGE:"Transcription language",RUNWAY_API_KEY:"Runway API key",RUNWAY_MODEL:"Runway model",
+  FACE_DETECTION_SAMPLE_COUNT:"Frames sampled",FACE_CONFIDENCE_THRESHOLD:"Confidence threshold",FACE_ZOOM_RATIO:"Facecam zoom",
+  CLIP_COUNT:"Clips per video",CLIP_TARGET_DURATION:"Target length (s)",CLIP_MIN_DURATION:"Minimum length (s)",CLIP_MAX_DURATION:"Maximum length (s)",PREVIEW_WIDTH:"Preview width (px)",WATERMARK_WIDTH:"Watermark width (px)",WATERMARK_OPACITY:"Watermark opacity",
+  YOUTUBE_CLIENT_ID:"Client ID",YOUTUBE_CLIENT_SECRET:"Client secret",YOUTUBE_REFRESH_TOKEN:"Refresh token",TIKTOK_CLIENT_KEY:"Client key",TIKTOK_CLIENT_SECRET:"Client secret",TIKTOK_ACCESS_TOKEN:"Access token",
+  INSTAGRAM_ACCESS_TOKEN:"Access token",INSTAGRAM_BUSINESS_ACCOUNT_ID:"Business account ID",SUBMAGIC_API_KEY:"API key",SUBMAGIC_TEMPLATE:"Template",SUBMAGIC_MAGIC_ZOOMS:"Magic zooms",SUBMAGIC_MAGIC_BROLLS:"Magic B-rolls",
+  HASHTAGS:"Hashtags",CAMPAIGN_NAME:"Campaign name"};
+const SETTING_SOURCE={db:"Saved",env:"From .env",default:"Default"};
+const isSecretKey=k=>/KEY|TOKEN|SECRET|PASSWORD/i.test(k);
+const EYE='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.8"/></svg>';
 async function loadSettings(){
   try{
     settingsCache=await api("/api/settings");
-    const groups={
-      AI:["GEMINI_API_KEY","GEMINI_ANALYSIS_MODEL","GEMINI_MAX_ATTEMPTS","WHISPER_MODEL","WHISPER_LANGUAGE","RUNWAY_API_KEY","RUNWAY_MODEL"],
-      FACE:["FACE_DETECTION_SAMPLE_COUNT","FACE_CONFIDENCE_THRESHOLD","FACE_ZOOM_RATIO"],
-      RENDER:["CLIP_COUNT","CLIP_TARGET_DURATION","CLIP_MIN_DURATION","CLIP_MAX_DURATION","PREVIEW_WIDTH","WATERMARK_WIDTH","WATERMARK_OPACITY"],
-      YOUTUBE:["YOUTUBE_CLIENT_ID","YOUTUBE_CLIENT_SECRET","YOUTUBE_REFRESH_TOKEN"],
-      TIKTOK:["TIKTOK_CLIENT_KEY","TIKTOK_CLIENT_SECRET","TIKTOK_ACCESS_TOKEN"],
-      INSTAGRAM:["INSTAGRAM_ACCESS_TOKEN","INSTAGRAM_BUSINESS_ACCOUNT_ID"],
-      SUBMAGIC:["SUBMAGIC_API_KEY","SUBMAGIC_TEMPLATE","SUBMAGIC_MAGIC_ZOOMS","SUBMAGIC_MAGIC_BROLLS"],
-      PUBLISHING:["HASHTAGS","CAMPAIGN_NAME"]
-    };
-    $("settingsPanel").innerHTML=Object.entries(groups).map(([g,keys])=>`
-      <details><summary aria-expanded="false">${g}<span class="muted">${keys.length} settings</span><span class="chev" aria-hidden="true"></span></summary>
-      <div class="settings-grid">${keys.map(k=>{const s=settingsCache[k]||{value:"",configured:false};return `<div><label>${esc(k)}</label><input data-setting="${esc(k)}" type="${/KEY|TOKEN|SECRET|PASSWORD/i.test(k)?"password":"text"}" value="${esc(s.value||"")}" placeholder="${s.configured?"Configured / masked":"Not configured"}"><div class="hint">${s.configured?"Configured":"Not configured"}</div></div>`}).join("")}</div>
-      </details>`).join("");
+    $("settingsPanel").innerHTML=SETTINGS_GROUPS.map(([g,keys])=>`
+      <section class="inset-group" data-settings-group>
+        <h3 class="inset-title">${esc(g)}</h3>
+        <div class="inset-list">${keys.map(k=>{const s=settingsCache[k]||{value:"",configured:false},sec=isSecretKey(k),id="set-"+k;
+          return `<div class="inset-row" data-setting-row data-search="${esc((SETTING_LABELS[k]||k)+" "+k+" "+g).toLowerCase()}">
+            <label class="row-label" for="${id}">${esc(SETTING_LABELS[k]||k)}<small><code>${esc(k)}</code> · ${esc(SETTING_SOURCE[s.source]||(s.configured?"Configured":"Not set"))}</small></label>
+            <span class="row-control"><input id="${id}" data-setting="${esc(k)}" type="${sec?"password":"text"}" value="${esc(s.value||"")}" placeholder="${s.configured?"Configured / masked":"Not set"}" autocomplete="off" spellcheck="false">${sec?`<button class="icon-btn reveal-btn" type="button" data-reveal="${id}" aria-label="Show ${esc(SETTING_LABELS[k]||k)}" aria-pressed="false">${EYE}</button>`:""}</span>
+          </div>`}).join("")}</div>
+      </section>`).join("");
+    filterSettings();updateSettingsDirty();
   }catch(e){$("settingsPanel").innerHTML=`<div class="error-box">${esc(e.message)}</div>`}
 }
-async function saveSettings(){
-  // Send only fields the user changed: the form shows effective values (DB → env → default), and
-  // echoing them back would pin env/default values into the DB, which wins over .env.
-  const values={};document.querySelectorAll("[data-setting]").forEach(i=>{const v=i.value.trim(),prev=String((settingsCache[i.dataset.setting]||{}).value||"");if(v&&v!=="••••••••"&&v!==prev)values[i.dataset.setting]=v});
-  const b=$("saveSettings");setBusy(b,true,"Saving…");
-  try{await api("/api/settings",{method:"PUT",body:JSON.stringify({values})});await loadSettings();alert("Settings saved.")}catch(e){alert("Settings save failed: "+e.message)}
-  finally{setBusy(b,false)}
+// Send only fields the user changed: the form shows effective values (DB → env → default), and
+// echoing them back would pin env/default values into the DB, which wins over .env.
+function changedSettings(){const values={};document.querySelectorAll("[data-setting]").forEach(i=>{const v=i.value.trim(),prev=String((settingsCache[i.dataset.setting]||{}).value||"");if(v&&v!=="••••••••"&&v!==prev)values[i.dataset.setting]=v});return values}
+function updateSettingsDirty(){
+  const n=Object.keys(changedSettings()).length,b=$("saveSettings");
+  document.querySelectorAll("[data-setting]").forEach(i=>i.closest("[data-setting-row]")?.classList.toggle("is-changed",Object.prototype.hasOwnProperty.call(changedSettings(),i.dataset.setting)));
+  if(!b.classList.contains("is-busy")&&!b.classList.contains("is-saved"))b.disabled=!n;
+  $("settingsDirty").textContent=n?`${n} unsaved change${n===1?"":"s"}`:"";
 }
+function filterSettings(){
+  const q=($("settingsSearch")?.value||"").trim().toLowerCase();let any=false;
+  document.querySelectorAll("[data-settings-group]").forEach(g=>{let shown=0;g.querySelectorAll("[data-setting-row]").forEach(r=>{const ok=!q||r.dataset.search.includes(q);r.hidden=!ok;if(ok)shown++});g.hidden=!shown;if(shown)any=true});
+  const nm=$("settingsNoMatch");nm.hidden=any||!q;nm.querySelector("span").textContent=q;
+}
+async function saveSettings(){
+  const values=changedSettings();
+  const b=$("saveSettings");setBusy(b,true,"Saving…");
+  try{
+    await api("/api/settings",{method:"PUT",body:JSON.stringify({values})});await loadSettings();
+    setBusy(b,false);b.classList.add("is-saved");b.disabled=true;
+    const t=[...b.childNodes].find(n=>n.nodeType===3);if(t)t.nodeValue="Saved";
+    $("settingsDirty").textContent="";
+    setTimeout(()=>{b.classList.remove("is-saved");if(t)t.nodeValue="Save";updateSettingsDirty()},motionMs(1600)||1200);
+  }catch(e){setBusy(b,false);$("settingsDirty").textContent="Save failed: "+e.message;$("settingsDirty").classList.add("is-error");setTimeout(()=>$("settingsDirty").classList.remove("is-error"),4000)}
+}
+document.addEventListener("input",e=>{
+  if(e.target.id==="settingsSearch")return filterSettings();
+  if(e.target.matches?.("[data-setting]"))updateSettingsDirty();
+});
+document.addEventListener("click",e=>{
+  const rv=e.target.closest("[data-reveal]");if(!rv)return;
+  const inp=$(rv.dataset.reveal),show=inp.type==="password";
+  inp.type=show?"text":"password";rv.setAttribute("aria-pressed",String(show));rv.setAttribute("aria-label",(show?"Hide ":"Show ")+rv.getAttribute("aria-label").replace(/^(Show|Hide) /,""));
+});
 
 document.addEventListener("click",e=>{
   if(overlayOpen && !e.target.closest("#jobOverlay") && !e.target.closest("#jobIsland")){
