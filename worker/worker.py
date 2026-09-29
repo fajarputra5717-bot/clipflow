@@ -3063,6 +3063,13 @@ def job_watermark(job):
     )
 
 
+# BROWSER_MP4_NOTE (R-10): every mp4 a browser plays (preview, final,
+# Submagic final) is H.264 High profile, yuv420p (4:2:0; Safari/iOS
+# refuse 4:4:4), AAC audio, and +faststart (moov atom first, so
+# playback starts before the whole file downloads and seeking via HTTP
+# Range works). The baseline once produced a preview that wouldn't play.
+
+
 def apply_watermark_overlay(
     source_path,
     output_path,
@@ -3115,10 +3122,15 @@ def apply_watermark_overlay(
             setting("FFMPEG_PRESET"),
             "-crf",
             setting("FFMPEG_CRF"),
+            # Browser-safe mp4 (R-10): see BROWSER_MP4_NOTE.
+            "-profile:v",
+            "high",
             "-pix_fmt",
             "yuv420p",
             "-c:a",
-            "copy",
+            "aac",
+            "-b:a",
+            "128k",
             "-movflags",
             "+faststart",
             str(output_path),
@@ -3372,6 +3384,10 @@ def render_vertical(
 
         "-crf",
         str(crf),
+
+        # Browser-safe mp4 (R-10): see BROWSER_MP4_NOTE.
+        "-profile:v",
+        "high",
 
         "-pix_fmt",
         "yuv420p",

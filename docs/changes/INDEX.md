@@ -23,6 +23,7 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 013 · 2026-09-29 · R-19 display caption fonts: shared/fonts.py catalog, Bold=0 + weight via name, emoji stripped, fonts served at /fonts/ · shared, worker.py, main.py, index.html, compose
 014 · 2026-09-29 · R-08 cancel job: API + CancelWatch kills ffmpeg/yt-dlp, stops Whisper per segment; Cancel buttons · main.py, worker.py, index.html
 015 · 2026-09-29 · R-09 burn_subtitles toggle: no make_ass + no subtitle stage when off; edit-panel checkbox · main.py, worker.py, index.html
+016 · 2026-09-29 · R-10 browser-safe mp4: H.264 High cap, yuv420p, AAC, faststart; Range 206 verified; plays in Chromium + WebKit · worker.py
 050 · 2026-09-29 · R-12 Left sidebar (collapsible column / mobile drawer) replaces right rail; Import options in one disclosure · index.html (v2.1102)
 051 · 2026-09-29 · R-13 ui-audit.md; tabs pill docks via transform/opacity with 64/48 hysteresis (one scroll handler); job island is its own capsule with stage + % · index.html (v2.1103)
 052 · 2026-09-29 · R-11 Motion 100–200/300–500 ms, setBusy() for every async button, edit drawer progressive disclosure + sticky glass action row, reduced-motion covers JS loops, keyboard tabs · index.html (v2.1104)
