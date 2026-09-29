@@ -404,7 +404,7 @@ body.resizing .topbar,body.resizing .tabs,body.resizing .job-island,
 body.resizing .tab-indicator,body.resizing .topbar-logo{
   transition:none!important;
 }
-.layout{display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:14px}
+.layout{display:grid;grid-template-columns:minmax(0,1fr);gap:14px}
 main{min-width:0}
 .panel{
   background:var(--panel);
@@ -503,12 +503,71 @@ button.primary:hover:not(:disabled),.analyze-ready:hover:not(:disabled){backgrou
 .queue-open-hint svg{flex:0 0 auto;color:var(--muted2);transition:transform .3s var(--ease),color .3s var(--ease)}
 .queue-card:hover .queue-open-hint{color:#0071e3}
 .queue-card:hover .queue-open-hint svg{color:#0071e3;transform:translate(1px,-1px)}
-.rail{min-width:0}.rail .panel{position:sticky;top:65px}
+/* App shell: Apple-Music-style left sidebar + content column.
+   Desktop (>=1000px): the sidebar is a sticky grid column; hiding it
+   (body.sidebar-collapsed) slides it out with transform and drops the
+   column. Narrow: it is an off-canvas drawer over a scrim.
+   Click-through rule (a regression we hit once: "nothing clickable"):
+   every fixed/overlay layer here is pointer-events:none + visibility
+   hidden while closed, and the scrim sits *below* the drawer. */
+.app-shell{display:grid;grid-template-columns:var(--sidebar-w) minmax(0,1fr);min-height:100vh;--sidebar-w:272px}
+body.sidebar-collapsed .app-shell{grid-template-columns:0 minmax(0,1fr)}
+.app-shell > .container{min-width:0}
+.sidebar{
+  position:sticky;top:0;height:100vh;overflow-y:auto;overscroll-behavior:contain;
+  width:var(--sidebar-w);padding:16px 14px 24px;z-index:40;
+  background:var(--panel2);border-right:1px solid var(--line);
+  display:flex;flex-direction:column;gap:4px;
+  transform:translateX(0);visibility:visible;
+  transition:transform .35s var(--ease),visibility 0s linear 0s;
+}
+body.sidebar-collapsed .sidebar{transform:translateX(-100%);visibility:hidden;transition:transform .3s var(--ease),visibility 0s linear .3s}
+.sidebar-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:2px 2px 10px}
+.sidebar-brand{display:flex;align-items:center;gap:9px;font-size:13px;font-weight:600;letter-spacing:-.01em}
+.sidebar-brand-icon{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;font-size:12px;font-weight:700;color:#fff;background:linear-gradient(145deg,#0071e3,#42a1ff)}
+.sidebar-collapse,.sidebar-open-btn{
+  width:32px;height:32px;min-height:32px;padding:0;border-radius:10px;flex:none;
+  display:grid;place-items:center;color:var(--muted);background:transparent;border-color:transparent!important;box-shadow:none;
+  transition:background .15s ease,color .15s ease;
+}
+.sidebar-collapse svg,.sidebar-open-btn svg{width:18px;height:18px}
+.sidebar-collapse:hover:not(:disabled),.sidebar-open-btn:hover:not(:disabled){background:var(--line);color:var(--text);transform:none;box-shadow:none}
+.sidebar-open-btn{display:none}
+[data-theme="dark"] .sidebar-collapse,[data-theme="dark"] .sidebar-open-btn{background:transparent;border-color:transparent!important}
+[data-theme="dark"] .sidebar-collapse:hover:not(:disabled),[data-theme="dark"] .sidebar-open-btn:hover:not(:disabled){background:var(--line);box-shadow:none}
+body.sidebar-collapsed .sidebar-open-btn{display:grid}
+.sidebar-group{padding:12px 2px;border-top:1px solid var(--line)}
+.sidebar-group .rail-actions{margin-top:9px}
+.sidebar-group .settings:first-of-type details{margin-top:4px}
+.sidebar-scrim{position:fixed;inset:0;z-index:110;background:rgba(0,0,0,.28);opacity:0;visibility:hidden;pointer-events:none;transition:opacity .3s ease,visibility 0s linear .3s}
+@media(max-width:999px){
+  .app-shell,body.sidebar-collapsed .app-shell{grid-template-columns:minmax(0,1fr)}
+  .sidebar,body.sidebar-collapsed .sidebar{
+    position:fixed;left:0;top:0;bottom:0;height:auto;width:min(300px,86vw);z-index:120;
+    box-shadow:0 20px 60px rgba(0,0,0,.25);
+    transform:translateX(-105%);visibility:hidden;transition:transform .3s var(--ease),visibility 0s linear .3s;
+  }
+  body.sidebar-open .sidebar{transform:translateX(0);visibility:visible;transition:transform .35s var(--ease),visibility 0s linear 0s}
+  body.sidebar-open .sidebar-scrim{opacity:1;visibility:visible;pointer-events:auto;transition:opacity .3s ease,visibility 0s linear 0s}
+  .sidebar-open-btn,body.sidebar-collapsed .sidebar-open-btn{display:grid}
+}
+/* Simplified Import: composition / facecam / platform live in one
+   "Options" disclosure with a live one-line summary. */
+.import-options{margin-top:14px;border:1px solid var(--line);border-radius:16px;padding:0 14px;background:var(--panel2)}
+.import-options > summary{display:flex;align-items:center;gap:8px;min-height:44px;cursor:pointer;list-style:none;font-size:12px;font-weight:600}
+.import-options > summary::-webkit-details-marker{display:none}
+.import-options > summary .muted{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500}
+.import-options[open]{padding-bottom:14px}
+.import-options .field:first-of-type{margin-top:0}
+.chev{width:16px;height:16px;flex:none;display:inline-block;background:currentColor;color:var(--muted);transition:transform .2s var(--ease);
+  -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 6l4 4 4-4' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat;
+          mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 6l4 4 4-4' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat}
+details[open] > summary > .chev{transform:rotate(180deg)}
 .rail-title{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}.rail-section{border-top:1px solid rgba(0,0,0,.07);padding-top:12px;margin-top:12px}
 .rail-actions{display:grid;grid-template-columns:1fr 1fr;gap:7px}
 .rail-actions button{font-size:10.5px;min-height:34px}
 .settings details{border-top:1px solid rgba(0,0,0,.06);padding:9px 0}.settings summary{cursor:pointer;font-size:11px;font-weight:700;color:var(--text);list-style:none}.settings summary::-webkit-details-marker{display:none}
-.settings summary:after{content:"＋";float:right;color:var(--muted)}.settings details[open] summary:after{content:"−"}
+.settings summary:after{content:"＋";float:right;color:var(--muted)}.settings details[open] > summary:after{content:"−"}.settings summary .muted{margin-left:4px}
 .settings-grid{display:grid;gap:8px;margin-top:8px}.settings-grid label{font-size:9.5px;color:var(--muted)}.settings-grid input{font-size:10.5px;padding:8px 9px}.hint{font-size:9px;color:var(--muted2);margin-top:3px}
 .hidden{display:none!important}
 .queue-list{display:grid;gap:10px}
@@ -741,7 +800,6 @@ button.primary:hover:not(:disabled),.analyze-ready:hover:not(:disabled){backgrou
 .running-job-item:active{transform:translateY(0) scale(.985);transition-duration:.15s}
 .running-job-main{display:flex;align-items:center;gap:10px}.running-job-info{min-width:0;display:flex;flex-direction:column;gap:2px}.running-job-name{font-size:10.5px;font-weight:700}.running-job-stage{font-size:9px;font-weight:700;transition:color .3s ease}.running-job-meta{display:flex;justify-content:space-between;gap:8px;font-size:8.5px;color:var(--muted2);margin-top:7px}
 @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.72)}}@keyframes bars{to{transform:scaleY(.55);opacity:.55}}@keyframes analyzeGlow{0%,100%{box-shadow:0 4px 14px rgba(0,113,227,.20),0 0 0 1px rgba(0,113,227,.10)}50%{box-shadow:0 8px 26px rgba(0,113,227,.38),0 0 0 1px rgba(0,113,227,.24)}}@keyframes shine{from{background-position:180% 0}to{background-position:-20% 0}}@keyframes sweep{from{background-position:180% 0}to{background-position:-20% 0}}@keyframes flow{from{background-position:0 0}to{background-position:180% 0}}@keyframes viewIn{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}@keyframes viewOut{from{opacity:1;transform:none}to{opacity:0;transform:translateY(-5px)}}
-@media(max-width:1080px){.layout{grid-template-columns:1fr}.rail{order:2}.rail .panel{position:static}}
 @media(max-width:760px){
   .container{width:calc(100% - 14px);margin-top:10px}.brand{margin-bottom:10px}.brand h1{font-size:16px}.logo{width:40px;height:40px;border-radius:13px}
   .topbar{top:5px}.tab{flex:1;text-align:center;padding:9px 8px;font-size:10px}.job-island.is-visible{min-width:78px}.job-island-track{width:52px}.job-island-label{display:none}
@@ -766,13 +824,60 @@ button.primary:hover:not(:disabled),.analyze-ready:hover:not(:disabled){backgrou
   </div>
 </div>
 
+<div class="app-shell" id="appShell">
+<div class="sidebar-scrim" id="sidebarScrim" aria-hidden="true"></div>
+<aside class="sidebar" id="sidebar" aria-label="Workspace">
+  <div class="sidebar-head">
+    <div class="sidebar-brand"><span class="sidebar-brand-icon">R</span>Workspace</div>
+    <button class="sidebar-collapse" type="button" data-sidebar-toggle aria-controls="sidebar" aria-expanded="true" aria-label="Hide sidebar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="15" rx="3"/><path d="M9.5 4.5v15"/></svg>
+    </button>
+  </div>
+  <div class="sidebar-group">
+    <div class="rail-title">Quick actions</div>
+    <div class="rail-actions">
+      <button class="secondary" id="refreshCurrent" type="button">Refresh import</button>
+      <button class="secondary" id="refreshQueue" type="button">Refresh queue</button>
+    </div>
+  </div>
+  <div class="sidebar-group">
+    <div class="rail-title">Editing tips</div>
+    <div class="muted" style="margin-top:4px">Open Edit on a candidate to adjust subtitle, font, style, title, rating, render, download, and publishing.</div>
+  </div>
+  <div class="sidebar-group">
+    <div class="rail-title">Settings</div>
+    <div class="settings">
+      <details>
+        <summary>Advanced settings <span class="muted">· system / publishing</span></summary>
+        <div id="settingsPanel"></div>
+        <div class="rail-actions" style="margin-top:9px">
+          <button class="secondary" id="reloadSettings" type="button">Reload</button>
+          <button id="saveSettings" type="button">Save</button>
+        </div>
+        <div class="hint">Secrets are masked. Leaving a masked value unchanged preserves the existing secret.</div>
+      </details>
+    </div>
+    <div class="settings">
+      <details>
+        <summary>Watermark <span class="muted">· asset library</span></summary>
+        <div id="watermarkPanel"></div>
+        <label class="secondary watermark-upload-btn" style="margin-top:9px;display:block;text-align:center">Upload watermark image<input type="file" accept="image/png,image/webp" id="watermarkUploadInput" hidden></label>
+      </details>
+    </div>
+  </div>
+</aside>
+
 <div class="container">
   <header class="brand">
+    <button class="sidebar-open-btn" type="button" data-sidebar-toggle aria-controls="sidebar" aria-expanded="true" aria-label="Show sidebar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="15" rx="3"/><path d="M9.5 4.5v15"/></svg>
+    </button>
     <div class="logo">R</div>
-    <div><h1>ClipFlow <button class="version-badge" id="versionBadge" type="button" aria-expanded="false">BETA · v2.1101</button></h1><p>Video clipping workspace · import → queue → publish</p>
+    <div><h1>ClipFlow <button class="version-badge" id="versionBadge" type="button" aria-expanded="false">BETA · v2.1102</button></h1><p>Video clipping workspace · import → queue → publish</p>
       <div class="version-popover" id="versionPopover" role="dialog" aria-hidden="true">
-        <div class="version-popover-title">What's new in v2.1101</div>
+        <div class="version-popover-title">What's new in v2.1102</div>
         <ul>
+          <li>Left sidebar for quick actions and settings; Import options folded into one disclosure</li>
           <li>API key required: asked once per browser session</li>
           <li>Settings now take effect without a restart and only changed fields are saved</li>
           <li>Rebuilt on the new server (v2.1100 baseline)</li>
@@ -835,43 +940,45 @@ button.primary:hover:not(:disabled),.analyze-ready:hover:not(:disabled){backgrou
             <input id="jobCustomTitle" autocomplete="off" maxlength="120" placeholder="e.g. Q4 Launch — Creator Bootcamp">
           </div>
 
-          <div class="field">
-            <label>Face / content composition</label>
-            <div class="choice-grid">
-              <div class="choice" data-split="60" role="button" tabindex="0"><strong>60 : 40</strong><small>More creator · balanced content</small></div>
-              <div class="choice active" data-split="70" role="button" tabindex="0"><strong>70 : 30</strong><small>More content · creator face preserved</small></div>
-            </div>
-          </div>
-
-          <div class="field">
-            <label>Facecam position <span class="muted">· helps face detection before analysis runs</span></label>
-            <div class="choice-grid layout-grid">
-              <div class="choice active" data-layout="auto" role="button" tabindex="0"><strong>Auto</strong><small>Detect automatically</small></div>
-              <div class="choice" data-layout="left" role="button" tabindex="0"><strong>Left</strong><small>Facecam is on the left</small></div>
-              <div class="choice" data-layout="right" role="button" tabindex="0"><strong>Right</strong><small>Facecam is on the right</small></div>
-            </div>
-          </div>
-
-
-          <div class="field">
-            <label>Output platform</label>
-            <div class="choice-grid platform-grid">
-              <div class="choice active" data-platform="youtube_shorts" role="button" tabindex="0">
-                <div class="platform-head"><span class="platform-icon shorts"><svg viewBox="0 0 24 24"><path fill="white" d="M9 4.7v14.6a1 1 0 0 0 1.55.83l8.9-7.3a1.05 1.05 0 0 0 0-1.66l-8.9-7.3A1 1 0 0 0 9 4.7Z"/></svg></span><strong>YouTube Shorts</strong></div><small>9:16 · recommended</small>
-              </div>
-              <div class="choice" data-platform="instagram_reels" role="button" tabindex="0">
-                <div class="platform-head"><span class="platform-icon reels"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="5" stroke="white" stroke-width="2" fill="none"/><circle cx="12" cy="12" r="3" fill="white"/></svg></span><strong>Instagram Reels</strong></div><small>9:16 · ready for publishing</small>
-              </div>
-              <div class="choice" data-platform="tiktok" role="button" tabindex="0">
-                <div class="platform-head"><span class="platform-icon tiktok"><svg viewBox="0 0 24 24"><path fill="white" d="M14 4v9.1a3.3 3.3 0 1 1-2.3-3.15V7.1a6 6 0 1 0 5.2 5.95V8.2c1.15.9 2.5 1.45 4.1 1.55V7.1A5.8 5.8 0 0 1 14 4Z"/></svg></span><strong>TikTok</strong></div><small>9:16 · ready for publishing</small>
+          <details class="import-options" id="importOptions">
+            <summary>Options <span class="muted" id="importOptionsSummary"></span><span class="chev" aria-hidden="true"></span></summary>
+            <div class="field">
+              <label>Face / content composition</label>
+              <div class="choice-grid">
+                <div class="choice" data-split="60" role="button" tabindex="0"><strong>60 : 40</strong><small>More creator · balanced content</small></div>
+                <div class="choice active" data-split="70" role="button" tabindex="0"><strong>70 : 30</strong><small>More content · creator face preserved</small></div>
               </div>
             </div>
-          </div>
 
-          <div class="status-box">
-            <div class="status-title">Subtitle defaults</div>
-            <div class="muted">Indonesian · ALL CAPS · bold white · heavy outline + subtle shadow · positioned higher to protect the creator face.</div>
-          </div>
+            <div class="field">
+              <label>Facecam position <span class="muted">· helps face detection before analysis runs</span></label>
+              <div class="choice-grid layout-grid">
+                <div class="choice active" data-layout="auto" role="button" tabindex="0"><strong>Auto</strong><small>Detect automatically</small></div>
+                <div class="choice" data-layout="left" role="button" tabindex="0"><strong>Left</strong><small>Facecam is on the left</small></div>
+                <div class="choice" data-layout="right" role="button" tabindex="0"><strong>Right</strong><small>Facecam is on the right</small></div>
+              </div>
+            </div>
+
+            <div class="field">
+              <label>Output platform</label>
+              <div class="choice-grid platform-grid">
+                <div class="choice active" data-platform="youtube_shorts" role="button" tabindex="0">
+                  <div class="platform-head"><span class="platform-icon shorts"><svg viewBox="0 0 24 24"><path fill="white" d="M9 4.7v14.6a1 1 0 0 0 1.55.83l8.9-7.3a1.05 1.05 0 0 0 0-1.66l-8.9-7.3A1 1 0 0 0 9 4.7Z"/></svg></span><strong>YouTube Shorts</strong></div><small>9:16 · recommended</small>
+                </div>
+                <div class="choice" data-platform="instagram_reels" role="button" tabindex="0">
+                  <div class="platform-head"><span class="platform-icon reels"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="5" stroke="white" stroke-width="2" fill="none"/><circle cx="12" cy="12" r="3" fill="white"/></svg></span><strong>Instagram Reels</strong></div><small>9:16 · ready for publishing</small>
+                </div>
+                <div class="choice" data-platform="tiktok" role="button" tabindex="0">
+                  <div class="platform-head"><span class="platform-icon tiktok"><svg viewBox="0 0 24 24"><path fill="white" d="M14 4v9.1a3.3 3.3 0 1 1-2.3-3.15V7.1a6 6 0 1 0 5.2 5.95V8.2c1.15.9 2.5 1.45 4.1 1.55V7.1A5.8 5.8 0 0 1 14 4Z"/></svg></span><strong>TikTok</strong></div><small>9:16 · ready for publishing</small>
+                </div>
+              </div>
+            </div>
+
+            <div class="status-box">
+              <div class="status-title">Subtitle defaults</div>
+              <div class="muted">Indonesian · ALL CAPS · bold white · heavy outline + subtle shadow · positioned higher to protect the creator face.</div>
+            </div>
+          </details>
           <div id="createStatus" class="status-box"><div class="status-title">Ready.</div><div class="status-message">Enter a YouTube URL to begin the import.</div></div>
           <div id="currentJobs"></div>
         </div>
@@ -882,44 +989,8 @@ button.primary:hover:not(:disabled),.analyze-ready:hover:not(:disabled){backgrou
         <div id="queueDetail" class="view-section hidden"></div>
       </section>
     </main>
-
-    <aside class="rail">
-      <div class="panel soft">
-        <div class="rail-title">Quick actions</div>
-        <div class="muted" style="margin-top:4px">Only the essentials for the active workflow.</div>
-
-        <div class="rail-actions" style="margin-top:10px">
-          <button class="secondary" id="refreshCurrent" type="button">Refresh import</button>
-          <button class="secondary" id="refreshQueue" type="button">Refresh queue</button>
-        </div>
-
-        <div class="rail-section">
-          <div class="rail-title">Editing tips</div>
-          <div class="muted" style="margin-top:4px">Open Edit on a candidate to adjust subtitle, font, style, title, rating, render, download, and publishing.</div>
-        </div>
-
-        <div class="rail-section settings">
-          <details>
-            <summary>Advanced settings <span class="muted">· system / publishing</span></summary>
-            <div id="settingsPanel"></div>
-            <div class="rail-actions" style="margin-top:9px">
-              <button class="secondary" id="reloadSettings" type="button">Reload</button>
-              <button id="saveSettings" type="button">Save</button>
-            </div>
-            <div class="hint">Secrets are masked. Leaving a masked value unchanged preserves the existing secret.</div>
-          </details>
-        </div>
-
-        <div class="rail-section settings">
-          <details>
-            <summary>Watermark <span class="muted">· asset library</span></summary>
-            <div id="watermarkPanel"></div>
-            <label class="secondary watermark-upload-btn" style="margin-top:9px;display:block;text-align:center">Upload watermark image<input type="file" accept="image/png,image/webp" id="watermarkUploadInput" hidden></label>
-          </details>
-        </div>
-      </div>
-    </aside>
   </div>
+</div>
 </div>
 
 <script>
@@ -1110,9 +1181,14 @@ function jobDisplayTitle(j){
   return j.custom_title||j.source_title||fallback||"AI-Generated Highlight";
 }
 
-function selectSplit(v){selectedSplit=Number(v);document.querySelectorAll("[data-split]").forEach(x=>x.classList.toggle("active",Number(x.dataset.split)===selectedSplit))}
-function selectPlatform(v){selectedPlatform=v;document.querySelectorAll("[data-platform]").forEach(x=>x.classList.toggle("active",x.dataset.platform===selectedPlatform))}
-function selectLayout(v){selectedLayout=v;document.querySelectorAll("[data-layout]").forEach(x=>x.classList.toggle("active",x.dataset.layout===selectedLayout))}
+function selectSplit(v){selectedSplit=Number(v);document.querySelectorAll("[data-split]").forEach(x=>x.classList.toggle("active",Number(x.dataset.split)===selectedSplit));updateImportOptionsSummary()}
+function selectPlatform(v){selectedPlatform=v;document.querySelectorAll("[data-platform]").forEach(x=>x.classList.toggle("active",x.dataset.platform===selectedPlatform));updateImportOptionsSummary()}
+function selectLayout(v){selectedLayout=v;document.querySelectorAll("[data-layout]").forEach(x=>x.classList.toggle("active",x.dataset.layout===selectedLayout));updateImportOptionsSummary()}
+function updateImportOptionsSummary(){
+  const el=$("importOptionsSummary");if(!el)return;
+  const lay={auto:"Auto facecam",left:"Facecam left",right:"Facecam right"}[selectedLayout]||"Auto facecam";
+  el.textContent=`${selectedSplit} : ${100-selectedSplit} · ${lay} · ${platformLabel(selectedPlatform)}`;
+}
 function validYouTube(v){try{const u=new URL(v),h=u.hostname.toLowerCase();return (h==="youtube.com"||h.endsWith(".youtube.com")||h==="youtu.be"||h.endsWith(".youtu.be"))&&(h==="youtu.be"||u.searchParams.has("v")||u.pathname.startsWith("/shorts/")||u.pathname.startsWith("/live/"))}catch{return false}}
 function updateAnalyzeReady(){const b=$("analyzeButton"),ok=validYouTube($("youtubeUrl").value.trim())&&!b.disabled;b.classList.toggle("analyze-ready",ok)}
 
@@ -2081,6 +2157,8 @@ document.addEventListener("click",e=>{
   if(overlayOpen && !e.target.closest("#jobOverlay") && !e.target.closest("#jobIsland")){
     closeJobOverlay();
   }
+  if(e.target.closest("[data-sidebar-toggle]"))return toggleSidebar();
+  if(e.target.closest("#sidebarScrim"))return closeSidebarDrawer();
   const t=e.target.closest(".tab");if(t)return showTab(t.dataset.tab);
   const tt=e.target.closest(".theme-toggle");if(tt)return toggleTheme();
   const sp=e.target.closest("[data-split]");if(sp)return selectSplit(sp.dataset.split);
@@ -2135,8 +2213,36 @@ document.addEventListener("keydown",e=>{
   const el=e.target.closest("[data-split],[data-platform],[data-layout]");
   if(el&&(e.key==="Enter"||e.key===" ")){e.preventDefault();if(el.dataset.split)selectSplit(el.dataset.split);if(el.dataset.platform)selectPlatform(el.dataset.platform);if(el.dataset.layout)selectLayout(el.dataset.layout)}
   if(e.target.closest("#topbarLogo")&&(e.key==="Enter"||e.key===" ")){e.preventDefault();e.target.closest("#topbarLogo").click()}
-  if(e.key==="Escape"){closeJobOverlay();closeVersionPopover();collapseTopbarLogo()}
+  if(e.key==="Escape"){closeJobOverlay();closeVersionPopover();collapseTopbarLogo();closeSidebarDrawer(true)}
 });
+// Sidebar: desktop = collapsible column (remembered), narrow = drawer.
+const SIDEBAR_MQ=window.matchMedia("(max-width:999px)");
+const SIDEBAR_STORAGE="clipflow_sidebar_collapsed_v1";
+function syncSidebarAria(){
+  const shown=SIDEBAR_MQ.matches?document.body.classList.contains("sidebar-open"):!document.body.classList.contains("sidebar-collapsed");
+  document.querySelectorAll("[data-sidebar-toggle]").forEach(b=>b.setAttribute("aria-expanded",String(shown)));
+  $("sidebar").toggleAttribute("inert",!shown);
+}
+function toggleSidebar(){
+  if(SIDEBAR_MQ.matches){
+    if(document.body.classList.contains("sidebar-open"))return closeSidebarDrawer(true);
+    document.body.classList.add("sidebar-open");syncSidebarAria();
+    $("sidebar").querySelector(".sidebar-collapse")?.focus();
+    return;
+  }
+  const collapsed=document.body.classList.toggle("sidebar-collapsed");
+  try{localStorage.setItem(SIDEBAR_STORAGE,collapsed?"1":"0")}catch{}
+  syncSidebarAria();
+  (collapsed?document.querySelector(".sidebar-open-btn"):$("sidebar").querySelector(".sidebar-collapse"))?.focus();
+}
+function closeSidebarDrawer(restoreFocus){
+  if(!document.body.classList.contains("sidebar-open"))return;
+  document.body.classList.remove("sidebar-open");syncSidebarAria();
+  if(restoreFocus)document.querySelector(".sidebar-open-btn")?.focus();
+}
+try{if(localStorage.getItem(SIDEBAR_STORAGE)==="1")document.body.classList.add("sidebar-collapsed")}catch{}
+SIDEBAR_MQ.addEventListener("change",()=>{document.body.classList.remove("sidebar-open");syncSidebarAria()});
+syncSidebarAria();
 function closeVersionPopover(){
   const p=$("versionPopover");if(!p||!p.classList.contains("open"))return;
   p.classList.remove("open");p.setAttribute("aria-hidden","true");
