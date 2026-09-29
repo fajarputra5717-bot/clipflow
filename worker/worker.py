@@ -673,6 +673,25 @@ YTDLP_FORMAT = (
 )
 
 
+YTDLP_MAX_ATTEMPTS = 3
+
+# yt-dlp output that means "try again later", not "this URL is bad":
+# YouTube's intermittent 403s on media URLs, rate limits, 5xx, and
+# network errors. A private/removed video fails the same way every time.
+_TRANSIENT_DOWNLOAD_RE = re.compile(
+    r"HTTP Error (403|408|429|5\d\d)"
+    r"|timed out|Connection (reset|refused|aborted)"
+    r"|Temporary failure in name resolution|Network is unreachable"
+    r"|IncompleteRead|RemoteDisconnected|Read timed out"
+    r"|Got error: .*(403|429|5\d\d)",
+    re.IGNORECASE,
+)
+
+
+def is_transient_download_error(message):
+    return bool(_TRANSIENT_DOWNLOAD_RE.search(message or ""))
+
+
 def download_video(
     youtube_url,
     job_id,
@@ -705,24 +724,51 @@ def download_video(
         / f"{job_id}.%(ext)s"
     )
 
-    run_command(
-        [
-            "yt-dlp",
+    command = [
+        "yt-dlp",
 
-            "--no-playlist",
+        "--no-playlist",
 
-            "--merge-output-format",
-            "mp4",
+        "--merge-output-format",
+        "mp4",
 
-            "-f",
-            YTDLP_FORMAT,
+        "-f",
+        YTDLP_FORMAT,
 
-            "-o",
-            template,
+        "-o",
+        template,
 
-            youtube_url,
-        ]
-    )
+        # End of options: a URL starting with "-" can't be parsed
+        # as a yt-dlp flag (security audit 060, option injection).
+        "--",
+        youtube_url,
+    ]
+
+    for attempt in range(1, YTDLP_MAX_ATTEMPTS + 1):
+
+        try:
+
+            run_command(command)
+
+            break
+
+        except RuntimeError as exc:
+
+            if (
+                attempt >= YTDLP_MAX_ATTEMPTS
+                or not is_transient_download_error(str(exc))
+            ):
+                raise
+
+            delay = 5 * 2 ** (attempt - 1) + random.uniform(0, 2)
+
+            log(
+                f"yt-dlp transient failure (attempt {attempt}/"
+                f"{YTDLP_MAX_ATTEMPTS}), retrying in {delay:.0f}s: "
+                + str(exc).strip().splitlines()[-1][:200]
+            )
+
+            time.sleep(delay)
 
     candidates = list(
         DOWNLOAD_DIR.glob(
