@@ -17,3 +17,6 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 007 · 2026-09-29 · R-01 fix: pin opencv <5 (v5 removed readNetFromCaffe; face detection silently fell back on every render) · worker/requirements.txt
 008 · 2026-09-29 · R-04 facecam: zoom 0.78, min crop 120 px@1080p scaled, centering floor (>=60% and >= face) · worker.py, shared/settings.py
 009 · 2026-09-29 · R-05 per-job watermark size/opacity (+ post-Submagic overlay); fixed edit panel resetting/ignoring subtitle style · main.py, worker.py, index.html
+050 · 2026-09-29 · R-12 left sidebar (quick actions, tips, settings) + simplified Import options (lane B) · index.html
+051 · 2026-09-29 · R-13 UI audit, transform-only tabs pill, separate job island (lane B; audit in ui-audit.md) · index.html
+052 · 2026-09-29 · R-11 UI polish: motion timings, one busy state, grouped edit drawer + sticky Apply, reduced motion (lane B) · index.html
