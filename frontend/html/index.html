@@ -69,7 +69,9 @@ html[data-theme="dark"]{color-scheme:dark}
 [data-theme="dark"] .queue-thumb:empty{background:linear-gradient(100deg,#2c2c2e 30%,#3a3a3c 50%,#2c2c2e 70%);background-size:200% 100%}
 [data-theme="dark"] .candidate-card{border-color:rgba(255,255,255,.09);box-shadow:0 2px 12px rgba(0,0,0,.3)}
 [data-theme="dark"] .preview-frame{border-color:rgba(255,255,255,.1)}
-[data-theme="dark"] .edit-drawer-inner{border-color:rgba(255,255,255,.09)}
+[data-theme="dark"] .edit-drawer-inner{border-color:rgba(255,255,255,.09);background:rgba(35,35,37,.72)}
+[data-theme="dark"] .edit-actions{background:rgba(28,28,30,.8);border-color:rgba(255,255,255,.09);box-shadow:0 8px 24px rgba(0,0,0,.4)}
+[data-theme="dark"] .edit-more{border-color:rgba(255,255,255,.08)}
 [data-theme="dark"] .edit-section{border-color:rgba(255,255,255,.08)}
 [data-theme="dark"] .thumb-nav{background:#2c2c2e;border-color:rgba(255,255,255,.14)!important}
 [data-theme="dark"] .thumb-nav:hover:not(:disabled){background:#3a3a3c}
@@ -103,7 +105,7 @@ button{
   padding:9px 16px;color:#fff;background:var(--accent);
   font-size:12px;font-weight:600;letter-spacing:-.005em;cursor:pointer;
   box-shadow:0 1px 2px rgba(0,0,0,.06);
-  transition:transform .32s var(--ease),box-shadow .32s var(--ease),filter .32s var(--ease),opacity .32s var(--ease),background .32s var(--ease);
+  transition:transform .18s var(--ease),box-shadow .18s var(--ease),filter .18s var(--ease),opacity .18s var(--ease),background .18s var(--ease);
 }
 button:hover:not(:disabled){transform:translateY(-1px);filter:brightness(1.06);box-shadow:0 6px 16px rgba(0,113,227,.22)}
 button:active:not(:disabled){transform:scale(.98);transition-duration:.15s}
@@ -111,6 +113,17 @@ button.secondary{background:#fff;border-color:#d2d2d7;color:var(--text);box-shad
 button.secondary:hover:not(:disabled){background:#f5f5f7;box-shadow:0 4px 12px rgba(0,0,0,.08)}
 button.danger{background:#ff3b30;border-color:#ff3b30}
 button.ghost{background:rgba(0,0,0,.035);border-color:rgba(0,0,0,.08);color:var(--text);box-shadow:none}
+/* One busy treatment for every async action (setBusy in JS): keeps the
+   control legible (not the .4 disabled fade) and adds a spinner. */
+button.is-busy:disabled,.is-busy[aria-disabled="true"]{opacity:.8;cursor:progress}
+label[aria-disabled="true"]{pointer-events:none}
+.is-busy::before{
+  content:"";display:inline-block;width:10px;height:10px;margin-right:6px;vertical-align:-1px;
+  border:1.5px solid currentColor;border-right-color:transparent;border-radius:50%;
+  animation:spin .7s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+button:focus-visible,[role="button"]:focus-visible,summary:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 button:disabled{opacity:.4;cursor:not-allowed;transform:none!important;filter:none!important;box-shadow:none}
 a{color:inherit}
 .container{width:min(1420px,calc(100% - 28px));margin:18px auto 50px}
@@ -357,9 +370,9 @@ a{color:inherit}
   transform:translate3d(0,0,0) scale(1);
   filter:blur(0);
   transition:
-    opacity .45s var(--ease),
-    transform .5s var(--ease),
-    filter .35s ease;
+    opacity .3s var(--ease),
+    transform .35s var(--ease),
+    filter .3s ease-out;
   will-change:opacity,transform,filter;
 }
 .view-section.switching-out{
@@ -369,7 +382,7 @@ a{color:inherit}
   pointer-events:none;
 }
 .view-section.switching-in{
-  animation:viewSwitchIn .55s var(--ease) both;
+  animation:viewSwitchIn .4s var(--ease) both;
 }
 @keyframes viewSwitchIn{
   from{opacity:0;transform:translate3d(var(--slide-in,16px),0,0) scale(.98);filter:blur(2px)}
@@ -396,7 +409,7 @@ h2{font-size:22px;font-weight:600;line-height:1.2;margin:0 0 4px;letter-spacing:
 .grid-url{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}
 input,select,textarea{
   width:100%;color:var(--text);background:#fff;border:1px solid #d2d2d7;border-radius:14px;
-  padding:10px 11px;outline:none;font-size:12px;transition:border-color .28s var(--ease),box-shadow .28s var(--ease),background .28s var(--ease)
+  padding:10px 11px;outline:none;font-size:12px;transition:border-color .15s var(--ease),box-shadow .15s var(--ease),background .15s var(--ease)
 }
 input:focus,select:focus,textarea:focus{border-color:#0071e3;box-shadow:0 0 0 4px rgba(0,113,227,.13);background:#fff}
 textarea{min-height:130px;resize:vertical;line-height:1.35}button{
@@ -415,7 +428,7 @@ button.primary:hover:not(:disabled),.analyze-ready:hover:not(:disabled){backgrou
 .platform-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
 .choice{
   min-height:65px;padding:12px;border:1px solid #d2d2d7;border-radius:16px;background:#fff;
-  cursor:pointer;transition:border-color .3s var(--ease),background .3s var(--ease),box-shadow .3s var(--ease),transform .3s var(--ease);position:relative;overflow:hidden
+  cursor:pointer;transition:border-color .18s var(--ease),background .18s var(--ease),box-shadow .18s var(--ease),transform .18s var(--ease);position:relative;overflow:hidden
 }
 .choice:hover{transform:translateY(-1px);border-color:#b8b8bd;box-shadow:0 4px 14px rgba(0,0,0,.06)}
 .choice.active{border-color:#0071e3;background:rgba(0,113,227,.05);box-shadow:0 4px 16px rgba(0,113,227,.14),inset 0 0 0 1px rgba(0,113,227,.16)}
@@ -445,7 +458,7 @@ button.primary:hover:not(:disabled),.analyze-ready:hover:not(:disabled){backgrou
   height:100%;border-radius:99px;
   background:linear-gradient(90deg,var(--mini-bar-color,#0071e3),#64b5ff,var(--mini-bar-color,#0071e3));
   background-size:220% 100%;animation:flow 3s linear infinite;
-  transition:width .6s var(--ease);
+  width:100%;transform-origin:left center;transition:transform .4s var(--ease);
 }
 .mini-bar-pct{flex:none;min-width:30px;text-align:right;font-size:9.5px;font-weight:700;color:var(--muted);font-variant-numeric:tabular-nums}
 .job-title-row{display:flex;align-items:center;gap:6px}
@@ -468,7 +481,7 @@ button.primary:hover:not(:disabled),.analyze-ready:hover:not(:disabled){backgrou
 .progress-ring{position:relative;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto}
 .progress-ring svg{display:block;width:100%;height:100%;transform:rotate(-90deg);overflow:visible}
 .progress-ring-track{fill:none;stroke:rgba(0,0,0,.08)}
-.progress-ring-bar{fill:none;stroke-linecap:round;filter:drop-shadow(0 0 3px var(--ring-color));transition:stroke-dashoffset .9s var(--ease)}
+.progress-ring-bar{fill:none;stroke-linecap:round;filter:drop-shadow(0 0 3px var(--ring-color));transition:stroke-dashoffset .4s var(--ease)}
 .progress-ring-pct{position:absolute;font-size:8px;font-weight:700;letter-spacing:-.02em;color:var(--text);font-variant-numeric:tabular-nums}
 .progress-status{min-width:0;display:flex;flex-direction:column;gap:2px}
 .progress-status .msg{font-size:9.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -610,18 +623,45 @@ details[open] > summary > .chev{transform:rotate(180deg)}
 .preview-badges{position:absolute;left:9px;top:9px;z-index:5;display:flex;flex-direction:column;align-items:flex-start;gap:6px;max-width:calc(100% - 60px)}
 .preview-badges-right{position:absolute;right:9px;top:9px;z-index:6;display:flex;flex-direction:column;align-items:flex-end;gap:6px}
 .preview-footer{position:absolute;right:9px;bottom:9px;z-index:5;display:flex;align-items:center;gap:8px}
-.chip{display:inline-flex;align-items:center;gap:4px;padding:5px 9px;border-radius:999px;font-size:9px;font-weight:700;background:rgba(0,0,0,.55);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.16);color:#fff;white-space:nowrap}
+.chip{display:inline-flex;align-items:center;gap:4px;padding:5px 9px;border-radius:999px;font-size:9px;font-weight:700;background:rgba(0,0,0,.62);border:1px solid rgba(255,255,255,.16);color:#fff;white-space:nowrap}
 .chip-genre{color:#7cc0ff}
 .chip-rating{color:#ffd60a}
 .preview-edit{min-height:30px;padding:6px 10px;border-radius:12px;font-size:9.5px;flex:none}
 .preview-note{text-align:center;color:var(--muted2);font-size:9px;margin-top:5px}
-.rating-row{display:flex;gap:2px;flex-wrap:wrap}.star{font-size:16px;color:#d2d2d7;cursor:pointer;transition:transform .25s var(--ease),color .25s var(--ease)}.star:hover{transform:scale(1.16)}.star.on{color:#ff9500}
-.edit-drawer{
-  max-height:0;opacity:0;overflow:hidden;transform:translateY(-5px);
-  transition:max-height .45s var(--ease),opacity .3s ease,transform .35s var(--ease),margin-top .35s var(--ease)
+.rating-row{display:flex;gap:2px;flex-wrap:wrap}.star{font-size:16px;color:#d2d2d7;cursor:pointer;transition:transform .15s var(--ease),color .15s var(--ease)}.star:hover{transform:scale(1.16)}.star.on{color:#ff9500}
+/* Edit drawer (R-11): shown with display, entrance is opacity+transform
+   only (no max-height morph). Re-renders while editing (watchCandidate)
+   add .no-enter so the entrance doesn't replay every poll. Frosted glass
+   lives on the drawer surface and its sticky action row only; the video
+   preview stays flat. */
+.edit-drawer{display:none}
+.candidate-card.editing .edit-drawer{display:block;margin-top:10px;animation:drawerIn .34s var(--ease) both}
+.candidate-card.editing.no-enter .edit-drawer{animation:none}
+@keyframes drawerIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
+.edit-drawer-inner{
+  border:1px solid var(--line);border-radius:16px;padding:12px 13px 0;
+  background:rgba(251,251,253,.72);
+  backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%);
 }
-.candidate-card.editing .edit-drawer{max-height:2600px;opacity:1;transform:none;margin-top:10px}
-.edit-drawer-inner{border-top:1px solid rgba(0,0,0,.07);padding-top:11px}
+.edit-actions{
+  position:sticky;bottom:10px;z-index:4;margin:6px -6px 10px;padding:9px;border-radius:14px;
+  border:1px solid var(--line);
+  background:rgba(255,255,255,.78);
+  backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%);
+  box-shadow:0 8px 24px rgba(0,0,0,.08);
+}
+.edit-actions button{flex:1 1 auto}
+.edit-more{padding:0;border-bottom:1px solid rgba(0,0,0,.06)}
+.edit-more > summary{display:flex;align-items:center;gap:8px;min-height:42px;cursor:pointer;list-style:none}
+.edit-more > summary::-webkit-details-marker{display:none}
+.edit-more > summary h4{margin:0;font-size:11.5px;font-weight:700;color:var(--text)}
+.edit-more > summary .muted{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:9.5px}
+.edit-more[open] > summary{margin-bottom:4px}
+.edit-more-body{padding-bottom:13px}
+.edit-more-body > .edit-section-tools{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.version-history > summary{display:flex;align-items:center;gap:8px;list-style:none}
+.version-history > summary::-webkit-details-marker{display:none}
+.version-history > summary .chev{margin-left:auto}
 .edit-title{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}.edit-title strong{font-size:11px}.edit-title span{font-size:9px;color:var(--muted)}
 .edit-section{padding:13px 0;border-bottom:1px solid rgba(0,0,0,.06)}
 .edit-section:first-of-type{padding-top:2px}
@@ -671,7 +711,7 @@ details[open] > summary > .chev{transform:rotate(180deg)}
 .mini-ai-btn{min-height:26px;padding:4px 10px;font-size:9.5px;border-radius:9px;flex:none;white-space:nowrap}
 .thumb-head-actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;flex:none}
 .thumb-upload-btn{display:inline-flex;align-items:center;justify-content:center;cursor:pointer}
-.thumb-upload-btn[aria-disabled="true"]{opacity:.5;pointer-events:none}
+.thumb-upload-btn[aria-disabled="true"]:not(.is-busy){opacity:.5;pointer-events:none}
 .thumb-slider{display:flex;align-items:center;gap:8px;margin-top:2px}
 .thumb-slider-viewport{flex:1;min-width:0;overflow:hidden;border-radius:14px}
 .thumb-slider-track{display:flex;transition:transform .5s var(--ease);will-change:transform}
@@ -722,7 +762,7 @@ details[open] > summary > .chev{transform:rotate(180deg)}
 .thumb-option:active:not(:disabled){transform:translateY(-1px) scale(.975);transition-duration:.15s}
 .thumb-option.selected{
   border-color:#1eb85a;box-shadow:0 0 0 1px rgba(30,184,90,.3),0 10px 26px rgba(30,184,90,.18);
-  animation:thumbSelectPop .48s var(--ease) both;
+  animation:thumbSelectPop .2s var(--ease) both;
 }
 .thumb-option.selected img{filter:saturate(1.08)}
 .thumb-check{
@@ -733,7 +773,7 @@ details[open] > summary > .chev{transform:rotate(180deg)}
 .thumb-option-footer{position:absolute;left:6px;bottom:6px;z-index:3;display:flex;align-items:center}
 .thumb-option.selected .thumb-check{
   background:#1eb85a;border-color:#1eb85a;color:#fff;
-  animation:thumbCheckPop .42s var(--ease) both;
+  animation:thumbCheckPop .2s var(--ease) both;
 }
 @keyframes thumbSelectPop{0%{transform:scale(1)}45%{transform:scale(1.04)}100%{transform:scale(1)}}
 @keyframes thumbCheckPop{0%{transform:scale(.5)}60%{transform:scale(1.14)}100%{transform:scale(1)}}
@@ -851,10 +891,11 @@ details[open] > summary > .chev{transform:rotate(180deg)}
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="15" rx="3"/><path d="M9.5 4.5v15"/></svg>
     </button>
     <div class="logo">R</div>
-    <div><h1>ClipFlow <button class="version-badge" id="versionBadge" type="button" aria-expanded="false">BETA · v2.1103</button></h1><p>Video clipping workspace · import → queue → publish</p>
+    <div><h1>ClipFlow <button class="version-badge" id="versionBadge" type="button" aria-expanded="false">BETA · v2.1104</button></h1><p>Video clipping workspace · import → queue → publish</p>
       <div class="version-popover" id="versionPopover" role="dialog" aria-hidden="true">
-        <div class="version-popover-title">What's new in v2.1103</div>
+        <div class="version-popover-title">What's new in v2.1104</div>
         <ul>
+          <li>Polish: calmer motion, one loading style for every button, tidier edit drawer with sticky Apply</li>
           <li>Smoother tabs pill on scroll; running-job island is its own capsule with stage and progress</li>
           <li>Left sidebar for quick actions and settings; Import options folded into one disclosure</li>
           <li>API key required: asked once per browser session</li>
@@ -870,10 +911,10 @@ details[open] > summary > .chev{transform:rotate(180deg)}
   </header>
 
   <div class="topbar" id="topbarWrap">
-    <nav class="tabs" id="tabsNav">
+    <nav class="tabs" id="tabsNav" role="tablist" aria-label="Sections">
       <div class="tab-indicator" id="tabIndicator"></div>
-      <div id="tabCurrent" class="tab active" data-tab="current">Import</div>
-      <div id="tabQueue" class="tab" data-tab="queue">Publish</div>
+      <div id="tabCurrent" class="tab active" data-tab="current" role="tab" tabindex="0" aria-selected="true" aria-controls="currentSection">Import</div>
+      <div id="tabQueue" class="tab" data-tab="queue" role="tab" tabindex="-1" aria-selected="false" aria-controls="queueSection">Publish</div>
     </nav>
     <button id="jobIsland" class="job-island" type="button" aria-label="Show running jobs" aria-hidden="true" aria-controls="jobOverlay" aria-expanded="false" disabled>
       <span class="job-island-live" aria-hidden="true"></span>
@@ -1040,6 +1081,27 @@ const SUBTITLE_ANIMATIONS=[
   ["none","Static (none)","flow"]
 ];
 let activeJobId=null,pollTimer=null,jobMonitorTimer=null,currentTab="current";
+const editMoreOpen={};  // "<cid>:desc|thumb" -> open, survives re-renders
+const REDUCED_MOTION=window.matchMedia("(prefers-reduced-motion: reduce)");
+function scrollMode(){return REDUCED_MOTION.matches?"auto":"smooth"}
+// One busy/disabled treatment for every async control (R-11): disables it
+// (aria-disabled for <label> upload buttons), adds .is-busy (spinner),
+// optionally swaps the label, and restores the original label after.
+function setBusy(el,busy,label){
+  if(!el)return;
+  const textNode=[...el.childNodes].find(n=>n.nodeType===3&&n.nodeValue.trim());
+  if(busy){
+    if(el.dataset.idleLabel===undefined&&textNode)el.dataset.idleLabel=textNode.nodeValue;
+    if(label&&textNode)textNode.nodeValue=label;
+    el.classList.add("is-busy");el.setAttribute("aria-busy","true");
+    if(el.tagName==="BUTTON")el.disabled=true;else el.setAttribute("aria-disabled","true");
+  }else{
+    if(el.dataset.idleLabel!==undefined&&textNode)textNode.nodeValue=el.dataset.idleLabel;
+    delete el.dataset.idleLabel;
+    el.classList.remove("is-busy");el.removeAttribute("aria-busy");
+    if(el.tagName==="BUTTON")el.disabled=false;else el.removeAttribute("aria-disabled");
+  }
+}
 let selectedSplit=70,selectedPlatform="youtube_shorts",selectedLayout="auto",settingsCache={},runningJobs=[],overlayOpen=false;
 // Per-candidate live-preview animation loop handles, so re-rendering
 // a card (or switching animation/style) cleans up the previous timer
@@ -1098,7 +1160,7 @@ let ringIdSeq=0;
 function miniProgressBar(p,color){
   const v=pct(p);
   return `<div class="mini-bar" style="--mini-bar-color:${color}">
-    <div class="mini-bar-track"><div class="mini-bar-fill" style="width:${v}%"></div></div>
+    <div class="mini-bar-track"><div class="mini-bar-fill" style="transform:scaleX(${v/100})"></div></div>
     <span class="mini-bar-pct">${v}%</span>
   </div>`;
 }
@@ -1181,7 +1243,7 @@ async function createJob(){
   if(!validYouTube(url))return alert("Please enter a valid YouTube URL.");
   clearTimeout(window._createStatusResetTimer);
   $("createStatus").classList.remove("fading");
-  const b=$("analyzeButton");b.disabled=true;b.classList.remove("analyze-ready");
+  const b=$("analyzeButton");setBusy(b,true,"Analyzing…");b.classList.remove("analyze-ready");
   $("createStatus").innerHTML=`<div class="status-title">Creating job…</div><div class="status-message">Starting the AI pipeline.</div>`;
   try{
     const j=await api("/api/jobs",{method:"POST",body:JSON.stringify({
@@ -1207,7 +1269,7 @@ async function createJob(){
       },340);
     },2400);
   }catch(e){$("createStatus").innerHTML=`<div class="error-box">${esc(e.message)}</div>`}
-  finally{b.disabled=false;updateAnalyzeReady()}
+  finally{setBusy(b,false);updateAnalyzeReady()}
 }
 
 function renderCurrentJob(j,i=0){
@@ -1357,11 +1419,11 @@ function renderCandidate(c,jid,platform){
       <h3 class="candidate-title">${esc(title)}</h3>
       <div class="candidate-top-actions">
         <span class="badge ${badgeClass(c.status)}">${esc(stageLabel(c.status||"candidate"))}</span>
-        <button class="secondary preview-edit" data-edit="${esc(c.id)}" type="button">${document.getElementById("candidate-"+c.id)?.classList.contains("editing")?"Close edit":"Edit"}</button>
+        <button class="secondary preview-edit" data-edit="${esc(c.id)}" type="button" aria-expanded="${document.getElementById("candidate-"+c.id)?.classList.contains("editing")?"true":"false"}">${document.getElementById("candidate-"+c.id)?.classList.contains("editing")?"Close edit":"Edit"}</button>
       </div>
     </div>
     <div class="candidate-hook-row">
-      <button class="secondary ai-highlight" data-hook="${esc(jid)}" data-cid="${esc(c.id)}" type="button" ${busy?"disabled":""}>${busy?"Finding hook…":"Get another hook"}</button>
+      <button class="secondary ai-highlight${busy?" is-busy":""}" data-hook="${esc(jid)}" data-cid="${esc(c.id)}" type="button" ${busy?'disabled aria-busy="true"':""}>${busy?"Finding hook…":"Get another hook"}</button>
     </div>
     ${renderSubmagicRow(c,jid)}
 
@@ -1401,25 +1463,24 @@ function renderCandidate(c,jid,platform){
           <div class="hint">Live preview reflects your actual subtitle text, style, font, size and animation. "Fix typos (AI)" only updates this box — nothing is saved or re-rendered until you hit Apply changes.</div>
         </div>
 
-        <div class="edit-section">
-          <div class="edit-section-head">
-            <span class="edit-section-num">2</span>
-            <h4>Description</h4>
-            <button class="mini-ai-btn ai-highlight" data-gen-desc="${esc(jid)}" data-cid="${esc(c.id)}" type="button" ${busy?"disabled":""}>Generate description (AI)</button>
+        <details class="edit-more" data-edit-more="desc" data-cid="${esc(c.id)}" ${editMoreOpen[c.id+":desc"]?"open":""}>
+          <summary><span class="edit-section-num">2</span><h4>Description</h4><span class="muted">${esc(c.description?String(c.description).slice(0,60):"Not written yet")}</span><span class="chev" aria-hidden="true"></span></summary>
+          <div class="edit-more-body">
+            <div class="edit-section-tools">
+              <button class="mini-ai-btn ai-highlight" data-gen-desc="${esc(jid)}" data-cid="${esc(c.id)}" type="button" ${busy?"disabled":""}>Generate description (AI)</button>
+            </div>
+            <label class="edit-subtle-label" for="desc-${esc(c.id)}">Shorts / Reels caption</label>
+            <textarea id="desc-${esc(c.id)}" placeholder="Generate a caption with AI, or write your own…">${esc(c.description||"")}</textarea>
           </div>
-          <label class="edit-subtle-label">Shorts / Reels caption</label>
-          <textarea id="desc-${esc(c.id)}" placeholder="Generate a caption with AI, or write your own…">${esc(c.description||"")}</textarea>
-        </div>
+        </details>
 
-        <div class="edit-section">
-          <div class="edit-section-head">
-            <span class="edit-section-num">3</span>
-            <h4>Thumbnail</h4>
-            <div class="thumb-head-actions">
+        <details class="edit-more" data-edit-more="thumb" data-cid="${esc(c.id)}" ${editMoreOpen[c.id+":thumb"]?"open":""}>
+          <summary><span class="edit-section-num">3</span><h4>Thumbnail</h4><span class="muted">${thumbOptions.length?`${thumbOptions.length} option${thumbOptions.length===1?"":"s"}${c.thumbnail_locked?" · picked":""}`:"No options yet"}</span><span class="chev" aria-hidden="true"></span></summary>
+          <div class="edit-more-body">
+            <div class="thumb-head-actions edit-section-tools">
               <button class="mini-ai-btn ai-highlight" data-gen-thumbs="${esc(jid)}" data-cid="${esc(c.id)}" type="button" ${busy?"disabled":""}>${busy&&c.status==="thumbnail_rendering"?"Generating…":"Generate thumbnails (AI)"}</button>
               <label class="mini-ai-btn thumb-upload-btn" ${busy?"aria-disabled=\"true\"":""}>Upload thumbnail<input type="file" accept="image/*" data-upload-thumb="${esc(jid)}" data-cid="${esc(c.id)}" ${busy?"disabled":""} hidden></label>
             </div>
-          </div>
           <label class="edit-subtle-label">AI-styled + hook headline, 3 options — or upload your own</label>
           ${thumbOptions.length?(()=>{
             const initialIdx=thumbOptions.findIndex((_,i)=>(pickedIdx===i)||(pickedIdx===undefined&&c.thumbnail_path===thumbOptions[i]));
@@ -1445,17 +1506,18 @@ function renderCandidate(c,jid,platform){
           <div class="hint">Slide to browse, tap the one you want to pick it — then hit Apply changes.</div>`;
           })()
           :`<div class="hint">${busy&&c.status==="thumbnail_rendering"?"AI thumbnails are being generated…":"No AI thumbnails yet — generate 3 options above."}</div>`}
-        </div>
+          </div>
+        </details>
 
         <div class="edit-section">
           <details class="version-history" data-versions-toggle="${esc(jid)}" data-cid="${esc(c.id)}">
-            <summary>Version history</summary>
+            <summary>Version history<span class="chev" aria-hidden="true"></span></summary>
             <div id="versionsPanel-${esc(c.id)}" class="hint">Loading…</div>
           </details>
         </div>
 
-        <div class="actions">
-          <button data-apply="${esc(jid)}" data-cid="${esc(c.id)}" type="button" ${busy?"disabled":""}>${busy?"Updating…":"Apply changes"}</button>
+        <div class="actions edit-actions">
+          <button class="${busy?"is-busy":""}" data-apply="${esc(jid)}" data-cid="${esc(c.id)}" type="button" ${busy?'disabled aria-busy="true"':""}>${busy?"Updating…":"Apply changes"}</button>
           <button class="secondary" data-approve="${esc(jid)}" data-cid="${esc(c.id)}" type="button" ${busy?"disabled":""}>Final render</button>
         </div>
 
@@ -1493,7 +1555,9 @@ function updateCaptionPreview(cid){
 
   if(captionPreviewTimers[cid]){clearInterval(captionPreviewTimers[cid]);delete captionPreviewTimers[cid]}
 
-  if(animValue==="none"){
+  // Reduced motion: the loop below is JS-driven, so the CSS
+  // prefers-reduced-motion rule can't stop it; render the static line.
+  if(animValue==="none"||REDUCED_MOTION.matches){
     // Fully static: no karaoke sweep, no entrance pop.
     textEl.innerHTML=`<span class="cpw active">${words.map(esc).join(" ")}</span>`;
     return;
@@ -1539,6 +1603,7 @@ function updateCaptionPreview(cid){
     return;
   }
 }
+REDUCED_MOTION.addEventListener("change",()=>document.querySelectorAll("[id^=capPreviewText-]").forEach(el=>updateCaptionPreview(el.id.slice("capPreviewText-".length))));
 function initCaptionPreviews(candidates){(candidates||[]).forEach(c=>updateCaptionPreview(c.id))}
 function initVersionHistory(candidates){
   (candidates||[]).forEach(c=>{
@@ -1653,7 +1718,7 @@ async function switchQueueView(showDetail){
   void next.offsetWidth;
   next.classList.add("switching-in");
 
-  setTimeout(()=>next.classList.remove("switching-in"),540);
+  setTimeout(()=>next.classList.remove("switching-in"),400);
 }
 async function openQueueJob(id){
   try{
@@ -1667,7 +1732,7 @@ async function openQueueJob(id){
       $("queueDetail").classList.remove("hidden");
     }else{
       await switchQueueView(true);
-      $("queueDetail").scrollIntoView({behavior:"smooth",block:"start"});
+      $("queueDetail").scrollIntoView({behavior:scrollMode(),block:"start"});
     }
   }catch(e){alert("Unable to open job: "+e.message)}
 }
@@ -1708,8 +1773,9 @@ function stopPolling(){if(pollTimer){clearInterval(pollTimer);pollTimer=null}}
 
 function toggleCandidateEdit(cid){
   const el=$("candidate-"+cid);if(!el)return;
-  el.classList.toggle("editing");
-  const b=el.querySelector("[data-edit]");if(b)b.textContent=el.classList.contains("editing")?"Close edit":"Edit";
+  el.classList.remove("no-enter");el.classList.toggle("editing");
+  const open=el.classList.contains("editing");
+  const b=el.querySelector("[data-edit]");if(b){b.textContent=open?"Close edit":"Edit";b.setAttribute("aria-expanded",String(open))}
 }
 async function applyEdits(jid,cid){
   const sub=($("sub-"+cid)?.value||"").trim().toUpperCase();
@@ -1721,13 +1787,16 @@ async function applyEdits(jid,cid){
   const thumbIdx=thumbSelection[cid];
   const patch={subtitle_override:sub,description:desc};
   if(thumbIdx!==undefined)patch.selected_thumbnail_index=thumbIdx;
+  const b=document.querySelector(`[data-apply="${css(jid)}"][data-cid="${css(cid)}"]`);
+  if(b?.disabled)return;
+  setBusy(b,true,"Applying…");
   try{
     await api(`/api/jobs/${jid}/candidates/${cid}`,{method:"PATCH",body:JSON.stringify(patch)});
     await api(`/api/jobs/${jid}/subtitle-style`,{method:"PATCH",body:JSON.stringify({subtitle_style:style,subtitle_font:font,subtitle_size:size,subtitle_animation:animation})});
     await api(`/api/jobs/${jid}/candidates/${cid}/regenerate-preview`,{method:"POST"});
     delete thumbSelection[cid];
     watchCandidate(jid,cid);
-  }catch(e){alert("Could not regenerate preview: "+e.message)}
+  }catch(e){setBusy(b,false);alert("Could not regenerate preview: "+e.message)}
 }
 function pickThumbnail(jid,cid,idx){
   thumbSelection[cid]=idx;
@@ -1761,7 +1830,7 @@ function watchCandidate(jid,cid){
       if(currentTab==="queue"&&detail&&card){
         const wasEditing=card.classList.contains("editing");
         const tmp=document.createElement("div");tmp.innerHTML=renderCandidate(c,jid,j.platform);const next=tmp.firstElementChild;
-        if(wasEditing)next.classList.add("editing");
+        if(wasEditing)next.classList.add("editing","no-enter");
         card.replaceWith(next);
         updateCaptionPreview(cid);
         initThumbCarousels([c]);
@@ -1781,15 +1850,15 @@ async function getHook(jid,cid){
   const b=document.querySelector(`[data-hook="${css(jid)}"][data-cid="${css(cid)}"]`);
   if(b?.disabled)return;
   if(!confirm("Replace this candidate with another AI-selected moment?"))return;
-  if(b){b.disabled=true;b.textContent="Finding hook…"}
+  setBusy(b,true,"Finding hook…")
   setCandidateActiveTask(jid,cid,{actionLabel:"Finding new hook (AI)",status:"queued",progress:0});
   try{await api(`/api/jobs/${jid}/candidates/${cid}/new-hook`,{method:"POST"});watchCandidate(jid,cid)}
-  catch(e){if(b){b.disabled=false;b.textContent="Get another hook"}clearCandidateActiveTask(cid);alert("Get another hook failed: "+e.message)}
+  catch(e){setBusy(b,false);clearCandidateActiveTask(cid);alert("Get another hook failed: "+e.message)}
 }
 async function fixSubtitleAI(jid,cid){
   const b=document.querySelector(`[data-fix-subtitle="${css(jid)}"][data-cid="${css(cid)}"]`);
   if(b?.disabled)return;
-  if(b){b.disabled=true;b.textContent="Working…"}
+  setBusy(b,true,"Fixing typos…")
   try{
     const r=await api(`/api/jobs/${jid}/candidates/${cid}/fix-subtitle-ai`,{method:"POST"});
     const ta=$("sub-"+cid);
@@ -1798,12 +1867,12 @@ async function fixSubtitleAI(jid,cid){
       updateCaptionPreview(cid);
     }
   }catch(e){alert("AI subtitle fix failed: "+e.message)}
-  finally{if(b){b.disabled=false;b.textContent="Fix typos (AI)"}}
+  finally{setBusy(b,false)}
 }
 async function generateDescriptionAI(jid,cid){
   const b=document.querySelector(`[data-gen-desc="${css(jid)}"][data-cid="${css(cid)}"]`);
   if(b?.disabled)return;
-  if(b){b.disabled=true;b.textContent="Writing…"}
+  setBusy(b,true,"Writing description…")
   // No backend queue/polling for this one — it's a single request/response
   // call, so track it locally for the island's duration and clear it
   // ourselves once the response lands (success or failure).
@@ -1812,24 +1881,23 @@ async function generateDescriptionAI(jid,cid){
     const r=await api(`/api/jobs/${jid}/candidates/${cid}/generate-description`,{method:"POST"});
     const ta=$("desc-"+cid);if(ta)ta.value=r.description||"";
   }catch(e){alert("AI description failed: "+e.message)}
-  finally{if(b){b.disabled=false;b.textContent="Generate description (AI)"}clearCandidateActiveTask(cid)}
+  finally{setBusy(b,false);clearCandidateActiveTask(cid)}
 }
 async function generateThumbnailsAI(jid,cid){
   const b=document.querySelector(`[data-gen-thumbs="${css(jid)}"][data-cid="${css(cid)}"]`);
   if(b?.disabled)return;
-  if(b){b.disabled=true;b.textContent="Generating…"}
+  setBusy(b,true,"Generating thumbnails…")
   setCandidateActiveTask(jid,cid,{actionLabel:"Generating AI thumbnails",status:"thumbnail_queued",progress:0});
   try{
     delete thumbSelection[cid];
     await api(`/api/jobs/${jid}/candidates/${cid}/generate-thumbnails-ai`,{method:"POST"});
     watchCandidate(jid,cid);
-  }catch(e){if(b){b.disabled=false;b.textContent="Generate thumbnails (AI)"}clearCandidateActiveTask(cid);alert("AI thumbnail generation failed: "+e.message)}
+  }catch(e){setBusy(b,false);clearCandidateActiveTask(cid);alert("AI thumbnail generation failed: "+e.message)}
 }
 async function uploadManualThumbnail(jid,cid,file){
   const input=document.querySelector(`[data-upload-thumb="${css(jid)}"][data-cid="${css(cid)}"]`);
   const label=input?.closest(".thumb-upload-btn");
-  const prevText=label?.firstChild?.textContent;
-  if(label){label.setAttribute("aria-disabled","true");if(label.firstChild)label.firstChild.textContent="Uploading…"}
+  setBusy(label,true,"Uploading…");
   try{
     const form=new FormData();
     form.append("file",file);
@@ -1839,12 +1907,15 @@ async function uploadManualThumbnail(jid,cid,file){
     if(typeof d.index==="number")pickThumbnail(jid,cid,d.index);
     await openQueueJob(jid);
   }catch(e){alert("Thumbnail upload failed: "+e.message)}
-  finally{if(input)input.value="";if(label){label.removeAttribute("aria-disabled");if(label.firstChild&&prevText)label.firstChild.textContent=prevText}}
+  finally{if(input)input.value="";setBusy(label,false)}
 }
 async function approve(jid,cid){
+  const b=document.querySelector(`[data-approve="${css(jid)}"][data-cid="${css(cid)}"]`);
+  if(b?.disabled)return;
+  setBusy(b,true,"Starting render…");
   setCandidateActiveTask(jid,cid,{actionLabel:"Rendering final",status:"render_queued",progress:0});
   try{await api(`/api/jobs/${jid}/candidates/${cid}/approve`,{method:"POST"});watchCandidate(jid,cid)}
-  catch(e){clearCandidateActiveTask(cid);alert("Final render failed: "+e.message)}
+  catch(e){setBusy(b,false);clearCandidateActiveTask(cid);alert("Final render failed: "+e.message)}
 }
 async function rate(jid,cid,n){
   try{await api(`/api/jobs/${jid}/candidates/${cid}`,{method:"PATCH",body:JSON.stringify({rating:n})});await openQueueJob(jid)}catch(e){alert("Rating failed: "+e.message)}
@@ -1942,7 +2013,7 @@ function moveTabIndicator(){
 // into view — this is also what makes the floating logo chip and the
 // docked pill undock, since initTopbarDock drives both via .condensed.
 function scrollToHeader(){
-  window.scrollTo({top:0,behavior:"smooth"});
+  window.scrollTo({top:0,behavior:scrollMode()});
 }
 
 // "Freeze pane" behavior: when a tab is clicked while scrolled past the
@@ -1955,7 +2026,7 @@ function freezeUnderHeader(){
   if(!wrap || !wrap.classList.contains("condensed"))return;
   const stickyTop=parseFloat(getComputedStyle(wrap).top)||10;
   const targetY=window.scrollY+wrap.getBoundingClientRect().top-stickyTop;
-  if(targetY>4)window.scrollTo({top:targetY,behavior:"smooth"});
+  if(targetY>4)window.scrollTo({top:targetY,behavior:scrollMode()});
 }
 
 async function showTab(tab){
@@ -1986,6 +2057,7 @@ async function showTab(tab){
   currentTab=tab;
   $("tabCurrent").classList.toggle("active",tab==="current");
   $("tabQueue").classList.toggle("active",tab==="queue");
+  [["tabCurrent","current"],["tabQueue","queue"]].forEach(([id,t])=>{$(id).setAttribute("aria-selected",String(tab===t));$(id).tabIndex=tab===t?0:-1});
   moveTabIndicator();
 
   prev.classList.remove("switching-in");
@@ -2013,7 +2085,7 @@ async function showTab(tab){
     updateJobIsland();
   }
 
-  setTimeout(()=>next.classList.remove("switching-in"),540);
+  setTimeout(()=>next.classList.remove("switching-in"),400);
 }
 
 async function loadWatermarkAssets(){
@@ -2035,7 +2107,8 @@ async function loadWatermarkAssets(){
   }catch(e){$("watermarkPanel").innerHTML=`<div class="error-box">${esc(e.message)}</div>`}
 }
 async function uploadWatermarkAsset(file){
-  const input=$("watermarkUploadInput");
+  const input=$("watermarkUploadInput"),label=input?.closest("label");
+  setBusy(label,true,"Uploading…");
   try{
     const form=new FormData();form.append("file",file);
     const r=await authFetch(`/api/assets/watermarks`,{method:"POST",body:form});
@@ -2043,7 +2116,7 @@ async function uploadWatermarkAsset(file){
     if(!r.ok)throw new Error(d?.detail||`HTTP ${r.status}`);
     await loadWatermarkAssets();
   }catch(e){alert("Watermark upload failed: "+e.message)}
-  finally{if(input)input.value=""}
+  finally{if(input)input.value="";setBusy(label,false)}
 }
 async function activateWatermarkAsset(id){
   try{await api(`/api/assets/watermarks/${id}/activate`,{method:"POST"});await loadWatermarkAssets()}
@@ -2080,7 +2153,9 @@ async function saveSettings(){
   // Send only fields the user changed: the form shows effective values (DB → env → default), and
   // echoing them back would pin env/default values into the DB, which wins over .env.
   const values={};document.querySelectorAll("[data-setting]").forEach(i=>{const v=i.value.trim(),prev=String((settingsCache[i.dataset.setting]||{}).value||"");if(v&&v!=="••••••••"&&v!==prev)values[i.dataset.setting]=v});
+  const b=$("saveSettings");setBusy(b,true,"Saving…");
   try{await api("/api/settings",{method:"PUT",body:JSON.stringify({values})});await loadSettings();alert("Settings saved.")}catch(e){alert("Settings save failed: "+e.message)}
+  finally{setBusy(b,false)}
 }
 
 document.addEventListener("click",e=>{
@@ -2142,9 +2217,13 @@ document.addEventListener("click",e=>{
 document.addEventListener("keydown",e=>{
   const el=e.target.closest("[data-split],[data-platform],[data-layout]");
   if(el&&(e.key==="Enter"||e.key===" ")){e.preventDefault();if(el.dataset.split)selectSplit(el.dataset.split);if(el.dataset.platform)selectPlatform(el.dataset.platform);if(el.dataset.layout)selectLayout(el.dataset.layout)}
+  const tb=e.target.closest(".tab");
+  if(tb&&(e.key==="Enter"||e.key===" ")){e.preventDefault();showTab(tb.dataset.tab)}
+  if(tb&&(e.key==="ArrowLeft"||e.key==="ArrowRight")){e.preventDefault();const next=tb.dataset.tab==="current"?"queue":"current";showTab(next);$(next==="current"?"tabCurrent":"tabQueue").focus()}
   if(e.target.closest("#topbarLogo")&&(e.key==="Enter"||e.key===" ")){e.preventDefault();e.target.closest("#topbarLogo").click()}
   if(e.key==="Escape"){closeJobOverlay();closeVersionPopover();collapseTopbarLogo();closeSidebarDrawer(true)}
 });
+document.addEventListener("toggle",e=>{const d=e.target;if(d.matches?.("[data-edit-more]"))editMoreOpen[d.dataset.cid+":"+d.dataset.editMore]=d.open},true);
 // Sidebar: desktop = collapsible column (remembered), narrow = drawer.
 const SIDEBAR_MQ=window.matchMedia("(max-width:999px)");
 const SIDEBAR_STORAGE="clipflow_sidebar_collapsed_v1";
