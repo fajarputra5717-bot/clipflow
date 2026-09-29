@@ -31,3 +31,13 @@ Do not add columns to init.sql: it only runs on an empty volume. Use ensure_sche
   `docker compose config` valid; py_compile and node --check pass.
 - NOT verified: image builds (no PyPI access where this was prepared), a real end-to-end job,
   Postgres 17 specifically (16 was used for the check).
+
+### R-01 re-check on the new VM (2026-09-29)
+- Verified: all four containers up (postgres healthy); `/health` → `{"status":"healthy"}` on both
+  nginx :80 and backend 127.0.0.1:8000 (so the images built, incl. python-multipart);
+  py_compile + `node --check` pass. `POST /api/jobs` through nginx created a job and the worker
+  claimed it and ran download (yt-dlp+Deno) → AV1→H.264 normalize → Whisper `base` → Gemini.
+- Gemini returned `503 UNAVAILABLE` ("high demand") on all 4 attempts (retry/backoff worked),
+  so the job ended `failed` at `ai_analysis`. The test job and its intermediates were deleted.
+- NOT verified: a job reaching `review` (no candidates, preview, final render, thumbnails,
+  Submagic) — blocked by the external Gemini 503, re-check in a later session.

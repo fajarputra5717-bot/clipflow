@@ -7,4 +7,4 @@ you're about to touch.
 Format: `NNN · YYYY-MM-DD · title · files touched`
 
 <!-- entries start; append below this line -->
-000 · 2026-09-26 · Rebuild baseline after VM loss (v2.1100 code, rebuilt infra + schema) · all
+000 · 2026-09-26 · Rebuild baseline after VM loss (v2.1100 code, rebuilt infra + schema) · all (R-01 re-verified 2026-09-29)
