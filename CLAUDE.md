@@ -216,6 +216,42 @@ must be added to `MEDIA_PATH_RE`** and its frontend URL wrapped in
 CORS middleware must stay added *after* the auth middleware (outermost),
 or preflights get 401.
 
+## Frontend shell (R-11/R-12/R-13; badge v2.1105 after the lane merge)
+
+- **Layout:** `.app-shell` grid = left `<aside id="sidebar">` (Quick
+  actions, Editing tips, Settings disclosures; element IDs unchanged) +
+  `.container`. Desktop ≥1000 px: collapsible column
+  (`body.sidebar-collapsed`, localStorage). Narrow: off-canvas drawer
+  (`body.sidebar-open`) over `#sidebarScrim`. Toggles are
+  `[data-sidebar-toggle]`; hidden sidebar gets `inert`. **Every closed
+  overlay layer must be `visibility:hidden; pointer-events:none`**:
+  a stray layer once made the whole app unclickable. Import options
+  (split/facecam/platform) live in `<details id="importOptions">`;
+  `updateImportOptionsSummary()` runs from the `select*()` fns.
+- **Tabs pill:** constant layout size. Docking = `transform:scale` +
+  shadow cross-fade only. Never transition width/padding/gap on the scroll
+  path. `initTopbarDock()` is the **only** owner of `.topbar.condensed`
+  (rAF scroll handler, hysteresis dock >64 / undock <48 px). The old
+  `#headerSentinel` IntersectionObserver is gone. Don't add a second
+  scroll/observer driver. Tabs are `role=tab` with a roving tabindex.
+- **Job island:** its own fixed-width capsule, absolutely positioned,
+  never in the tabs' flow. It drops below the tabs via a `@container
+  topbar` query. `updateJobIsland()` only toggles `.is-visible` + text; the
+  progress bar is `scaleX`. No JS width measuring. `#jobIslandLive` is
+  the aria-live region.
+- **Busy state:** every async button/upload label goes through
+  `setBusy(el, busy, label?)`. It disables the control, sets `aria-busy` and
+  `.is-busy` (spinner), and restores the label. Don't hand-swap `textContent`.
+- **Edit drawer:** shown via `display` + `drawerIn` keyframe. Re-renders
+  while editing must add `.no-enter` (see `watchCandidate`). Description/
+  Thumbnail are `<details data-edit-more>`. Their open state lives in
+  `editMoreOpen["<cid>:desc|thumb"]` (capture `toggle` listener) so
+  re-renders keep it. Apply/Final render sit in the sticky `.edit-actions`.
+  Glass only on the drawer and that row, never over the video.
+- **Reduced motion:** the CSS rule can't stop JS. Guard JS-driven motion
+  with `REDUCED_MOTION.matches` (caption preview loop) and use
+  `scrollMode()` for `scrollTo`/`scrollIntoView`.
+
 ## Conventions worth copying, not reinventing
 
 - New queue → new status enum + `claim_x_task()` with `FOR UPDATE
