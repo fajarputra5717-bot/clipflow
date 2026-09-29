@@ -26,5 +26,17 @@ Date: 2026-09-29 · Commit: see `git log --grep R-22` · Files: shared/ai/router
 - New AI task name → add it to `TASK_PROVIDER_SETTING` (router) and `_MODEL_SETTING` (claude.py) or it runs as a utility task.
 - No UI yet for these settings or for `hook_provider` (TASKS-5 T5, TODO). Change them via PUT /api/settings or .env.
 
+## End-to-end run (2026-09-29, job 0316327c…, youtube VgwaVaLaOVQ, 136 s)
+- download → normalize → whisper → hooks → review → regenerate-preview → approve → final: all passed.
+- Hooks: Gemini 503 "high demand" twice → `AI: FAILOVER task=hooks gemini -> claude after 2 attempt(s)` →
+  served by `claude-sonnet-5-5`; both candidates have `hook_provider=claude`. Versions logged: "Applied changes",
+  "Final render requested".
+- Final: h264 1080x1920 + aac, 34.5 s. Frames at 4/12/24 s inspected: watermark present, ClipFlow's burned subtitle
+  present (small, under the source's own hardcoded caption).
+
 ## What I did NOT verify
-See the end-to-end note appended below.
+- Hook *quality*: the test video is a Spanish-audio meme with fake Indonesian captions, so Whisper (WHISPER_LANGUAGE=id)
+  produced a nonsense transcript and the hooks were picked from it. Needs a real Indonesian-speech video (TASKS-5 T4).
+- Seen but not investigated (pre-existing render path, not this change): bottom facecam panel half black on a source
+  with no facecam; burned subtitle looks small at size 42; non-Latin glyphs from the bad transcript render as boxes/Cyrillic.
+- A real Anthropic 429/529, and the breaker opening in production (tested offline only).
