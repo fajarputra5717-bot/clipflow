@@ -1,0 +1,103 @@
+# ClipFlow / Riftstorm — rebuilt 2026-09-26.
+# Project name is pinned so volumes are named riftstorm_* (backup scripts
+# and the runbook rely on that).
+name: riftstorm
+
+x-app-env: &app-env
+  DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+  DATA_ROOT: /data
+  TZ: ${TZ:-Asia/Jakarta}
+  PYTHONUNBUFFERED: "1"
+
+x-logging: &logging
+  driver: json-file
+  options: { max-size: "20m", max-file: "3" }
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: riftstorm-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      TZ: ${TZ:-Asia/Jakarta}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/001-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    logging: *logging
+
+  backend:
+    build:
+      context: ./backend
+      additional_contexts:
+        shared: ./shared
+    container_name: riftstorm-backend
+    restart: unless-stopped
+    env_file: .env
+    environment: *app-env
+    volumes:
+      - /data:/data
+    ports:
+      - "127.0.0.1:8000:8000"   # debugging from the VM only; the UI goes through nginx
+    depends_on:
+      postgres: { condition: service_healthy }
+    logging: *logging
+
+  worker:
+    build:
+      context: ./worker
+      additional_contexts:
+        shared: ./shared
+    container_name: riftstorm-worker
+    restart: unless-stopped
+    env_file: .env
+    environment: *app-env
+    volumes:
+      - /data:/data
+      - whisper_cache:/root/.cache/whisper
+    depends_on:
+      postgres: { condition: service_healthy }
+    logging: *logging
+
+  frontend:
+    image: nginx:1.27-alpine
+    container_name: riftstorm-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    # Directory mounts, NOT single-file mounts: editors write atomically
+    # (new inode), which silently detaches a single-file bind mount.
+    volumes:
+      - ./frontend/html:/usr/share/nginx/html:ro
+      - ./frontend/conf.d:/etc/nginx/conf.d:ro
+    depends_on:
+      - backend
+    logging: *logging
+
+  # Optional automation. Start with: docker compose --profile n8n up -d
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:latest
+    container_name: riftstorm-n8n
+    profiles: ["n8n"]
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ:-Asia/Jakarta}
+      GENERIC_TIMEZONE: ${TZ:-Asia/Jakarta}
+      N8N_SECURE_COOKIE: "false"   # LAN-only, no HTTPS
+    ports:
+      - "5678:5678"
+    volumes:
+      - n8n_data:/home/node/.n8n
+    logging: *logging
+
+volumes:
+  postgres_data:
+  whisper_cache:
+  n8n_data:
