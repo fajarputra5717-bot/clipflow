@@ -85,6 +85,31 @@ services:
       - backend
     logging: *logging
 
+  # Outbound-only Telegram alerts (change 066). One-time on the host:
+  #   mkdir -p /data/notifier && chown 10001:10001 /data/notifier && chmod 700 /data/notifier
+  notifier:
+    build: ./notifier
+    container_name: riftstorm-notifier
+    restart: unless-stopped
+    environment:
+      <<: *app-env                      # DATABASE_URL, DATA_ROOT, TZ
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+      BACKEND_HEALTH_URL: http://backend:8000/health
+      DISK_ALERT_PCT: ${DISK_ALERT_PCT:-15}
+      # POLL_SECONDS: 30   MAX_PER_HOUR: 20   SUMMARY_HOUR: 8 (WIB)
+    volumes:
+      - /data:/data:ro                  # disk-free check only
+      - /data/notifier:/data/notifier   # state.json (dedupe), the only writable path
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    logging: *logging
+
   # Optional automation. Start with: docker compose --profile n8n up -d
   n8n:
     image: docker.n8n.io/n8nio/n8n:latest

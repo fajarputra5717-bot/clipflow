@@ -57,3 +57,9 @@ baselines silently.
 - Cleanup: TEST job + 3 candidates deleted (0 left), test state.json removed, test image removed.
 - NOT verified: that the messages look right in the Telegram client (only API `ok` + message_id were checked); the
   real 08:00 WIB trigger (logic only, the summary was forced); a real backend outage; compose integration.
+
+## Wired into main (lane A, 2026-09-29)
+- Snippet pasted under `services:` in docker-compose.yml; `/data/notifier` created 10001:10001, mode 700.
+- `docker compose up -d --build backend notifier`: log shows "started: poll 30s …" and
+  "baseline: 9 existing events marked as seen"; state.json written; nothing sent at startup.
+- NOT verified: an actual Telegram delivery (no alert condition triggered).
