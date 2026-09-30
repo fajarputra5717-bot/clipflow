@@ -277,7 +277,7 @@ must be added to `MEDIA_PATH_RE`** and its frontend URL wrapped in
 CORS middleware must stay added *after* the auth middleware (outermost),
 or preflights get 401.
 
-## Frontend shell (R-11/R-12/R-13, lane B 067-073; badge v2.1114)
+## Frontend shell (R-11/R-12/R-13, lane B 067-073; badge v2.1115)
 
 - **Layout:** `.app-shell` grid = left `<aside id="sidebar">` (068: navigation
   only: `[data-nav]` Import/Publish switch views via `showTab()`,
@@ -312,6 +312,10 @@ or preflights get 401.
   only if a global `cancelJob(jobId)` exists: it does (R-08's `window.cancelJob(id, btn)`,
   confirm + `POST /api/jobs/{id}/cancel`; the island passes its button for `setBusy`). Reduced motion: opacity
   cross-fade only. Sheets make `#appShell`, `#tabbar`, `#island` inert.
+- **Job cards (074):** `#currentJobs` is keyed by job id: `syncCurrentJobs()` patches via
+  `patchJobCard()` (`setText`/`setAttr`, bar `transform`), new → `createJobCard()`, gone →
+  `leaveJobCard()`. Never re-render polled lists with innerHTML (flicker); same for the island
+  and `#jobOverlayList`. Card status line = `jobStatusLine(j)`, not `isBusy()` (BUSY lacks `processing`).
 - **Busy state:** every async button/upload label goes through
   `setBusy(el, busy, label?)`. It disables the control, sets `aria-busy` and
   `.is-busy` (spinner), and restores the label. Don't hand-swap `textContent`.

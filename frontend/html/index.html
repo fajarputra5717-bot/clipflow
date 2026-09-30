@@ -328,8 +328,17 @@ button.primary:hover:not(:disabled){background:#0077ed!important}
   height:100%;border-radius:99px;
   background:linear-gradient(90deg,var(--mini-bar-color,#0071e3),#64b5ff,var(--mini-bar-color,#0071e3));
   background-size:220% 100%;animation:flow 3s linear infinite;
-  width:100%;transform-origin:left center;transition:transform var(--dur-4) var(--ease);
+  width:100%;transform-origin:left center;transition:transform 600ms var(--ease-out); /* node persists across polls: glides from the last value */
 }
+.job-foot{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-2);margin-top:8px}
+.job-foot .stage{margin:0}
+.job-details{min-width:0;text-align:right}
+.job-details>summary{list-style:none;cursor:pointer;font-size:10.5px;font-weight:600;color:var(--muted);display:inline-flex;align-items:center;gap:4px;padding:2px 0}
+.job-details>summary::-webkit-details-marker{display:none}
+.job-details>summary::after{content:"";width:5px;height:5px;border:solid currentColor;border-width:0 1.5px 1.5px 0;transform:rotate(45deg) translateY(-2px);transition:transform var(--dur-2) var(--ease-out)}
+.job-details[open]>summary::after{transform:rotate(-135deg) translateY(-1px)}
+.job-details[open]{text-align:left;flex-basis:100%}
+.job-foot:has(.job-details[open]){flex-wrap:wrap}
 .mini-bar-pct{flex:none;min-width:30px;text-align:right;font-size:9.5px;font-weight:700;color:var(--muted);font-variant-numeric:tabular-nums}
 .job-title-row{display:flex;align-items:center;gap:6px}
 .rename-btn{
@@ -1055,10 +1064,11 @@ img.topbar-logo-icon{background:none;padding:0;object-fit:cover}
     </button>
       <h1 class="page-title" id="pageTitle">Import</h1>
       <div class="toolbar-trail">
-        <div class="version-wrap"><button class="version-badge" id="versionBadge" type="button" aria-expanded="false">Beta · v2.1114</button>
+        <div class="version-wrap"><button class="version-badge" id="versionBadge" type="button" aria-expanded="false">Beta · v2.1115</button>
         <div class="version-popover" id="versionPopover" role="dialog" aria-hidden="true">
-        <div class="version-popover-title">What's new in v2.1114</div>
+        <div class="version-popover-title">What's new in v2.1115</div>
         <ul>
+          <li>Import: job cards and progress bars update smoothly in place (no more flicker); job ID and link tucked under Details</li>
           <li>New jobs: watermark moves up into the gameplay, captions sit closer to the facecam (both adjustable in Settings)</li>
           <li>Watermark sized by its visible mark and kept clear of captions (it moves up instead of overlapping); captions never drop into the facecam</li>
           <li>Retry failed jobs and clips in one tap; temporary problems (network, rate limits, a worker restart) now retry on their own</li>
@@ -1536,30 +1546,74 @@ async function createJob(){
   finally{setBusy(b,false);updateAnalyzeReady()}
 }
 
-function renderCurrentJob(j,i=0){
-  const p=pct(j.progress),s=j.status||"processing",busy=isBusy(s),done=isDone(p,s);
-  return `<div class="panel job-card ${busy?"processing":""}" data-job-id="${esc(j.id)}" style="--i:${i}">
-    <div class="job-header">
-      <div>
-        <div class="job-title-row"><h3>${esc(jobDisplayTitle(j))}</h3><button class="rename-btn" data-rename="${esc(j.id)}" type="button" aria-label="Rename job" title="Rename job">${PENCIL_ICON}</button></div>
-        <div class="job-id">${esc(j.id)}</div>
-        <div class="job-url">${esc(j.youtube_url||"")}</div>
-        ${done?"":`<div class="progress-msg">${esc(j.message||stageLabel(s))}</div>`}
-      </div>
-      <div class="job-header-side">
-        ${platformIcon(j.platform,"sm")}
-        <span class="badge ${badgeClass(s)}">${esc(stageLabel(s))}</span>
-        ${isCancellable(s)?`<button class="secondary cancel-job-btn" data-cancel-job="${esc(j.id)}" type="button">Cancel</button>`:""}
-        ${s==="failed"?`<button class="secondary cancel-job-btn" data-retry-job="${esc(j.id)}" type="button">Retry</button>`:""}
-      </div>
+// Import job cards (task A, v2.1115): one DOM node per job id for its whole life, patched in place on
+// every poll (text nodes, badge class, bar transform), never re-rendered with innerHTML, so bars glide
+// from the previous value and nothing flickers. New cards play cardIn; gone ones collapse (height +
+// opacity) before removal. The status line and badge both derive from j.status (+ j.message).
+function setText(el,v){v=v==null?"":String(v);const n=el.firstChild;if(n&&n.nodeType===3&&el.childNodes.length===1){if(n.nodeValue!==v)n.nodeValue=v}else if(el.textContent!==v)el.textContent=v}
+function setAttr(el,k,v){if(v==null||v===false){if(el.hasAttribute(k))el.removeAttribute(k)}else if(el.getAttribute(k)!==String(v))el.setAttribute(k,v===true?"":v)}
+function jobStatusLine(j){
+  const s=j.status||"processing";
+  if(s==="review"||s==="completed")return "Finished — moved to Publish";
+  return j.message||stageLabel(s);
+}
+function createJobCard(j){
+  const el=document.createElement("div");
+  el.className="panel job-card";el.dataset.jobId=String(j.id);
+  el.innerHTML=`<div class="job-header">
+      <div class="job-main"><div class="job-title-row"><h3></h3><button class="rename-btn" data-rename="${esc(j.id)}" type="button" aria-label="Rename job" title="Rename job">${PENCIL_ICON}</button></div></div>
+      <div class="job-header-side">${platformIcon(j.platform,"sm")}<span class="badge"></span><span class="job-actions"></span></div>
     </div>
-    ${done?"":miniProgressBar(p,stageColor(s))}
-    <div class="stage">${esc(String(j.split_ratio||70))}:${esc(String(100-Number(j.split_ratio||70)))} · 9:16</div>
-    <div class="job-auto-queue">
-      <span class="auto-queue-dot"></span>
-      <span>${busy ? esc(j.message||stageLabel(s)) : "Finished — moved to Publish"}</span>
-    </div>
-  </div>`;
+    <div class="mini-bar"><div class="mini-bar-track"><div class="mini-bar-fill"></div></div><span class="mini-bar-pct"></span></div>
+    <div class="job-auto-queue"><span class="auto-queue-dot"></span><span class="job-status-line"></span></div>
+    <div class="job-foot"><span class="stage job-format"></span><details class="job-details"><summary>Details</summary><div class="job-id"></div><div class="job-url"></div></details></div>`;
+  patchJobCard(el,j);return el;
+}
+function patchJobCard(el,j){
+  const p=pct(j.progress),s=j.status||"processing",q=c=>el.querySelector(c),split=Number(j.split_ratio||70);
+  el.classList.toggle("processing",!TERMINAL.includes(s));
+  setText(q("h3"),jobDisplayTitle(j));
+  const badge=q(".badge");setAttr(badge,"class","badge "+badgeClass(s));setText(badge,stageLabel(s));
+  const bar=q(".mini-bar");setAttr(bar,"hidden",isDone(p,s));
+  if(bar.style.getPropertyValue("--mini-bar-color")!==stageColor(s))bar.style.setProperty("--mini-bar-color",stageColor(s));
+  const fill=q(".mini-bar-fill"),t=`scaleX(${p/100})`;if(fill.style.transform!==t)fill.style.transform=t;
+  setText(q(".mini-bar-pct"),p+"%");
+  const line=jobStatusLine(j);setText(q(".job-status-line"),line);setAttr(q(".job-auto-queue"),"hidden",line===stageLabel(s)); // never say the badge twice
+  setText(q(".job-format"),`${split}:${100-split} · 9:16`);
+  setText(q(".job-id"),j.id);setText(q(".job-url"),j.youtube_url||"");
+  const acts=q(".job-actions"),key=(isCancellable(s)?"c":"")+(s==="failed"?"r":"");
+  if(acts.dataset.key!==key){acts.dataset.key=key;
+    acts.innerHTML=(key.includes("c")?`<button class="secondary cancel-job-btn" data-cancel-job="${esc(j.id)}" type="button">Cancel</button>`:"")+(key.includes("r")?`<button class="secondary cancel-job-btn" data-retry-job="${esc(j.id)}" type="button">Retry</button>`:"")}
+}
+const JOBS_EMPTY_HTML=`<svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="3"/><path d="m10 9.5 4.5 2.5-4.5 2.5z"/></svg><div class="empty-title">Nothing importing</div><div class="empty-tip">Paste a YouTube link above and press Analyze. Jobs show their progress here, then move to Publish when the clips are ready.</div>`;
+function syncJobsEmpty(){
+  const box=$("currentJobs"),empty=box.querySelector(":scope>.import-empty");
+  if(box.querySelector(":scope>.job-card")){empty?.remove();return}
+  if(!empty){const e=document.createElement("div");e.className="panel empty import-empty";e.innerHTML=JOBS_EMPTY_HTML;box.append(e)}
+}
+function leaveJobCard(el){
+  el.classList.add("leaving");el.inert=true;
+  const done=()=>{el.remove();syncJobsEmpty()};
+  if(REDUCED_MOTION.matches)return done();
+  const cs=getComputedStyle(el),z={height:"0px",opacity:0,marginTop:"0px",marginBottom:"0px",paddingTop:"0px",paddingBottom:"0px",borderTopWidth:"0px",borderBottomWidth:"0px"};
+  el.animate([{height:el.offsetHeight+"px",opacity:1,marginTop:cs.marginTop,marginBottom:cs.marginBottom,paddingTop:cs.paddingTop,paddingBottom:cs.paddingBottom,borderTopWidth:cs.borderTopWidth,borderBottomWidth:cs.borderBottomWidth},z],
+    {duration:450,easing:"cubic-bezier(.32,.72,0,1)",fill:"forwards"}).finished.then(done,done);
+}
+function syncCurrentJobs(jobs){
+  const box=$("currentJobs"),live=new Map(),want=new Set(jobs.map(j=>String(j.id)));
+  box.querySelector(":scope>.jobs-error")?.remove();
+  if(jobs.length)box.querySelector(":scope>.import-empty")?.remove();
+  for(const el of box.querySelectorAll(":scope>.job-card:not(.leaving)")){if(want.has(el.dataset.jobId))live.set(el.dataset.jobId,el);else leaveJobCard(el)}
+  let prev=null,fresh=0;
+  for(const j of jobs){
+    let el=live.get(String(j.id));
+    if(el)patchJobCard(el,j);else{el=createJobCard(j);el.style.setProperty("--i",fresh++)}
+    let at=prev?prev.nextElementSibling:box.firstElementChild;
+    while(at&&at!==el&&at.classList.contains("leaving"))at=at.nextElementSibling;
+    if(at!==el)box.insertBefore(el,at); // only new cards (or a real reorder) touch the tree
+    prev=el;
+  }
+  syncJobsEmpty();
 }
 
 function renderQueueJob(j,i=0){
@@ -1992,11 +2046,14 @@ function renderDetail(j){
 async function loadCurrentJobs(){
   try{
     const d=await api("/api/jobs?scope=current"),jobs=Array.isArray(d)?d:(d?.jobs||d?.items||[]);
-    $("currentJobs").innerHTML=jobs.length?jobs.map((j,i)=>renderCurrentJob(j,i)).join(""):`<div class="panel empty import-empty"><svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="3"/><path d="m10 9.5 4.5 2.5-4.5 2.5z"/></svg><div class="empty-title">Nothing importing</div><div class="empty-tip">Paste a YouTube link above and press Analyze. Jobs show their progress here, then move to Publish when the clips are ready.</div></div>`;
+    syncCurrentJobs(jobs);
     const stored=loadActive();
     if(stored&&jobs.some(j=>String(j.id)===String(stored)))activeJobId=stored;
     else if(!activeJobId&&jobs[0])saveActive(jobs[0].id);
-  }catch(e){$("currentJobs").innerHTML=`<div class="panel error-box">Cannot load active jobs: ${esc(e.message)}</div>`}
+  }catch(e){ // keep the cards on screen; only an empty list gets the error panel
+    console.error(e);const box=$("currentJobs");
+    if(!box.querySelector(":scope>.job-card")){box.innerHTML=`<div class="panel error-box jobs-error">Cannot load active jobs: ${esc(e.message)}</div>`}
+  }
 }
 async function loadQueue(){
   try{
@@ -2065,8 +2122,8 @@ async function refreshJob(id){
   try{
     const j=await api("/api/jobs/"+id);
     if(currentTab==="current"){
-      const el=document.querySelector(`[data-job-id="${css(id)}"]`);
-      if(el){const fresh=renderCurrentJob(j);if(el.outerHTML!==fresh)el.outerHTML=fresh}
+      const el=document.querySelector(`#currentJobs>.job-card[data-job-id="${css(id)}"]:not(.leaving)`);
+      if(el)patchJobCard(el,j);
     }
     if(TERMINAL.includes(j.status)){
       stopPolling();saveActive(null);
@@ -2338,32 +2395,33 @@ function paintIsland(){
   const items=islandItems(),ev=ISL.event,isl=$("island");
   isl.classList.toggle("is-ready",ev?.type==="ready");isl.classList.toggle("is-failed",ev?.type==="failed"||!ISL.failSeen);
   const more=$("islandMore"),extra=ev?items.length:Math.max(0,items.length-1);
-  more.textContent=extra?`+${extra}`:"";
+  setText(more,extra?`+${extra}`:""); // text node patched, the circle itself is never re-mounted
   // The split only exists in compact mode: it merges into the island while expanded (so the expanded
   // shape stays centred and never overflows a phone), and springs back out afterwards.
   requestAnimationFrame(()=>{const want=!!extra&&ISL.mode==="compact";
     if(!want){more.classList.remove("on");more.hidden=true;return}
     if(more.hidden){more.hidden=false;void more.offsetWidth}more.classList.add("on")});
   if(ev){
-    $("islIcon").className="isl-x-icon "+ev.type;$("islIcon").innerHTML=ev.type==="ready"?'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m6 12.5 4 4 8-9"/></svg>':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M12 7v6M12 17h.01"/></svg>';
-    $("islTitleX").textContent=ev.title;$("islStage").textContent=ev.type==="ready"?"Ready for review":`Failed · ${ev.stage}`;
-    $("islPct").textContent=ev.type==="ready"?"100%":"";$("islBar").style.transform=`scaleX(${ev.type==="ready"?1:0})`;
+    const icon=$("islIcon");setAttr(icon,"class","isl-x-icon "+ev.type);if(icon.dataset.key!=="ev:"+ev.type){icon.dataset.key="ev:"+ev.type;icon.innerHTML=ev.type==="ready"?'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m6 12.5 4 4 8-9"/></svg>':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M12 7v6M12 17h.01"/></svg>'}
+    setText($("islTitleX"),ev.title);setText($("islStage"),ev.type==="ready"?"Ready for review":`Failed · ${ev.stage}`);
+    // Failed keeps the bar/ring where the job stopped (never snaps back to 0); ready glides to full.
+    setText($("islPct"),ev.type==="ready"?"100%":"");if(ev.type==="ready")$("islBar").style.transform="scaleX(1)";
     $("islCancel").hidden=true;
-    $("islTitleC").textContent=ev.type==="ready"?"Ready for review":`Failed · ${ev.stage}`;
-    $("islLead").innerHTML=`<span class="isl-dot ${ev.type}"></span>`;$("islLead").dataset.key="";setRing(ev.type==="ready"?100:0);
+    setText($("islTitleC"),ev.type==="ready"?"Ready for review":`Failed · ${ev.stage}`);
+    if($("islLead").dataset.key!=="ev:"+ev.type){$("islLead").dataset.key="ev:"+ev.type;$("islLead").innerHTML=`<span class="isl-dot ${ev.type}"></span>`}if(ev.type==="ready")setRing(100);
     return;
   }
   const lead=items[0];if(!lead)return;ISL.lead=lead;
   const p=pct(lead.progress),stage=lead.actionLabel||stageLabel(lead.status),title=islandTitle(lead);
-  $("islTitleC").textContent=title;$("islTitleX").textContent=title;$("islStage").textContent=stage;$("islPct").textContent=p+"%";
-  $("islBar").style.transform=`scaleX(${p/100})`;setRing(p);
-  $("islIcon").className="isl-x-icon";$("islIcon").innerHTML=islandThumb(lead);
+  setText($("islTitleC"),title);setText($("islTitleX"),title);setText($("islStage"),stage);setText($("islPct"),p+"%");
+  const bt=`scaleX(${p/100})`;if($("islBar").style.transform!==bt)$("islBar").style.transform=bt;setRing(p);
+  const icon=$("islIcon");setAttr(icon,"class","isl-x-icon");if(icon.dataset.key!==String(lead.id)){icon.dataset.key=String(lead.id);icon.innerHTML=islandThumb(lead)} // keyed: the thumbnail <img> isn't re-mounted per poll
   if($("islLead").dataset.key!==String(lead.id)){$("islLead").dataset.key=String(lead.id);$("islLead").innerHTML=islandThumb(lead)}
   $("islCancel").hidden=!(lead.kind==="job"&&typeof window.cancelJob==="function");
   $("islandMain").setAttribute("aria-label",`${title}: ${stage}, ${p}%${items.length>1?` (and ${items.length-1} more)`:""}`);
   const said=`${title}: ${stage}, ${Math.floor(p/25)*25}%`;if(said!==ISL.announced){ISL.announced=said;$("islandLive").textContent=said}
 }
-function setRing(p){const c=$("islRing"),L=2*Math.PI*9.5;c.style.strokeDasharray=L;c.style.strokeDashoffset=L*(1-Math.max(0,Math.min(100,p))/100)}
+function setRing(p){const c=$("islRing"),L=2*Math.PI*9.5,o=String(L*(1-Math.max(0,Math.min(100,p))/100));if(!c.style.strokeDasharray)c.style.strokeDasharray=L;if(c.style.strokeDashoffset!==o)c.style.strokeDashoffset=o}
 function updateJobIsland(){
   trackIslandEvents();
   const items=islandItems();paintIsland();
@@ -2413,12 +2471,23 @@ function renderJobOverlay(){
   const overlay=$("jobOverlay");overlay.classList.toggle("open",overlayOpen);overlay.setAttribute("aria-hidden",String(!overlayOpen));
   const items=allActiveTasks();
   $("jobOverlaySummary").textContent=items.length?`${items.length} job${items.length===1?"":"s"} running`:"No jobs running";
-  $("jobOverlayList").innerHTML=items.map(j=>{
-    const p=pct(j.progress),color=stageColor(j.status);
-    const name=j.kind==="candidate"?(j.title||"Candidate"):platformLabel(j.platform);
-    const stage=j.actionLabel||stageLabel(j.status);
-    return `<div class="running-job-item" data-running-job="${esc(j.id)}" data-running-kind="${j.kind}" data-running-jobid="${esc(j.jobId)}"><div class="running-job-main">${progressRing(p,color,34,4)}<div class="running-job-info"><div class="running-job-name">${esc(name)}</div><div class="running-job-stage" style="color:${color}">${esc(stage)}</div></div></div><div class="running-job-meta"><span>${esc(j.message||"")}</span><span>${esc(String(j.id).slice(0,8))}</span></div></div>`;
-  }).join("");
+  // Keyed rows, patched in place (like the Import cards): the ring glides instead of re-mounting per poll.
+  const list=$("jobOverlayList"),keep=new Set(),key=j=>j.kind+":"+j.id;let prev=null;
+  for(const j of items){
+    const k=key(j),p=pct(j.progress),color=stageColor(j.status);keep.add(k);
+    let row=[...list.children].find(r=>r.dataset.key===k);
+    if(!row){row=document.createElement("div");row.className="running-job-item";row.dataset.key=k;
+      row.dataset.runningJob=j.id;row.dataset.runningKind=j.kind;row.dataset.runningJobid=j.jobId;
+      row.innerHTML=`<div class="running-job-main">${progressRing(p,color,34,4)}<div class="running-job-info"><div class="running-job-name"></div><div class="running-job-stage"></div></div></div><div class="running-job-meta"><span class="rj-msg"></span><span>${esc(String(j.id).slice(0,8))}</span></div>`}
+    const ring=row.querySelector(".progress-ring-bar"),c=Number(ring.getAttribute("stroke-dasharray")),off=String(+(c*(1-p/100)).toFixed(3));
+    setAttr(ring,"stroke-dashoffset",off);setText(row.querySelector(".progress-ring-pct"),p+"%");
+    const rw=row.querySelector(".progress-ring");if(rw.style.getPropertyValue("--ring-color")!==color)rw.style.setProperty("--ring-color",color);
+    setText(row.querySelector(".running-job-name"),j.kind==="candidate"?(j.title||"Candidate"):platformLabel(j.platform));
+    const st=row.querySelector(".running-job-stage");setText(st,j.actionLabel||stageLabel(j.status));if(st.dataset.color!==color){st.dataset.color=color;st.style.color=color}
+    setText(row.querySelector(".rj-msg"),j.message||"");
+    const at=prev?prev.nextElementSibling:list.firstElementChild;if(at!==row)list.insertBefore(row,at);prev=row;
+  }
+  for(const r of [...list.children])if(!keep.has(r.dataset.key))r.remove();
 }
 function openJobOverlay(){if(!allActiveTasks().length)return;overlayOpen=true;renderJobOverlay();updateJobIsland()}
 function closeJobOverlay(){overlayOpen=false;renderJobOverlay();updateJobIsland()}
@@ -2428,6 +2497,7 @@ async function refreshRunningJobs(){
     const next=Array.isArray(d)?d:(d?.jobs||d?.items||[]);
     const previousIds=new Set(runningJobs.map(j=>String(j.id)));
     runningJobs=next;
+    if(currentTab==="current")syncCurrentJobs(next); // same endpoint as loadCurrentJobs: every card stays live
     const disappeared=[...previousIds].some(id=>!runningJobs.some(j=>String(j.id)===id));
     updateJobIsland();renderJobOverlay();
     if(disappeared && currentTab==="queue") await loadQueue();
