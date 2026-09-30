@@ -1068,10 +1068,30 @@ class CancelWatch:
                 return
 
 
+# Render watchdog: an ffmpeg that stops making progress (stuck
+# decoder, NFS stall) would otherwise hold the single worker forever
+# while its heartbeat thread keeps the claim looking alive.
+RENDER_TIMEOUT_FACTOR = 10          # x the clip duration
+RENDER_TIMEOUT_MIN_SECONDS = 300
+
+
+class RenderTimeout(TimeoutError):
+    """ffmpeg exceeded its watchdog. A TimeoutError, so
+    failure_class() calls it transient and R-15 retries it."""
+
+
+def render_timeout_seconds(duration_seconds):
+    return max(
+        RENDER_TIMEOUT_MIN_SECONDS,
+        int(RENDER_TIMEOUT_FACTOR * max(0.0, float(duration_seconds or 0))),
+    )
+
+
 def run_command(
     command,
     *,
     check=True,
+    timeout=None,
 ):
 
     log(
@@ -1092,7 +1112,18 @@ def run_command(
     _set_active_process(process)
 
     try:
+        output, _ = process.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        process.kill()
         output, _ = process.communicate()
+        _set_active_process(None)
+        log(f"Watchdog: killed pid {process.pid} after {timeout}s: "
+            + " ".join(map(str, command[:3])))
+        raise RenderTimeout(
+            f"{command[0]} timed out after {timeout}s (render watchdog: "
+            f"{RENDER_TIMEOUT_FACTOR}x clip duration, min "
+            f"{RENDER_TIMEOUT_MIN_SECONDS}s); killed"
+        )
     finally:
         _set_active_process(None)
 
@@ -3672,7 +3703,10 @@ def apply_watermark_overlay(
     cap = cv2.VideoCapture(str(source_path))
     video_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH) or FINAL_WIDTH)
     video_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or FINAL_HEIGHT)
+    frames = cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0
+    fps = cap.get(cv2.CAP_PROP_FPS) or 0
     cap.release()
+    duration = frames / fps if frames and fps else 0
 
     # R-16: same geometry as native renders (Submagic's own captions
     # can't be measured, so no caption clearance here).
@@ -3725,7 +3759,8 @@ def apply_watermark_overlay(
             "-movflags",
             "+faststart",
             str(output_path),
-        ]
+        ],
+        timeout=render_timeout_seconds(duration),
     )
 
 
@@ -3997,7 +4032,8 @@ def render_vertical(
     ]
 
     run_command(
-        command
+        command,
+        timeout=render_timeout_seconds(duration),
     )
 
 

@@ -28,6 +28,7 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 018 · 2026-09-30 · R-15 heartbeat + stale-claim reclaim, transient/permanent failures with backoff, Retry for jobs and candidates · worker.py, main.py, shared/errors.py, index.html
 019 · 2026-09-30 · R-16 one watermark geometry (alpha bbox, get_watermark_rect), caption-top collision moves the watermark up, WATERMARK_WIDTH 320 · worker.py
 020 · 2026-09-30 · R-17 WATERMARK_POSITION_Y 25 % + SUBTITLE_SEAM_GAP 1.5 %, stored per job at creation (NULL = legacy) · worker.py, main.py, settings
+021 · 2026-09-30 · ffmpeg render watchdog: max(300 s, 10× clip) timeout, killed + transient → R-15 retry · worker.py
 050 · 2026-09-29 · R-12 Left sidebar (collapsible column / mobile drawer) replaces right rail; Import options in one disclosure · index.html (v2.1102)
 051 · 2026-09-29 · R-13 ui-audit.md; tabs pill docks via transform/opacity with 64/48 hysteresis (one scroll handler); job island is its own capsule with stage + % · index.html (v2.1103)
 052 · 2026-09-29 · R-11 Motion 100–200/300–500 ms, setBusy() for every async button, edit drawer progressive disclosure + sticky glass action row, reduced-motion covers JS loops, keyboard tabs · index.html (v2.1104)

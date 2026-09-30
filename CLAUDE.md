@@ -78,6 +78,8 @@ requeue with `retry_after` backoff (claims must keep the `retry_after`
 filter), permanent = `failed`. A new failure path: call
 `record_failure`, don't hand-write `status='failed'`. Manual retry:
 `POST /api/jobs/{id}/retry`, `.../candidates/{cid}/retry`.
+Renders run with a watchdog: `run_command(..., timeout=render_timeout_seconds(duration))`
+(max 300 s, 10× clip); timeout → `RenderTimeout` (transient). New ffmpeg render → pass a timeout too.
 
 ## Disk (R-14)
 
