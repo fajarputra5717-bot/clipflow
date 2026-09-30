@@ -305,10 +305,22 @@ button.primary:hover:not(:disabled){background:#0077ed!important}
 .analyze-wrap{position:relative}
 .job-auto-queue{display:flex;align-items:center;gap:7px;margin-top:10px;color:var(--muted);font-size:10.5px;font-weight:600;padding:7px 9px;border-radius:11px;background:rgba(0,113,227,.05);border:1px solid rgba(0,113,227,.10)}
 .auto-queue-dot{width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 9px rgba(0,113,227,.4)}
-.job-card.processing .auto-queue-dot{background:var(--accent);box-shadow:0 0 10px rgba(0,113,227,.5);animation:pulse 1.3s infinite}
 .job-card{position:relative;overflow:hidden}
-.job-card.processing{border-color:rgba(0,113,227,.28);box-shadow:0 10px 30px rgba(0,113,227,.08)}
-.job-card.processing:before{content:"";position:absolute;left:0;right:0;top:0;height:2px;background:linear-gradient(90deg,transparent,#0071e3,#64b5ff,transparent);background-size:220% 100%;animation:sweep 2.2s linear infinite}
+/* Job list (075): own section under the import panel. 8pt grid: 24 above, label 16 + 8, cards 16 apart. */
+#currentSection>.panel:first-child{margin-bottom:0}
+.jobs-section{margin-top:var(--sp-3)}
+.section-label{font-size:13px;line-height:16px;font-weight:500;color:var(--muted);margin:0 0 var(--sp-1) var(--sp-h)}
+.jobs-list>.panel{margin:0 0 var(--sp-2)}
+.jobs-list>.import-empty{margin-top:0}
+/* "Only what's working moves": cards are static; the running job gets one low-contrast sheen on its bar
+   and a gentle dot breathe. Queued = no motion at all. Reduced motion: neither. */
+.job-card .auto-queue-dot{background:var(--muted2);box-shadow:none}
+.job-card.is-running .auto-queue-dot{background:var(--accent);animation:dotBreathe 2s ease-in-out infinite}
+@keyframes dotBreathe{50%{opacity:.4}}
+.job-card .badge.running::after{display:none}
+.job-card.is-running .mini-bar-fill{background:linear-gradient(100deg,transparent 35%,rgba(255,255,255,.26) 50%,transparent 65%) no-repeat var(--mini-bar-color,#0071e3);background-size:250% 100%;animation:barSheen 2s linear infinite}
+@keyframes barSheen{0%{background-position:150% 0}100%{background-position:-50% 0}}
+@media (prefers-reduced-motion:reduce){.job-card .auto-queue-dot,.job-card .mini-bar-fill{animation:none!important;background-image:none!important}}
 .job-header{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
 .job-header-side{display:flex;align-items:center;gap:7px;flex:none}
 .cancel-job-btn{padding:5px 10px;font-size:11.5px;min-height:0}
@@ -326,8 +338,7 @@ button.primary:hover:not(:disabled){background:#0077ed!important}
 .mini-bar-track{flex:1;height:5px;border-radius:99px;overflow:hidden;background:rgba(0,0,0,.08)}
 .mini-bar-fill{
   height:100%;border-radius:99px;
-  background:linear-gradient(90deg,var(--mini-bar-color,#0071e3),#64b5ff,var(--mini-bar-color,#0071e3));
-  background-size:220% 100%;animation:flow 3s linear infinite;
+  background:var(--mini-bar-color,#0071e3);
   width:100%;transform-origin:left center;transition:transform 600ms var(--ease-out); /* node persists across polls: glides from the last value */
 }
 .job-foot{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-2);margin-top:8px}
@@ -909,6 +920,7 @@ img.topbar-logo-icon{background:none;padding:0;object-fit:cover}
 .toolbar{
   --p:0;position:sticky;top:0;z-index:60;height:52px;margin:0 calc(-1 * var(--sp-2));padding:0 var(--sp-2);
 }
+@media(max-width:760px){.toolbar{margin-inline:-7px;padding-inline:7px}} /* bleed = the container's 7 px side margin there, not 16 (was a 9 px horizontal scroll) */
 .toolbar-bg{position:absolute;inset:0;pointer-events:none;opacity:var(--p);
   background:var(--material);backdrop-filter:var(--material-blur);-webkit-backdrop-filter:var(--material-blur)}
 /* hairline + scroll-edge fade: content dissolves into the bar instead of meeting a hard edge */
@@ -968,6 +980,7 @@ img.topbar-logo-icon{background:none;padding:0;object-fit:cover}
 @media(max-width:600px){.isl-compact{--cw:150px;width:150px}}
 .isl-lead{width:20px;height:20px;flex:none;display:grid;place-items:center}
 .isl-lead img,.isl-x-icon img{width:20px;height:20px;border-radius:50%;object-fit:cover;display:block}
+.island.is-idle .isl-spinner{animation:none;border-top-color:rgba(255,255,255,.25)} /* queued: static empty ring */
 .isl-spinner{width:16px;height:16px;border-radius:50%;border:2px solid rgba(255,255,255,.25);border-top-color:#fff;animation:spin .9s linear infinite}
 .isl-dot{width:10px;height:10px;border-radius:50%}
 .isl-dot.ready{background:#30d158}.isl-dot.failed{background:#ff453a}
@@ -1064,10 +1077,11 @@ img.topbar-logo-icon{background:none;padding:0;object-fit:cover}
     </button>
       <h1 class="page-title" id="pageTitle">Import</h1>
       <div class="toolbar-trail">
-        <div class="version-wrap"><button class="version-badge" id="versionBadge" type="button" aria-expanded="false">Beta · v2.1115</button>
+        <div class="version-wrap"><button class="version-badge" id="versionBadge" type="button" aria-expanded="false">Beta · v2.1116</button>
         <div class="version-popover" id="versionPopover" role="dialog" aria-hidden="true">
-        <div class="version-popover-title">What's new in v2.1115</div>
+        <div class="version-popover-title">What's new in v2.1116</div>
         <ul>
+          <li>Import: active jobs get their own section; only the job that's actually working animates</li>
           <li>Import: job cards and progress bars update smoothly in place (no more flicker); job ID and link tucked under Details</li>
           <li>New jobs: watermark moves up into the gameplay, captions sit closer to the facecam (both adjustable in Settings)</li>
           <li>Watermark sized by its visible mark and kept clear of captions (it moves up instead of overlapping); captions never drop into the facecam</li>
@@ -1165,7 +1179,10 @@ img.topbar-logo-icon{background:none;padding:0;object-fit:cover}
             </div>
           </details>
           <div id="createStatus" class="status-box" role="status" hidden></div>
-          <div id="currentJobs"></div>
+        </div>
+        <div class="jobs-section" id="jobsSection">
+          <div class="section-label" id="jobsLabel" hidden>Active jobs · <span id="jobsCount">0</span></div>
+          <div id="currentJobs" class="jobs-list"></div>
         </div>
       </section>
 
@@ -1571,7 +1588,7 @@ function createJobCard(j){
 }
 function patchJobCard(el,j){
   const p=pct(j.progress),s=j.status||"processing",q=c=>el.querySelector(c),split=Number(j.split_ratio||70);
-  el.classList.toggle("processing",!TERMINAL.includes(s));
+  const bc=badgeClass(s);el.classList.toggle("is-running",bc==="running");el.classList.toggle("is-idle",bc==="idle");
   setText(q("h3"),jobDisplayTitle(j));
   const badge=q(".badge");setAttr(badge,"class","badge "+badgeClass(s));setText(badge,stageLabel(s));
   const bar=q(".mini-bar");setAttr(bar,"hidden",isDone(p,s));
@@ -1614,6 +1631,7 @@ function syncCurrentJobs(jobs){
     prev=el;
   }
   syncJobsEmpty();
+  setText($("jobsCount"),jobs.length);setAttr($("jobsLabel"),"hidden",!jobs.length);
 }
 
 function renderQueueJob(j,i=0){
@@ -2347,7 +2365,8 @@ const SPRING={grow:springEasing(260,20),settle:springEasing(300,34),pop:springEa
 const ISL={mode:"hidden",pinned:false,hover:false,event:null,eventTimer:null,failSeen:true,lastStatus:new Map(),announced:"",lead:null,morph:null};
 let jobIslandAnnounced=""; // kept for older callers
 const ISL_BUSY=s=>BUSY.includes(s)||s==="processing";
-function islandItems(){return allActiveTasks().filter(t=>t.kind==="candidate"||ISL_BUSY(t.status)||!TERMINAL.includes(t.status))}
+// Running work leads (stable sort), so the island never shows a queued job while another one is working.
+function islandItems(){const busy=t=>t.kind==="candidate"||badgeClass(t.status)==="running"?0:1;return allActiveTasks().filter(t=>t.kind==="candidate"||ISL_BUSY(t.status)||!TERMINAL.includes(t.status)).sort((a,b)=>busy(a)-busy(b))}
 function islandSize(mode){
   const narrow=window.innerWidth<=600,vw=window.innerWidth;
   if(mode==="compact")return{w:narrow?150:248,h:36,r:18};
@@ -2411,7 +2430,7 @@ function paintIsland(){
     if($("islLead").dataset.key!=="ev:"+ev.type){$("islLead").dataset.key="ev:"+ev.type;$("islLead").innerHTML=`<span class="isl-dot ${ev.type}"></span>`}if(ev.type==="ready")setRing(100);
     return;
   }
-  const lead=items[0];if(!lead)return;ISL.lead=lead;
+  const lead=items[0];if(!lead)return;ISL.lead=lead;isl.classList.toggle("is-idle",lead.kind==="job"&&badgeClass(lead.status)==="idle");
   const p=pct(lead.progress),stage=lead.actionLabel||stageLabel(lead.status),title=islandTitle(lead);
   setText($("islTitleC"),title);setText($("islTitleX"),title);setText($("islStage"),stage);setText($("islPct"),p+"%");
   const bt=`scaleX(${p/100})`;if($("islBar").style.transform!==bt)$("islBar").style.transform=bt;setRing(p);
