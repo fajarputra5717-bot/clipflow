@@ -775,6 +775,14 @@ img.topbar-logo-icon{background:none;padding:0;object-fit:cover}
 .sheet-search input:focus{background:var(--panel)}
 .settings-body{flex:1;padding-top:var(--sp-1)}
 .inset-group{margin-top:var(--sp-3)}
+.disk-meter{margin:var(--sp-2) 12px 0;display:flex;flex-direction:column;gap:6px}
+.disk-meter:empty{display:none}
+.disk-meter-row{display:flex;justify-content:space-between;align-items:baseline;font-size:13px}
+.disk-meter-row span{color:var(--muted);font-variant-numeric:tabular-nums}
+.disk-meter-bar{height:6px;border-radius:3px;background:rgba(127,127,127,.18);overflow:hidden}
+.disk-meter-bar span{display:block;height:100%;transform-origin:left;background:var(--accent)}
+.disk-meter.low .disk-meter-bar span{background:#ff3b30}
+.disk-meter.low .hint{color:#ff3b30}
 .inset-group:first-child{margin-top:var(--sp-1)}
 .inset-title{margin:0 12px 6px;font-size:13px;font-weight:600;color:var(--muted);letter-spacing:-.005em}
 .inset-list{background:var(--panel);border:1px solid var(--hairline);border-radius:12px;overflow:hidden}
@@ -1042,10 +1050,11 @@ img.topbar-logo-icon{background:none;padding:0;object-fit:cover}
     </button>
       <h1 class="page-title" id="pageTitle">Import</h1>
       <div class="toolbar-trail">
-        <div class="version-wrap"><button class="version-badge" id="versionBadge" type="button" aria-expanded="false">Beta · v2.1110</button>
+        <div class="version-wrap"><button class="version-badge" id="versionBadge" type="button" aria-expanded="false">Beta · v2.1111</button>
         <div class="version-popover" id="versionPopover" role="dialog" aria-hidden="true">
-        <div class="version-popover-title">What's new in v2.1110</div>
+        <div class="version-popover-title">What's new in v2.1111</div>
         <ul>
+          <li>Free disk space shown in Settings; new jobs are refused when the disk is nearly full, old downloads are cleaned up automatically</li>
           <li>Cancel a running job straight from the Dynamic Island</li>
           <li>Turn burned-in subtitles off per job for a clean video (your subtitle text and style are kept)</li>
           <li>Cancel a running job (stops the download, transcription or render within seconds)</li>
@@ -1177,6 +1186,7 @@ img.topbar-logo-icon{background:none;padding:0;object-fit:cover}
     <header class="sheet-head"><h2 id="settingsSheetTitle">Settings</h2><button class="sheet-close" type="button" data-sheet-close aria-label="Close settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></header>
     <div class="sheet-search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg><input type="search" id="settingsSearch" placeholder="Search settings" autocomplete="off" aria-label="Search settings" aria-controls="settingsPanel"></div>
     <div class="sheet-body settings-body">
+      <div class="disk-meter" id="diskMeter" aria-live="polite"></div>
       <div id="settingsPanel"></div>
       <div id="settingsNoMatch" class="settings-nomatch" hidden>No settings match “<span></span>”.</div>
       <p class="hint settings-hint">Secrets are masked. Leaving a masked value unchanged keeps the saved secret.</p>
@@ -2543,9 +2553,10 @@ const SETTINGS_GROUPS=[
   ["TikTok",["TIKTOK_CLIENT_KEY","TIKTOK_CLIENT_SECRET","TIKTOK_ACCESS_TOKEN"]],
   ["Instagram",["INSTAGRAM_ACCESS_TOKEN","INSTAGRAM_BUSINESS_ACCOUNT_ID"]],
   ["Submagic",["SUBMAGIC_API_KEY","SUBMAGIC_TEMPLATE","SUBMAGIC_MAGIC_ZOOMS","SUBMAGIC_MAGIC_BROLLS"]],
-  ["Publishing",["HASHTAGS","CAMPAIGN_NAME"]]
+  ["Publishing",["HASHTAGS","CAMPAIGN_NAME"]],
+  ["Storage",["DISK_SPACE_MIN_MB","RETENTION_DAYS_INTERMEDIATE","ORPHAN_SWEEP_DRY_RUN"]]
 ];
-const SETTING_LABELS={GEMINI_API_KEY:"Gemini API key",GEMINI_ANALYSIS_MODEL:"Gemini model",GEMINI_MAX_ATTEMPTS:"Gemini attempts",WHISPER_MODEL:"Whisper model",WHISPER_LANGUAGE:"Transcription language",RUNWAY_API_KEY:"Runway API key",RUNWAY_MODEL:"Runway model",
+const SETTING_LABELS={DISK_SPACE_MIN_MB:"Disk reserve (MB)",RETENTION_DAYS_INTERMEDIATE:"Keep downloads (days)",ORPHAN_SWEEP_DRY_RUN:"Orphan sweep dry run",GEMINI_API_KEY:"Gemini API key",GEMINI_ANALYSIS_MODEL:"Gemini model",GEMINI_MAX_ATTEMPTS:"Gemini attempts",WHISPER_MODEL:"Whisper model",WHISPER_LANGUAGE:"Transcription language",RUNWAY_API_KEY:"Runway API key",RUNWAY_MODEL:"Runway model",
   FACE_DETECTION_SAMPLE_COUNT:"Frames sampled",FACE_CONFIDENCE_THRESHOLD:"Confidence threshold",FACE_ZOOM_RATIO:"Facecam zoom",
   CLIP_COUNT:"Clips per video",CLIP_TARGET_DURATION:"Target length (s)",CLIP_MIN_DURATION:"Minimum length (s)",CLIP_MAX_DURATION:"Maximum length (s)",PREVIEW_WIDTH:"Preview width (px)",WATERMARK_WIDTH:"Watermark width (px)",WATERMARK_OPACITY:"Watermark opacity",
   YOUTUBE_CLIENT_ID:"Client ID",YOUTUBE_CLIENT_SECRET:"Client secret",YOUTUBE_REFRESH_TOKEN:"Refresh token",TIKTOK_CLIENT_KEY:"Client key",TIKTOK_CLIENT_SECRET:"Client secret",TIKTOK_ACCESS_TOKEN:"Access token",
@@ -2554,7 +2565,19 @@ const SETTING_LABELS={GEMINI_API_KEY:"Gemini API key",GEMINI_ANALYSIS_MODEL:"Gem
 const SETTING_SOURCE={db:"Saved",env:"From .env",default:"Default"};
 const isSecretKey=k=>/KEY|TOKEN|SECRET|PASSWORD/i.test(k);
 const EYE='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.8"/></svg>';
+async function loadDiskMeter(){
+  const el=$("diskMeter");if(!el)return;
+  try{
+    const d=await api("/api/system/disk");
+    const gb=mb=>(mb/1024).toFixed(1)+" GB",used=1-d.free_mb/Math.max(1,d.total_mb);
+    el.classList.toggle("low",!d.ok);
+    el.innerHTML=`<div class="disk-meter-row"><strong>Disk</strong><span>${gb(d.free_mb)} free of ${gb(d.total_mb)}</span></div>
+      <div class="disk-meter-bar" role="img" aria-label="${Math.round(used*100)}% used"><span style="transform:scaleX(${used.toFixed(3)})"></span></div>
+      <div class="hint">${d.ok?`New jobs are refused below the ${gb(d.min_mb)} reserve.`:`Below the ${gb(d.min_mb)} reserve: new jobs are refused until space is freed.`}</div>`;
+  }catch(e){el.textContent=""}
+}
 async function loadSettings(){
+  loadDiskMeter();
   try{
     settingsCache=await api("/api/settings");
     $("settingsPanel").innerHTML=SETTINGS_GROUPS.map(([g,keys])=>`

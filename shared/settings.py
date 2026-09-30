@@ -84,6 +84,10 @@ DEFAULT_SETTINGS = {
     "SUBMAGIC_MAGIC_ZOOMS": "true",
     "SUBMAGIC_MAGIC_BROLLS": "true",
     "ACTIVE_WATERMARK_ID": "",
+    # Disk retention + guards (R-14).
+    "RETENTION_DAYS_INTERMEDIATE": "3",
+    "ORPHAN_SWEEP_DRY_RUN": "true",
+    "DISK_SPACE_MIN_MB": "2048",
 }
 
 SECRET_SETTING_KEYS = {

@@ -4,6 +4,7 @@ import json
 import os
 import re
 import secrets
+import shutil
 import time
 import traceback
 import uuid
@@ -598,6 +599,27 @@ def media_token():
 # CREATE JOB
 # ============================================================
 
+def disk_status() -> dict:
+    usage = shutil.disk_usage(DATA_ROOT)
+    try:
+        min_mb = int(float(runtime_setting("DISK_SPACE_MIN_MB")))
+    except (TypeError, ValueError):
+        min_mb = 2048
+    free_mb = usage.free // (1024 * 1024)
+    return {
+        "free_mb": free_mb,
+        "total_mb": usage.total // (1024 * 1024),
+        "min_mb": min_mb,
+        "ok": free_mb >= min_mb,
+    }
+
+
+@app.get("/api/system/disk")
+def get_disk_status():
+    """Free space on DATA_ROOT for the Settings sheet (R-14)."""
+    return disk_status()
+
+
 @app.post("/api/jobs")
 def create_job(req: ClipRequest):
 
@@ -613,6 +635,20 @@ def create_job(req: ClipRequest):
             detail="layout must be auto, left, or right",
         )
     req.youtube_url = validate_youtube_url(req.youtube_url)
+
+    # R-14: refuse up front instead of failing deep in the pipeline.
+    # The exact per-video size check needs yt-dlp, so it runs in the
+    # worker before the download (long work stays out of handlers).
+    disk = disk_status()
+    if not disk["ok"]:
+        raise HTTPException(
+            status_code=507,
+            detail=(
+                f"Not enough disk space to start a job: {disk['free_mb']} MB "
+                f"free, the reserve is {disk['min_mb']} MB "
+                "(DISK_SPACE_MIN_MB). Delete old jobs or free space."
+            ),
+        )
 
     # DEFAULT_SUBTITLE_* settings apply only to fields the client
     # didn't send (the Import form omits them on purpose).
@@ -3627,9 +3663,21 @@ def delete_job(job_id: str):
                 # ON DELETE CASCADE. source_videos is intentionally
                 # left untouched: youtube_url is unique on that
                 # table, so a source video is likely shared/reused
-                # across jobs, and it's also referenced separately
-                # by the transcripts table.
+                # across jobs. (There is no transcripts table on the
+                # rebuilt schema.) Its download/audio/normalized files
+                # are left to the worker's retention/orphan sweeps (R-14).
+                # candidate_versions has no FK cascade: delete explicitly.
                 # ------------------------------------------------
+
+                cur.execute(
+                    """
+                    DELETE FROM candidate_versions
+                    WHERE candidate_id IN (
+                        SELECT id FROM clip_candidates WHERE job_id = %s
+                    )
+                    """,
+                    (job_id,),
+                )
 
                 cur.execute(
                     """

@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 import random
 import re
 import statistics
@@ -436,6 +437,248 @@ def update_candidate(
 # ============================================================
 
 # ============================================================
+# DISK GUARDS + RETENTION (R-14)
+# ============================================================
+# The old VM's disk hit 100% and corrupted a Postgres recovery.
+# ensure_disk_space() refuses work that would eat into the
+# DISK_SPACE_MIN_MB reserve (before download, normalize and every
+# render); the idle-time sweeps delete intermediates of finished jobs
+# and (opt-in) orphan files. Finals and thumbnails are never swept.
+
+SWEEP_INTERVAL_SECONDS = 30 * 60
+ORPHAN_MIN_AGE_SECONDS = 60 * 60
+TERMINAL_STATUSES = ("completed", "failed", "cancelled")
+SUBMAGIC_BUSY = (
+    "queued_upload", "uploading", "transcribing", "queued_export",
+    "exporting", "queued_apply", "applying",
+)
+
+_last_sweep = 0.0
+
+
+class DiskSpaceError(RuntimeError):
+    pass
+
+
+def disk_free_mb():
+    return shutil.disk_usage(DATA_ROOT).free // (1024 * 1024)
+
+
+def ensure_disk_space(stage, need_mb=0):
+    free = disk_free_mb()
+    reserve = setting_int("DISK_SPACE_MIN_MB")
+    if free - need_mb < reserve:
+        raise DiskSpaceError(
+            f"Not enough disk space for {stage}: {free} MB free, needs "
+            f"{int(need_mb)} MB plus the {reserve} MB reserve "
+            "(DISK_SPACE_MIN_MB). Free space or delete old jobs."
+        )
+
+
+def estimate_download_mb(youtube_url):
+    """Size of the formats download_video() will fetch, from
+    `yt-dlp -j` (filesize or filesize_approx). None if unknown."""
+    try:
+        _, output = run_command(
+            [
+                "yt-dlp", "-j", "--no-playlist", "--no-warnings",
+                "-f", YTDLP_FORMAT, "--", youtube_url,
+            ]
+        )
+        info = json.loads(output.strip().splitlines()[-1])
+    except JobCancelled:
+        raise
+    except Exception as exc:
+        log(f"Download size pre-flight skipped: {str(exc)[-200:]}")
+        return None
+    formats = info.get("requested_formats") or [info]
+    sizes = [
+        f.get("filesize") or f.get("filesize_approx") for f in formats
+    ]
+    if not all(sizes):
+        return None
+    return sum(sizes) / (1024 * 1024)
+
+
+def _unlink_all(paths):
+    freed = 0
+    removed = []
+    for path in paths:
+        try:
+            size = path.stat().st_size
+            path.unlink()
+        except FileNotFoundError:
+            continue
+        freed += size
+        removed.append(path.name)
+    return freed, removed
+
+
+def retention_sweep():
+    """Delete intermediates (download, normalized copy, audio, Submagic
+    clean plates) per SOURCE VIDEO, only when every job using it is
+    terminal, every candidate of those jobs is terminal and not busy at
+    Submagic, and nothing changed for RETENTION_DAYS_INTERMEDIATE days.
+    source_videos is shared across jobs (unique youtube_url), so a
+    per-job check would delete a file another job still renders from."""
+    days = setting_int("RETENTION_DAYS_INTERMEDIATE")
+    with db() as conn:
+        rows = conn.execute(
+            """
+            SELECT sv.id, sv.source_path,
+                   array_agg(DISTINCT j.id::text) AS job_ids,
+                   array_remove(array_agg(DISTINCT c.id::text), NULL)
+                       AS candidate_ids
+            FROM source_videos sv
+            JOIN jobs j ON j.source_video_id = sv.id
+            LEFT JOIN clip_candidates c ON c.job_id = j.id
+            WHERE sv.status IS DISTINCT FROM 'purged'
+            GROUP BY sv.id, sv.source_path
+            HAVING bool_and(j.status = ANY(%(terminal)s))
+               AND bool_and(c.id IS NULL OR c.status = ANY(%(terminal)s))
+               AND bool_and(c.id IS NULL
+                   OR c.submagic_status IS NULL
+                   OR NOT c.submagic_status = ANY(%(submagic_busy)s))
+               AND max(GREATEST(j.updated_at,
+                                COALESCE(c.updated_at, j.updated_at)))
+                   < NOW() - make_interval(days => %(days)s)
+            """,
+            {
+                "terminal": list(TERMINAL_STATUSES),
+                "submagic_busy": list(SUBMAGIC_BUSY),
+                "days": days,
+            },
+        ).fetchall()
+
+    total = 0
+    for row in rows:
+        paths = []
+        if row["source_path"]:
+            paths.append(Path(row["source_path"]))
+        for job_id in row["job_ids"]:
+            paths += list(DOWNLOAD_DIR.glob(f"{job_id}.*"))
+            paths += list(AUDIO_DIR.glob(f"{job_id}.*"))
+            paths.append(NORMALIZED_DIR / f"{job_id}_h264.mp4")
+        for candidate_id in row["candidate_ids"]:
+            paths.append(clean_plate_path(candidate_id))
+        freed, removed = _unlink_all(paths)
+        with db() as conn:
+            conn.execute(
+                """
+                UPDATE source_videos
+                SET source_path = NULL, status = 'purged',
+                    updated_at = NOW()
+                WHERE id = %s
+                """,
+                (row["id"],),
+            )
+            conn.commit()
+        total += freed
+        log(
+            f"Retention: source {row['id']} ({len(row['job_ids'])} job(s)) "
+            f"purged {len(removed)} file(s), {freed / 2**20:.1f} MB"
+        )
+    if rows:
+        log(f"Retention: freed {total / 2**20:.1f} MB (>{days} d old)")
+
+
+def _referenced_on_disk():
+    """(ids, paths) the DB still points at. A file is kept if its name
+    contains a known job/candidate id or its path is referenced."""
+    ids, paths = set(), set()
+    with db() as conn:
+        for row in conn.execute("SELECT id::text AS id FROM jobs"):
+            ids.add(row["id"])
+        for row in conn.execute(
+            """
+            SELECT id::text AS id, preview_path, render_path, final_path,
+                   thumbnail_path, thumbnail_options
+            FROM clip_candidates
+            """
+        ):
+            ids.add(row["id"])
+            for key in ("preview_path", "render_path", "final_path",
+                        "thumbnail_path"):
+                if row[key]:
+                    paths.add(str(row[key]))
+            for option in row["thumbnail_options"] or []:
+                paths.add(str(option))
+        for row in conn.execute(
+            "SELECT source_path FROM source_videos WHERE source_path IS NOT NULL"
+        ):
+            paths.add(row["source_path"])
+        for row in conn.execute(
+            "SELECT output_path FROM rendered_clips WHERE output_path IS NOT NULL"
+        ):
+            paths.add(row["output_path"])
+        for row in conn.execute("SELECT path FROM watermark_assets"):
+            paths.add(row["path"])
+    # Stored paths are absolute (baseline) or DATA_ROOT-relative (uploads).
+    resolved = set()
+    for p in paths:
+        path = Path(p)
+        resolved.add(str(path if path.is_absolute() else DATA_ROOT / path))
+    return ids, resolved
+
+
+def orphan_sweep():
+    """Files under the media dirs that nothing in the DB points at
+    (crashed renders, rows deleted by hand, delete_job leftovers).
+    ORPHAN_SWEEP_DRY_RUN=true (default) only logs what it would delete."""
+    dry_run = str(setting("ORPHAN_SWEEP_DRY_RUN")).strip().lower() not in (
+        "false", "0", "no", "off",
+    )
+    ids, referenced = _referenced_on_disk()
+    now = time.time()
+    orphans = []
+    for directory in (DOWNLOAD_DIR, AUDIO_DIR, NORMALIZED_DIR, PREVIEW_DIR,
+                      FINAL_DIR, SUBTITLE_DIR, THUMBNAIL_DIR,
+                      DATA_ROOT / "watermarks"):
+        if not directory.exists():
+            continue
+        for path in directory.rglob("*"):
+            if not path.is_file():
+                continue
+            if now - path.stat().st_mtime < ORPHAN_MIN_AGE_SECONDS:
+                continue  # may be mid-render
+            if str(path) in referenced:
+                continue
+            if any(token in path.name for token in ids):
+                continue
+            orphans.append(path)
+    if not orphans:
+        return
+    size = sum(p.stat().st_size for p in orphans) / 2**20
+    sample = ", ".join(str(p.relative_to(DATA_ROOT)) for p in orphans[:10])
+    if dry_run:
+        log(
+            f"Orphan sweep (DRY RUN, set ORPHAN_SWEEP_DRY_RUN=false to "
+            f"delete): would delete {len(orphans)} file(s), {size:.1f} MB: "
+            f"{sample}{' …' if len(orphans) > 10 else ''}"
+        )
+        return
+    freed, removed = _unlink_all(orphans)
+    log(
+        f"Orphan sweep: deleted {len(removed)} file(s), "
+        f"{freed / 2**20:.1f} MB: {sample}"
+    )
+
+
+def maybe_run_sweeps(force=False):
+    """Idle-time housekeeping, at most every SWEEP_INTERVAL_SECONDS."""
+    global _last_sweep
+    if not force and time.monotonic() - _last_sweep < SWEEP_INTERVAL_SECONDS:
+        return
+    _last_sweep = time.monotonic()
+    for sweep in (retention_sweep, orphan_sweep):
+        try:
+            sweep()
+        except Exception as exc:
+            log(f"{sweep.__name__} failed: {exc}")
+    log(f"Disk: {disk_free_mb()} MB free on {DATA_ROOT}")
+
+
+# ============================================================
 # CANCELLATION (R-08)
 # ============================================================
 # The worker is single-threaded, so a cancel can't interrupt it from
@@ -681,6 +924,12 @@ def normalize_video(
 
         return normalized_path
 
+    # R-14: the H.264 copy is about the size of the source.
+    ensure_disk_space(
+        "normalization",
+        need_mb=Path(video_path).stat().st_size / (1024 * 1024),
+    )
+
     log(
         "AV1 source detected."
     )
@@ -839,6 +1088,14 @@ def download_video(
             )
 
             return path
+
+    # R-14: refuse before downloading rather than filling the disk
+    # half-way. yt-dlp keeps the video and audio parts until the merge,
+    # so the peak is about twice the final size.
+    size_mb = estimate_download_mb(youtube_url)
+    if size_mb is not None:
+        log(f"Download pre-flight: ~{size_mb:.0f} MB")
+    ensure_disk_space("download", need_mb=2 * (size_mb or 0))
 
     template = str(
         DOWNLOAD_DIR
@@ -3081,6 +3338,8 @@ def apply_watermark_overlay(
     after the Submagic download, R-05): same centered geometry as
     render_vertical(), audio copied."""
 
+    ensure_disk_space("watermark overlay")
+
     watermark = resolve_watermark_path()
 
     if not watermark.exists():
@@ -3157,6 +3416,8 @@ def render_vertical(
     watermark and burned-in subtitles. subtitle_path=None skips the
     subtitles (R-06 clean plate, R-09 burn-in off); watermark=False
     skips the overlay and its input (R-06 clean plate)."""
+
+    ensure_disk_space("render")
 
     if preview:
 
@@ -5152,6 +5413,13 @@ def _process_candidate_task(
 
     try:
 
+        if not task.get("source_path"):
+            raise RuntimeError(
+                "The source video was removed by disk retention "
+                "(RETENTION_DAYS_INTERMEDIATE) after this job finished; "
+                "re-import the video to edit or re-render it."
+            )
+
         video_path = Path(
             task["source_path"]
         )
@@ -5774,6 +6042,9 @@ def main():
                 )
 
                 continue
+
+            # Nothing queued: housekeeping (R-14), then idle.
+            maybe_run_sweeps()
 
             time.sleep(
                 2

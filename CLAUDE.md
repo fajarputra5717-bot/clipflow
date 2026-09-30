@@ -68,6 +68,17 @@ thumbnails, an optional Submagic pass, and a watermark asset library.
   `completed` → `queued_apply`→`applying`→`applied`. Never touches
   `status`/`final_path` until the explicit `use-as-final` step.
 
+## Disk (R-14)
+
+Reserve `DISK_SPACE_MIN_MB`: `ensure_disk_space(stage, need_mb)` before
+download/normalize/every render (new heavy step → call it too);
+`POST /api/jobs` answers 507 below it. Idle sweeps in `main()`:
+retention deletes intermediates **per source video** (all jobs +
+candidates terminal, older than `RETENTION_DAYS_INTERMEDIATE`), marks
+it `purged`; orphan sweep is dry-run unless `ORPHAN_SWEEP_DRY_RUN=false`.
+Never sweep finals/thumbnails. New file kinds: name them with the job or
+candidate id (or store the path in the DB) or the orphan sweep flags them.
+
 ## Cancellation (R-08)
 
 `POST /api/jobs/{id}/cancel` sets `cancelled`; the worker's
