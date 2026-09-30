@@ -15,6 +15,7 @@
 })();
 </script>
 <title>ClipFlow — Video Clipper</title>
+<link rel="icon" href="clipflow-mark.svg" type="image/svg+xml">
 <style>
 /* Caption display fonts (R-19): worker/fonts mounted read-only at /fonts/ by nginx. */
 @font-face{font-family:"CF Montserrat";src:url("/fonts/montserrat/Montserrat%5Bwght%5D.ttf") format("truetype");font-weight:100 900;font-display:swap}
@@ -26,6 +27,7 @@
 @font-face{font-family:"CF Bebas Neue";src:url("/fonts/bebas-neue/BebasNeue-Regular.ttf") format("truetype");font-display:swap}
 @font-face{font-family:"CF Archivo Black";src:url("/fonts/archivo-black/ArchivoBlack-Regular.ttf") format("truetype");font-display:swap}
 *{box-sizing:border-box}
+[hidden]{display:none!important} /* author display rules must never un-hide [hidden] (070) */
  :root{
   --bg:#f5f5f7;--panel:#ffffff;--panel2:#fbfbfd;--input:#ffffff;
   --line:rgba(0,0,0,.08);--line2:rgba(0,0,0,.13);--text:#1d1d1f;--muted:#6e6e73;
@@ -35,7 +37,27 @@
      app — this is what makes the interface feel like it's all part of
      the same smooth, considered motion system instead of many
      independently-tuned animations. */
-  --ease:cubic-bezier(.22,1,.36,1);
+  --ease:var(--ease-out);
+  /* Motion & detail system (067). Curves: --ease-out is the iOS sheet
+     curve (fast start, long soft settle); --ease-spring overshoots
+     slightly for "pop" moments; --ease-in-out for symmetric moves.
+     Durations: 120 micro (press/hover) · 200 small (toggles, chips) ·
+     320 medium (panels, sheets) · 450 large (page-level). */
+  --ease-out:cubic-bezier(.32,.72,0,1);
+  --ease-spring:cubic-bezier(.34,1.4,.64,1);
+  --ease-in-out:cubic-bezier(.65,0,.35,1);
+  --dur-1:120ms;--dur-2:200ms;--dur-3:320ms;--dur-4:450ms;
+  --press:.97;
+  /* 8pt grid (4pt half-step for tight insets) */
+  --sp-h:4px;--sp-1:8px;--sp-2:16px;--sp-3:24px;--sp-4:32px;--sp-5:40px;
+  --hit:44px;
+  --font-text:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI Variable Text","Segoe UI",system-ui,Roboto,"Helvetica Neue",Arial,sans-serif;
+  --font-display:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI Variable Display","Segoe UI",system-ui,Roboto,"Helvetica Neue",Arial,sans-serif;
+  --ring:0 0 0 4px rgba(0,113,227,.28);
+  /* Materials (vibrancy): translucent fill + backdrop blur/saturate */
+  --material-thin:rgba(255,255,255,.6);--material:rgba(255,255,255,.74);--material-thick:rgba(255,255,255,.88);
+  --material-blur:saturate(180%) blur(24px);
+  --hairline:rgba(0,0,0,.1);
   /* Status badges: tinted fill + matching text. Each fg/bg pair is
      measured >= 4.5:1 (WCAG AA, 9.5px text) on --panel incl. the
      running shimmer peak; re-measure if you change one (052/061). */
@@ -53,6 +75,9 @@ html[data-theme="dark"]{color-scheme:dark}
   --line:rgba(255,255,255,.11);--line2:rgba(255,255,255,.17);--text:#f5f5f7;--muted:#98989d;
   --muted2:#8e8e93;--accent:#0a84ff;--accent2:#409cff;--lux:#0a84ff;--lux2:#409cff;
   --good:#30d158;--bad:#ff453a;--warn:#ff9f0a;
+  --ring:0 0 0 4px rgba(10,132,255,.4);
+  --material-thin:rgba(28,28,30,.55);--material:rgba(28,28,30,.72);--material-thick:rgba(28,28,30,.88);
+  --hairline:rgba(255,255,255,.12);
   --badge-idle-fg:#c7c7cc;--badge-idle-bg:rgba(142,142,147,.18);--badge-idle-line:rgba(142,142,147,.3);
   --badge-run-fg:#6cb2ff;--badge-run-bg:rgba(10,132,255,.17);--badge-run-line:rgba(10,132,255,.36);
   --badge-warn-fg:#ffb340;--badge-warn-bg:rgba(255,159,10,.15);--badge-warn-line:rgba(255,159,10,.32);
@@ -77,10 +102,6 @@ html[data-theme="dark"]{color-scheme:dark}
 [data-theme="dark"] .tabs:before{box-shadow:0 10px 30px rgba(0,0,0,.35)}
 [data-theme="dark"] .tabs:after{box-shadow:0 12px 28px rgba(0,0,0,.5),0 2px 6px rgba(0,0,0,.3)}
 [data-theme="dark"] .tab-indicator{background:#3a3a3c;box-shadow:0 1px 4px rgba(0,0,0,.3),0 0 0 1px rgba(255,255,255,.06)}
-[data-theme="dark"] .job-island{background:rgba(28,28,30,.84);border-color:rgba(10,132,255,.35)!important;box-shadow:0 12px 30px rgba(0,0,0,.4),0 4px 14px rgba(10,132,255,.14),inset 0 1px 0 rgba(255,255,255,.08)}
-[data-theme="dark"] .job-island.is-visible:hover:not(:disabled){background:rgba(28,28,30,.84)}
-[data-theme="dark"] .job-island-pct,[data-theme="dark"] .job-island-more{color:#409cff}
-[data-theme="dark"] .job-island-track{background:#3a3a3c}
 [data-theme="dark"] .topbar-logo,[data-theme="dark"] .theme-toggle-float{background:rgba(28,28,30,.78);border-color:rgba(255,255,255,.1);box-shadow:0 10px 26px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.08)}
 [data-theme="dark"] .topbar-logo:hover,[data-theme="dark"] .topbar-logo:focus-visible,[data-theme="dark"] .topbar-logo.expanded{box-shadow:0 14px 30px rgba(0,0,0,.45),0 0 0 1px rgba(10,132,255,.12),inset 0 1px 0 rgba(255,255,255,.08)}
 [data-theme="dark"] input,[data-theme="dark"] select,[data-theme="dark"] textarea{background:var(--input);border-color:rgba(255,255,255,.14);color:var(--text)}
@@ -118,21 +139,21 @@ html[data-theme="dark"]{color-scheme:dark}
 html{background:var(--bg);scroll-behavior:smooth}
 body{
   margin:0;min-height:100vh;color:var(--text);
-  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text","Helvetica Neue","Segoe UI",Roboto,Arial,sans-serif;
+  font-family:var(--font-text);
   background:var(--bg);
   letter-spacing:-.001em;
   -webkit-font-smoothing:antialiased;
 }
 button,input,select,textarea{font:inherit}
 button{
-  border:1px solid rgba(0,0,0,.08);border-radius:980px;min-height:38px;
+  border:1px solid rgba(0,0,0,.08);border-radius:980px;min-height:var(--hit);
   padding:9px 16px;color:#fff;background:var(--accent);
   font-size:12px;font-weight:600;letter-spacing:-.005em;cursor:pointer;
   box-shadow:0 1px 2px rgba(0,0,0,.06);
-  transition:transform .18s var(--ease),box-shadow .18s var(--ease),filter .18s var(--ease),opacity .18s var(--ease),background .18s var(--ease);
+  transition:transform var(--dur-2) var(--ease),box-shadow var(--dur-2) var(--ease),filter var(--dur-2) var(--ease),opacity var(--dur-2) var(--ease),background var(--dur-2) var(--ease);
 }
-button:hover:not(:disabled){transform:translateY(-1px);filter:brightness(1.06);box-shadow:0 6px 16px rgba(0,113,227,.22)}
-button:active:not(:disabled){transform:scale(.98);transition-duration:.15s}
+button:hover:not(:disabled){filter:brightness(1.06);box-shadow:0 6px 16px rgba(0,113,227,.22)}
+button:active:not(:disabled){transform:scale(var(--press));transition-duration:var(--dur-1)}
 button.secondary{background:#fff;border-color:#d2d2d7;color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,.04)}
 button.secondary:hover:not(:disabled){background:#f5f5f7;box-shadow:0 4px 12px rgba(0,0,0,.08)}
 button.danger{background:#ff3b30;border-color:#ff3b30}
@@ -147,11 +168,11 @@ label[aria-disabled="true"]{pointer-events:none}
   animation:spin .7s linear infinite;
 }
 @keyframes spin{to{transform:rotate(360deg)}}
-button:focus-visible,[role="button"]:focus-visible,summary:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button:focus-visible,[role="button"]:focus-visible,[role="tab"]:focus-visible,summary:focus-visible,a:focus-visible,label:focus-within:has(> input[type=file]){outline:2px solid var(--accent);outline-offset:2px;box-shadow:var(--ring)}
 button:disabled{opacity:.4;cursor:not-allowed;transform:none!important;filter:none!important;box-shadow:none}
 a{color:inherit}
-.container{width:min(1420px,calc(100% - 28px));margin:18px auto 50px}
-.brand{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.container{width:min(1420px,calc(100% - var(--sp-4)));margin:var(--sp-2) auto var(--sp-5)}
+.brand{display:flex;align-items:center;gap:12px;margin-bottom:var(--sp-2)}
 .brand > div{position:relative}
 .logo{
   width:44px;height:44px;border-radius:14px;display:grid;place-items:center;font-weight:700;font-size:20px;color:#fff;
@@ -160,180 +181,28 @@ a{color:inherit}
 .brand h1{margin:0;font-size:21px;font-weight:600;letter-spacing:-.021em;display:flex;align-items:center;gap:9px}.brand p{margin:3px 0 0;color:var(--muted);font-size:12px;letter-spacing:-.005em}
 .version-badge{
   font-size:9.5px;font-weight:700;letter-spacing:.02em;color:#0071e3;
-  padding:4px 9px;border-radius:999px;white-space:nowrap;min-height:0;
+  padding:4px 9px;border-radius:999px;white-space:nowrap;min-height:0;position:relative;
   background:rgba(0,113,227,.08);
   border:1px solid rgba(0,113,227,.22);box-shadow:none;
-  cursor:pointer;transition:background .32s var(--ease),transform .32s var(--ease),box-shadow .32s var(--ease);
+  cursor:pointer;transition:background var(--dur-3) var(--ease),transform var(--dur-3) var(--ease),box-shadow var(--dur-3) var(--ease);
 }
-.version-badge:hover{background:rgba(0,113,227,.14);transform:translateY(-1px);filter:none;box-shadow:0 4px 12px rgba(0,113,227,.14)}
-.version-badge:active{transform:translateY(0) scale(.96);transition-duration:.15s}
+.version-badge::after{content:"";position:absolute;inset:-12px -6px}
+.version-badge:hover{background:rgba(0,113,227,.14);filter:none;box-shadow:0 4px 12px rgba(0,113,227,.14)}
+.version-badge:active{transform:scale(var(--press));transition-duration:var(--dur-1)}
 .version-popover{
   position:absolute;top:calc(100% + 8px);left:0;z-index:60;min-width:230px;max-width:280px;
   padding:12px 14px;border-radius:15px;
   background:rgba(255,255,255,.86);
-  backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);
+  backdrop-filter:var(--material-blur);-webkit-backdrop-filter:var(--material-blur);
   border:1px solid rgba(0,0,0,.08);box-shadow:0 20px 50px rgba(0,0,0,.16),inset 0 1px 0 rgba(255,255,255,.5);
   opacity:0;visibility:hidden;transform:translateY(-6px) scale(.96);transform-origin:top left;
-  transition:opacity .38s var(--ease),transform .38s var(--ease),visibility 0s linear .38s;
+  transition:opacity var(--dur-3) var(--ease),transform var(--dur-3) var(--ease),visibility 0s linear var(--dur-3);
 }
 .version-popover.open{opacity:1;visibility:visible;transform:translateY(0) scale(1);transition-delay:0s}
 .version-popover-title{font-size:11.5px;font-weight:700;color:var(--text);margin-bottom:8px}
 .version-popover ul{margin:0;padding-left:16px;display:flex;flex-direction:column;gap:5px}
 .version-popover li{font-size:11px;color:var(--muted);line-height:1.4}
-/* Tabs pill + job island (R-13). Two independent capsules in one sticky
-   row; neither ever changes its layout size.
-   - Tabs: constant size (equal-width grid columns, so the indicator only
-     translates). Docking on scroll = transform:scale on the whole pill
-     plus an opacity cross-fade between two shadow layers (::before bar,
-     ::after docked). No width/padding/radius/gap ever transitions, so
-     nothing relayouts and the children never reflow mid-morph.
-   - One scroll handler (initTopbarDock) owns .condensed, with
-     hysteresis (dock > 64px, undock < 48px). Dock is a touch slower than
-     undock (asymmetric). will-change is set only while moving.
-   - Job island: separate capsule, absolutely positioned at the row's
-     leading edge (never shifts the tabs), fixed width capped so it
-     cannot reach the centered tabs; below the tabs when the row is
-     narrow (container query). Enter/exit = opacity + transform. */
-.topbar{
-  position:sticky;top:10px;z-index:50;margin:0 0 14px;
-  display:flex;align-items:center;justify-content:center;min-height:48px;
-  container:topbar/inline-size;
-}
-.tabs{
-  --dock-scale:1;
-  position:relative;display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:4px;flex:0 0 auto;
-  padding:5px;border-radius:999px;
-  border:1px solid rgba(0,0,0,.08);
-  background:rgba(255,255,255,.72);
-  backdrop-filter:blur(28px) saturate(190%);-webkit-backdrop-filter:blur(28px) saturate(190%);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.9);
-  transform:scale(var(--dock-scale));transform-origin:50% 0;
-  transition:transform .32s cubic-bezier(.2,.9,.3,1.06);
-}
-.tabs.is-moving{will-change:transform}
-.tabs:before,.tabs:after{
-  content:"";position:absolute;inset:-1px;border-radius:inherit;pointer-events:none;z-index:-1;
-}
-.tabs:before{box-shadow:0 10px 30px rgba(0,0,0,.08);opacity:1;transition:opacity .32s ease-out}
-.tabs:after{box-shadow:0 12px 28px rgba(0,0,0,.16),0 2px 6px rgba(0,0,0,.06);opacity:0;transition:opacity .32s ease-out}
-.topbar.condensed .tabs{--dock-scale:.88;transition-duration:.42s;transition-timing-function:cubic-bezier(.22,1,.36,1)}
-.topbar.condensed .tabs:before{opacity:0;transition-duration:.42s}
-.topbar.condensed .tabs:after{opacity:1;transition-duration:.42s}
-.tab-indicator{
-  position:absolute;top:5px;left:0;height:calc(100% - 10px);width:0;
-  border-radius:999px;background:#fff;
-  box-shadow:0 1px 4px rgba(0,0,0,.12),0 0 0 1px rgba(0,0,0,.04);
-  transform:translateX(0);
-  transition:transform .3s cubic-bezier(.22,1,.36,1);
-  pointer-events:none;z-index:0;
-}
-.tab{
-  position:relative;z-index:1;padding:10px 16px;border-radius:999px;color:var(--muted);font-size:12px;font-weight:600;
-  text-align:center;white-space:nowrap;cursor:pointer;transition:color .15s ease;
-}
-.tab:hover{color:var(--text)}.tab.active{color:var(--text)}
-.tab:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-
-.job-island{
-  position:absolute;left:0;top:50%;
-  width:min(240px,calc(50cqi - var(--tabs-half,100px) - 16px));min-width:0;min-height:44px;
-  padding:7px 12px 7px 10px;border-radius:999px;
-  display:flex;align-items:center;gap:9px;text-align:left;cursor:pointer;overflow:hidden;white-space:nowrap;
-  color:var(--text);
-  background:rgba(255,255,255,.84);
-  backdrop-filter:blur(28px) saturate(190%);-webkit-backdrop-filter:blur(28px) saturate(190%);
-  border:1px solid rgba(0,113,227,.28)!important;
-  box-shadow:0 12px 30px rgba(0,0,0,.10),0 4px 14px rgba(0,113,227,.10),inset 0 1px 0 rgba(255,255,255,.9);
-  opacity:0;visibility:hidden;pointer-events:none;
-  transform:translate(-8px,-50%) scale(.92);transform-origin:left center;
-  transition:opacity .2s ease-in,transform .24s cubic-bezier(.4,0,1,1),visibility 0s linear .24s;
-}
-.job-island.is-visible{
-  opacity:1;visibility:visible;pointer-events:auto;
-  transform:translate(0,-50%) scale(1);
-  transition:opacity .3s ease-out,transform .42s cubic-bezier(.2,.9,.3,1.12),visibility 0s linear 0s;
-}
-.job-island.is-visible:hover:not(:disabled){transform:translate(0,-50%) scale(1.02);filter:none;box-shadow:0 14px 34px rgba(0,0,0,.12),0 4px 14px rgba(0,113,227,.14),inset 0 1px 0 rgba(255,255,255,.9)}
-.job-island.is-visible:active:not(:disabled){transform:translate(0,-50%) scale(.98)}
-.job-island:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.job-island-live{width:7px;height:7px;flex:0 0 7px;border-radius:50%;background:#0071e3;box-shadow:0 0 0 4px rgba(0,113,227,.12);animation:pulse 2.2s cubic-bezier(.45,0,.55,1) infinite}
-.job-island-main{display:flex;flex-direction:column;gap:4px;min-width:0;flex:1;line-height:1.15}
-.job-island-top{display:flex;align-items:baseline;gap:6px;min-width:0}
-.job-island-title{font-size:11px;font-weight:700;letter-spacing:-.005em;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1}
-.job-island-pct{font-size:10px;color:#0071e3;font-weight:700;font-variant-numeric:tabular-nums;flex:none}
-.job-island-sub{display:flex;align-items:center;gap:6px;min-width:0}
-.job-island-stage{font-size:9.5px;color:var(--muted);font-weight:600;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1}
-.job-island-more{font-size:9px;font-weight:700;color:#0071e3;background:rgba(0,113,227,.1);border-radius:99px;padding:1px 6px;flex:none}
-.job-island-more:empty{display:none}
-.job-island-track{display:block;height:3px;border-radius:99px;overflow:hidden;background:#e5e5ea}
-.job-island-bar{
-  display:block;height:100%;width:100%;border-radius:99px;transform:scaleX(0);transform-origin:left center;
-  background:linear-gradient(90deg,#0071e3,#2997ff,#64b5ff,#2997ff,#0071e3);background-size:200% 100%;
-  transition:transform .4s cubic-bezier(.22,1,.36,1);animation:flow 3.2s linear infinite;
-}
-@container topbar (max-width:600px){
-  .job-island{
-    left:50%;top:calc(100% + 6px);width:min(280px,calc(100cqi - 16px));
-    transform:translate(-50%,-6px) scale(.94);transform-origin:center top;
-  }
-  .job-island.is-visible{transform:translate(-50%,0) scale(1)}
-  .job-island.is-visible:hover:not(:disabled){transform:translate(-50%,0) scale(1.02)}
-  .job-island.is-visible:active:not(:disabled){transform:translate(-50%,0) scale(.98)}
-}
 .sr-only{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
-
-/* Floating brand chip: hidden while the real header + logo are on
-   screen. Once the header scrolls away (the same moment the topbar
-   condenses into its small pill) a mini "R" logo fades in, pinned to
-   the right edge of the sticky bar — a stand-in for the logo you can
-   no longer see above. It stays in a tiny idle/collapsed state until
-   the pointer rests on it or it's tapped, then eases open to reveal
-   the brand name; tapping it scrolls back up to the real header,
-   which makes the chip fade out again on its own (initTopbarDock owns
-   .condensed). */
-.topbar-logo{
-  position:absolute;right:2px;top:50%;
-  display:flex;align-items:center;gap:0;
-  padding:6px;border-radius:999px;cursor:pointer;overflow:hidden;white-space:nowrap;
-  max-width:34px;
-  background:rgba(255,255,255,.78);
-  border:1px solid rgba(0,0,0,.08);
-  backdrop-filter:blur(28px) saturate(190%);-webkit-backdrop-filter:blur(28px) saturate(190%);
-  box-shadow:0 10px 26px rgba(0,0,0,.10),inset 0 1px 0 rgba(255,255,255,.9);
-  opacity:0;visibility:hidden;pointer-events:none;
-  transform:translateY(-50%) scale(.75);
-  transition:
-    opacity .4s ease,
-    transform .5s var(--ease),
-    visibility 0s linear .4s,
-    max-width .4s var(--ease),
-    padding .4s var(--ease),
-    gap .4s var(--ease),
-    box-shadow .3s ease,border-color .3s ease;
-}
-.topbar.condensed .topbar-logo{
-  opacity:1;visibility:visible;pointer-events:auto;
-  transform:translateY(-50%) scale(1);
-  transition-delay:0s;
-}
-.topbar-logo:hover,.topbar-logo:focus-visible,.topbar-logo.expanded{
-  max-width:150px;padding:6px 14px 6px 6px;gap:8px;
-  border-color:rgba(0,113,227,.3);
-  box-shadow:0 14px 30px rgba(0,0,0,.12),0 0 0 1px rgba(0,113,227,.06),inset 0 1px 0 rgba(255,255,255,.9);
-}
-.topbar-logo:active{transform:translateY(-50%) scale(.94);transition-duration:.15s}.topbar-logo-icon{
-  width:22px;height:22px;flex:0 0 22px;border-radius:8px;display:grid;place-items:center;
-  font-weight:700;font-size:11px;color:#fff;
-  background:linear-gradient(145deg,#0071e3,#42a1ff);box-shadow:inset 0 1px 0 rgba(255,255,255,.3);
-}
-.topbar-logo-text{
-  font-size:10.5px;font-weight:600;letter-spacing:-.005em;color:var(--text);
-  opacity:0;max-width:0;overflow:hidden;
-  transition:opacity .3s ease .05s,max-width .4s var(--ease);
-}
-.topbar-logo:hover .topbar-logo-text,.topbar-logo:focus-visible .topbar-logo-text,.topbar-logo.expanded .topbar-logo-text{
-  opacity:1;max-width:110px;
-}
 
 /* Theme toggle — a plain small icon button beside the main header logo,
    plus a floating twin beside the condensed topbar-logo chip. Both
@@ -345,48 +214,17 @@ a{color:inherit}
   display:grid;place-items:center;position:relative;
   background:var(--panel2);border:1px solid rgba(0,0,0,.07)!important;color:var(--text);
   box-shadow:0 2px 8px rgba(0,0,0,.05);
-  transition:background .3s ease,transform .3s var(--ease),box-shadow .3s ease;
+  transition:background var(--dur-3) ease,transform var(--dur-3) var(--ease),box-shadow var(--dur-3) ease;
 }
-.theme-toggle-btn:hover:not(:disabled){background:var(--panel);transform:translateY(-1px)}
-.theme-toggle-btn:active:not(:disabled){transform:translateY(0) scale(.92);transition-duration:.15s}
+.theme-toggle-btn:hover:not(:disabled){background:var(--panel);}
+.theme-toggle-btn:active:not(:disabled){transform:scale(var(--press));transition-duration:var(--dur-1)}
 .theme-icon-sun,.theme-icon-moon{
   position:absolute;inset:0;margin:auto;width:18px;height:18px;
-  transition:opacity .4s var(--ease),transform .5s var(--ease);
+  transition:opacity var(--dur-4) var(--ease),transform var(--dur-4) var(--ease);
 }
 .theme-icon-moon{opacity:0;transform:rotate(-90deg) scale(.5)}
 [data-theme="dark"] .theme-icon-sun{opacity:0;transform:rotate(90deg) scale(.5)}
 [data-theme="dark"] .theme-icon-moon{opacity:1;transform:rotate(0) scale(1)}
-/* Floating twin, positioned to sit just left of the condensed
-   topbar-logo chip. Its exact `right` offset is set from JS
-   (syncThemeToggleFloatPosition) using the logo's real measured width
-   in each state, not a guessed constant — the logo's "expanded" width
-   is content-fit (shorter than its own CSS max-width cap), so a fixed
-   guess consistently left too big a gap. The transition below is what
-   makes that JS-driven move animate smoothly instead of jumping. */
-.theme-toggle-float{
-  position:absolute;right:42px;top:50%;
-  width:30px;height:30px;border-radius:50%;padding:0;
-  display:flex;align-items:center;justify-content:center;cursor:pointer;
-  background:rgba(255,255,255,.78);border:1px solid rgba(0,0,0,.08);color:var(--text);
-  backdrop-filter:blur(28px) saturate(190%);-webkit-backdrop-filter:blur(28px) saturate(190%);
-  box-shadow:0 10px 26px rgba(0,0,0,.10),inset 0 1px 0 rgba(255,255,255,.9);
-  opacity:0;visibility:hidden;pointer-events:none;
-  transform:translateY(-50%) scale(.75);
-  transition:
-    right .5s var(--ease),
-    opacity .4s ease,
-    transform .5s var(--ease),
-    visibility 0s linear .4s,
-    background .3s ease,border-color .3s ease,box-shadow .3s ease;
-}
-.theme-toggle-float .theme-icon-sun,.theme-toggle-float .theme-icon-moon{width:15px;height:15px}
-.topbar.condensed .theme-toggle-float{
-  opacity:1;visibility:visible;pointer-events:auto;
-  transform:translateY(-50%) scale(1);
-  transition-delay:0s;
-}
-.theme-toggle-float:hover{transform:translateY(-50%) scale(1.08)}
-.theme-toggle-float:active{transform:translateY(-50%) scale(.9);transition-duration:.15s}
 
 /* Smooth iOS-style paging transition between tabs */
 .view-section{
@@ -394,9 +232,9 @@ a{color:inherit}
   transform:translate3d(0,0,0) scale(1);
   filter:blur(0);
   transition:
-    opacity .3s var(--ease),
-    transform .35s var(--ease),
-    filter .3s ease-out;
+    opacity var(--dur-3) var(--ease),
+    transform var(--dur-3) var(--ease),
+    filter var(--dur-3) ease-out;
   will-change:opacity,transform,filter;
 }
 .view-section.switching-out{
@@ -406,7 +244,7 @@ a{color:inherit}
   pointer-events:none;
 }
 .view-section.switching-in{
-  animation:viewSwitchIn .4s var(--ease) both;
+  animation:viewSwitchIn var(--dur-4) var(--ease) both;
 }
 @keyframes viewSwitchIn{
   from{opacity:0;transform:translate3d(var(--slide-in,16px),0,0) scale(.98);filter:blur(2px)}
@@ -420,51 +258,51 @@ body.resizing .topbar,body.resizing .tabs,body.resizing .job-island,
 body.resizing .tab-indicator,body.resizing .topbar-logo{
   transition:none!important;
 }
-.layout{display:grid;grid-template-columns:minmax(0,1fr);gap:14px}
+.layout{display:grid;grid-template-columns:minmax(0,1fr);gap:var(--sp-2)}
 main{min-width:0}
 .panel{
   background:var(--panel);
-  border:1px solid rgba(0,0,0,.07);border-radius:var(--radius);padding:17px;margin-bottom:12px;
+  border:1px solid rgba(0,0,0,.07);border-radius:var(--radius);padding:var(--sp-2);margin-bottom:var(--sp-2);
   box-shadow:0 2px 10px rgba(0,0,0,.04);
 }
 .panel.soft{background:var(--panel2)}
-h2{font-size:22px;font-weight:600;line-height:1.2;margin:0 0 4px;letter-spacing:-.022em}h3{font-size:16px;font-weight:600;line-height:1.25;margin:0;letter-spacing:-.014em}.muted{color:var(--muted);font-size:11.5px;line-height:1.55}
-.field{margin-top:14px}.field label{display:block;font-size:11.5px;font-weight:600;margin-bottom:6px;color:var(--text)}
+h1,h2{font-family:var(--font-display)}h2{font-size:22px;font-weight:600;line-height:1.2;margin:0 0 4px;letter-spacing:-.022em}h3{font-size:16px;font-weight:600;line-height:1.25;margin:0;letter-spacing:-.014em}.muted{color:var(--muted);font-size:11.5px;line-height:1.55}
+.field{margin-top:var(--sp-2)}.field label{display:block;font-size:11.5px;font-weight:600;margin-bottom:6px;color:var(--text)}
 .grid-url{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}
 input,select,textarea{
   width:100%;color:var(--text);background:#fff;border:1px solid #d2d2d7;border-radius:14px;
-  padding:10px 11px;outline:none;font-size:12px;transition:border-color .15s var(--ease),box-shadow .15s var(--ease),background .15s var(--ease)
+  padding:10px 11px;outline:none;font-size:12px;transition:border-color var(--dur-1) var(--ease),box-shadow var(--dur-1) var(--ease),background var(--dur-1) var(--ease)
 }
 input:focus,select:focus,textarea:focus{border-color:#0071e3;box-shadow:0 0 0 4px rgba(0,113,227,.13);background:#fff}
 textarea{min-height:130px;resize:vertical;line-height:1.35}button{
-  border-radius:980px!important;border:1px solid rgba(0,0,0,.06)!important;
+  /* 071: was !important on both, which silently overrode every component's own radius/border */
+  border-radius:980px;border:1px solid rgba(0,0,0,.06);
   background:#f5f5f7;color:var(--text);
   box-shadow:none;
-  transition:transform .3s var(--ease),box-shadow .3s var(--ease),border-color .3s var(--ease),background .3s var(--ease)
+  transition:transform var(--dur-3) var(--ease),box-shadow var(--dur-3) var(--ease),border-color var(--dur-3) var(--ease),background var(--dur-3) var(--ease)
 }
-button:hover:not(:disabled){transform:translateY(-1px);border-color:rgba(0,0,0,.1)!important;background:#ececee;box-shadow:0 4px 14px rgba(0,0,0,.08)}
-button:active:not(:disabled){transform:scale(.975);transition-duration:.15s}
-button.primary,.analyze-ready{background:#0071e3!important;color:#fff;border-color:#0071e3!important;box-shadow:0 6px 18px rgba(0,113,227,.28)}
-button.primary:hover:not(:disabled),.analyze-ready:hover:not(:disabled){background:#0077ed!important}
+button:hover:not(:disabled){border-color:rgba(0,0,0,.1)!important;background:#ececee;box-shadow:0 4px 14px rgba(0,0,0,.08)}
+button:active:not(:disabled){transform:scale(var(--press));transition-duration:var(--dur-1)}
+button.primary{background:#0071e3!important;color:#fff;border-color:#0071e3!important;box-shadow:0 6px 18px rgba(0,113,227,.28)}
+button.primary:hover:not(:disabled){background:#0077ed!important}
 
 .choice-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 .layout-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
 .platform-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
 .choice{
   min-height:65px;padding:12px;border:1px solid #d2d2d7;border-radius:16px;background:#fff;
-  cursor:pointer;transition:border-color .18s var(--ease),background .18s var(--ease),box-shadow .18s var(--ease),transform .18s var(--ease);position:relative;overflow:hidden
+  cursor:pointer;transition:border-color var(--dur-2) var(--ease),background var(--dur-2) var(--ease),box-shadow var(--dur-2) var(--ease),transform var(--dur-2) var(--ease);position:relative;overflow:hidden
 }
-.choice:hover{transform:translateY(-1px);border-color:#b8b8bd;box-shadow:0 4px 14px rgba(0,0,0,.06)}
+.choice:hover{border-color:#b8b8bd;box-shadow:0 4px 14px rgba(0,0,0,.06)}
 .choice.active{border-color:#0071e3;background:rgba(0,113,227,.05);box-shadow:0 4px 16px rgba(0,113,227,.14),inset 0 0 0 1px rgba(0,113,227,.16)}
 .choice strong{display:block;font-size:12px;font-weight:600}.choice small{display:block;color:var(--muted);font-size:10.5px;margin-top:4px}
 .platform-head{display:flex;align-items:center;gap:8px}.platform-icon{width:27px;height:27px;border-radius:9px;display:grid;place-items:center;box-shadow:inset 0 1px 0 rgba(255,255,255,.15);flex:none}
 .platform-icon svg{width:17px;height:17px}.shorts{background:#ff0033}.reels{background:linear-gradient(145deg,#feda75,#d62976,#4f5bd5)}.tiktok{background:#000}
 .platform-icon.sm{width:19px;height:19px;border-radius:7px}.platform-icon.sm svg{width:11px;height:11px}
-.status-box{margin-top:10px;padding:11px 12px;border:1px solid rgba(0,0,0,.06);border-radius:15px;background:var(--panel2);transition:opacity .34s ease}
+.status-box{margin-top:var(--sp-1);padding:12px;border:1px solid rgba(0,0,0,.06);border-radius:15px;background:var(--panel2);transition:opacity var(--dur-3) ease}
 .status-box.fading{opacity:0}
 .status-title{font-size:12px;font-weight:700}.status-message{font-size:11px;color:var(--muted);margin-top:3px}
-.analyze-wrap{position:relative}.analyze-ready{animation:analyzeGlow 2s ease-in-out infinite}
-.analyze-ready:after{content:"";position:absolute;inset:1px;border-radius:980px;pointer-events:none;background:linear-gradient(105deg,transparent 15%,rgba(255,255,255,.45) 50%,transparent 85%);background-size:220% 100%;animation:shine 2.4s linear infinite}
+.analyze-wrap{position:relative}
 .job-auto-queue{display:flex;align-items:center;gap:7px;margin-top:10px;color:var(--muted);font-size:10.5px;font-weight:600;padding:7px 9px;border-radius:11px;background:rgba(0,113,227,.05);border:1px solid rgba(0,113,227,.10)}
 .auto-queue-dot{width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 9px rgba(0,113,227,.4)}
 .job-card.processing .auto-queue-dot{background:var(--accent);box-shadow:0 0 10px rgba(0,113,227,.5);animation:pulse 1.3s infinite}
@@ -485,7 +323,7 @@ button.primary:hover:not(:disabled),.analyze-ready:hover:not(:disabled){backgrou
   height:100%;border-radius:99px;
   background:linear-gradient(90deg,var(--mini-bar-color,#0071e3),#64b5ff,var(--mini-bar-color,#0071e3));
   background-size:220% 100%;animation:flow 3s linear infinite;
-  width:100%;transform-origin:left center;transition:transform .4s var(--ease);
+  width:100%;transform-origin:left center;transition:transform var(--dur-4) var(--ease);
 }
 .mini-bar-pct{flex:none;min-width:30px;text-align:right;font-size:9.5px;font-weight:700;color:var(--muted);font-variant-numeric:tabular-nums}
 .job-title-row{display:flex;align-items:center;gap:6px}
@@ -493,10 +331,11 @@ button.primary:hover:not(:disabled),.analyze-ready:hover:not(:disabled){backgrou
   width:20px;height:20px;min-height:0;flex:0 0 auto;padding:0;border-radius:7px;
   background:rgba(0,0,0,.035);border:1px solid rgba(0,0,0,.08)!important;box-shadow:none;
   color:var(--muted);display:inline-flex;align-items:center;justify-content:center;opacity:.75;
-  transition:opacity .3s var(--ease),color .3s var(--ease),background .3s var(--ease),transform .3s var(--ease);
+  transition:opacity var(--dur-3) var(--ease),color var(--dur-3) var(--ease),background var(--dur-3) var(--ease),transform var(--dur-3) var(--ease);
 }
 .rename-btn:hover:not(:disabled){opacity:1;color:var(--text);background:rgba(0,0,0,.07);transform:none;box-shadow:none}
-.rename-btn:active:not(:disabled){transform:scale(.9);transition-duration:.15s}
+.rename-btn:active:not(:disabled){transform:scale(var(--press));transition-duration:var(--dur-1)}
+.rename-btn{position:relative}.rename-btn::after{content:"";position:absolute;inset:-12px}
 .badge,.tag{
   display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:5px 8px;font-size:9.5px;font-weight:700;
   background:rgba(0,0,0,.045);border:1px solid rgba(0,0,0,.07);white-space:nowrap;color:var(--text)
@@ -515,7 +354,7 @@ button.primary:hover:not(:disabled),.analyze-ready:hover:not(:disabled){backgrou
 .progress-ring{position:relative;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto}
 .progress-ring svg{display:block;width:100%;height:100%;transform:rotate(-90deg);overflow:visible}
 .progress-ring-track{fill:none;stroke:rgba(0,0,0,.08)}
-.progress-ring-bar{fill:none;stroke-linecap:round;filter:drop-shadow(0 0 3px var(--ring-color));transition:stroke-dashoffset .4s var(--ease)}
+.progress-ring-bar{fill:none;stroke-linecap:round;filter:drop-shadow(0 0 3px var(--ring-color));transition:stroke-dashoffset var(--dur-4) var(--ease)}
 .progress-ring-pct{position:absolute;font-size:8px;font-weight:700;letter-spacing:-.02em;color:var(--text);font-variant-numeric:tabular-nums}
 .progress-status{min-width:0;display:flex;flex-direction:column;gap:2px}
 .progress-status .msg{font-size:9.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -523,10 +362,10 @@ button.primary:hover:not(:disabled),.analyze-ready:hover:not(:disabled){backgrou
 .queue-actions{justify-content:space-between;align-items:center;flex-wrap:nowrap}
 .icon-btn{min-height:auto;width:30px;height:30px;flex:0 0 auto;padding:0;border-radius:10px;display:inline-flex;align-items:center;justify-content:center}
 .icon-btn.danger-ghost{background:rgba(255,59,48,.06);border:1px solid rgba(255,59,48,.2);color:#ff3b30;box-shadow:none}
-.icon-btn.danger-ghost:hover:not(:disabled){background:rgba(255,59,48,.12);border-color:rgba(255,59,48,.36);color:#d70015;transform:translateY(-1px);filter:none;box-shadow:none}
-.icon-btn.danger-ghost:active:not(:disabled){transform:scale(.92);transition-duration:.15s}
-.queue-open-hint{display:flex;align-items:center;gap:5px;font-size:9.5px;font-weight:700;color:var(--muted);transition:color .3s var(--ease)}
-.queue-open-hint svg{flex:0 0 auto;color:var(--muted2);transition:transform .3s var(--ease),color .3s var(--ease)}
+.icon-btn.danger-ghost:hover:not(:disabled){background:rgba(255,59,48,.12);border-color:rgba(255,59,48,.36);color:#d70015;filter:none;box-shadow:none}
+.icon-btn.danger-ghost:active:not(:disabled){transform:scale(var(--press));transition-duration:var(--dur-1)}
+.queue-open-hint{display:flex;align-items:center;gap:5px;font-size:9.5px;font-weight:700;color:var(--muted);transition:color var(--dur-3) var(--ease)}
+.queue-open-hint svg{flex:0 0 auto;color:var(--muted2);transition:transform var(--dur-3) var(--ease),color var(--dur-3) var(--ease)}
 .queue-card:hover .queue-open-hint{color:#0071e3}
 .queue-card:hover .queue-open-hint svg{color:#0071e3;transform:translate(1px,-1px)}
 /* App shell: Apple-Music-style left sidebar + content column.
@@ -541,20 +380,20 @@ body.sidebar-collapsed .app-shell{grid-template-columns:0 minmax(0,1fr)}
 .app-shell > .container{min-width:0}
 .sidebar{
   position:sticky;top:0;height:100vh;overflow-y:auto;overscroll-behavior:contain;
-  width:var(--sidebar-w);padding:16px 14px 24px;z-index:40;
-  background:var(--panel2);border-right:1px solid var(--line);
+  width:var(--sidebar-w);padding:var(--sp-2) var(--sp-2) var(--sp-3);z-index:40;
+  background:var(--material);backdrop-filter:var(--material-blur);-webkit-backdrop-filter:var(--material-blur);border-right:1px solid var(--hairline);
   display:flex;flex-direction:column;gap:4px;
   transform:translateX(0);visibility:visible;
-  transition:transform .35s var(--ease),visibility 0s linear 0s;
+  transition:transform var(--dur-3) var(--ease),visibility 0s linear 0s;
 }
-body.sidebar-collapsed .sidebar{transform:translateX(-100%);visibility:hidden;transition:transform .3s var(--ease),visibility 0s linear .3s}
+body.sidebar-collapsed .sidebar{transform:translateX(-100%);visibility:hidden;transition:transform var(--dur-3) var(--ease),visibility 0s linear var(--dur-3)}
 .sidebar-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:2px 2px 10px}
 .sidebar-brand{display:flex;align-items:center;gap:9px;font-size:13px;font-weight:600;letter-spacing:-.01em}
 .sidebar-brand-icon{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;font-size:12px;font-weight:700;color:#fff;background:linear-gradient(145deg,#0071e3,#42a1ff)}
 .sidebar-collapse,.sidebar-open-btn{
-  width:32px;height:32px;min-height:32px;padding:0;border-radius:10px;flex:none;
+  width:var(--hit);height:var(--hit);min-height:var(--hit);padding:0;border-radius:12px;flex:none;
   display:grid;place-items:center;color:var(--muted);background:transparent;border-color:transparent!important;box-shadow:none;
-  transition:background .15s ease,color .15s ease;
+  transition:background var(--dur-1) ease,color var(--dur-1) ease;
 }
 .sidebar-collapse svg,.sidebar-open-btn svg{width:16px;height:16px;stroke-width:2.7}
 .sidebar-collapse:hover:not(:disabled),.sidebar-open-btn:hover:not(:disabled){background:var(--line);color:var(--text);transform:none;box-shadow:none}
@@ -562,45 +401,45 @@ body.sidebar-collapsed .sidebar{transform:translateX(-100%);visibility:hidden;tr
 [data-theme="dark"] .sidebar-collapse,[data-theme="dark"] .sidebar-open-btn{background:transparent;border-color:transparent!important}
 [data-theme="dark"] .sidebar-collapse:hover:not(:disabled),[data-theme="dark"] .sidebar-open-btn:hover:not(:disabled){background:var(--line);box-shadow:none}
 body.sidebar-collapsed .sidebar-open-btn{display:grid}
-.sidebar-group{padding:12px 2px;border-top:1px solid var(--line)}
+.sidebar-group{padding:12px 0;border-top:1px solid var(--line)}
 .sidebar-group .rail-actions{margin-top:9px}
 .sidebar-group .settings:first-of-type details{margin-top:4px}
-.sidebar-scrim{position:fixed;inset:0;z-index:110;background:rgba(0,0,0,.28);opacity:0;visibility:hidden;pointer-events:none;transition:opacity .3s ease,visibility 0s linear .3s}
+.sidebar-scrim{position:fixed;inset:0;z-index:110;background:rgba(0,0,0,.28);opacity:0;visibility:hidden;pointer-events:none;transition:opacity var(--dur-3) ease,visibility 0s linear var(--dur-3)}
 @media(max-width:999px){
   .app-shell,body.sidebar-collapsed .app-shell{grid-template-columns:minmax(0,1fr)}
   .sidebar,body.sidebar-collapsed .sidebar{
     position:fixed;left:0;top:0;bottom:0;height:auto;width:min(300px,86vw);z-index:120;
     box-shadow:0 20px 60px rgba(0,0,0,.25);
-    transform:translateX(-105%);visibility:hidden;transition:transform .3s var(--ease),visibility 0s linear .3s;
+    transform:translateX(-105%);visibility:hidden;transition:transform var(--dur-3) var(--ease),visibility 0s linear var(--dur-3);
   }
-  body.sidebar-open .sidebar{transform:translateX(0);visibility:visible;transition:transform .35s var(--ease),visibility 0s linear 0s}
-  body.sidebar-open .sidebar-scrim{opacity:1;visibility:visible;pointer-events:auto;transition:opacity .3s ease,visibility 0s linear 0s}
+  body.sidebar-open .sidebar{transform:translateX(0);visibility:visible;transition:transform var(--dur-3) var(--ease),visibility 0s linear 0s}
+  body.sidebar-open .sidebar-scrim{opacity:1;visibility:visible;pointer-events:auto;transition:opacity var(--dur-3) ease,visibility 0s linear 0s}
   .sidebar-open-btn,body.sidebar-collapsed .sidebar-open-btn{display:grid}
 }
 /* Simplified Import: composition / facecam / platform live in one
    "Options" disclosure with a live one-line summary. */
-.import-options{margin-top:14px;border:1px solid var(--line);border-radius:16px;padding:0 14px;background:var(--panel2)}
+.import-options{margin-top:var(--sp-2);border:1px solid var(--line);border-radius:16px;padding:0 var(--sp-2);background:var(--panel2)}
 .import-options > summary{display:flex;align-items:center;gap:8px;cursor:pointer;list-style:none;font-size:12px;font-weight:600}
 .import-options > summary::-webkit-details-marker{display:none}
 .import-options > summary .muted{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500}
 .import-options[open]{padding-bottom:14px}
 .import-options .field:first-of-type{margin-top:0}
-.chev{width:16px;height:16px;flex:none;display:inline-block;background:currentColor;color:var(--muted);transition:transform .2s var(--ease);
+.chev{width:16px;height:16px;flex:none;display:inline-block;background:currentColor;color:var(--muted);transition:transform var(--dur-2) var(--ease);
   -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 6l4 4 4-4' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat;
           mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 6l4 4 4-4' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat}
 details[open] > summary > .chev{transform:rotate(180deg)}
 /* One disclosure affordance (UI-QA T5): every <summary> is a 44px full-width row, chevron on the trailing edge. */
 .import-options > summary,.edit-more > summary,.version-history > summary,.settings summary{min-height:44px}
 summary > .chev{margin-left:auto}
-.rail-title{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}.rail-section{border-top:1px solid rgba(0,0,0,.07);padding-top:12px;margin-top:12px}
+.rail-title{font-size:12px;font-weight:600;letter-spacing:-.005em;color:var(--muted)}.rail-section{border-top:1px solid rgba(0,0,0,.07);padding-top:12px;margin-top:12px}
 .rail-actions{display:grid;grid-template-columns:1fr 1fr;gap:7px}
-.rail-actions button{font-size:10.5px;min-height:34px}
+.rail-actions button{font-size:11px;min-height:var(--hit)}
 .settings details{border-top:1px solid rgba(0,0,0,.06)}.settings details[open]{padding-bottom:9px}.settings summary{display:flex;align-items:center;gap:8px;cursor:pointer;font-size:11px;font-weight:700;color:var(--text);list-style:none}.settings summary::-webkit-details-marker{display:none}
 .settings summary .muted{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500}
 .settings-grid{display:grid;gap:8px;margin-top:8px}.settings-grid label{font-size:9.5px;color:var(--muted)}.settings-grid input{font-size:10.5px;padding:8px 9px}.hint{font-size:9px;color:var(--muted2);margin-top:3px}
 .hidden{display:none!important}
 .queue-list{display:grid;gap:10px}
-.queue-card{cursor:pointer;transition:transform .3s var(--ease),border-color .3s var(--ease),box-shadow .3s var(--ease)}
+.queue-card{cursor:pointer;transition:transform var(--dur-3) var(--ease),border-color var(--dur-3) var(--ease),box-shadow var(--dur-3) var(--ease)}
 .queue-card:hover{transform:translateY(-2px);border-color:rgba(0,113,227,.3);box-shadow:0 12px 30px rgba(0,0,0,.08)}
 .queue-card .actions{position:relative;z-index:3}
 .queue-preview{display:grid;grid-template-columns:72px minmax(0,1fr);gap:11px;align-items:center;margin-top:10px}
@@ -609,11 +448,11 @@ summary > .chev{margin-left:auto}
   background:linear-gradient(100deg,#e8e8ed 30%,#f3f3f5 50%,#e8e8ed 70%);
   background-size:200% 100%;animation:shimmer 1.7s ease-in-out infinite;
 }
-.queue-thumb img{width:100%;height:100%;object-fit:cover;display:block;opacity:0;transition:opacity .5s var(--ease)}
+.queue-thumb img{width:100%;height:100%;object-fit:cover;display:block;opacity:0;transition:opacity var(--dur-4) var(--ease)}
 .queue-thumb img.loaded{opacity:1}
 @keyframes shimmer{0%{background-position:150% 0}100%{background-position:-50% 0}}
 .job-card,.queue-card{
-  animation:cardIn .5s var(--ease) both;
+  animation:cardIn var(--dur-4) var(--ease) both;
   animation-delay:calc(var(--i,0) * 55ms);
 }
 @keyframes cardIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
@@ -621,7 +460,7 @@ summary > .chev{margin-left:auto}
 .queue-open-label{font-size:10.5px;color:var(--muted)}
 .detail-head{margin-bottom:12px}.detail-meta{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}
 .candidate-pair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
-.candidate-card{min-width:0;padding:13px;border:1px solid rgba(0,0,0,.07);border-radius:19px;background:var(--panel);box-shadow:0 2px 12px rgba(0,0,0,.05);transition:border-color .35s var(--ease),box-shadow .35s var(--ease),transform .35s var(--ease)}
+.candidate-card{min-width:0;padding:13px;border:1px solid rgba(0,0,0,.07);border-radius:19px;background:var(--panel);box-shadow:0 2px 12px rgba(0,0,0,.05);transition:border-color var(--dur-3) var(--ease),box-shadow var(--dur-3) var(--ease),transform var(--dur-3) var(--ease)}
 .candidate-card.editing{border-color:rgba(0,113,227,.4);box-shadow:0 8px 28px rgba(0,113,227,.12)}
 .candidate-top{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:10px}
 .candidate-top-actions{display:flex;align-items:center;gap:7px;flex:none}
@@ -633,13 +472,6 @@ summary > .chev{margin-left:auto}
 .candidate-submagic-row .actions>*{flex:1}
 .candidate-submagic-row .hint{margin-top:6px}
 .error-text{color:#ff453a}
-.watermark-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:8px;margin-top:8px}
-.watermark-item{position:relative;border-radius:10px;overflow:hidden;background:repeating-conic-gradient(#2a2a2e 0% 25%,#232326 0% 50%) 50%/16px 16px;border:2px solid transparent}
-.watermark-item.active{border-color:var(--accent,#0a84ff)}
-.watermark-item img{width:100%;aspect-ratio:1/1;object-fit:contain;display:block}
-.watermark-item-actions{position:absolute;inset:auto 0 0 0;display:flex;gap:4px;padding:4px;background:linear-gradient(transparent,rgba(0,0,0,.65))}
-.watermark-item-actions button{flex:1;font-size:9px;padding:3px 4px;min-height:0}
-.watermark-item-actions .chip-active{flex:1;text-align:center;font-size:9px;padding:3px 4px;background:var(--accent,#0a84ff);color:#fff;border-radius:6px}
 .watermark-upload-btn{cursor:pointer}
 .version-history summary{cursor:pointer;font-size:11px;font-weight:600}
 .version-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 0;border-top:1px solid var(--border,rgba(127,127,127,.15))}
@@ -665,26 +497,26 @@ summary > .chev{margin-left:auto}
 .chip-rating{color:#ffd60a}
 .preview-edit{min-height:30px;padding:6px 10px;border-radius:12px;font-size:9.5px;flex:none}
 .preview-note{text-align:center;color:var(--muted2);font-size:9px;margin-top:5px}
-.rating-row{display:flex;gap:2px;flex-wrap:wrap}.star{font-size:16px;color:#d2d2d7;cursor:pointer;transition:transform .15s var(--ease),color .15s var(--ease)}.star:hover{transform:scale(1.16)}.star.on{color:#ff9500}
+.rating-row{display:flex;gap:2px;flex-wrap:wrap}.star{font-size:16px;color:#d2d2d7;cursor:pointer;transition:transform var(--dur-1) var(--ease),color var(--dur-1) var(--ease)}.star:hover{transform:scale(1.16)}.star.on{color:#ff9500}
 /* Edit drawer (R-11): shown with display, entrance is opacity+transform
    only (no max-height morph). Re-renders while editing (watchCandidate)
    add .no-enter so the entrance doesn't replay every poll. Frosted glass
    lives on the drawer surface and its sticky action row only; the video
    preview stays flat. */
 .edit-drawer{display:none}
-.candidate-card.editing .edit-drawer{display:block;margin-top:10px;animation:drawerIn .34s var(--ease) both}
+.candidate-card.editing .edit-drawer{display:block;margin-top:10px;animation:drawerIn var(--dur-3) var(--ease) both}
 .candidate-card.editing.no-enter .edit-drawer{animation:none}
 @keyframes drawerIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
 .edit-drawer-inner{
   border:1px solid var(--line);border-radius:16px;padding:12px 13px 0;
   background:rgba(251,251,253,.72);
-  backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%);
+  backdrop-filter:var(--material-blur);-webkit-backdrop-filter:var(--material-blur);
 }
 .edit-actions{
   position:sticky;bottom:10px;z-index:4;margin:6px -6px 10px;padding:9px;border-radius:14px;
   border:1px solid var(--line);
   background:rgba(255,255,255,.78);
-  backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%);
+  backdrop-filter:var(--material-blur);-webkit-backdrop-filter:var(--material-blur);
   box-shadow:0 8px 24px rgba(0,0,0,.08);
 }
 .edit-actions button{flex:1 1 auto}
@@ -722,13 +554,13 @@ summary > .chev{margin-left:auto}
 .caption-preview-text{
   display:flex;flex-wrap:wrap;justify-content:center;gap:.32em;text-align:center;
   line-height:1.18;
-  transition:font-size .25s var(--ease),letter-spacing .25s var(--ease),gap .25s var(--ease);
+  transition:font-size var(--dur-2) var(--ease),letter-spacing var(--dur-2) var(--ease),gap var(--dur-2) var(--ease);
 }
 .cpw{
   color:var(--cap-resting,#fff);font-weight:var(--cap-weight,800);
   -webkit-text-stroke:var(--cap-outline,3px) #000;paint-order:stroke fill;
   text-shadow:var(--cap-shadow,0 2px 3px rgba(0,0,0,.55));
-  transition:color .3s var(--ease);
+  transition:color var(--dur-3) var(--ease);
 }
 .cpw.active{color:var(--cap-highlight,#FFD60A)}
 .caption-preview.boxed .caption-preview-text{
@@ -739,9 +571,9 @@ summary > .chev{margin-left:auto}
 @keyframes capBounce{0%{transform:scale(.55);opacity:0}55%{transform:scale(1.18);opacity:1}100%{transform:scale(1)}}
 @keyframes capFadeSettle{0%{transform:scale(1.12);opacity:0}100%{transform:scale(1);opacity:1}}
 @keyframes capTypeIn{0%{opacity:0}100%{opacity:1}}
-.cpw-pop{display:inline-block;animation:capPop .22s var(--ease) both}
-.cpw-bounce{display:inline-block;animation:capBounce .34s var(--ease) both}
-.cpw-fade{display:inline-block;animation:capFadeSettle .28s var(--ease) both}
+.cpw-pop{display:inline-block;animation:capPop .22s cubic-bezier(.22,1,.36,1) both}
+.cpw-bounce{display:inline-block;animation:capBounce .34s cubic-bezier(.22,1,.36,1) both}
+.cpw-fade{display:inline-block;animation:capFadeSettle .28s cubic-bezier(.22,1,.36,1) both}
 .cpw-type{display:inline-block;animation:capTypeIn .12s linear both}
 .edit-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.edit-grid .full{grid-column:1/-1}
 .field-label-row{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px}
@@ -752,22 +584,22 @@ summary > .chev{margin-left:auto}
 .thumb-upload-btn[aria-disabled="true"]:not(.is-busy){opacity:.5;pointer-events:none}
 .thumb-slider{display:flex;align-items:center;gap:8px;margin-top:2px}
 .thumb-slider-viewport{flex:1;min-width:0;overflow:hidden;border-radius:14px}
-.thumb-slider-track{display:flex;transition:transform .5s var(--ease);will-change:transform}
+.thumb-slider-track{display:flex;transition:transform var(--dur-4) var(--ease);will-change:transform}
 .thumb-slide{flex:0 0 100%;display:flex;justify-content:center;padding:2px 4px}
 .thumb-nav{
   width:32px;height:32px;min-height:0;flex:0 0 auto;padding:0;border-radius:50%;
   display:grid;place-items:center;background:#fff;border:1px solid #d2d2d7!important;
   color:var(--text);box-shadow:0 2px 8px rgba(0,0,0,.08);
-  transition:background .3s var(--ease),transform .3s var(--ease),box-shadow .3s var(--ease),opacity .3s ease;
+  transition:background var(--dur-3) var(--ease),transform var(--dur-3) var(--ease),box-shadow var(--dur-3) var(--ease),opacity var(--dur-3) ease;
 }
 .thumb-nav:hover:not(:disabled){background:#f5f5f7;transform:none;box-shadow:0 4px 12px rgba(0,0,0,.10)}
-.thumb-nav:active:not(:disabled){transform:scale(.9);transition-duration:.15s}
+.thumb-nav:active:not(:disabled){transform:scale(var(--press));transition-duration:var(--dur-1)}
 .thumb-nav:disabled{opacity:.28;box-shadow:none}
 .thumb-dots{display:flex;justify-content:center;gap:6px;margin-top:9px}
 .thumb-dot{
   width:6px;height:6px;min-height:0;padding:0;border-radius:50%;flex:none;
   background:rgba(0,0,0,.16);border:none!important;box-shadow:none;
-  transition:background .3s var(--ease),transform .3s var(--ease);
+  transition:background var(--dur-3) var(--ease),transform var(--dur-3) var(--ease);
 }
 .thumb-dot:hover{background:rgba(0,0,0,.28);transform:none}
 .thumb-dot.active{background:#0071e3;transform:scale(1.25)}
@@ -777,7 +609,7 @@ summary > .chev{margin-left:auto}
   border:1px solid rgba(0,0,0,.08);background:#000;min-height:0;
   box-shadow:0 8px 22px rgba(0,0,0,.16);
   transform-origin:center center;
-  transition:border-color .4s var(--ease),transform .4s var(--ease),box-shadow .4s var(--ease);
+  transition:border-color var(--dur-4) var(--ease),transform var(--dur-4) var(--ease),box-shadow var(--dur-4) var(--ease);
 }
 /* Same top/bottom vignette as the real .preview-frame, so a thumbnail
    option reads as "a frame from your actual vertical video" rather
@@ -786,7 +618,7 @@ summary > .chev{margin-left:auto}
 .thumb-option:after{content:"";position:absolute;left:0;right:0;bottom:0;height:30%;background:linear-gradient(to top,rgba(0,0,0,.55),transparent);pointer-events:none;z-index:2}
 .thumb-option img{
   width:100%;height:100%;object-fit:cover;display:block;opacity:0;position:relative;z-index:1;
-  transition:opacity .5s var(--ease),transform .5s var(--ease),filter .4s var(--ease);
+  transition:opacity var(--dur-4) var(--ease),transform var(--dur-4) var(--ease),filter var(--dur-4) var(--ease);
 }
 .thumb-option img.loaded{opacity:1}
 .thumb-option img.broken{display:none}
@@ -797,21 +629,21 @@ summary > .chev{margin-left:auto}
 .thumb-option.has-broken .thumb-broken-note{display:flex}
 .thumb-option:hover:not(:disabled){transform:translateY(-3px);border-color:rgba(0,113,227,.4);box-shadow:0 10px 24px rgba(0,0,0,.10)}
 .thumb-option:hover:not(:disabled) img{transform:scale(1.045)}
-.thumb-option:active:not(:disabled){transform:translateY(-1px) scale(.975);transition-duration:.15s}
+.thumb-option:active:not(:disabled){transform:scale(var(--press));transition-duration:var(--dur-1)}
 .thumb-option.selected{
   border-color:#1eb85a;box-shadow:0 0 0 1px rgba(30,184,90,.3),0 10px 26px rgba(30,184,90,.18);
-  animation:thumbSelectPop .2s var(--ease) both;
+  animation:thumbSelectPop var(--dur-2) var(--ease) both;
 }
 .thumb-option.selected img{filter:saturate(1.08)}
 .thumb-check{
   position:absolute;top:5px;right:5px;width:20px;height:20px;border-radius:50%;display:grid;place-items:center;z-index:3;
   background:rgba(0,0,0,.5);border:1px solid rgba(255,255,255,.4);color:transparent;font-size:11px;font-weight:700;
-  transition:background .35s var(--ease),border-color .35s var(--ease),color .3s ease .05s,transform .4s var(--ease);
+  transition:background var(--dur-3) var(--ease),border-color var(--dur-3) var(--ease),color var(--dur-3) ease var(--dur-1),transform var(--dur-4) var(--ease);
 }
 .thumb-option-footer{position:absolute;left:6px;bottom:6px;z-index:3;display:flex;align-items:center}
 .thumb-option.selected .thumb-check{
   background:#1eb85a;border-color:#1eb85a;color:#fff;
-  animation:thumbCheckPop .2s var(--ease) both;
+  animation:thumbCheckPop var(--dur-2) var(--ease) both;
 }
 @keyframes thumbSelectPop{0%{transform:scale(1)}45%{transform:scale(1.04)}100%{transform:scale(1)}}
 @keyframes thumbCheckPop{0%{transform:scale(.5)}60%{transform:scale(1.14)}100%{transform:scale(1)}}
@@ -843,19 +675,19 @@ summary > .chev{margin-left:auto}
   transform-origin:top right;
   transform:translateY(-16px) scale(.82);
   filter:blur(8px);
-  transition:opacity .35s var(--ease),transform .5s var(--ease),filter .35s ease
+  transition:opacity var(--dur-3) var(--ease),transform var(--dur-4) var(--ease),filter var(--dur-3) ease
 }
 .job-overlay.open{opacity:1;pointer-events:auto;transform:translateY(0) scale(1);filter:blur(0)}
-.job-overlay-card{border:1px solid rgba(0,0,0,.08);border-radius:20px;background:rgba(255,255,255,.86);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);box-shadow:0 20px 55px rgba(0,0,0,.18);padding:13px;transition:box-shadow .3s ease}
-.job-overlay-head{display:flex;justify-content:space-between;align-items:center;gap:10px}.job-overlay-title{font-size:12px;font-weight:700}.job-overlay-summary{font-size:9.5px;color:var(--muted);margin-top:2px;transition:opacity .2s ease}
-.job-overlay-close{width:31px;height:31px;min-height:31px;padding:0;border-radius:50%;background:#f5f5f7;border-color:rgba(0,0,0,.08)!important;color:var(--text);transition:transform .4s var(--ease),background .3s ease}
+.job-overlay-card{border:1px solid rgba(0,0,0,.08);border-radius:20px;background:rgba(255,255,255,.86);backdrop-filter:var(--material-blur);-webkit-backdrop-filter:var(--material-blur);box-shadow:0 20px 55px rgba(0,0,0,.18);padding:13px;transition:box-shadow var(--dur-3) ease}
+.job-overlay-head{display:flex;justify-content:space-between;align-items:center;gap:10px}.job-overlay-title{font-size:12px;font-weight:700}.job-overlay-summary{font-size:9.5px;color:var(--muted);margin-top:2px;transition:opacity var(--dur-2) ease}
+.job-overlay-close{width:31px;height:31px;min-height:31px;padding:0;border-radius:50%;background:#f5f5f7;border-color:rgba(0,0,0,.08)!important;color:var(--text);transition:transform var(--dur-4) var(--ease),background var(--dur-3) ease}
 .job-overlay-close:hover{transform:scale(1.08) rotate(90deg);background:#ececee}
-.job-overlay-close:active{transform:scale(.92) rotate(90deg);transition-duration:.15s}
+.job-overlay-close:active{transform:scale(var(--press)) rotate(90deg);transition-duration:var(--dur-1)}
 .running-job-list{display:grid;gap:7px;margin-top:10px}
-.running-job-item{padding:9px;border-radius:14px;background:var(--panel2);border:1px solid rgba(0,0,0,.06);cursor:pointer;transition:transform .35s var(--ease),border-color .3s ease,background .3s ease,box-shadow .35s var(--ease)}
+.running-job-item{padding:9px;border-radius:14px;background:var(--panel2);border:1px solid rgba(0,0,0,.06);cursor:pointer;transition:transform var(--dur-3) var(--ease),border-color var(--dur-3) ease,background var(--dur-3) ease,box-shadow var(--dur-3) var(--ease)}
 .running-job-item:hover{transform:translateY(-2px);border-color:rgba(0,113,227,.3);background:#fff;box-shadow:0 8px 22px rgba(0,0,0,.08)}
-.running-job-item:active{transform:translateY(0) scale(.985);transition-duration:.15s}
-.running-job-main{display:flex;align-items:center;gap:10px}.running-job-info{min-width:0;display:flex;flex-direction:column;gap:2px}.running-job-name{font-size:10.5px;font-weight:700}.running-job-stage{font-size:9px;font-weight:700;transition:color .3s ease}.running-job-meta{display:flex;justify-content:space-between;gap:8px;font-size:8.5px;color:var(--muted2);margin-top:7px}
+.running-job-item:active{transform:scale(var(--press));transition-duration:var(--dur-1)}
+.running-job-main{display:flex;align-items:center;gap:10px}.running-job-info{min-width:0;display:flex;flex-direction:column;gap:2px}.running-job-name{font-size:10.5px;font-weight:700}.running-job-stage{font-size:9px;font-weight:700;transition:color var(--dur-3) ease}.running-job-meta{display:flex;justify-content:space-between;gap:8px;font-size:8.5px;color:var(--muted2);margin-top:7px}
 @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.72)}}@keyframes bars{to{transform:scaleY(.55);opacity:.55}}@keyframes analyzeGlow{0%,100%{box-shadow:0 4px 14px rgba(0,113,227,.20),0 0 0 1px rgba(0,113,227,.10)}50%{box-shadow:0 8px 26px rgba(0,113,227,.38),0 0 0 1px rgba(0,113,227,.24)}}@keyframes shine{from{background-position:180% 0}to{background-position:-20% 0}}@keyframes sweep{from{background-position:180% 0}to{background-position:-20% 0}}@keyframes flow{from{background-position:0 0}to{background-position:180% 0}}@keyframes viewIn{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}@keyframes viewOut{from{opacity:1;transform:none}to{opacity:0;transform:translateY(-5px)}}
 @media(max-width:760px){
   .container{width:calc(100% - 14px);margin-top:10px}.brand{margin-bottom:10px}.brand h1{font-size:16px}.logo{width:40px;height:40px;border-radius:13px}
@@ -866,6 +698,304 @@ summary > .chev{margin-left:auto}
 }
 @media(max-width:440px){.choice-grid,.platform-grid{grid-template-columns:1fr}.actions button{flex:1 1 auto}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+
+/* ===== 068: sidebar = navigation, sheets ===== */
+.brand-mark{width:28px;height:28px;flex:none;border-radius:7px}
+img.logo{padding:0;background:none;display:block;box-shadow:0 8px 20px rgba(10,132,255,.25);border-radius:12px}
+img.topbar-logo-icon{background:none;padding:0;object-fit:cover}
+.sidebar-head{padding:0 0 var(--sp-1)}
+.side-nav{position:relative;display:flex;flex-direction:column;gap:2px;padding:var(--sp-1) 0}
+.nav-item{
+  position:relative;z-index:1;display:flex;align-items:center;gap:12px;width:100%;
+  min-height:var(--hit);padding:0 12px;border-radius:12px;border:0;box-shadow:none;
+  background:transparent;color:var(--text);font-size:13px;font-weight:500;letter-spacing:-.01em;text-align:left;
+  transition:color var(--dur-2) var(--ease),background var(--dur-2) var(--ease),transform var(--dur-1) var(--ease);
+}
+.nav-item:hover:not(:disabled){background:var(--line);filter:none;box-shadow:none}
+.nav-item:active:not(:disabled){transform:scale(var(--press))}
+.nav-item[aria-current]{color:var(--accent);font-weight:600}
+.nav-item[aria-current]:hover{background:transparent}
+.nav-icon{width:20px;height:20px;flex:none}
+.nav-icon-stack{position:relative;width:20px;height:20px;flex:none}
+.nav-icon-stack .theme-icon-sun,.nav-icon-stack .theme-icon-moon{width:20px;height:20px}
+.nav-value{margin-left:auto;color:var(--muted);font-weight:400;font-size:12px}
+.nav-indicator{
+  position:absolute;left:0;right:0;top:0;height:var(--hit);border-radius:12px;pointer-events:none;
+  background:rgba(0,113,227,.1);opacity:0;
+  transform:translateY(var(--nav-y,0));
+  transition:transform var(--dur-3) var(--ease-spring),opacity var(--dur-2) var(--ease);
+}
+.nav-indicator.ready{opacity:1}
+[data-theme="dark"] .nav-indicator{background:rgba(10,132,255,.2)}
+[data-theme="dark"] .nav-item{background:transparent;border-color:transparent!important}
+[data-theme="dark"] .nav-item:hover:not(:disabled){background:var(--line)}
+.sidebar-foot{margin-top:auto;padding-top:var(--sp-1);border-top:1px solid var(--line)}
+.icon-btn{
+  width:var(--hit);height:var(--hit);min-height:var(--hit);padding:0;flex:none;display:grid;place-items:center;
+  border-radius:12px;background:transparent;border-color:transparent;box-shadow:none;color:var(--muted);
+}
+.icon-btn svg{width:20px;height:20px}
+.icon-btn:hover:not(:disabled){background:var(--line);color:var(--text);box-shadow:none;filter:none}
+[data-theme="dark"] .icon-btn{background:transparent;border-color:transparent!important}
+[data-theme="dark"] .icon-btn:hover:not(:disabled){background:var(--line)}
+.brand .refresh-btn{margin-left:auto}
+.refresh-btn.spinning svg{animation:spin var(--dur-4) var(--ease-out)}
+/* Sheets: centred dialog, scale + fade in over a blurred backdrop. */
+.sheet-layer{position:fixed;inset:0;z-index:200;display:grid;place-items:center;padding:var(--sp-2);visibility:hidden;pointer-events:none;transition:visibility 0s linear var(--dur-3)}
+.sheet-layer.open{visibility:visible;pointer-events:auto;transition:visibility 0s linear 0s}
+.sheet-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.28);backdrop-filter:blur(8px) saturate(120%);-webkit-backdrop-filter:blur(8px) saturate(120%);opacity:0;transition:opacity var(--dur-3) var(--ease)}
+.sheet-layer.open .sheet-backdrop{opacity:1}
+.sheet{
+  position:relative;width:min(640px,100%);max-height:min(760px,calc(100dvh - 2*var(--sp-2)));display:flex;flex-direction:column;
+  background:var(--material-thick);backdrop-filter:var(--material-blur);-webkit-backdrop-filter:var(--material-blur);
+  border:1px solid var(--hairline);border-radius:22px;box-shadow:0 30px 80px rgba(0,0,0,.28),0 2px 8px rgba(0,0,0,.08);
+  opacity:0;transform:scale(.96);transition:opacity var(--dur-2) var(--ease),transform var(--dur-3) var(--ease-out);
+}
+.sheet-layer.open .sheet{opacity:1;transform:scale(1)}
+.sheet-head{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-1);padding:var(--sp-2) var(--sp-2) var(--sp-1) var(--sp-3)}
+.sheet-head h2{margin:0;font-size:20px}
+.sheet-close{width:var(--hit);height:var(--hit);min-height:var(--hit);padding:0;display:grid;place-items:center;border-radius:50%;background:var(--line);border-color:transparent;color:var(--muted);box-shadow:none}
+.sheet-close svg{width:16px;height:16px}
+.sheet-close:hover:not(:disabled){background:var(--line2);color:var(--text);box-shadow:none;filter:none}
+[data-theme="dark"] .sheet-close{background:rgba(255,255,255,.1);border-color:transparent!important}
+.sheet-body{overflow:auto;overscroll-behavior:contain;padding:0 var(--sp-3) var(--sp-3)}
+.sheet-body.settings details:first-of-type{border-top:0}
+@media(max-width:600px){
+  .sheet-layer{place-items:end center;padding:0}
+  .sheet{width:100%;max-height:92dvh;border-radius:22px 22px 0 0;transform:translateY(24px)}
+  .sheet-layer.open .sheet{transform:none}
+}
+.empty-title{font-weight:600;color:var(--text);font-size:14px}.empty-tip{margin:6px auto 0;max-width:46ch;color:var(--muted);font-size:12px;line-height:1.5}
+
+/* ===== 069: settings sheet — System Settings-style inset lists ===== */
+#settingsSheet .sheet{width:min(720px,100%);height:min(760px,calc(100dvh - 2*var(--sp-2)))}
+.sheet-search{position:relative;margin:0 var(--sp-3) var(--sp-1)}
+.sheet-search svg{position:absolute;left:12px;top:50%;width:16px;height:16px;transform:translateY(-50%);color:var(--muted);pointer-events:none}
+.sheet-search input{min-height:36px;padding-left:36px;border-radius:10px;background:var(--line);border-color:transparent}
+.sheet-search input:focus{background:var(--panel)}
+.settings-body{flex:1;padding-top:var(--sp-1)}
+.inset-group{margin-top:var(--sp-3)}
+.inset-group:first-child{margin-top:var(--sp-1)}
+.inset-title{margin:0 12px 6px;font-size:13px;font-weight:600;color:var(--muted);letter-spacing:-.005em}
+.inset-list{background:var(--panel);border:1px solid var(--hairline);border-radius:12px;overflow:hidden}
+.inset-row{position:relative;display:flex;align-items:center;gap:12px;min-height:var(--hit);padding:6px 8px 6px 14px;transition:background var(--dur-2) var(--ease)}
+.inset-row+.inset-row::before{content:"";position:absolute;top:0;left:14px;right:0;border-top:1px solid var(--line)}
+.inset-row.is-changed{background:rgba(0,113,227,.06)}
+[data-theme="dark"] .inset-row.is-changed{background:rgba(10,132,255,.12)}
+.row-label{flex:1;min-width:0;font-size:13px;font-weight:500;color:var(--text);cursor:default}
+.row-label small{display:block;margin-top:1px;font-size:11px;font-weight:400;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row-label code{font:inherit;font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:10.5px}
+.row-control{display:flex;align-items:center;gap:2px;width:min(300px,52%);flex:none}
+.row-control input{min-height:34px;padding:6px 10px;border-radius:8px;font-size:12.5px;text-align:left}
+.row-control:not(:has(.reveal-btn))::after{content:"";width:36px;flex:none}
+.reveal-btn{width:36px;height:36px;min-height:36px;border-radius:8px;position:relative}
+.reveal-btn::after{content:"";position:absolute;inset:-4px}
+.reveal-btn svg{width:18px;height:18px}
+.reveal-btn[aria-pressed="true"]{color:var(--accent)}
+.settings-nomatch{padding:var(--sp-4) 0;text-align:center;color:var(--muted);font-size:13px}
+.settings-hint{margin:var(--sp-2) 12px 0}
+.sheet-foot{
+  position:sticky;bottom:0;display:flex;align-items:center;gap:var(--sp-1);
+  padding:12px var(--sp-3);border-top:1px solid var(--hairline);
+  background:var(--material);backdrop-filter:var(--material-blur);-webkit-backdrop-filter:var(--material-blur);border-radius:0 0 22px 22px;
+}
+.sheet-foot-status{flex:1;min-width:0;font-size:12px;color:var(--muted);transition:color var(--dur-2) var(--ease)}
+.sheet-foot-status.is-error{color:var(--bad)}
+.sheet-foot button{min-width:96px}
+#saveSettings.is-saved{background:var(--good)!important;border-color:var(--good)!important;opacity:1}
+#saveSettings.is-saved::before{content:"✓";display:inline-block;margin-right:6px;animation:savedPop var(--dur-3) var(--ease-spring) both}
+@keyframes savedPop{from{transform:scale(.3);opacity:0}to{transform:scale(1);opacity:1}}
+@media(max-width:600px){
+  #settingsSheet .sheet{height:92dvh}
+  .inset-row{flex-wrap:wrap;padding-top:10px;padding-bottom:10px}
+  .row-control{width:100%}
+  .sheet-foot{border-radius:0}
+}
+
+/* ===== 070: import card ===== */
+#analyzeButton{min-width:120px}
+#analyzeButton:disabled{opacity:1;background:var(--line)!important;border-color:transparent!important;color:var(--muted);box-shadow:none}
+.url-hint{margin-top:6px;font-size:11.5px;color:var(--muted);transition:color var(--dur-2) var(--ease)}
+.url-hint.is-error{color:var(--bad)}
+#youtubeUrl[aria-invalid="true"]{border-color:rgba(255,59,48,.55)}
+.url-preview{display:flex;align-items:center;gap:12px;margin-top:var(--sp-1);padding:var(--sp-1);border:1px solid var(--line);border-radius:14px;background:var(--panel2);
+  opacity:0;transform:translateY(-4px);transition:opacity var(--dur-3) var(--ease),transform var(--dur-3) var(--ease)}
+.url-preview.is-loaded{opacity:1;transform:none}
+.url-preview img{width:120px;height:68px;object-fit:cover;border-radius:10px;background:var(--line);flex:none}
+.url-preview-meta{display:flex;flex-direction:column;gap:2px;min-width:0;font-size:12px}
+.url-preview-meta span{color:var(--muted);font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:11px}
+.import-empty{display:flex;flex-direction:column;align-items:center;gap:4px;margin-top:var(--sp-2);border-style:dashed;background:transparent;box-shadow:none}
+.empty-icon{width:32px;height:32px;color:var(--muted2);margin-bottom:4px}
+
+/* ===== 071: watermark library ===== */
+:root{--checker-a:#ffffff;--checker-b:#e6e6ea}
+:root[data-theme="dark"]{--checker-a:#2c2c2e;--checker-b:#1f1f21}
+.sheet-lede{margin:0 0 var(--sp-2);color:var(--muted);font-size:13px}
+.wm-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+.wm-tile{position:relative;transition:opacity var(--dur-2) var(--ease),transform var(--dur-2) var(--ease)}
+.wm-tile.removing{opacity:0;transform:scale(.9)}
+.wm-select{
+  display:flex;flex-direction:column;align-items:stretch;gap:0;width:100%;min-height:0;padding:0;overflow:hidden;
+  border-radius:14px;background:var(--panel);border:1px solid var(--hairline);color:var(--text);box-shadow:none;text-align:left;
+  transition:box-shadow var(--dur-2) var(--ease),border-color var(--dur-2) var(--ease),transform var(--dur-1) var(--ease);
+}
+.wm-select:hover:not(:disabled){filter:none;box-shadow:0 4px 14px rgba(0,0,0,.08)}
+[data-theme="dark"] .wm-select{background:var(--panel2);border-color:var(--hairline)!important}
+.wm-tile.is-active .wm-select{border-color:var(--accent)!important;outline:2px solid var(--accent);outline-offset:-1px}
+.wm-preview{position:relative;display:block;aspect-ratio:16/10;
+  background:repeating-conic-gradient(var(--checker-a) 0% 25%,var(--checker-b) 0% 50%) 50%/14px 14px}
+.wm-preview img{position:absolute;inset:12px;width:calc(100% - 24px);height:calc(100% - 24px);object-fit:contain}
+.wm-name{display:block;padding:10px 12px;font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:var(--hit);line-height:24px}
+.wm-check{position:absolute;top:8px;left:8px;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;
+  background:var(--accent);color:#fff;box-shadow:0 2px 6px rgba(0,0,0,.25);opacity:0;transform:scale(.4);
+  transition:opacity var(--dur-2) var(--ease),transform var(--dur-3) var(--ease-spring)}
+.wm-check svg{width:14px;height:14px}
+.wm-tile.is-active .wm-check{opacity:1;transform:scale(1)}
+.wm-tile.pop .wm-check{animation:savedPop var(--dur-3) var(--ease-spring) both}
+.wm-delete{position:absolute;top:4px;right:4px;width:36px;height:36px;min-height:36px;border-radius:50%;
+  background:var(--material)!important;backdrop-filter:var(--material-blur);-webkit-backdrop-filter:var(--material-blur);color:var(--text);
+  opacity:0;transition:opacity var(--dur-2) var(--ease),color var(--dur-2) var(--ease)}
+.wm-delete::after{content:"";position:absolute;inset:-4px}
+.wm-delete svg{width:18px;height:18px}
+.wm-tile:hover .wm-delete,.wm-delete:focus-visible{opacity:1}
+.wm-delete:hover:not(:disabled){color:var(--bad)}
+@media(hover:none){.wm-delete{opacity:1}}
+.wm-empty{padding:var(--sp-3);text-align:center;color:var(--muted);font-size:13px;border:1px dashed var(--line2);border-radius:14px}
+.wm-drop{display:flex;align-items:center;gap:12px;margin-top:var(--sp-2);padding:var(--sp-2);border:1.5px dashed var(--line2);border-radius:14px;color:var(--muted);
+  transition:border-color var(--dur-2) var(--ease),background var(--dur-2) var(--ease),transform var(--dur-2) var(--ease-spring)}
+.wm-drop svg{width:28px;height:28px;flex:none}
+.wm-drop strong{display:block;color:var(--text);font-size:13px;font-weight:600}
+.wm-drop span{font-size:12px}
+.wm-drop.is-over{border-color:var(--accent);background:rgba(0,113,227,.07);transform:scale(1.01);color:var(--accent)}
+.wm-drop.is-busy-zone{opacity:.7}
+.wm-choose{color:var(--accent);font-weight:600;cursor:pointer;display:inline-block;padding:10px 0;margin:-10px 0}
+.wm-choose.is-busy{cursor:progress}
+/* Toast: bottom centre, above sheets. */
+.toast{position:fixed;left:50%;bottom:calc(var(--sp-3) + env(safe-area-inset-bottom));z-index:300;display:flex;align-items:center;gap:12px;
+  max-width:calc(100vw - 2*var(--sp-2));padding:6px 6px 6px 16px;min-height:var(--hit);border-radius:999px;color:#fff;font-size:13px;
+  background:rgba(28,28,30,.92);backdrop-filter:var(--material-blur);-webkit-backdrop-filter:var(--material-blur);box-shadow:0 10px 30px rgba(0,0,0,.25);
+  opacity:0;visibility:hidden;pointer-events:none;transform:translate(-50%,16px);
+  transition:opacity var(--dur-2) var(--ease),transform var(--dur-3) var(--ease-spring),visibility 0s linear var(--dur-3)}
+.toast.show{opacity:1;visibility:visible;pointer-events:auto;transform:translate(-50%,0);transition:opacity var(--dur-2) var(--ease),transform var(--dur-3) var(--ease-spring),visibility 0s}
+.toast-action{min-height:32px;padding:6px 14px;background:rgba(255,255,255,.14);border:0;color:#6cb2ff;font-weight:600;position:relative}
+.toast-action::after{content:"";position:absolute;inset:-6px}
+.toast-action:hover:not(:disabled){background:rgba(255,255,255,.22);box-shadow:none}
+[data-theme="dark"] .toast-action{background:rgba(255,255,255,.14);border-color:transparent!important}
+
+/* ===== 072: large-title toolbar + bottom tab bar ===== */
+.container{margin-top:0}
+.toolbar{
+  --p:0;position:sticky;top:0;z-index:60;height:52px;margin:0 calc(-1 * var(--sp-2));padding:0 var(--sp-2);
+}
+.toolbar-bg{position:absolute;inset:0;pointer-events:none;opacity:var(--p);
+  background:var(--material);backdrop-filter:var(--material-blur);-webkit-backdrop-filter:var(--material-blur)}
+/* hairline + scroll-edge fade: content dissolves into the bar instead of meeting a hard edge */
+.toolbar-bg::before{content:"";position:absolute;left:0;right:0;bottom:0;height:1px;background:var(--hairline)}
+.toolbar-bg::after{content:"";position:absolute;left:0;right:0;top:100%;height:14px;
+  background:linear-gradient(to bottom,color-mix(in srgb,var(--bg) 75%,transparent),transparent)}
+.toolbar-row{position:relative;display:flex;align-items:center;gap:var(--sp-1);height:100%}
+.page-title{
+  margin:0;flex:none;font-family:var(--font-display);font-size:34px;font-weight:700;letter-spacing:-.025em;line-height:1.1;white-space:nowrap;
+  transform-origin:left center;will-change:transform;
+  transform:translateY(calc((1 - var(--p)) * 46px)) scale(calc(1 - var(--p) * .5));
+}
+.title-spacer{height:52px}
+.toolbar-trail{margin-left:auto;display:flex;align-items:center;gap:4px}
+.version-wrap{position:relative}
+.version-wrap .version-popover{left:auto;right:0}
+.tabbar{display:none}
+@media(max-width:600px){
+  .page-title{font-size:30px}
+  .version-wrap{display:none}
+  body{padding-bottom:calc(64px + env(safe-area-inset-bottom))}
+  .tabbar{
+    position:fixed;left:0;right:0;bottom:0;z-index:90;display:grid;grid-template-columns:repeat(4,1fr);
+    padding:4px 4px calc(4px + env(safe-area-inset-bottom));
+    background:var(--material);backdrop-filter:var(--material-blur);-webkit-backdrop-filter:var(--material-blur);
+    border-top:1px solid var(--hairline);
+  }
+  .tabbar-item{
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-height:52px;padding:4px 0;
+    border:0;border-radius:12px;background:transparent;box-shadow:none;color:var(--muted);font-size:10.5px;font-weight:500;
+    transition:color var(--dur-2) var(--ease),transform var(--dur-1) var(--ease);
+  }
+  [data-theme="dark"] .tabbar-item{background:transparent;border-color:transparent!important}
+  .tabbar-item:hover:not(:disabled){background:transparent;box-shadow:none;filter:none}
+  .tabbar-item:active:not(:disabled){transform:scale(var(--press))}
+  .tabbar-item .nav-icon{width:24px;height:24px;transition:transform var(--dur-3) var(--ease-spring)}
+  .tabbar-item[aria-current]{color:var(--accent)}
+  .tabbar-item[aria-current] .nav-icon{transform:scale(1.08)}
+  .toast{bottom:calc(76px + env(safe-area-inset-bottom))}
+}
+
+/* ===== 073: Dynamic Island ===== */
+.island{position:fixed;top:8px;left:50%;z-index:1000;display:flex;align-items:flex-start;gap:6px;width:max-content;transform:translateX(-50%);
+  transition:opacity var(--dur-2) var(--ease)}
+.island.fading{opacity:0}
+.island-main{
+  position:relative;flex:none;overflow:hidden;contain:layout paint;width:12px;height:12px;border-radius:6px;cursor:pointer;
+  background:#000;color:#fff;box-shadow:inset 0 0 0 1px rgba(255,255,255,.08),0 8px 24px rgba(0,0,0,.28);
+  -webkit-tap-highlight-color:transparent;outline-offset:3px;
+}
+.island.is-failed .island-main{background:#2a0706;box-shadow:inset 0 0 0 1px rgba(255,69,58,.35),0 8px 24px rgba(0,0,0,.28)}
+.isl-layer{position:absolute;left:0;top:0;opacity:0;pointer-events:none;transition:opacity var(--dur-1) var(--ease)}
+.isl-layer.on{opacity:1;pointer-events:auto;transition:opacity var(--dur-2) var(--ease) 60ms}
+.isl-compact{display:flex;align-items:center;gap:8px;height:36px;width:100%;padding:0 8px 0 8px}
+.island-main{--cw:248px}
+.isl-compact{width:var(--cw)}
+@media(max-width:600px){.isl-compact{--cw:150px;width:150px}}
+.isl-lead{width:20px;height:20px;flex:none;display:grid;place-items:center}
+.isl-lead img,.isl-x-icon img{width:20px;height:20px;border-radius:50%;object-fit:cover;display:block}
+.isl-spinner{width:16px;height:16px;border-radius:50%;border:2px solid rgba(255,255,255,.25);border-top-color:#fff;animation:spin .9s linear infinite}
+.isl-dot{width:10px;height:10px;border-radius:50%}
+.isl-dot.ready{background:#30d158}.isl-dot.failed{background:#ff453a}
+.isl-title{flex:1;min-width:0;font-size:12.5px;font-weight:600;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.isl-ring{width:22px;height:22px;flex:none;transform:rotate(-90deg)}
+.isl-ring circle{fill:none;stroke-width:3}
+.isl-ring-track{stroke:rgba(255,255,255,.18)}
+.isl-ring-fill{stroke:#0a84ff;stroke-linecap:round;transition:stroke-dashoffset 2200ms linear,stroke var(--dur-2) var(--ease)} /* spans one poll: glides, never jumps */
+.island.is-ready .isl-ring-fill{stroke:#30d158}
+.isl-expanded{width:min(380px,calc(100vw - 16px));padding:16px 18px 14px}
+.isl-expanded > *{opacity:0;transform:translateY(-4px);transition:opacity var(--dur-1) var(--ease),transform var(--dur-1) var(--ease)}
+.isl-expanded.on > *{opacity:1;transform:none;transition:opacity var(--dur-2) var(--ease),transform var(--dur-3) var(--ease-out)}
+.isl-expanded.on > :nth-child(1){transition-delay:60ms}
+.isl-expanded.on > :nth-child(2){transition-delay:100ms}
+.isl-expanded.on > :nth-child(3){transition-delay:140ms}
+.isl-x-head{display:flex;align-items:center;gap:12px}
+.isl-x-icon{width:36px;height:36px;flex:none;border-radius:10px;display:grid;place-items:center;background:rgba(255,255,255,.1);overflow:hidden}
+.isl-x-icon img{width:36px;height:36px;border-radius:10px}
+.isl-x-icon.ready{background:#30d158;color:#fff;border-radius:50%;animation:savedPop var(--dur-3) var(--ease-spring) both}
+.isl-x-icon.failed{background:#ff453a;color:#fff;border-radius:50%}
+.isl-x-icon svg{width:20px;height:20px}
+.isl-x-text{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.isl-x-title{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.isl-x-stage{font-size:12px;color:rgba(255,255,255,.62)}
+.island.is-failed .isl-x-stage{color:#ff8a82}
+.island.is-ready .isl-x-stage{color:#63e18b}
+.isl-x-pct{font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;color:rgba(255,255,255,.85)}
+.isl-bar{height:4px;margin-top:12px;border-radius:4px;background:rgba(255,255,255,.16);overflow:hidden}
+.isl-bar-fill{display:block;height:100%;background:#0a84ff;border-radius:4px;transform:scaleX(0);transform-origin:left center;transition:transform 2200ms linear}
+.island.is-ready .isl-bar-fill{background:#30d158;transition-duration:var(--dur-3)}
+.isl-x-actions{display:flex;justify-content:flex-end;margin-top:10px;min-height:0}
+.isl-x-actions:has(.isl-cancel[hidden]){margin-top:0}
+.isl-cancel{min-height:36px;padding:6px 16px;background:rgba(255,255,255,.14);border:0;color:#fff;box-shadow:none;position:relative}
+.isl-cancel::after{content:"";position:absolute;inset:-4px}
+.isl-cancel:hover:not(:disabled){background:rgba(255,69,58,.85);box-shadow:none;filter:none}
+[data-theme="dark"] .isl-cancel{background:rgba(255,255,255,.14);border-color:transparent!important}
+.island-more{
+  flex:none;width:36px;height:36px;min-height:36px;padding:0;border-radius:50%;border:0;background:#000;color:#fff;font-size:11.5px;font-weight:700;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.08),0 8px 24px rgba(0,0,0,.28);position:relative;
+  opacity:0;transform:translateX(-24px) scale(.4);transition:opacity var(--dur-2) var(--ease),transform var(--dur-3) var(--ease-spring);
+}
+.island-more::after{content:"";position:absolute;inset:-4px}
+.island-more.on{opacity:1;transform:none}
+.island-more:not(.on){pointer-events:none}
+.island.is-failed .isl-bar{display:none}
+[data-theme="dark"] .island-more{background:#000;border-color:transparent!important}
+.island-more:hover:not(:disabled){background:#1c1c1e;filter:none}
+.island-main:focus-visible{outline:2px solid var(--accent)}
+.job-overlay{left:50%;right:auto;top:56px;transform-origin:top center;z-index:990} /* 073: hangs under the island's "+N" */
+.job-overlay{transform:translate(-50%,-16px) scale(.82)}.job-overlay.open{transform:translate(-50%,0) scale(1)}
 </style>
 </head>
 <body>
@@ -884,58 +1014,49 @@ summary > .chev{margin-left:auto}
 <div class="sidebar-scrim" id="sidebarScrim" aria-hidden="true"></div>
 <aside class="sidebar" id="sidebar" aria-label="Workspace">
   <div class="sidebar-head">
-    <div class="sidebar-brand"><span class="sidebar-brand-icon">R</span>Workspace</div>
+    <div class="sidebar-brand"><img class="brand-mark" src="clipflow-mark.svg" alt="" width="28" height="28">ClipFlow</div>
     <button class="sidebar-collapse" type="button" data-sidebar-toggle aria-controls="sidebar" aria-expanded="true" aria-label="Hide sidebar">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="15" rx="3"/><path d="M9.5 4.5v15"/></svg>
     </button>
   </div>
-  <div class="sidebar-group">
-    <div class="rail-title">Quick actions</div>
-    <div class="rail-actions">
-      <button class="secondary" id="refreshCurrent" type="button">Refresh import</button>
-      <button class="secondary" id="refreshQueue" type="button">Refresh queue</button>
-    </div>
-  </div>
-  <div class="sidebar-group">
-    <div class="rail-title">Editing tips</div>
-    <div class="muted" style="margin-top:4px">Open Edit on a candidate to adjust subtitle, font, style, title, rating, render, download, and publishing.</div>
-  </div>
-  <div class="sidebar-group">
-    <div class="rail-title">Settings</div>
-    <div class="settings">
-      <details>
-        <summary aria-expanded="false">Advanced settings <span class="muted">· system / publishing</span><span class="chev" aria-hidden="true"></span></summary>
-        <div id="settingsPanel"></div>
-        <div class="rail-actions" style="margin-top:9px">
-          <button class="secondary" id="reloadSettings" type="button">Reload</button>
-          <button id="saveSettings" type="button">Save</button>
-        </div>
-        <div class="hint">Secrets are masked. Leaving a masked value unchanged preserves the existing secret.</div>
-      </details>
-    </div>
-    <div class="settings">
-      <details>
-        <summary aria-expanded="false">Watermark <span class="muted">· asset library</span><span class="chev" aria-hidden="true"></span></summary>
-        <div id="watermarkPanel"></div>
-        <label class="secondary watermark-upload-btn" style="margin-top:9px;display:block;text-align:center">Upload watermark image<input type="file" accept="image/png,image/webp" id="watermarkUploadInput" hidden></label>
-      </details>
-    </div>
+  <nav class="side-nav" id="sideNav" aria-label="Main">
+    <span class="nav-indicator" id="navIndicator" aria-hidden="true"></span>
+    <button class="nav-item" type="button" data-nav="current" aria-current="page"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v10.5M8 10.5l4 4 4-4"/><path d="M4.5 15v2.5A2.5 2.5 0 0 0 7 20h10a2.5 2.5 0 0 0 2.5-2.5V15"/></svg><span>Import</span></button>
+    <button class="nav-item" type="button" data-nav="queue"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.5 3.5 10 14"/><path d="M20.5 3.5 14 20.5l-4-6.5-6.5-4z"/></svg><span>Publish</span></button>
+    <button class="nav-item" type="button" data-nav="watermarks" aria-haspopup="dialog" aria-controls="watermarkSheet"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="3"/><path d="m3.5 15.5 4.5-4.5 4 4"/><path d="M14.5 16h3"/></svg><span>Watermarks</span></button>
+    <button class="nav-item" type="button" data-nav="settings" aria-haspopup="dialog" aria-controls="settingsSheet"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg><span>Settings</span></button>
+  </nav>
+  <div class="sidebar-foot">
+    <button class="nav-item theme-toggle" id="themeToggleSide" type="button" aria-label="Switch appearance"><span class="nav-icon-stack"><svg class="theme-icon-sun nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2.2M12 19.3v2.2M4.9 4.9l1.6 1.6M17.5 17.5l1.6 1.6M2.5 12h2.2M19.3 12h2.2M4.9 19.1l1.6-1.6M17.5 6.5l1.6-1.6"/></svg><svg class="theme-icon-moon nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg></span><span>Appearance</span><span class="nav-value" id="themeValue">Light</span></button>
   </div>
 </aside>
 
 <div class="container">
-  <header class="brand">
-    <button class="sidebar-open-btn" type="button" data-sidebar-toggle aria-controls="sidebar" aria-expanded="true" aria-label="Show sidebar">
+  <!-- 072: iOS large-title toolbar. #pageTitle is one element: large under the bar at scroll 0, shrinking into the
+       bar as you scroll. applyToolbarProgress() maps scrollY -> --p (0..1) every frame (transform/opacity only). -->
+  <header class="toolbar" id="toolbar">
+    <div class="toolbar-bg" aria-hidden="true"></div>
+    <div class="toolbar-row">
+      <button class="sidebar-open-btn" type="button" data-sidebar-toggle aria-controls="sidebar" aria-expanded="true" aria-label="Show sidebar">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="15" rx="3"/><path d="M9.5 4.5v15"/></svg>
     </button>
-    <div class="logo">R</div>
-    <div><h1>ClipFlow <button class="version-badge" id="versionBadge" type="button" aria-expanded="false">BETA · v2.1109</button></h1><p>Video clipping workspace · import → queue → publish</p>
-      <div class="version-popover" id="versionPopover" role="dialog" aria-hidden="true">
-        <div class="version-popover-title">What's new in v2.1109</div>
+      <h1 class="page-title" id="pageTitle">Import</h1>
+      <div class="toolbar-trail">
+        <div class="version-wrap"><button class="version-badge" id="versionBadge" type="button" aria-expanded="false">Beta · v2.1110</button>
+        <div class="version-popover" id="versionPopover" role="dialog" aria-hidden="true">
+        <div class="version-popover-title">What's new in v2.1110</div>
         <ul>
+          <li>Cancel a running job straight from the Dynamic Island</li>
           <li>Turn burned-in subtitles off per job for a clean video (your subtitle text and style are kept)</li>
           <li>Cancel a running job (stops the download, transcription or render within seconds)</li>
           <li>11 new caption fonts (Montserrat, Inter, Oswald, Poppins, Anton, Bebas Neue, Archivo Black), shown in their own typeface</li>
+          <li>Dynamic Island: live job status at the top, springs open on hover or tap, celebrates when clips are ready</li>
+          <li>Large page title that glides into a slim toolbar as you scroll; bottom tab bar on phones</li>
+          <li>Watermark library: preview tiles, drag-and-drop upload, delete with undo</li>
+          <li>Import: Analyze enables only for a valid YouTube link, with an instant thumbnail preview</li>
+          <li>Settings sheet: grouped lists, search, show/hide secrets, Save confirms inline</li>
+          <li>Sidebar is now navigation: Import, Publish, Watermarks, Settings (as sheets), appearance in the footer</li>
+          <li>One motion system: calmer curves, a consistent press, larger tap targets, sentence-case labels</li>
           <li>Every expandable section uses the same chevron that turns when it opens</li>
           <li>Status badges: clearer colours (grey waiting, blue working, amber needs you) that pass contrast in light and dark</li>
           <li>Per-job watermark size and opacity in the edit panel</li>
@@ -947,60 +1068,29 @@ summary > .chev{margin-left:auto}
           <li>Settings now take effect without a restart and only changed fields are saved</li>
           <li>Rebuilt on the new server (v2.1100 baseline)</li>
         </ul>
+      </div></div>
+        <button class="icon-btn refresh-btn" id="refreshView" type="button" aria-label="Refresh"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3"/><path d="M19.5 4.5v4h-4"/></svg></button>
       </div>
     </div>
-    <button class="theme-toggle-btn theme-toggle" id="themeToggleMain" type="button" aria-label="Toggle dark mode">
-      <svg class="theme-icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.6M12 18.9v2.6M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M2.5 12h2.6M18.9 12h2.6M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"/></svg>
-      <svg class="theme-icon-moon" viewBox="0 0 24 24" fill="currentColor"><path d="M20.4 14.7A8.3 8.3 0 0 1 9.3 3.6a.6.6 0 0 0-.7-.8A9.5 9.5 0 1 0 21.2 15.4a.6.6 0 0 0-.8-.7Z"/></svg>
-    </button>
   </header>
-
-  <div class="topbar" id="topbarWrap">
-    <nav class="tabs" id="tabsNav" role="tablist" aria-label="Sections">
-      <div class="tab-indicator" id="tabIndicator"></div>
-      <div id="tabCurrent" class="tab active" data-tab="current" role="tab" tabindex="0" aria-selected="true" aria-controls="currentSection">Import</div>
-      <div id="tabQueue" class="tab" data-tab="queue" role="tab" tabindex="-1" aria-selected="false" aria-controls="queueSection">Publish</div>
-    </nav>
-    <button id="jobIsland" class="job-island" type="button" aria-label="Show running jobs" aria-hidden="true" aria-controls="jobOverlay" aria-expanded="false" disabled>
-      <span class="job-island-live" aria-hidden="true"></span>
-      <span class="job-island-main" aria-hidden="true">
-        <span class="job-island-top">
-          <span id="jobIslandTitle" class="job-island-title"></span>
-          <span id="jobIslandPct" class="job-island-pct">0%</span>
-        </span>
-        <span class="job-island-sub">
-          <span id="jobIslandStage" class="job-island-stage"></span>
-          <span id="jobIslandMore" class="job-island-more"></span>
-        </span>
-        <span class="job-island-track"><span id="jobIslandBar" class="job-island-bar"></span></span>
-      </span>
-    </button>
-    <span id="jobIslandLive" class="sr-only" role="status" aria-live="polite"></span>
-    <button class="theme-toggle-float theme-toggle" id="themeToggleFloat" type="button" aria-label="Toggle dark mode">
-      <svg class="theme-icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.6M12 18.9v2.6M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M2.5 12h2.6M18.9 12h2.6M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"/></svg>
-      <svg class="theme-icon-moon" viewBox="0 0 24 24" fill="currentColor"><path d="M20.4 14.7A8.3 8.3 0 0 1 9.3 3.6a.6.6 0 0 0-.7-.8A9.5 9.5 0 1 0 21.2 15.4a.6.6 0 0 0-.8-.7Z"/></svg>
-    </button>
-    <div class="topbar-logo" id="topbarLogo" role="button" tabindex="0" aria-label="ClipFlow — scroll to top">
-      <span class="topbar-logo-icon">R</span>
-      <span class="topbar-logo-text">ClipFlow</span>
-    </div>
-  </div>
+  <div class="title-spacer" aria-hidden="true"></div>
 
   <div class="layout">
     <main>
       <section id="currentSection" class="view-section">
         <div class="panel">
           <div class="job-header">
-            <div><h2>Import a new job</h2><div class="muted">Add a source, choose the format, and start processing.</div></div>
-            <span class="badge">AI</span>
+            <div><h2>Import a new job</h2><div class="muted">Paste a YouTube link. AI finds the strongest hooks and cuts them into vertical clips.</div></div>
           </div>
 
           <div class="field">
             <label for="youtubeUrl">YouTube URL</label>
             <div class="grid-url">
-              <input id="youtubeUrl" autocomplete="off" placeholder="https://www.youtube.com/watch?v=...">
-              <div class="analyze-wrap"><button id="analyzeButton" type="button">Analyze Video</button></div>
+              <input id="youtubeUrl" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://www.youtube.com/watch?v=…" aria-describedby="youtubeUrlHint">
+              <div class="analyze-wrap"><button class="primary" id="analyzeButton" type="button" disabled>Analyze</button></div>
             </div>
+            <div class="url-hint" id="youtubeUrlHint">youtube.com, m./music.youtube.com or youtu.be · https only</div>
+            <div class="url-preview" id="urlPreview" hidden><img id="urlPreviewImg" alt="" width="160" height="90"><div class="url-preview-meta"><strong>YouTube video</strong><span id="urlPreviewId"></span></div></div>
           </div>
 
           <div class="field">
@@ -1047,7 +1137,7 @@ summary > .chev{margin-left:auto}
               <div class="muted">Indonesian · ALL CAPS · bold white · heavy outline + subtle shadow · positioned higher to protect the creator face.</div>
             </div>
           </details>
-          <div id="createStatus" class="status-box"><div class="status-title">Ready.</div><div class="status-message">Enter a YouTube URL to begin the import.</div></div>
+          <div id="createStatus" class="status-box" role="status" hidden></div>
           <div id="currentJobs"></div>
         </div>
       </section>
@@ -1061,6 +1151,59 @@ summary > .chev{margin-left:auto}
 </div>
 </div>
 
+<!-- Dynamic Island (073). Not rendered (hidden) while nothing runs. #islandMain is the black shape whose
+     size is spring-morphed; its two content layers cross-fade. #islandMore is the detached "+N" circle. -->
+<div class="island" id="island" hidden>
+  <div class="island-main" id="islandMain" role="button" tabindex="0" aria-expanded="false" aria-label="Running jobs">
+    <div class="isl-layer isl-compact" id="islCompact">
+      <span class="isl-lead" id="islLead"></span>
+      <span class="isl-title" id="islTitleC"></span>
+      <svg class="isl-ring" viewBox="0 0 24 24" aria-hidden="true"><circle class="isl-ring-track" cx="12" cy="12" r="9.5"/><circle class="isl-ring-fill" id="islRing" cx="12" cy="12" r="9.5"/></svg>
+    </div>
+    <div class="isl-layer isl-expanded" id="islExpanded">
+      <div class="isl-x-head"><span class="isl-x-icon" id="islIcon"></span><div class="isl-x-text"><strong class="isl-x-title" id="islTitleX"></strong><span class="isl-x-stage" id="islStage"></span></div><span class="isl-x-pct" id="islPct"></span></div>
+      <div class="isl-bar"><span class="isl-bar-fill" id="islBar"></span></div>
+      <div class="isl-x-actions"><button class="isl-cancel" id="islCancel" type="button" hidden>Cancel</button></div>
+    </div>
+  </div>
+  <button class="island-more" id="islandMore" type="button" hidden aria-label="Show all running jobs"></button>
+  <span class="sr-only" id="islandLive" role="status" aria-live="polite"></span>
+</div>
+<nav class="tabbar" id="tabbar" aria-label="Main"><button class="tabbar-item" type="button" data-nav="current"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v10.5M8 10.5l4 4 4-4"/><path d="M4.5 15v2.5A2.5 2.5 0 0 0 7 20h10a2.5 2.5 0 0 0 2.5-2.5V15"/></svg><span>Import</span></button><button class="tabbar-item" type="button" data-nav="queue"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.5 3.5 10 14"/><path d="M20.5 3.5 14 20.5l-4-6.5-6.5-4z"/></svg><span>Publish</span></button><button class="tabbar-item" type="button" data-nav="watermarks" aria-haspopup="dialog"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="3"/><path d="m3.5 15.5 4.5-4.5 4 4"/><path d="M14.5 16h3"/></svg><span>Watermarks</span></button><button class="tabbar-item" type="button" data-nav="settings" aria-haspopup="dialog"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg><span>Settings</span></button></nav>
+<!-- Sheets (068): Settings and Watermarks open as centred dialogs from the sidebar. Closed = visibility:hidden + pointer-events:none. -->
+<div class="sheet-layer" id="settingsSheet" aria-hidden="true">
+  <div class="sheet-backdrop" data-sheet-close></div>
+  <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="settingsSheetTitle">
+    <header class="sheet-head"><h2 id="settingsSheetTitle">Settings</h2><button class="sheet-close" type="button" data-sheet-close aria-label="Close settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></header>
+    <div class="sheet-search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg><input type="search" id="settingsSearch" placeholder="Search settings" autocomplete="off" aria-label="Search settings" aria-controls="settingsPanel"></div>
+    <div class="sheet-body settings-body">
+      <div id="settingsPanel"></div>
+      <div id="settingsNoMatch" class="settings-nomatch" hidden>No settings match “<span></span>”.</div>
+      <p class="hint settings-hint">Secrets are masked. Leaving a masked value unchanged keeps the saved secret.</p>
+    </div>
+    <footer class="sheet-foot">
+      <span class="sheet-foot-status" id="settingsDirty" aria-live="polite"></span>
+      <button class="secondary" id="reloadSettings" type="button">Reload</button>
+      <button class="primary" id="saveSettings" type="button" disabled>Save</button>
+    </footer>
+  </section>
+</div>
+<div class="sheet-layer" id="watermarkSheet" aria-hidden="true">
+  <div class="sheet-backdrop" data-sheet-close></div>
+  <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="watermarkSheetTitle">
+    <header class="sheet-head"><h2 id="watermarkSheetTitle">Watermarks</h2><button class="sheet-close" type="button" data-sheet-close aria-label="Close watermarks"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></header>
+    <div class="sheet-body">
+      <p class="sheet-lede">The selected watermark is burned into every render. Transparent PNGs work best.</p>
+      <div id="watermarkPanel"></div>
+      <div class="wm-drop" id="wmDrop">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V4.5M8 8.5l4-4 4 4"/><path d="M4.5 14.5v3A2.5 2.5 0 0 0 7 20h10a2.5 2.5 0 0 0 2.5-2.5v-3"/></svg>
+        <div><strong>Drop a PNG or WebP here</strong><span>or <label class="wm-choose watermark-upload-btn" tabindex="0">choose a file<input type="file" accept="image/png,image/webp" id="watermarkUploadInput" hidden></label> · up to 5 MB</span></div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite" aria-hidden="true"><span id="toastText"></span><button class="toast-action" id="toastAction" type="button"></button></div>
 <script>
 "use strict";
 
@@ -1148,6 +1291,8 @@ let activeJobId=null,pollTimer=null,jobMonitorTimer=null,currentTab="current";
 const editMoreOpen={};  // "<cid>:desc|thumb|wm" -> open, survives re-renders
 const REDUCED_MOTION=window.matchMedia("(prefers-reduced-motion: reduce)");
 function scrollMode(){return REDUCED_MOTION.matches?"auto":"smooth"}
+// JS waits that exist only to let a CSS animation play collapse to 0 under reduced motion (067).
+function motionMs(ms){return REDUCED_MOTION.matches?0:ms}
 // One busy/disabled treatment for every async control (R-11): disables it
 // (aria-disabled for <label> upload buttons), adds .is-busy (spinner),
 // optionally swaps the label, and restores the original label after.
@@ -1177,6 +1322,7 @@ function applyTheme(theme){
   const meta=document.querySelector('meta[name="theme-color"]');
   if(meta)meta.setAttribute("content",theme==="dark"?"#000000":"#f5f5f7");
   try{localStorage.setItem("clipflow-theme",theme)}catch(e){}
+  const tv=document.getElementById("themeValue");if(tv)tv.textContent=theme==="dark"?"Dark":"Light";
 }
 function toggleTheme(){
   applyTheme((document.documentElement.getAttribute("data-theme")||"light")==="dark"?"light":"dark");
@@ -1301,8 +1447,40 @@ function updateImportOptionsSummary(){
   const lay={auto:"Auto facecam",left:"Facecam left",right:"Facecam right"}[selectedLayout]||"Auto facecam";
   el.textContent=`${selectedSplit} : ${100-selectedSplit} · ${lay} · ${platformLabel(selectedPlatform)}`;
 }
-function validYouTube(v){try{const u=new URL(v),h=u.hostname.toLowerCase();return (h==="youtube.com"||h.endsWith(".youtube.com")||h==="youtu.be"||h.endsWith(".youtu.be"))&&(h==="youtu.be"||u.searchParams.has("v")||u.pathname.startsWith("/shorts/")||u.pathname.startsWith("/live/"))}catch{return false}}
-function updateAnalyzeReady(){const b=$("analyzeButton"),ok=validYouTube($("youtubeUrl").value.trim())&&!b.disabled;b.classList.toggle("analyze-ready",ok)}
+// Same rules as the backend's validate_youtube_url() (063): https only, exact host allowlist, no
+// userinfo/odd port, no whitespace/control chars, no leading "-". On top of that the link must
+// name a video, so the thumbnail preview and the Analyze button agree.
+const YT_HOSTS=["youtube.com","www.youtube.com","m.youtube.com","music.youtube.com","youtu.be"];
+function youtubeUrlProblem(raw){
+  const v=(raw||"").trim();
+  if(!v)return"empty";
+  if(v.startsWith("-")||/[\s\x00-\x1f\\]/.test(v)||!/^https:\/\//i.test(v))return"Use an https:// YouTube link.";
+  let u;try{u=new URL(v)}catch{return"That doesn't look like a link."}
+  if(!YT_HOSTS.includes(u.hostname.toLowerCase()))return"Only youtube.com, m./music.youtube.com or youtu.be links.";
+  if(u.username||u.password||(u.port&&u.port!=="443"))return"Only plain YouTube links (no login or port).";
+  if(!youtubeId(v))return"Link to a specific video (watch, shorts or youtu.be).";
+  return"";
+}
+function youtubeId(v){
+  try{const u=new URL(v.trim()),h=u.hostname.toLowerCase(),seg=u.pathname.split("/").filter(Boolean);
+    const id=h==="youtu.be"?seg[0]:(u.searchParams.get("v")||(["shorts","live","embed"].includes(seg[0])?seg[1]:""));
+    return /^[A-Za-z0-9_-]{11}$/.test(id||"")?id:""}catch{return""}
+}
+function validYouTube(v){return !youtubeUrlProblem(v)}
+let urlPreviewId="";
+function updateAnalyzeReady(){
+  const b=$("analyzeButton"),input=$("youtubeUrl"),raw=input.value,problem=youtubeUrlProblem(raw),ok=!problem;
+  if(!b.classList.contains("is-busy"))b.disabled=!ok;
+  const bad=problem&&problem!=="empty";
+  input.setAttribute("aria-invalid",bad?"true":"false");
+  const hint=$("youtubeUrlHint");hint.textContent=bad?problem:"youtube.com, m./music.youtube.com or youtu.be · https only";hint.classList.toggle("is-error",!!bad);
+  const id=ok?youtubeId(raw):"",pv=$("urlPreview"),img=$("urlPreviewImg");
+  if(id!==urlPreviewId){
+    urlPreviewId=id;pv.classList.remove("is-loaded");
+    if(id){pv.hidden=false;$("urlPreviewId").textContent=id;img.onload=()=>{if(urlPreviewId===id)pv.classList.add("is-loaded")};img.onerror=()=>{if(urlPreviewId===id)pv.hidden=true};img.src=`https://i.ytimg.com/vi/${id}/mqdefault.jpg`}
+    else{pv.hidden=true;img.removeAttribute("src")}
+  }
+}
 
 async function createJob(){
   const url=$("youtubeUrl").value.trim();
@@ -1310,8 +1488,8 @@ async function createJob(){
   if(!url)return alert("Please enter a YouTube URL.");
   if(!validYouTube(url))return alert("Please enter a valid YouTube URL.");
   clearTimeout(window._createStatusResetTimer);
-  $("createStatus").classList.remove("fading");
-  const b=$("analyzeButton");setBusy(b,true,"Analyzing…");b.classList.remove("analyze-ready");
+  $("createStatus").classList.remove("fading");$("createStatus").hidden=false;
+  const b=$("analyzeButton");setBusy(b,true,"Analyzing…");
   $("createStatus").innerHTML=`<div class="status-title">Creating job…</div><div class="status-message">Starting the AI pipeline.</div>`;
   try{
     const j=await api("/api/jobs",{method:"POST",body:JSON.stringify({
@@ -1332,9 +1510,9 @@ async function createJob(){
       if(!box)return;
       box.classList.add("fading");
       setTimeout(()=>{
-        box.innerHTML=`<div class="status-title">Ready.</div><div class="status-message">Enter a YouTube URL to begin the import.</div>`;
+        box.innerHTML="";box.hidden=true;
         box.classList.remove("fading");
-      },340);
+      },motionMs(340));
     },2400);
   }catch(e){$("createStatus").innerHTML=`<div class="error-box">${esc(e.message)}</div>`}
   finally{setBusy(b,false);updateAnalyzeReady()}
@@ -1790,7 +1968,7 @@ function renderDetail(j){
 async function loadCurrentJobs(){
   try{
     const d=await api("/api/jobs?scope=current"),jobs=Array.isArray(d)?d:(d?.jobs||d?.items||[]);
-    $("currentJobs").innerHTML=jobs.length?jobs.map((j,i)=>renderCurrentJob(j,i)).join(""):`<div class="panel empty">No active jobs.</div>`;
+    $("currentJobs").innerHTML=jobs.length?jobs.map((j,i)=>renderCurrentJob(j,i)).join(""):`<div class="panel empty import-empty"><svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="3"/><path d="m10 9.5 4.5 2.5-4.5 2.5z"/></svg><div class="empty-title">Nothing importing</div><div class="empty-tip">Paste a YouTube link above and press Analyze. Jobs show their progress here, then move to Publish when the clips are ready.</div></div>`;
     const stored=loadActive();
     if(stored&&jobs.some(j=>String(j.id)===String(stored)))activeJobId=stored;
     else if(!activeJobId&&jobs[0])saveActive(jobs[0].id);
@@ -1799,7 +1977,7 @@ async function loadCurrentJobs(){
 async function loadQueue(){
   try{
     const d=await api("/api/jobs?scope=queue"),jobs=Array.isArray(d)?d:(d?.jobs||d?.items||[]);
-    $("queueJobs").innerHTML=jobs.length?`<div class="queue-list">${jobs.map((j,i)=>renderQueueJob(j,i)).join("")}</div>`:`<div class="panel empty">No jobs in Publish yet.</div>`;
+    $("queueJobs").innerHTML=jobs.length?`<div class="queue-list">${jobs.map((j,i)=>renderQueueJob(j,i)).join("")}</div>`:`<div class="panel empty"><div class="empty-title">No jobs in Publish yet</div><div class="empty-tip">Finished imports land here. Open one and use <b>Edit</b> on a clip to adjust its subtitle, font, style, title and rating, then render, download or publish.</div></div>`;
   }catch(e){$("queueJobs").innerHTML=`<div class="panel error-box">Cannot load history: ${esc(e.message)}</div>`}
 }
 async function switchQueueView(showDetail){
@@ -1813,7 +1991,7 @@ async function switchQueueView(showDetail){
   prev.classList.remove("switching-in");
   prev.classList.add("switching-out");
 
-  await new Promise(resolve=>setTimeout(resolve,300));
+  await new Promise(resolve=>setTimeout(resolve,motionMs(300)));
 
   prev.classList.remove("switching-out");
   prev.classList.add("hidden");
@@ -1876,6 +2054,8 @@ async function refreshJob(id){
 }
 function startPolling(id){if(!id)return;stopPolling();activeJobId=id;saveActive(id);refreshJob(id);pollTimer=setInterval(()=>refreshJob(id),POLL_INTERVAL)}
 function stopPolling(){if(pollTimer){clearInterval(pollTimer);pollTimer=null}}
+// Global on purpose: the Dynamic Island (073) shows its Cancel only when window.cancelJob exists.
+window.cancelJob=cancelJob;
 async function cancelJob(id,btn){
   if(!confirm("Cancel this job? Work in progress stops and can't be resumed."))return;
   setBusy(btn,true,"Cancelling…");
@@ -2050,7 +2230,6 @@ async function uploadCandidate(jid,cid){
 // task's title, plain-language stage and %, plus "+N" for the rest.
 // Nothing here measures or animates width — entrance/exit and progress
 // are pure opacity/transform (see the .job-island CSS).
-let jobIslandAnnounced="";
 // Merges job-level pipeline jobs (import/download/transcribe/analyze)
 // with candidate-level actions (preview regen, final render, AI hook/
 // typo/thumbnail/caption work) into one list the island/overlay can
@@ -2059,39 +2238,139 @@ function allActiveTasks(){
   const jobItems=runningJobs.map(j=>({id:j.id,jobId:j.id,kind:"job",platform:j.platform,status:j.status,progress:j.progress,message:j.message,custom_title:j.custom_title,source_title:j.source_title}));
   return [...jobItems,...Object.values(candidateActiveTasks)];
 }
-function updateJobIsland(){
-  const b=$("jobIsland"),wrap=$("topbarWrap");
-  const items=allActiveTasks();
-  // Job-level pipeline jobs stay hidden while on the Import tab (that
-  // job's own full progress card is already on screen there — showing
-  // the island too would be redundant). Candidate-level actions have no
-  // such duplicate anywhere else once you're not looking at that exact
-  // candidate, so those always surface the island regardless of tab.
-  const candidateCount=Object.keys(candidateActiveTasks).length;
-  const shouldShow=(candidateCount>0 || (currentTab==="queue" && runningJobs.length>0)) && items.length>0 && !overlayOpen;
-  b.setAttribute("aria-expanded",String(overlayOpen));
-  if(!shouldShow){
-    b.classList.remove("is-visible");wrap?.classList.remove("has-job");
-    b.setAttribute("aria-hidden","true");b.disabled=true;
-    if(!items.length)jobIslandAnnounced="";
+// ---- Dynamic Island (073) ----------------------------------------------------------------
+// Springs: a damped harmonic oscillator integrated once per preset and emitted as a CSS
+// linear() easing (sampled at 60 Hz), so WAAPI runs real spring physics off the main thread's
+// per-frame JS. grow = slight overshoot; settle = near-critically damped (no wobble on collapse).
+function springEasing(stiffness,damping,mass=1){
+  let x=0,v=0,t=0;const dt=1/600,pts=[0];let next=1/60;
+  while(t<2){const a=(-stiffness*(x-1)-damping*v)/mass;v+=a*dt;x+=v*dt;t+=dt;
+    if(t>=next){pts.push(+x.toFixed(4));next+=1/60;if(t>.12&&Math.abs(1-x)<.0015&&Math.abs(v)<.02)break}}
+  pts[pts.length-1]=1;return{easing:`linear(${pts.join(",")})`,duration:Math.round(t*1000)};
+}
+const SPRING={grow:springEasing(260,20),settle:springEasing(300,34),pop:springEasing(420,18)};
+const ISL={mode:"hidden",pinned:false,hover:false,event:null,eventTimer:null,failSeen:true,lastStatus:new Map(),announced:"",lead:null,morph:null};
+let jobIslandAnnounced=""; // kept for older callers
+const ISL_BUSY=s=>BUSY.includes(s)||s==="processing";
+function islandItems(){return allActiveTasks().filter(t=>t.kind==="candidate"||ISL_BUSY(t.status)||!TERMINAL.includes(t.status))}
+function islandSize(mode){
+  const narrow=window.innerWidth<=600,vw=window.innerWidth;
+  if(mode==="compact")return{w:narrow?150:248,h:36,r:18};
+  if(mode==="expanded"){const w=Math.min(380,vw-16);const h=Math.ceil($("islExpanded").scrollHeight)||132;return{w,h,r:28}}
+  return{w:12,h:12,r:6};
+}
+function islandMorph(to,{spring="grow",fade=false}={}){
+  const el=$("islandMain"),from=el.getBoundingClientRect(),fromR=parseFloat(getComputedStyle(el).borderRadius)||to.r;
+  ISL.morph?.cancel();
+  el.style.width=to.w+"px";el.style.height=to.h+"px";el.style.borderRadius=to.r+"px";
+  if(REDUCED_MOTION.matches){el.animate([{opacity:fade?0:.35},{opacity:1}],{duration:200});return} // reduced motion: a cross-fade, no size motion
+  if(!from.width)return;
+  const sp=SPRING[spring];
+  ISL.morph=el.animate([{width:from.width+"px",height:from.height+"px",borderRadius:fromR+"px"},{width:to.w+"px",height:to.h+"px",borderRadius:to.r+"px"}],{duration:sp.duration,easing:sp.easing});
+}
+function islandShowLayer(mode){
+  const c=$("islCompact"),x=$("islExpanded"),on=mode==="expanded"?x:c,off=mode==="expanded"?c:x;
+  if(on.classList.contains("on"))return;
+  off.classList.remove("on");on.classList.add("on"); // CSS: size morph first, content fades in after 60 ms, children staggered
+}
+function setIslandMode(mode,opts={}){
+  const isl=$("island"),prev=ISL.mode;if(mode===prev&&!opts.force){if(mode==="expanded")islandMorph(islandSize("expanded"),{spring:"settle"});return}
+  ISL.mode=mode;$("islandMain").setAttribute("aria-expanded",String(mode==="expanded"));
+  if(mode==="hidden"){
+    if(prev==="hidden")return;
+    $("islCompact").classList.remove("on");$("islExpanded").classList.remove("on");$("islandMore").classList.remove("on");
+    const done=()=>{if(ISL.mode==="hidden"){isl.hidden=true;$("islandMain").style.cssText=""}};
+    if(REDUCED_MOTION.matches){isl.classList.add("fading");setTimeout(()=>{isl.classList.remove("fading");done()},200);return}
+    islandMorph({w:12,h:12,r:6},{spring:"settle"});isl.classList.add("fading");
+    setTimeout(()=>{isl.classList.remove("fading");done()},Math.min(SPRING.settle.duration,420));return;
+  }
+  if(prev==="hidden"){ // birth: a 12 px pill at centre grows with overshoot, content follows ~60 ms later
+    isl.hidden=false;const el=$("islandMain");el.style.width="12px";el.style.height="12px";el.style.borderRadius="6px";void el.offsetWidth;
+  }
+  islandShowLayer(mode);
+  islandMorph(islandSize(mode),{spring:mode==="expanded"||prev==="hidden"?"grow":"settle",fade:prev==="hidden"});
+}
+function islandThumb(item){
+  const job=item.kind==="job"?runningJobs.find(j=>String(j.id)===String(item.jobId)):null;
+  const id=job?.youtube_url?youtubeId(job.youtube_url):"";
+  return id?`<img src="https://i.ytimg.com/vi/${id}/default.jpg" alt="" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'isl-spinner'}))">`:`<span class="isl-spinner"></span>`;
+}
+function islandTitle(t){return t.kind==="candidate"?(t.title||"Clip"):(t.custom_title||t.source_title||platformLabel(t.platform))}
+function paintIsland(){
+  const items=islandItems(),ev=ISL.event,isl=$("island");
+  isl.classList.toggle("is-ready",ev?.type==="ready");isl.classList.toggle("is-failed",ev?.type==="failed"||!ISL.failSeen);
+  const more=$("islandMore"),extra=ev?items.length:Math.max(0,items.length-1);
+  more.textContent=extra?`+${extra}`:"";
+  // The split only exists in compact mode: it merges into the island while expanded (so the expanded
+  // shape stays centred and never overflows a phone), and springs back out afterwards.
+  requestAnimationFrame(()=>{const want=!!extra&&ISL.mode==="compact";
+    if(!want){more.classList.remove("on");more.hidden=true;return}
+    if(more.hidden){more.hidden=false;void more.offsetWidth}more.classList.add("on")});
+  if(ev){
+    $("islIcon").className="isl-x-icon "+ev.type;$("islIcon").innerHTML=ev.type==="ready"?'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m6 12.5 4 4 8-9"/></svg>':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M12 7v6M12 17h.01"/></svg>';
+    $("islTitleX").textContent=ev.title;$("islStage").textContent=ev.type==="ready"?"Ready for review":`Failed · ${ev.stage}`;
+    $("islPct").textContent=ev.type==="ready"?"100%":"";$("islBar").style.transform=`scaleX(${ev.type==="ready"?1:0})`;
+    $("islCancel").hidden=true;
+    $("islTitleC").textContent=ev.type==="ready"?"Ready for review":`Failed · ${ev.stage}`;
+    $("islLead").innerHTML=`<span class="isl-dot ${ev.type}"></span>`;$("islLead").dataset.key="";setRing(ev.type==="ready"?100:0);
     return;
   }
-  const lead=items[0],p=pct(lead.progress);
-  const title=lead.kind==="candidate"?(lead.title||"Candidate"):(lead.custom_title||lead.source_title||platformLabel(lead.platform));
-  const stage=lead.actionLabel||stageLabel(lead.status);
-  $("jobIslandTitle").textContent=title;
-  $("jobIslandStage").textContent=stage;
-  $("jobIslandMore").textContent=items.length>1?`+${items.length-1}`:"";
-  $("jobIslandPct").textContent=p+"%";
-  $("jobIslandBar").style.transform=`scaleX(${p/100})`;
-  const more=items.length>1?` (and ${items.length-1} more)`:"";
-  b.setAttribute("aria-label",`${title}: ${stage}, ${p}%${more}. Show running jobs`);
-  // Announce stage changes and each 25% step, not every poll tick.
-  const said=`${title}: ${stage}, ${Math.floor(p/25)*25}%${more}`;
-  if(said!==jobIslandAnnounced){jobIslandAnnounced=said;$("jobIslandLive").textContent=said}
-  b.classList.add("is-visible");wrap?.classList.add("has-job");
-  b.setAttribute("aria-hidden","false");b.disabled=false;
+  const lead=items[0];if(!lead)return;ISL.lead=lead;
+  const p=pct(lead.progress),stage=lead.actionLabel||stageLabel(lead.status),title=islandTitle(lead);
+  $("islTitleC").textContent=title;$("islTitleX").textContent=title;$("islStage").textContent=stage;$("islPct").textContent=p+"%";
+  $("islBar").style.transform=`scaleX(${p/100})`;setRing(p);
+  $("islIcon").className="isl-x-icon";$("islIcon").innerHTML=islandThumb(lead);
+  if($("islLead").dataset.key!==String(lead.id)){$("islLead").dataset.key=String(lead.id);$("islLead").innerHTML=islandThumb(lead)}
+  $("islCancel").hidden=!(lead.kind==="job"&&typeof window.cancelJob==="function");
+  $("islandMain").setAttribute("aria-label",`${title}: ${stage}, ${p}%${items.length>1?` (and ${items.length-1} more)`:""}`);
+  const said=`${title}: ${stage}, ${Math.floor(p/25)*25}%`;if(said!==ISL.announced){ISL.announced=said;$("islandLive").textContent=said}
 }
+function setRing(p){const c=$("islRing"),L=2*Math.PI*9.5;c.style.strokeDasharray=L;c.style.strokeDashoffset=L*(1-Math.max(0,Math.min(100,p))/100)}
+function updateJobIsland(){
+  trackIslandEvents();
+  const items=islandItems();paintIsland();
+  let mode="hidden";
+  if(ISL.event)mode="expanded";
+  else if(items.length||!ISL.failSeen)mode=(ISL.pinned||ISL.hover)&&items.length?"expanded":"compact";
+  if(!items.length&&!ISL.event&&ISL.failSeen){ISL.pinned=false;ISL.hover=false}
+  setIslandMode(mode);
+}
+// Ready/failed events: a busy job that turns terminal (or vanishes from the running list) fires once.
+function trackIslandEvents(){
+  const seen=new Set();
+  for(const j of runningJobs){const id=String(j.id),was=ISL.lastStatus.get(id);seen.add(id);
+    if(was&&ISL_BUSY(was)&&!ISL_BUSY(j.status))fireIslandEvent(j);ISL.lastStatus.set(id,j.status)}
+  for(const [id,was] of [...ISL.lastStatus]){if(seen.has(id))continue;ISL.lastStatus.delete(id);
+    if(ISL_BUSY(was))api("/api/jobs/"+id).then(j=>{if(j&&!ISL_BUSY(j.status)){fireIslandEvent(j);updateJobIsland()}}).catch(()=>{})}
+}
+function fireIslandEvent(j){
+  const st=j.status,title=j.custom_title||j.source_title||platformLabel(j.platform);
+  let type=null;if(st==="review"||st==="completed")type="ready";else if(st==="failed"||st==="partial_failure")type="failed";
+  if(!type)return;
+  clearTimeout(ISL.eventTimer);
+  ISL.event={type,title,jobId:j.id,stage:j.error_stage?stageLabel(j.error_stage):stageLabel(st)};
+  if(type==="failed")ISL.failSeen=false;
+  ISL.eventTimer=setTimeout(()=>{ISL.event=null;if(type==="failed")ISL.failTitle=`Failed · ${title}`;updateJobIsland()},2500);
+}
+function islandToggle(){
+  if(ISL.event){clearTimeout(ISL.eventTimer);ISL.event=null;ISL.failSeen=true;return updateJobIsland()}
+  if(!ISL.failSeen){ISL.failSeen=true;return updateJobIsland()}
+  ISL.pinned=!ISL.pinned;updateJobIsland();
+}
+function islandCollapse(){if(ISL.pinned||ISL.hover){ISL.pinned=false;ISL.hover=false;updateJobIsland()}}
+(function wireIsland(){
+  const m=$("islandMain");let hoverT=null;
+  m.addEventListener("click",e=>{e.stopPropagation();islandToggle()});
+  m.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();islandToggle()}});
+  const fine=matchMedia("(hover:hover) and (pointer:fine)");
+  $("island").addEventListener("mouseenter",()=>{if(!fine.matches)return;clearTimeout(hoverT);hoverT=setTimeout(()=>{ISL.hover=true;if(!ISL.failSeen)ISL.failSeen=true;updateJobIsland()},120)});
+  $("island").addEventListener("mouseleave",()=>{if(!fine.matches)return;clearTimeout(hoverT);hoverT=setTimeout(()=>{ISL.hover=false;updateJobIsland()},220)});
+  $("islandMore").addEventListener("click",e=>{e.stopPropagation();overlayOpen?closeJobOverlay():openJobOverlay()});
+  $("islCancel").addEventListener("click",e=>{e.stopPropagation();const l=ISL.lead;if(l&&typeof window.cancelJob==="function")window.cancelJob(l.jobId,e.currentTarget)});
+  document.addEventListener("click",e=>{if(!e.target.closest("#island"))islandCollapse()});
+  document.addEventListener("keydown",e=>{if(e.key==="Escape")islandCollapse()});
+  window.addEventListener("resize",()=>{if(ISL.mode!=="hidden")setIslandMode(ISL.mode,{force:true})},{passive:true});
+})();
 function renderJobOverlay(){
   const overlay=$("jobOverlay");overlay.classList.toggle("open",overlayOpen);overlay.setAttribute("aria-hidden",String(!overlayOpen));
   const items=allActiveTasks();
@@ -2119,33 +2398,12 @@ async function refreshRunningJobs(){
 function startJobMonitor(){if(jobMonitorTimer)clearInterval(jobMonitorTimer);refreshRunningJobs();jobMonitorTimer=setInterval(refreshRunningJobs,POLL_INTERVAL)}
 function stopJobMonitor(){if(jobMonitorTimer){clearInterval(jobMonitorTimer);jobMonitorTimer=null}}
 
-function moveTabIndicator(){
-  const nav=$("tabsNav"),ind=$("tabIndicator");
-  const active=currentTab==="current"?$("tabCurrent"):$("tabQueue");
-  // offset* are layout values, unaffected by the dock transform:scale.
-  ind.style.width=active.offsetWidth+"px";
-  ind.style.transform=`translateX(${active.offsetLeft}px)`;
-  $("topbarWrap").style.setProperty("--tabs-half",(nav.offsetWidth/2)+"px");
-}
+function syncPageTitle(){const t=$("pageTitle");if(t)t.textContent=currentTab==="queue"?"Publish":"Import"}
 
-// Scrolls fully back up so the real header (and its logo) come back
-// into view — this is also what makes the floating logo chip and the
-// docked pill undock, since initTopbarDock drives both via .condensed.
-function scrollToHeader(){
-  window.scrollTo({top:0,behavior:scrollMode()});
-}
-
-// "Freeze pane" behavior: when a tab is clicked while scrolled past the
-// header, snap the page up just enough that the sticky topbar settles
-// at its docked offset and the section content starts immediately
-// beneath it — like a spreadsheet's frozen header row — instead of
-// leaving the view wherever it happened to be scrolled to.
+// Switching views while scrolled keeps the large title collapsed and puts the new section's top right
+// under the toolbar (instead of leaving it wherever the old view was scrolled to).
 function freezeUnderHeader(){
-  const wrap=$("topbarWrap");
-  if(!wrap || !wrap.classList.contains("condensed"))return;
-  const stickyTop=parseFloat(getComputedStyle(wrap).top)||10;
-  const targetY=window.scrollY+wrap.getBoundingClientRect().top-stickyTop;
-  if(targetY>4)window.scrollTo({top:targetY,behavior:scrollMode()});
+  if(window.scrollY>TITLE_RANGE)window.scrollTo({top:TITLE_RANGE,behavior:scrollMode()});
 }
 
 async function showTab(tab){
@@ -2174,15 +2432,12 @@ async function showTab(tab){
   next.style.setProperty("--slide-in",forward?"22px":"-22px");
 
   currentTab=tab;
-  $("tabCurrent").classList.toggle("active",tab==="current");
-  $("tabQueue").classList.toggle("active",tab==="queue");
-  [["tabCurrent","current"],["tabQueue","queue"]].forEach(([id,t])=>{$(id).setAttribute("aria-selected",String(tab===t));$(id).tabIndex=tab===t?0:-1});
-  moveTabIndicator();
+  syncPageTitle();syncNav();
 
   prev.classList.remove("switching-in");
   prev.classList.add("switching-out");
 
-  await new Promise(resolve=>setTimeout(resolve,300));
+  await new Promise(resolve=>setTimeout(resolve,motionMs(300)));
 
   prev.classList.remove("switching-out");
   prev.classList.add("hidden");
@@ -2207,90 +2462,159 @@ async function showTab(tab){
   setTimeout(()=>next.classList.remove("switching-in"),400);
 }
 
+let wmAssets=[],wmLastActive=null;const wmPendingDelete=new Map(); // id -> timer
+const TRASH='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 7h15M9.5 7V5h5v2M6.5 7l.8 12a1.5 1.5 0 0 0 1.5 1.4h6.4a1.5 1.5 0 0 0 1.5-1.4l.8-12"/></svg>';
+const CHECK='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 12.5 4 4 8-9"/></svg>';
 async function loadWatermarkAssets(){
-  try{
-    const r=await api("/api/assets/watermarks");
-    const assets=r.assets||[];
-    if(!assets.length){
-      $("watermarkPanel").innerHTML=`<div class="hint">No watermarks uploaded yet — the built-in default is used.</div>`;
-      return;
-    }
-    $("watermarkPanel").innerHTML=`<div class="watermark-grid">${assets.map(a=>`
-      <div class="watermark-item ${a.active?"active":""}">
-        <img src="${esc(mediaUrl(`${API}/api/assets/watermarks/${a.id}/file`))}" alt="${esc(a.filename)}" loading="lazy">
-        <div class="watermark-item-actions">
-          ${a.active?`<span class="chip chip-active">Active</span>`:`<button type="button" class="secondary" data-watermark-activate="${esc(a.id)}">Use this</button>`}
-          <button type="button" class="secondary" data-watermark-delete="${esc(a.id)}" aria-label="Delete watermark">✕</button>
-        </div>
-      </div>`).join("")}</div>`;
-  }catch(e){$("watermarkPanel").innerHTML=`<div class="error-box">${esc(e.message)}</div>`}
+  try{const r=await api("/api/assets/watermarks");wmAssets=r.assets||[];renderWatermarks()}
+  catch(e){$("watermarkPanel").innerHTML=`<div class="error-box">${esc(e.message)}</div>`}
+}
+function renderWatermarks(){
+  const list=wmAssets.filter(a=>!wmPendingDelete.has(a.id)),active=list.find(a=>a.active)?.id||null;
+  const popId=active&&active!==wmLastActive&&wmLastActive!==null?active:null;wmLastActive=active;
+  if(!list.length){$("watermarkPanel").innerHTML=`<div class="wm-empty">No watermarks yet: renders use the built-in default.</div>`;return}
+  $("watermarkPanel").innerHTML=`<div class="wm-grid">${list.map(a=>`
+    <div class="wm-tile${a.active?" is-active":""}${a.id===popId?" pop":""}" data-wm-id="${esc(a.id)}">
+      <button type="button" class="wm-select" ${a.active?"":`data-watermark-activate="${esc(a.id)}"`} aria-pressed="${a.active?"true":"false"}" aria-label="${a.active?"In use":"Use"}: ${esc(a.filename)}">
+        <span class="wm-preview"><img src="${esc(mediaUrl(`${API}/api/assets/watermarks/${a.id}/file`))}" alt="" loading="lazy"></span>
+        <span class="wm-name">${esc(a.filename)}</span>
+        <span class="wm-check">${CHECK}</span>
+      </button>
+      <button type="button" class="icon-btn wm-delete" data-watermark-delete="${esc(a.id)}" aria-label="Delete ${esc(a.filename)}">${TRASH}</button>
+    </div>`).join("")}</div>`;
 }
 async function uploadWatermarkAsset(file){
   const input=$("watermarkUploadInput"),label=input?.closest("label");
-  setBusy(label,true,"Uploading…");
+  if(file&&!/^image\/(png|webp)$/.test(file.type)){showToast("Use a PNG or WebP image.");return}
+  setBusy(label,true,"Uploading…");$("wmDrop").classList.add("is-busy-zone");
   try{
     const form=new FormData();form.append("file",file);
     const r=await authFetch(`/api/assets/watermarks`,{method:"POST",body:form});
     let d=null;try{d=await r.json()}catch{}
     if(!r.ok)throw new Error(d?.detail||`HTTP ${r.status}`);
-    await loadWatermarkAssets();
-  }catch(e){alert("Watermark upload failed: "+e.message)}
-  finally{if(input)input.value="";setBusy(label,false)}
+    await loadWatermarkAssets();showToast("Watermark uploaded.");
+  }catch(e){showToast("Upload failed: "+e.message)}
+  finally{if(input)input.value="";setBusy(label,false);$("wmDrop").classList.remove("is-busy-zone")}
 }
 async function activateWatermarkAsset(id){
-  try{await api(`/api/assets/watermarks/${id}/activate`,{method:"POST"});await loadWatermarkAssets()}
-  catch(e){alert("Couldn't activate watermark: "+e.message)}
+  const prev=wmAssets.map(a=>a.active);
+  wmAssets.forEach(a=>a.active=a.id===id);renderWatermarks(); // optimistic: the ✓ moves now
+  try{await api(`/api/assets/watermarks/${id}/activate`,{method:"POST"})}
+  catch(e){wmAssets.forEach((a,i)=>a.active=prev[i]);renderWatermarks();showToast("Couldn't switch watermark: "+e.message)}
 }
-async function deleteWatermarkAsset(id){
-  if(!confirm("Delete this watermark? Renders using it will fall back to the default."))return;
-  try{await api(`/api/assets/watermarks/${id}`,{method:"DELETE"});await loadWatermarkAssets()}
-  catch(e){alert("Couldn't delete watermark: "+e.message)}
+// Delete is deferred 5 s behind an Undo toast; the DELETE only goes out when the toast expires
+// (or the page is closing).
+function deleteWatermarkAsset(id){
+  const a=wmAssets.find(x=>x.id===id);if(!a||wmPendingDelete.has(id))return;
+  const tile=document.querySelector(`.wm-tile[data-wm-id="${CSS.escape(id)}"]`);
+  const finishRemove=()=>{wmPendingDelete.set(id,setTimeout(()=>commitWatermarkDelete(id),5000));renderWatermarks()};
+  if(tile&&!REDUCED_MOTION.matches){tile.classList.add("removing");setTimeout(finishRemove,200)}else finishRemove();
+  showToast(`Deleted “${a.filename}”.`,"Undo",()=>{clearTimeout(wmPendingDelete.get(id));wmPendingDelete.delete(id);renderWatermarks()},5000);
 }
+async function commitWatermarkDelete(id,keepalive=false){
+  if(!wmPendingDelete.has(id))return;wmPendingDelete.delete(id);
+  try{await api(`/api/assets/watermarks/${id}`,{method:"DELETE",keepalive});wmAssets=wmAssets.filter(a=>a.id!==id);if(!keepalive)await loadWatermarkAssets()}
+  catch(e){if(!keepalive){showToast("Couldn't delete watermark: "+e.message);await loadWatermarkAssets()}}
+}
+window.addEventListener("pagehide",()=>{[...wmPendingDelete.keys()].forEach(id=>{clearTimeout(wmPendingDelete.get(id));commitWatermarkDelete(id,true)})});
+// Drop zone: highlight while dragging a file over it; files dropped anywhere else in the sheet are ignored, not opened.
+["dragenter","dragover"].forEach(t=>document.addEventListener(t,e=>{if(!openSheetId||openSheetId!=="watermarkSheet")return;e.preventDefault();$("wmDrop").classList.toggle("is-over",!!e.target.closest?.("#wmDrop"))}));
+document.addEventListener("dragleave",e=>{if(e.target.closest?.("#wmDrop")&&!e.relatedTarget?.closest?.("#wmDrop"))$("wmDrop").classList.remove("is-over")});
+document.addEventListener("drop",e=>{if(openSheetId!=="watermarkSheet")return;e.preventDefault();$("wmDrop").classList.remove("is-over");const f=e.dataTransfer?.files?.[0];if(f&&e.target.closest?.("#wmDrop"))uploadWatermarkAsset(f)});
+document.addEventListener("keydown",e=>{if((e.key==="Enter"||e.key===" ")&&e.target.classList?.contains("wm-choose")){e.preventDefault();$("watermarkUploadInput").click()}});
+// Toast (071): one at a time, optional action, auto-hides.
+let toastTimer=null,toastFn=null;
+function showToast(text,actionLabel,onAction,ms=3200){
+  const t=$("toast");$("toastText").textContent=text;const btn=$("toastAction");
+  btn.textContent=actionLabel||"";btn.hidden=!actionLabel;toastFn=onAction||null;
+  t.classList.add("show");t.setAttribute("aria-hidden","false");
+  clearTimeout(toastTimer);toastTimer=setTimeout(hideToast,ms);
+}
+function hideToast(){const t=$("toast");t.classList.remove("show");t.setAttribute("aria-hidden","true");toastFn=null}
+document.addEventListener("click",e=>{if(e.target.closest("#toastAction")){const fn=toastFn;hideToast();fn&&fn()}});
 document.addEventListener("change",e=>{
   if(e.target.id==="watermarkUploadInput"&&e.target.files&&e.target.files[0])uploadWatermarkAsset(e.target.files[0]);
 });
+const SETTINGS_GROUPS=[
+  ["AI & transcription",["GEMINI_API_KEY","GEMINI_ANALYSIS_MODEL","GEMINI_MAX_ATTEMPTS","WHISPER_MODEL","WHISPER_LANGUAGE","RUNWAY_API_KEY","RUNWAY_MODEL"]],
+  ["Face detection",["FACE_DETECTION_SAMPLE_COUNT","FACE_CONFIDENCE_THRESHOLD","FACE_ZOOM_RATIO"]],
+  ["Clips & rendering",["CLIP_COUNT","CLIP_TARGET_DURATION","CLIP_MIN_DURATION","CLIP_MAX_DURATION","PREVIEW_WIDTH","WATERMARK_WIDTH","WATERMARK_OPACITY"]],
+  ["YouTube",["YOUTUBE_CLIENT_ID","YOUTUBE_CLIENT_SECRET","YOUTUBE_REFRESH_TOKEN"]],
+  ["TikTok",["TIKTOK_CLIENT_KEY","TIKTOK_CLIENT_SECRET","TIKTOK_ACCESS_TOKEN"]],
+  ["Instagram",["INSTAGRAM_ACCESS_TOKEN","INSTAGRAM_BUSINESS_ACCOUNT_ID"]],
+  ["Submagic",["SUBMAGIC_API_KEY","SUBMAGIC_TEMPLATE","SUBMAGIC_MAGIC_ZOOMS","SUBMAGIC_MAGIC_BROLLS"]],
+  ["Publishing",["HASHTAGS","CAMPAIGN_NAME"]]
+];
+const SETTING_LABELS={GEMINI_API_KEY:"Gemini API key",GEMINI_ANALYSIS_MODEL:"Gemini model",GEMINI_MAX_ATTEMPTS:"Gemini attempts",WHISPER_MODEL:"Whisper model",WHISPER_LANGUAGE:"Transcription language",RUNWAY_API_KEY:"Runway API key",RUNWAY_MODEL:"Runway model",
+  FACE_DETECTION_SAMPLE_COUNT:"Frames sampled",FACE_CONFIDENCE_THRESHOLD:"Confidence threshold",FACE_ZOOM_RATIO:"Facecam zoom",
+  CLIP_COUNT:"Clips per video",CLIP_TARGET_DURATION:"Target length (s)",CLIP_MIN_DURATION:"Minimum length (s)",CLIP_MAX_DURATION:"Maximum length (s)",PREVIEW_WIDTH:"Preview width (px)",WATERMARK_WIDTH:"Watermark width (px)",WATERMARK_OPACITY:"Watermark opacity",
+  YOUTUBE_CLIENT_ID:"Client ID",YOUTUBE_CLIENT_SECRET:"Client secret",YOUTUBE_REFRESH_TOKEN:"Refresh token",TIKTOK_CLIENT_KEY:"Client key",TIKTOK_CLIENT_SECRET:"Client secret",TIKTOK_ACCESS_TOKEN:"Access token",
+  INSTAGRAM_ACCESS_TOKEN:"Access token",INSTAGRAM_BUSINESS_ACCOUNT_ID:"Business account ID",SUBMAGIC_API_KEY:"API key",SUBMAGIC_TEMPLATE:"Template",SUBMAGIC_MAGIC_ZOOMS:"Magic zooms",SUBMAGIC_MAGIC_BROLLS:"Magic B-rolls",
+  HASHTAGS:"Hashtags",CAMPAIGN_NAME:"Campaign name"};
+const SETTING_SOURCE={db:"Saved",env:"From .env",default:"Default"};
+const isSecretKey=k=>/KEY|TOKEN|SECRET|PASSWORD/i.test(k);
+const EYE='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.8"/></svg>';
 async function loadSettings(){
   try{
     settingsCache=await api("/api/settings");
-    const groups={
-      AI:["GEMINI_API_KEY","GEMINI_ANALYSIS_MODEL","GEMINI_MAX_ATTEMPTS","WHISPER_MODEL","WHISPER_LANGUAGE","RUNWAY_API_KEY","RUNWAY_MODEL"],
-      FACE:["FACE_DETECTION_SAMPLE_COUNT","FACE_CONFIDENCE_THRESHOLD","FACE_ZOOM_RATIO"],
-      RENDER:["CLIP_COUNT","CLIP_TARGET_DURATION","CLIP_MIN_DURATION","CLIP_MAX_DURATION","PREVIEW_WIDTH","WATERMARK_WIDTH","WATERMARK_OPACITY"],
-      YOUTUBE:["YOUTUBE_CLIENT_ID","YOUTUBE_CLIENT_SECRET","YOUTUBE_REFRESH_TOKEN"],
-      TIKTOK:["TIKTOK_CLIENT_KEY","TIKTOK_CLIENT_SECRET","TIKTOK_ACCESS_TOKEN"],
-      INSTAGRAM:["INSTAGRAM_ACCESS_TOKEN","INSTAGRAM_BUSINESS_ACCOUNT_ID"],
-      SUBMAGIC:["SUBMAGIC_API_KEY","SUBMAGIC_TEMPLATE","SUBMAGIC_MAGIC_ZOOMS","SUBMAGIC_MAGIC_BROLLS"],
-      PUBLISHING:["HASHTAGS","CAMPAIGN_NAME"]
-    };
-    $("settingsPanel").innerHTML=Object.entries(groups).map(([g,keys])=>`
-      <details><summary aria-expanded="false">${g}<span class="muted">${keys.length} settings</span><span class="chev" aria-hidden="true"></span></summary>
-      <div class="settings-grid">${keys.map(k=>{const s=settingsCache[k]||{value:"",configured:false};return `<div><label>${esc(k)}</label><input data-setting="${esc(k)}" type="${/KEY|TOKEN|SECRET|PASSWORD/i.test(k)?"password":"text"}" value="${esc(s.value||"")}" placeholder="${s.configured?"Configured / masked":"Not configured"}"><div class="hint">${s.configured?"Configured":"Not configured"}</div></div>`}).join("")}</div>
-      </details>`).join("");
+    $("settingsPanel").innerHTML=SETTINGS_GROUPS.map(([g,keys])=>`
+      <section class="inset-group" data-settings-group>
+        <h3 class="inset-title">${esc(g)}</h3>
+        <div class="inset-list">${keys.map(k=>{const s=settingsCache[k]||{value:"",configured:false},sec=isSecretKey(k),id="set-"+k;
+          return `<div class="inset-row" data-setting-row data-search="${esc((SETTING_LABELS[k]||k)+" "+k+" "+g).toLowerCase()}">
+            <label class="row-label" for="${id}">${esc(SETTING_LABELS[k]||k)}<small><code>${esc(k)}</code> · ${esc(SETTING_SOURCE[s.source]||(s.configured?"Configured":"Not set"))}</small></label>
+            <span class="row-control"><input id="${id}" data-setting="${esc(k)}" type="${sec?"password":"text"}" value="${esc(s.value||"")}" placeholder="${s.configured?"Configured / masked":"Not set"}" autocomplete="off" spellcheck="false">${sec?`<button class="icon-btn reveal-btn" type="button" data-reveal="${id}" aria-label="Show ${esc(SETTING_LABELS[k]||k)}" aria-pressed="false">${EYE}</button>`:""}</span>
+          </div>`}).join("")}</div>
+      </section>`).join("");
+    filterSettings();updateSettingsDirty();
   }catch(e){$("settingsPanel").innerHTML=`<div class="error-box">${esc(e.message)}</div>`}
 }
-async function saveSettings(){
-  // Send only fields the user changed: the form shows effective values (DB → env → default), and
-  // echoing them back would pin env/default values into the DB, which wins over .env.
-  const values={};document.querySelectorAll("[data-setting]").forEach(i=>{const v=i.value.trim(),prev=String((settingsCache[i.dataset.setting]||{}).value||"");if(v&&v!=="••••••••"&&v!==prev)values[i.dataset.setting]=v});
-  const b=$("saveSettings");setBusy(b,true,"Saving…");
-  try{await api("/api/settings",{method:"PUT",body:JSON.stringify({values})});await loadSettings();alert("Settings saved.")}catch(e){alert("Settings save failed: "+e.message)}
-  finally{setBusy(b,false)}
+// Send only fields the user changed: the form shows effective values (DB → env → default), and
+// echoing them back would pin env/default values into the DB, which wins over .env.
+function changedSettings(){const values={};document.querySelectorAll("[data-setting]").forEach(i=>{const v=i.value.trim(),prev=String((settingsCache[i.dataset.setting]||{}).value||"");if(v&&v!=="••••••••"&&v!==prev)values[i.dataset.setting]=v});return values}
+function updateSettingsDirty(){
+  const n=Object.keys(changedSettings()).length,b=$("saveSettings");
+  document.querySelectorAll("[data-setting]").forEach(i=>i.closest("[data-setting-row]")?.classList.toggle("is-changed",Object.prototype.hasOwnProperty.call(changedSettings(),i.dataset.setting)));
+  if(!b.classList.contains("is-busy")&&!b.classList.contains("is-saved"))b.disabled=!n;
+  $("settingsDirty").textContent=n?`${n} unsaved change${n===1?"":"s"}`:"";
 }
+function filterSettings(){
+  const q=($("settingsSearch")?.value||"").trim().toLowerCase();let any=false;
+  document.querySelectorAll("[data-settings-group]").forEach(g=>{let shown=0;g.querySelectorAll("[data-setting-row]").forEach(r=>{const ok=!q||r.dataset.search.includes(q);r.hidden=!ok;if(ok)shown++});g.hidden=!shown;if(shown)any=true});
+  const nm=$("settingsNoMatch");nm.hidden=any||!q;nm.querySelector("span").textContent=q;
+}
+async function saveSettings(){
+  const values=changedSettings();
+  const b=$("saveSettings");setBusy(b,true,"Saving…");
+  try{
+    await api("/api/settings",{method:"PUT",body:JSON.stringify({values})});await loadSettings();
+    setBusy(b,false);b.classList.add("is-saved");b.disabled=true;
+    const t=[...b.childNodes].find(n=>n.nodeType===3);if(t)t.nodeValue="Saved";
+    $("settingsDirty").textContent="";
+    setTimeout(()=>{b.classList.remove("is-saved");if(t)t.nodeValue="Save";updateSettingsDirty()},motionMs(1600)||1200);
+  }catch(e){setBusy(b,false);$("settingsDirty").textContent="Save failed: "+e.message;$("settingsDirty").classList.add("is-error");setTimeout(()=>$("settingsDirty").classList.remove("is-error"),4000)}
+}
+document.addEventListener("input",e=>{
+  if(e.target.id==="settingsSearch")return filterSettings();
+  if(e.target.matches?.("[data-setting]"))updateSettingsDirty();
+});
+document.addEventListener("click",e=>{
+  const rv=e.target.closest("[data-reveal]");if(!rv)return;
+  const inp=$(rv.dataset.reveal),show=inp.type==="password";
+  inp.type=show?"text":"password";rv.setAttribute("aria-pressed",String(show));rv.setAttribute("aria-label",(show?"Hide ":"Show ")+rv.getAttribute("aria-label").replace(/^(Show|Hide) /,""));
+});
 
 document.addEventListener("click",e=>{
-  if(overlayOpen && !e.target.closest("#jobOverlay") && !e.target.closest("#jobIsland")){
+  if(overlayOpen && !e.target.closest("#jobOverlay") && !e.target.closest("#island")){
     closeJobOverlay();
   }
   if(e.target.closest("[data-sidebar-toggle]"))return toggleSidebar();
   if(e.target.closest("#sidebarScrim"))return closeSidebarDrawer();
-  const t=e.target.closest(".tab");if(t)return showTab(t.dataset.tab);
   const tt=e.target.closest(".theme-toggle");if(tt)return toggleTheme();
   const sp=e.target.closest("[data-split]");if(sp)return selectSplit(sp.dataset.split);
   const pl=e.target.closest("[data-platform]");if(pl)return selectPlatform(pl.dataset.platform);
   const lo=e.target.closest("[data-layout]");if(lo)return selectLayout(lo.dataset.layout);
   if(e.target.closest("#analyzeButton"))return createJob();
-  if(e.target.closest("#refreshCurrent"))return loadCurrentJobs();
-  if(e.target.closest("#refreshQueue"))return loadQueue();
   const ce=e.target.closest("[data-edit]");if(ce)return toggleCandidateEdit(ce.dataset.edit);
   const rn=e.target.closest("[data-rename]");if(rn)return renameJob(rn.dataset.rename);
   const cj=e.target.closest("[data-cancel-job]");if(cj)return cancelJob(cj.dataset.cancelJob,cj);
@@ -2337,11 +2661,7 @@ document.addEventListener("click",e=>{
 document.addEventListener("keydown",e=>{
   const el=e.target.closest("[data-split],[data-platform],[data-layout]");
   if(el&&(e.key==="Enter"||e.key===" ")){e.preventDefault();if(el.dataset.split)selectSplit(el.dataset.split);if(el.dataset.platform)selectPlatform(el.dataset.platform);if(el.dataset.layout)selectLayout(el.dataset.layout)}
-  const tb=e.target.closest(".tab");
-  if(tb&&(e.key==="Enter"||e.key===" ")){e.preventDefault();showTab(tb.dataset.tab)}
-  if(tb&&(e.key==="ArrowLeft"||e.key==="ArrowRight")){e.preventDefault();const next=tb.dataset.tab==="current"?"queue":"current";showTab(next);$(next==="current"?"tabCurrent":"tabQueue").focus()}
-  if(e.target.closest("#topbarLogo")&&(e.key==="Enter"||e.key===" ")){e.preventDefault();e.target.closest("#topbarLogo").click()}
-  if(e.key==="Escape"){closeJobOverlay();closeVersionPopover();collapseTopbarLogo();closeSidebarDrawer(true)}
+  if(e.key==="Escape"){closeJobOverlay();closeVersionPopover();closeSidebarDrawer(true)}
 });
 document.addEventListener("toggle",e=>{const d=e.target;if(d.tagName!=="DETAILS")return;d.querySelector(":scope > summary")?.setAttribute("aria-expanded",String(d.open));if(d.matches("[data-edit-more]"))editMoreOpen[d.dataset.cid+":"+d.dataset.editMore]=d.open},true);
 // Sidebar: desktop = collapsible column (remembered), narrow = drawer.
@@ -2387,67 +2707,10 @@ document.addEventListener("click",e=>{
   if(!e.target.closest("#versionPopover")&&!e.target.closest("#versionBadge"))closeVersionPopover();
 });
 $("youtubeUrl").addEventListener("input",updateAnalyzeReady);
-$("jobIsland").addEventListener("click",e=>{e.preventDefault();e.stopPropagation();overlayOpen?closeJobOverlay():openJobOverlay()});
 $("jobOverlayClose").addEventListener("click",e=>{e.preventDefault();e.stopPropagation();closeJobOverlay()});
 
-// Floating logo chip: first tap/click reveals the "ClipFlow" label
-// (the idle → active reveal — hovering does the same thing for a
-// mouse, via CSS :hover); tapping again while it's already open
-// scrolls back up to the real header, which makes the chip itself
-// fade away once the header is back in view.
-//
-// The theme toggle beside it needs to slide over in sync. The logo's
-// "expanded" CSS state only sets a max-width *cap* (150px) — the actual
-// rendered width is whatever "ClipFlow" actually needs, which is
-// narrower — so a hardcoded guess for the toggle's offset consistently
-// left too big a gap. Measuring both real states once (cheap: the icon
-// and text never change at runtime) and caching them fixes that.
-let logoWidths=null;
-function measureLogoWidths(){
-  const logo=$("topbarLogo");
-  if(!logo)return{collapsed:34,expanded:108};
-  const prevTransition=logo.style.transition;
-  const wasExpanded=logo.classList.contains("expanded");
-  logo.style.transition="none";
-  logo.classList.remove("expanded");
-  const collapsed=logo.getBoundingClientRect().width;
-  logo.classList.add("expanded");
-  const expanded=logo.getBoundingClientRect().width;
-  logo.classList.toggle("expanded",wasExpanded);
-  void logo.offsetWidth;
-  logo.style.transition=prevTransition;
-  return{collapsed,expanded};
-}
-function setThemeToggleFloatExpanded(expanded){
-  const toggle=$("themeToggleFloat");
-  if(!toggle)return;
-  if(!logoWidths)logoWidths=measureLogoWidths();
-  const w=expanded?logoWidths.expanded:logoWidths.collapsed;
-  toggle.style.right=(2+w+8)+"px";
-}
-function collapseTopbarLogo(){$("topbarLogo")?.classList.remove("expanded");setThemeToggleFloatExpanded(false)}
-$("topbarLogo").addEventListener("mouseenter",()=>setThemeToggleFloatExpanded(true));
-$("topbarLogo").addEventListener("mouseleave",()=>setThemeToggleFloatExpanded($("topbarLogo").classList.contains("expanded")));
-$("topbarLogo").addEventListener("focus",()=>setThemeToggleFloatExpanded(true));
-$("topbarLogo").addEventListener("blur",()=>setThemeToggleFloatExpanded($("topbarLogo").classList.contains("expanded")));
-$("topbarLogo").addEventListener("click",e=>{
-  e.preventDefault();e.stopPropagation();
-  const chip=e.currentTarget;
-  if(chip.classList.contains("expanded")){
-    collapseTopbarLogo();
-    scrollToHeader();
-  }else{
-    chip.classList.add("expanded");
-    setThemeToggleFloatExpanded(true);
-  }
-});
-window.addEventListener("resize",()=>{logoWidths=null;setThemeToggleFloatExpanded($("topbarLogo")?.classList.contains("expanded"))});
-setThemeToggleFloatExpanded(false);
-document.addEventListener("click",e=>{
-  if(!e.target.closest("#topbarLogo"))collapseTopbarLogo();
-});
 window.addEventListener("load",async()=>{
-  selectSplit(70);selectPlatform("youtube_shorts");overlayOpen=false;updateAnalyzeReady();updateJobIsland();moveTabIndicator();
+  selectSplit(70);selectPlatform("youtube_shorts");overlayOpen=false;updateAnalyzeReady();updateJobIsland();syncPageTitle();syncNav();
   // Key + media token first, so the first render already has working <img>/<video> URLs.
   // Token is stable for 12 h and valid 12-24 h; refresh hourly.
   await refreshMediaToken();setInterval(refreshMediaToken,60*60*1000);
@@ -2473,36 +2736,79 @@ window.addEventListener("resize",()=>{
   clearTimeout(_resizeSettleTimer);
   _resizeSettleTimer=setTimeout(()=>{
     document.body.classList.remove("resizing");
-    moveTabIndicator();
+    syncNav();
   },140);
 },{passive:true});
 window.addEventListener("beforeunload",()=>{stopPolling();stopJobMonitor()});
 
-// Tabs dock (R-13): the ONE owner of .condensed. rAF-throttled passive
-// scroll handler with hysteresis, so a short scroll around the threshold
-// can't flicker. will-change:transform is set only while the pill moves.
-(function initTopbarDock(){
-  const wrap=$("topbarWrap"),tabs=$("tabsNav");
-  if(!wrap||!tabs)return;
-  const DOCK_AT=64,UNDOCK_AT=48;
-  let docked=false,ticking=false,settleTimer=null;
-  function apply(next){
-    if(next===docked)return;
-    docked=next;
-    tabs.classList.add("is-moving");
-    clearTimeout(settleTimer);settleTimer=setTimeout(()=>tabs.classList.remove("is-moving"),600);
-    wrap.classList.toggle("condensed",docked);
-    if(!docked)collapseTopbarLogo();
-  }
-  function onScroll(){
+// Toolbar (072): the ONE scroll driver. scrollY maps continuously onto --p (0 = large title under the
+// bar, 1 = small title in the bar, material + hairline fully in). rAF-throttled, passive, and only
+// writes when the rounded value changes; CSS turns --p into transform/opacity only (no layout).
+const TITLE_RANGE=48;
+(function initToolbar(){
+  const bar=$("toolbar");if(!bar)return;
+  let ticking=false,last=-1;
+  function apply(){
     ticking=false;
-    const y=window.scrollY;
-    apply(docked?y>UNDOCK_AT:y>DOCK_AT);
+    const p=Math.min(1,Math.max(0,window.scrollY/TITLE_RANGE)),q=Math.round(p*1000)/1000;
+    if(q===last)return;last=q;
+    bar.style.setProperty("--p",q);bar.classList.toggle("is-collapsed",q>=1);
   }
-  tabs.addEventListener("transitionend",e=>{if(e.target===tabs&&e.propertyName==="transform"){clearTimeout(settleTimer);tabs.classList.remove("is-moving")}});
-  window.addEventListener("scroll",()=>{if(!ticking){ticking=true;requestAnimationFrame(onScroll)}},{passive:true});
-  onScroll();
+  window.addEventListener("scroll",()=>{if(!ticking){ticking=true;requestAnimationFrame(apply)}},{passive:true});
+  window.addEventListener("resize",()=>{last=-1;apply()},{passive:true});
+  apply();
 })();
+
+// ---- Sidebar navigation + sheets (068) ----
+let openSheetId=null,sheetOpener=null;
+function selectedNav(){return openSheetId==="settingsSheet"?"settings":openSheetId==="watermarkSheet"?"watermarks":currentTab}
+function syncNav(){
+  const sel=selectedNav(),ind=$("navIndicator");
+  document.querySelectorAll("[data-nav]").forEach(b=>{if(b.dataset.nav===sel)b.setAttribute("aria-current",b.dataset.nav==="current"||b.dataset.nav==="queue"?"page":"true");else b.removeAttribute("aria-current")});
+  const item=document.querySelector(`.side-nav [data-nav="${sel}"]`);
+  if(ind&&item){ind.style.setProperty("--nav-y",item.offsetTop+"px");ind.style.height=item.offsetHeight+"px";ind.classList.add("ready")}
+}
+function openSheet(id,opener){
+  const layer=$(id);if(!layer||openSheetId===id)return;
+  if(openSheetId)closeSheet(false);
+  openSheetId=id;sheetOpener=opener||document.activeElement;
+  layer.classList.add("open");layer.setAttribute("aria-hidden","false");
+  ["appShell","tabbar","island"].forEach(id=>{const el=$(id);if(el)el.inert=true}); // everything behind a modal sheet
+  syncNav();
+  requestAnimationFrame(()=>(layer.querySelector(".sheet-body input,.sheet-body button,.sheet-body summary")||layer.querySelector(".sheet-close"))?.focus({preventScroll:true}));
+}
+function closeSheet(restoreFocus=true){
+  if(!openSheetId)return false;
+  const layer=$(openSheetId);openSheetId=null;
+  layer.classList.remove("open");layer.setAttribute("aria-hidden","true");
+  ["appShell","tabbar","island"].forEach(id=>{const el=$(id);if(el)el.inert=false});
+  syncNav();
+  if(restoreFocus&&sheetOpener&&document.contains(sheetOpener))sheetOpener.focus({preventScroll:true});
+  return true;
+}
+document.addEventListener("keydown",e=>{
+  if(!openSheetId)return;
+  if(e.key==="Escape"){e.stopImmediatePropagation();closeSheet();return}
+  if(e.key==="Tab"){ // keep focus inside the open sheet
+    const f=[...$(openSheetId).querySelectorAll('button,input,select,textarea,summary,label[tabindex],[tabindex]:not([tabindex="-1"])')].filter(el=>!el.disabled&&el.offsetParent!==null);
+    if(!f.length)return;const first=f[0],last=f[f.length-1];
+    if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus()}
+    else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus()}
+  }
+},true);
+document.addEventListener("click",e=>{
+  if(e.target.closest("[data-sheet-close]"))return closeSheet();
+  const nav=e.target.closest("[data-nav]");if(nav){
+    const v=nav.dataset.nav;
+    if(v==="settings"||v==="watermarks"){openSheet(v==="settings"?"settingsSheet":"watermarkSheet",nav);closeSidebarDrawer(false);return}
+    closeSheet(false);closeSidebarDrawer(false);showTab(v);
+  }
+  const rb=e.target.closest("#refreshView");if(rb){
+    if(!REDUCED_MOTION.matches){rb.classList.remove("spinning");void rb.offsetWidth;rb.classList.add("spinning");setTimeout(()=>rb.classList.remove("spinning"),450)}
+    if(currentTab==="current")loadCurrentJobs();else{loadQueue();refreshRunningJobs()}
+  }
+});
+window.addEventListener("resize",()=>requestAnimationFrame(syncNav),{passive:true});
 
 </script>
 </body>

@@ -245,11 +245,14 @@ must be added to `MEDIA_PATH_RE`** and its frontend URL wrapped in
 CORS middleware must stay added *after* the auth middleware (outermost),
 or preflights get 401.
 
-## Frontend shell (R-11/R-12/R-13; badge v2.1106)
+## Frontend shell (R-11/R-12/R-13, lane B 067-073; badge v2.1110)
 
-- **Layout:** `.app-shell` grid = left `<aside id="sidebar">` (Quick
-  actions, Editing tips, Settings disclosures; element IDs unchanged) +
-  `.container`. Desktop ≥1000 px: collapsible column
+- **Layout:** `.app-shell` grid = left `<aside id="sidebar">` (068: navigation
+  only: `[data-nav]` Import/Publish switch views via `showTab()`,
+  Watermarks/Settings open **sheets** `#watermarkSheet`/`#settingsSheet` via
+  `openSheet()`/`closeSheet()`; `syncNav()` owns `aria-current` + the
+  spring `#navIndicator`; theme toggle in `.sidebar-foot`) + `.container`.
+  Sheets sit outside `#appShell`, which goes `inert` while one is open. Desktop ≥1000 px: collapsible column
   (`body.sidebar-collapsed`, localStorage). Narrow: off-canvas drawer
   (`body.sidebar-open`) over `#sidebarScrim`. Toggles are
   `[data-sidebar-toggle]`; hidden sidebar gets `inert`. **Every closed
@@ -257,17 +260,26 @@ or preflights get 401.
   a stray layer once made the whole app unclickable. Import options
   (split/facecam/platform) live in `<details id="importOptions">`;
   `updateImportOptionsSummary()` runs from the `select*()` fns.
-- **Tabs pill:** constant layout size. Docking = `transform:scale` +
-  shadow cross-fade only. Never transition width/padding/gap on the scroll
-  path. `initTopbarDock()` is the **only** owner of `.topbar.condensed`
-  (rAF scroll handler, hysteresis dock >64 / undock <48 px). The old
-  `#headerSentinel` IntersectionObserver is gone. Don't add a second
-  scroll/observer driver. Tabs are `role=tab` with a roving tabindex.
-- **Job island:** its own fixed-width capsule, absolutely positioned,
-  never in the tabs' flow. It drops below the tabs via a `@container
-  topbar` query. `updateJobIsland()` only toggles `.is-visible` + text; the
-  progress bar is `scaleX`. No JS width measuring. `#jobIslandLive` is
-  the aria-live region.
+- **Toolbar (072, replaces the tabs pill):** sticky `#toolbar` with ONE title
+  element `#pageTitle` ("Import"/"Publish", `syncPageTitle()`). `initToolbar()`
+  is the **only** scroll driver: rAF, passive, maps `scrollY/TITLE_RANGE(48)` →
+  `--p` 0..1 continuously (no threshold/hysteresis); CSS derives title
+  translate/scale and `.toolbar-bg` (material + hairline + scroll-edge fade)
+  opacity from `--p` — transform/opacity only. Don't add another scroll
+  driver. ≤600 px: `#tabbar` bottom tab bar (same `[data-nav]`). Sidebar nav
+  is the navigation; there are no `role=tab` elements any more.
+- **Dynamic Island (073):** `#island` (fixed, top 8 px, centred, z 1000,
+  black in both themes) is driven only by `updateJobIsland()` (same name
+  as before; every caller still works). `hidden` when nothing runs. Modes
+  compact (248×36, 150 on ≤600) / expanded (≤380, radius 28) via
+  `setIslandMode()`; size morphs are WAAPI width/height/radius with
+  spring curves from `springEasing()` (emitted as CSS `linear()`), content
+  layers cross-fade (+60 ms, staggered). Events: busy → review/completed
+  = ✓ auto-expand 2.5 s; → failed = red expand, then red compact until
+  seen. "+N" split only in compact; it opens `#jobOverlay`. Cancel shows
+  only if a global `cancelJob(jobId)` exists: it does (R-08's `window.cancelJob(id, btn)`,
+  confirm + `POST /api/jobs/{id}/cancel`; the island passes its button for `setBusy`). Reduced motion: opacity
+  cross-fade only. Sheets make `#appShell`, `#tabbar`, `#island` inert.
 - **Busy state:** every async button/upload label goes through
   `setBusy(el, busy, label?)`. It disables the control, sets `aria-busy` and
   `.is-busy` (spinner), and restores the label. Don't hand-swap `textContent`.
@@ -280,8 +292,13 @@ or preflights get 401.
 - **Status badges:** `badgeClass()` → idle (queued, `*_queued`) / running / attention (review,
   partial_failure) / completed / failed / cancelled. Colours are `--badge-*` tokens in both
   theme blocks, each pair measured ≥4.5:1 on `--panel` incl. the shimmer peak. Re-measure on change.
+- **Motion & detail tokens (067):** curves `--ease-out` (.32,.72,0,1; `--ease` aliases it),
+  `--ease-spring` (overshoot), `--ease-in-out`; durations `--dur-1..4` = 120/200/320/450 ms;
+  press `scale(var(--press))` (.97); spacing `--sp-*` (8pt, 4pt half-step); `--hit` 44 px;
+  `--font-text`/`--font-display`; materials `--material[-thin|-thick]` + `--material-blur`.
+  Use tokens, not literals. Caption-preview `cpw-*` keyframes keep their own timings (they mirror ASS).
 - **Reduced motion:** the CSS rule can't stop JS. Guard JS-driven motion
-  with `REDUCED_MOTION.matches` (caption preview loop) and use
+  with `REDUCED_MOTION.matches` / `motionMs(ms)` (animation waits → 0) (caption preview loop) and use
   `scrollMode()` for `scrollTo`/`scrollIntoView`.
 
 ## Conventions worth copying, not reinventing

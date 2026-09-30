@@ -34,3 +34,10 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 064 · 2026-09-29 · R-19 prep: SIL-OFL caption fonts in worker/fonts (files only, lane B) · worker/fonts
 065 · 2026-09-29 · libass spike = R-18 done: effects + variable-font weights, tests/libass-spike (lane B) · tests
 066 · 2026-09-29 · Telegram notifier service, outbound-only (lane B; compose wiring in main) · notifier/
+067 · 2026-09-29 · Motion & detail system (HIG UX pass) (lane B) · index.html
+068 · 2026-09-29 · Sidebar = navigation; Settings/Watermarks as sheets; ClipFlow mark (lane B) · index.html
+069 · 2026-09-29 · Settings sheet: inset lists, search, secret reveal, inline save state (lane B) · index.html
+070 · 2026-09-29 · Import card: validated Analyze, instant thumbnail, one empty state (lane B) · index.html
+071 · 2026-09-29 · Watermark library: checkerboard tiles, spring ✓, drag-and-drop, delete with undo (lane B) · index.html
+072 · 2026-09-29 · Toolbar: iOS large title (continuous), bottom tab bar, no tabs pill (lane B) · index.html
+073 · 2026-09-29 · Dynamic Island, Apple-style (springs, split, ready/failed events) (lane B) · index.html
