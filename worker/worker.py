@@ -21,6 +21,7 @@ from faster_whisper import WhisperModel
 from psycopg.rows import dict_row
 
 from shared.ai import router as ai_router
+from shared.errors import FAILURE_TRANSIENT, failure_class
 from shared.fonts import caption_font_bold, normalize_caption_font
 from shared.settings import RuntimeSettings
 
@@ -679,6 +680,183 @@ def maybe_run_sweeps(force=False):
 
 
 # ============================================================
+# FAILURE RECOVERY (R-15)
+# ============================================================
+# Every claimed job/candidate carries heartbeat_at (written by the
+# CancelWatch thread every HEARTBEAT_SECONDS). reclaim_stale() puts
+# rows whose claim went quiet (worker crash/restart) back in their
+# queue, attempts+1, or fails them after JOB_MAX_ATTEMPTS. A stage
+# failure is classified by shared.errors.failure_class(): transient
+# ones are requeued with exponential backoff (retry_after, respected
+# by the claims) until JOB_MAX_ATTEMPTS; permanent ones fail at once.
+
+HEARTBEAT_SECONDS = 30
+RECLAIM_INTERVAL_SECONDS = 60
+RETRY_BASE_SECONDS = 60
+
+_last_reclaim = 0.0
+
+
+def _max_attempts():
+    return max(1, setting_int("JOB_MAX_ATTEMPTS"))
+
+
+def _retry_delay_seconds(failures):
+    return min(3600, RETRY_BASE_SECONDS * 2 ** (failures - 1))
+
+
+def record_failure(table, row_id, *, exc, stage, retry_status,
+                   failures_before, detail=""):
+    """Fail or requeue one jobs/clip_candidates row after exc. Returns
+    the status written. Never touches a cancelled row."""
+    assert table in ("jobs", "clip_candidates")
+    cls = failure_class(exc)
+    failures = int(failures_before or 0) + 1
+    limit = _max_attempts()
+    text = str(exc).strip()
+    headline = (text.splitlines()[-1] if text else type(exc).__name__)[:200]
+
+    if cls == FAILURE_TRANSIENT and failures < limit:
+        delay = _retry_delay_seconds(failures)
+        status = retry_status
+        message = (
+            f"Temporary problem, retrying in {delay // 60 or 1} min "
+            f"(attempt {failures + 1}/{limit}): {headline}"
+        )
+    else:
+        delay = None
+        status = "failed"
+        message = (
+            f"Failed after {failures} attempts (temporary problem kept "
+            f"recurring): {headline}"
+            if cls == FAILURE_TRANSIENT
+            else f"Failed, needs attention: {headline}"
+        )
+
+    with db() as conn:
+        conn.execute(
+            f"""
+            UPDATE {table}
+            SET status = %s,
+                message = %s,
+                error_stage = %s,
+                error_message = %s,
+                error_class = %s,
+                attempts = %s,
+                retry_after = CASE WHEN %s::int IS NULL THEN NULL
+                              ELSE NOW() + make_interval(secs => %s::int) END,
+                updated_at = NOW()
+            WHERE id = %s
+              AND status IS DISTINCT FROM 'cancelled'
+            """,
+            (status, message, stage, (text + "\n\n" + detail)[-12000:],
+             cls, failures, delay, delay, row_id),
+        )
+        conn.commit()
+    log(f"{table} {row_id} {cls} failure #{failures} [{stage}] -> {status}")
+    return status
+
+
+def reset_attempts(table, row_id):
+    assert table in ("jobs", "clip_candidates")
+    with db() as conn:
+        conn.execute(
+            f"UPDATE {table} SET attempts = 0, error_class = NULL, "
+            "retry_after = NULL WHERE id = %s",
+            (row_id,),
+        )
+        conn.commit()
+
+
+def reclaim_stale(startup=False):
+    """Requeue work whose claiming worker died. At startup every
+    in-flight row is orphaned (one worker); later only rows whose
+    heartbeat is older than STALE_CLAIM_MINUTES."""
+    def stale(alias):
+        if startup:
+            return "TRUE"
+        return (
+            f"COALESCE({alias}.heartbeat_at, {alias}.updated_at) "
+            "< NOW() - make_interval(mins => %(mins)s)"
+        )
+
+    params = {"mins": setting_int("STALE_CLAIM_MINUTES"),
+              "limit": _max_attempts()}
+    with db() as conn:
+        jobs = conn.execute(
+            f"""
+            UPDATE jobs j SET
+                attempts = j.attempts + 1,
+                status = CASE WHEN j.attempts + 1 < %(limit)s THEN
+                    CASE WHEN j.transcript IS NOT NULL
+                         THEN 'reanalyze_queued' ELSE 'queued' END
+                    ELSE 'failed' END,
+                error_class = 'transient',
+                error_stage = COALESCE(j.error_stage, 'worker_restart'),
+                message = CASE WHEN j.attempts + 1 < %(limit)s
+                    THEN 'Recovered after a worker restart; queued again'
+                    ELSE 'Failed: the worker stopped during this job '
+                         || (j.attempts + 1) || ' times' END,
+                retry_after = NULL,
+                heartbeat_at = NULL,
+                updated_at = NOW()
+            WHERE j.status = 'processing' AND {stale('j')}
+            RETURNING j.id, j.status, j.attempts
+            """,
+            params,
+        ).fetchall()
+        # Candidates of a job that is (being) re-analysed are recreated
+        # by the analysis itself; leave those alone.
+        candidates = conn.execute(
+            f"""
+            UPDATE clip_candidates c SET
+                attempts = c.attempts + 1,
+                status = CASE WHEN c.attempts + 1 < %(limit)s THEN
+                    CASE c.status WHEN 'preview_rendering' THEN 'preview_queued'
+                                  WHEN 'rendering' THEN 'render_queued'
+                                  ELSE 'thumbnail_queued' END
+                    ELSE 'failed' END,
+                error_class = 'transient',
+                error_stage = COALESCE(c.error_stage, 'worker_restart'),
+                message = CASE WHEN c.attempts + 1 < %(limit)s
+                    THEN 'Recovered after a worker restart; queued again'
+                    ELSE 'Failed: the worker stopped during this task '
+                         || (c.attempts + 1) || ' times' END,
+                retry_after = NULL,
+                heartbeat_at = NULL,
+                updated_at = NOW()
+            FROM jobs j
+            WHERE j.id = c.job_id
+              AND c.status IN ('preview_rendering', 'rendering',
+                               'thumbnail_rendering')
+              AND j.status NOT IN ('processing', 'queued',
+                                   'reanalyze_queued', 'cancelled')
+              AND {stale('c')}
+            RETURNING c.id, c.status, c.attempts
+            """,
+            params,
+        ).fetchall()
+        conn.commit()
+    for kind, rows in (("job", jobs), ("candidate", candidates)):
+        for row in rows:
+            log(
+                f"Reclaimed {kind} {row['id']} -> {row['status']} "
+                f"(attempt {row['attempts']})"
+            )
+
+
+def maybe_reclaim_stale():
+    global _last_reclaim
+    if time.monotonic() - _last_reclaim < RECLAIM_INTERVAL_SECONDS:
+        return
+    _last_reclaim = time.monotonic()
+    try:
+        reclaim_stale()
+    except Exception as exc:
+        log(f"reclaim_stale failed: {exc}")
+
+
+# ============================================================
 # CANCELLATION (R-08)
 # ============================================================
 # The worker is single-threaded, so a cancel can't interrupt it from
@@ -765,8 +943,29 @@ class CancelWatch:
         _cancel_event.clear()
         return False
 
+    def _heartbeat(self):
+        table, row_id = (
+            ("clip_candidates", self.candidate_id)
+            if self.candidate_id else ("jobs", self.job_id)
+        )
+        with db() as conn:
+            conn.execute(
+                f"UPDATE {table} SET heartbeat_at = NOW() WHERE id = %s",
+                (row_id,),
+            )
+            conn.commit()
+
     def _run(self):
+        last_beat = 0.0
         while not self._stop.wait(CANCEL_POLL_SECONDS):
+            # R-15: heartbeat so reclaim_stale() can tell a live claim
+            # from one left behind by a dead worker.
+            if time.monotonic() - last_beat >= HEARTBEAT_SECONDS:
+                try:
+                    self._heartbeat()
+                    last_beat = time.monotonic()
+                except Exception as exc:
+                    log(f"Heartbeat failed: {exc}")
             try:
                 cancelled = is_cancelled(self.job_id, self.candidate_id)
             except Exception as exc:
@@ -4257,6 +4456,7 @@ def claim_analysis_job():
                 'queued',
                 'reanalyze_queued'
             )
+              AND (j.retry_after IS NULL OR j.retry_after <= NOW())
             ORDER BY j.created_at
             FOR UPDATE SKIP LOCKED
             LIMIT 1
@@ -4284,6 +4484,8 @@ def claim_analysis_job():
                     'Worker processing',
                 error_stage = NULL,
                 error_message = NULL,
+                heartbeat_at = NOW(),
+                retry_after = NULL,
                 updated_at = NOW()
             WHERE id = %s
             """,
@@ -4874,23 +5076,29 @@ def _process_analysis_job(
             f"{exc}"
         )
 
-        update_job(
+        # R-15: transient failures go back to the queue with backoff;
+        # re-analysis reuses the transcript once it's stored.
+        with db() as conn:
+            has_transcript = conn.execute(
+                "SELECT transcript IS NOT NULL AS t FROM jobs WHERE id = %s",
+                (job_id,),
+            ).fetchone()["t"]
+
+        record_failure(
+            "jobs",
             job_id,
-
-            status="failed",
-
-            message=
-                "Processing failed",
-
-            error_stage=
-                stage,
-
-            error=(
-                str(exc)
-                + "\n\n"
-                + detail[-8000:]
+            exc=exc,
+            stage=stage,
+            retry_status=(
+                "reanalyze_queued" if has_transcript else "queued"
             ),
+            failures_before=job.get("attempts"),
+            detail=detail[-8000:],
         )
+
+    else:
+
+        reset_attempts("jobs", job_id)
 
     finally:
 
@@ -5349,6 +5557,7 @@ def claim_candidate_task():
                 'thumbnail_queued'
             )
               AND j.status IS DISTINCT FROM 'cancelled'
+              AND (c.retry_after IS NULL OR c.retry_after <= NOW())
             ORDER BY c.updated_at
             FOR UPDATE SKIP LOCKED
             LIMIT 1
@@ -5377,6 +5586,8 @@ def claim_candidate_task():
             SET status = %s,
                 progress = 10,
                 message = %s,
+                heartbeat_at = NOW(),
+                retry_after = NULL,
                 updated_at = NOW()
             WHERE id = %s
             """,
@@ -5535,22 +5746,16 @@ def _process_candidate_task(
             traceback.format_exc()
         )
 
-        update_candidate(
+        # R-15: stage is the queued status this task was claimed from,
+        # i.e. exactly where an automatic retry has to go back to.
+        record_failure(
+            "clip_candidates",
             candidate_id,
-
-            status="failed",
-
-            message=
-                "Candidate processing failed",
-
-            error_stage=
-                stage,
-
-            error_message=(
-                str(exc)
-                + "\n\n"
-                + detail[-8000:]
-            ),
+            exc=exc,
+            stage=stage,
+            retry_status=stage,
+            failures_before=task.get("attempts"),
+            detail=detail[-8000:],
         )
 
         log(
@@ -5559,49 +5764,9 @@ def _process_candidate_task(
             f"{exc}"
         )
 
+    else:
 
-# ============================================================
-# RESET ORPHANS
-# ============================================================
-
-def reset_orphans():
-
-    with db() as conn:
-
-        conn.execute(
-            """
-            UPDATE jobs
-            SET status = 'failed',
-                message =
-                    'Worker restarted mid-job',
-                error_stage =
-                    'worker_restart',
-                error_message =
-                    'Worker was restarted while processing',
-                updated_at = NOW()
-            WHERE status = 'processing'
-            """
-        )
-
-        conn.execute(
-            """
-            UPDATE clip_candidates
-            SET status = 'failed',
-                message =
-                    'Worker restarted mid-task',
-                error_stage =
-                    'worker_restart',
-                error_message =
-                    'Worker was restarted while processing',
-                updated_at = NOW()
-            WHERE status IN (
-                'preview_rendering',
-                'rendering'
-            )
-            """
-        )
-
-        conn.commit()
+        reset_attempts("clip_candidates", candidate_id)
 
 
 # ============================================================
@@ -5987,7 +6152,9 @@ def main():
         "Final branding: WATERMARK ONLY"
     )
 
-    reset_orphans()
+    # R-15: requeue whatever the previous worker left mid-flight
+    # (was: reset_orphans(), which failed it outright).
+    reclaim_stale(startup=True)
 
     while True:
 
@@ -6043,7 +6210,8 @@ def main():
 
                 continue
 
-            # Nothing queued: housekeeping (R-14), then idle.
+            # Nothing queued: housekeeping (R-14/R-15), then idle.
+            maybe_reclaim_stale()
             maybe_run_sweeps()
 
             time.sleep(

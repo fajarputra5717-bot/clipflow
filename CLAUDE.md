@@ -68,6 +68,17 @@ thumbnails, an optional Submagic pass, and a watermark asset library.
   `completed` → `queued_apply`→`applying`→`applied`. Never touches
   `status`/`final_path` until the explicit `use-as-final` step.
 
+## Failure recovery (R-15)
+
+Claimed rows carry `heartbeat_at` (CancelWatch, 30 s); `reclaim_stale()`
+(startup + idle every 60 s) requeues orphaned/stale claims with
+`attempts+1`, failing at `JOB_MAX_ATTEMPTS`. Stage failures go through
+`record_failure()`: `shared/errors.failure_class()` → transient =
+requeue with `retry_after` backoff (claims must keep the `retry_after`
+filter), permanent = `failed`. A new failure path: call
+`record_failure`, don't hand-write `status='failed'`. Manual retry:
+`POST /api/jobs/{id}/retry`, `.../candidates/{cid}/retry`.
+
 ## Disk (R-14)
 
 Reserve `DISK_SPACE_MIN_MB`: `ensure_disk_space(stage, need_mb)` before

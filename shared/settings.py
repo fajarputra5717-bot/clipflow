@@ -88,6 +88,10 @@ DEFAULT_SETTINGS = {
     "RETENTION_DAYS_INTERMEDIATE": "3",
     "ORPHAN_SWEEP_DRY_RUN": "true",
     "DISK_SPACE_MIN_MB": "2048",
+    # Failure recovery (R-15): automatic retries of transient failures
+    # and of work orphaned by a worker restart, per job/candidate.
+    "JOB_MAX_ATTEMPTS": "3",
+    "STALE_CLAIM_MINUTES": "5",
 }
 
 SECRET_SETTING_KEYS = {

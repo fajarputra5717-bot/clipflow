@@ -25,6 +25,7 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 015 · 2026-09-29 · R-09 burn_subtitles toggle: no make_ass + no subtitle stage when off; edit-panel checkbox · main.py, worker.py, index.html
 016 · 2026-09-29 · R-10 browser-safe mp4: H.264 High cap, yuv420p, AAC, faststart; Range 206 verified; plays in Chromium + WebKit · worker.py
 017 · 2026-09-30 · R-14 disk guards (reserve, yt-dlp pre-flight, 507), retention sweep per source video, orphan sweep (dry run) · worker.py, main.py, index.html
+018 · 2026-09-30 · R-15 heartbeat + stale-claim reclaim, transient/permanent failures with backoff, Retry for jobs and candidates · worker.py, main.py, shared/errors.py, index.html
 050 · 2026-09-29 · R-12 Left sidebar (collapsible column / mobile drawer) replaces right rail; Import options in one disclosure · index.html (v2.1102)
 051 · 2026-09-29 · R-13 ui-audit.md; tabs pill docks via transform/opacity with 64/48 hysteresis (one scroll handler); job island is its own capsule with stage + % · index.html (v2.1103)
 052 · 2026-09-29 · R-11 Motion 100–200/300–500 ms, setBusy() for every async button, edit drawer progressive disclosure + sticky glass action row, reduced-motion covers JS loops, keyboard tabs · index.html (v2.1104)

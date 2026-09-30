@@ -14,6 +14,7 @@ retry and failover logic (shared/ai/router.py) can decide on the
 """
 
 import json
+import re as _re
 
 
 class AIError(Exception):
@@ -114,3 +115,54 @@ def classify_exception(exc, provider=None):
     return AIPermanentError(
         message, provider=provider, status=status, cause=exc,
     )
+
+
+# ------------------------------------------------------------
+# Job/candidate failure classes (R-15)
+# ------------------------------------------------------------
+# transient -> retried automatically with backoff (network, rate limit,
+#              upstream 5xx, ffmpeg killed for memory, worker restart).
+# permanent -> waits for a human (bad/removed video, unsupported media,
+#              disk reserve, bugs). Unknown errors default to permanent
+#              so nothing loops forever on an unclassified failure.
+
+
+FAILURE_TRANSIENT = "transient"
+FAILURE_PERMANENT = "permanent"
+
+_TRANSIENT_FAILURE_RE = _re.compile(
+    r"HTTP Error (403|408|429|5\d\d)"          # yt-dlp / media URLs
+    r"|Got error: .*(403|429|5\d\d)"
+    r"|timed out|Timeout|Connection (reset|refused|aborted)"
+    r"|Temporary failure in name resolution|Network is unreachable"
+    r"|IncompleteRead|RemoteDisconnected"
+    r"|Cannot allocate memory|Killed|signal 9|MemoryError"  # OOM
+    r"|UNAVAILABLE|RESOURCE_EXHAUSTED|overloaded|high demand",
+    _re.IGNORECASE,
+)
+
+_PERMANENT_FAILURE_RE = _re.compile(
+    r"Video unavailable|Private video|This video (is|has been) removed"
+    r"|Sign in to confirm your age|is not a valid URL|Unsupported URL"
+    r"|Invalid data found|does not contain any stream|Unsupported codec"
+    r"|Not enough disk space|removed by disk retention",
+    _re.IGNORECASE,
+)
+
+
+def failure_class(exc):
+    """FAILURE_TRANSIENT or FAILURE_PERMANENT for any exception raised
+    by a job/candidate stage. Typed AI errors decide for themselves;
+    everything else is matched on its message (yt-dlp/ffmpeg output)."""
+    if isinstance(exc, AIError):
+        return FAILURE_TRANSIENT if exc.transient else FAILURE_PERMANENT
+    if isinstance(exc, MemoryError):
+        return FAILURE_TRANSIENT
+    text = f"{type(exc).__name__}: {exc}"
+    if _PERMANENT_FAILURE_RE.search(text):
+        return FAILURE_PERMANENT
+    if isinstance(exc, (TimeoutError, ConnectionError)) or (
+        _TRANSIENT_FAILURE_RE.search(text)
+    ):
+        return FAILURE_TRANSIENT
+    return FAILURE_PERMANENT

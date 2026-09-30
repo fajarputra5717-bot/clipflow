@@ -235,6 +235,16 @@ def ensure_schema():
         "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS watermark_opacity REAL",
         # R-09: FALSE renders preview/final without burned-in captions.
         "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS burn_subtitles BOOLEAN DEFAULT TRUE",
+        # R-15 failure recovery: heartbeat of the claiming worker, attempt
+        # counter, transient/permanent class, earliest automatic retry.
+        "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS heartbeat_at TIMESTAMPTZ",
+        "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS attempts INT NOT NULL DEFAULT 0",
+        "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS error_class TEXT",
+        "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS retry_after TIMESTAMPTZ",
+        "ALTER TABLE clip_candidates ADD COLUMN IF NOT EXISTS heartbeat_at TIMESTAMPTZ",
+        "ALTER TABLE clip_candidates ADD COLUMN IF NOT EXISTS attempts INT NOT NULL DEFAULT 0",
+        "ALTER TABLE clip_candidates ADD COLUMN IF NOT EXISTS error_class TEXT",
+        "ALTER TABLE clip_candidates ADD COLUMN IF NOT EXISTS retry_after TIMESTAMPTZ",
     ]
 
     try:
@@ -851,7 +861,10 @@ def list_jobs(
                         j.subtitle_animation,
                         j.watermark_width,
                         j.watermark_opacity,
-                        j.burn_subtitles
+                        j.burn_subtitles,
+                        j.attempts,
+                        j.error_class,
+                        j.retry_after
                     FROM jobs j
                     LEFT JOIN source_videos sv
                         ON sv.id = j.source_video_id
@@ -926,7 +939,10 @@ def get_job(job_id: str):
                         j.subtitle_animation,
                         j.watermark_width,
                         j.watermark_opacity,
-                        j.burn_subtitles
+                        j.burn_subtitles,
+                        j.attempts,
+                        j.error_class,
+                        j.retry_after
                     FROM jobs j
                     LEFT JOIN source_videos sv
                         ON sv.id = j.source_video_id
@@ -3502,6 +3518,138 @@ def cancel_job(job_id: str):
         "job_id": job_id,
         "cancelled_candidates": cancelled_candidates,
     }
+
+
+# ============================================================
+# RETRY (R-15)
+# ============================================================
+# Manual retry of a failed job or candidate: resets the attempt
+# counter and error, keeps every edit and the version history. A job
+# with a stored transcript (and a source that retention hasn't purged)
+# re-runs only the analysis; otherwise it starts over from download.
+# A candidate goes back to the queue it failed in (error_stage holds
+# the queued status it was claimed from).
+
+CANDIDATE_RETRY_QUEUES = ("preview_queued", "render_queued", "thumbnail_queued")
+
+
+@app.post("/api/jobs/{job_id}/retry")
+def retry_job(job_id: str):
+
+    with get_db() as conn:
+
+        with conn.cursor() as cur:
+
+            cur.execute(
+                """
+                SELECT j.status,
+                       j.transcript IS NOT NULL,
+                       sv.source_path IS NOT NULL
+                FROM jobs j
+                LEFT JOIN source_videos sv ON sv.id = j.source_video_id
+                WHERE j.id = %s
+                FOR UPDATE OF j
+                """,
+                (job_id,),
+            )
+
+            row = cur.fetchone()
+
+            if not row:
+                raise HTTPException(status_code=404, detail="Job not found")
+
+            if row[0] != "failed":
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Job is {row[0]}; only failed jobs can be retried",
+                )
+
+            status = "reanalyze_queued" if row[1] and row[2] else "queued"
+
+            cur.execute(
+                """
+                UPDATE jobs
+                SET status = %s,
+                    message = 'Queued: retry requested',
+                    attempts = 0,
+                    error_class = NULL,
+                    error_stage = NULL,
+                    error_message = NULL,
+                    retry_after = NULL,
+                    completed_at = NULL,
+                    updated_at = NOW()
+                WHERE id = %s
+                """,
+                (status, job_id),
+            )
+
+        conn.commit()
+
+    return {"status": status, "job_id": job_id}
+
+
+@app.post("/api/jobs/{job_id}/candidates/{candidate_id}/retry")
+def retry_candidate(job_id: str, candidate_id: str):
+
+    with get_db() as conn:
+
+        with conn.cursor() as cur:
+
+            cur.execute(
+                """
+                SELECT c.status, c.error_stage, j.status
+                FROM clip_candidates c
+                JOIN jobs j ON j.id = c.job_id
+                WHERE c.id = %s AND c.job_id = %s
+                FOR UPDATE OF c
+                """,
+                (candidate_id, job_id),
+            )
+
+            row = cur.fetchone()
+
+            if not row:
+                raise HTTPException(
+                    status_code=404, detail="Candidate not found",
+                )
+
+            if row[0] != "failed":
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Candidate is {row[0]}; only failed candidates can be retried",
+                )
+
+            if row[2] == "cancelled":
+                raise HTTPException(
+                    status_code=409,
+                    detail="The job was cancelled; retry the job instead",
+                )
+
+            status = (
+                row[1] if row[1] in CANDIDATE_RETRY_QUEUES
+                else "preview_queued"
+            )
+
+            cur.execute(
+                """
+                UPDATE clip_candidates
+                SET status = %s,
+                    progress = 0,
+                    message = 'Queued: retry requested',
+                    attempts = 0,
+                    error_class = NULL,
+                    error_stage = NULL,
+                    error_message = NULL,
+                    retry_after = NULL,
+                    updated_at = NOW()
+                WHERE id = %s
+                """,
+                (status, candidate_id),
+            )
+
+        conn.commit()
+
+    return {"status": status, "candidate_id": candidate_id}
 
 
 @app.post("/api/jobs/{job_id}/move-to-queue")

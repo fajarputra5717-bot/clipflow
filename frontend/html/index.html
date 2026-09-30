@@ -312,6 +312,11 @@ button.primary:hover:not(:disabled){background:#0077ed!important}
 .job-header{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
 .job-header-side{display:flex;align-items:center;gap:7px;flex:none}
 .cancel-job-btn{padding:5px 10px;font-size:11.5px;min-height:0}
+.retry-banner{display:flex;align-items:center;gap:10px;margin:0 0 10px;padding:9px 12px;border-radius:12px;font-size:12px;line-height:1.35}
+.retry-banner span{flex:1}
+.retry-banner button{flex:none;padding:5px 12px;min-height:0}
+.retry-banner.permanent{background:var(--badge-bad-bg);color:var(--badge-bad-fg);box-shadow:inset 0 0 0 1px var(--badge-bad-line)}
+.retry-banner.transient{background:var(--badge-warn-bg);color:var(--badge-warn-fg);box-shadow:inset 0 0 0 1px var(--badge-warn-line)}
 .burn-toggle{display:flex;align-items:center;gap:8px;margin:8px 0 2px;font-size:12px;font-weight:600;cursor:pointer}
 .burn-toggle input{width:16px;height:16px;margin:0}
 .job-id,.job-url{font-size:9.5px;color:var(--muted2);word-break:break-all;margin-top:3px}.job-url{max-width:75vw}
@@ -1050,10 +1055,11 @@ img.topbar-logo-icon{background:none;padding:0;object-fit:cover}
     </button>
       <h1 class="page-title" id="pageTitle">Import</h1>
       <div class="toolbar-trail">
-        <div class="version-wrap"><button class="version-badge" id="versionBadge" type="button" aria-expanded="false">Beta · v2.1111</button>
+        <div class="version-wrap"><button class="version-badge" id="versionBadge" type="button" aria-expanded="false">Beta · v2.1112</button>
         <div class="version-popover" id="versionPopover" role="dialog" aria-hidden="true">
-        <div class="version-popover-title">What's new in v2.1111</div>
+        <div class="version-popover-title">What's new in v2.1112</div>
         <ul>
+          <li>Retry failed jobs and clips in one tap; temporary problems (network, rate limits, a worker restart) now retry on their own</li>
           <li>Free disk space shown in Settings; new jobs are refused when the disk is nearly full, old downloads are cleaned up automatically</li>
           <li>Cancel a running job straight from the Dynamic Island</li>
           <li>Turn burned-in subtitles off per job for a clean video (your subtitle text and style are kept)</li>
@@ -1542,6 +1548,7 @@ function renderCurrentJob(j,i=0){
         ${platformIcon(j.platform,"sm")}
         <span class="badge ${badgeClass(s)}">${esc(stageLabel(s))}</span>
         ${isCancellable(s)?`<button class="secondary cancel-job-btn" data-cancel-job="${esc(j.id)}" type="button">Cancel</button>`:""}
+        ${s==="failed"?`<button class="secondary cancel-job-btn" data-retry-job="${esc(j.id)}" type="button">Retry</button>`:""}
       </div>
     </div>
     ${done?"":miniProgressBar(p,stageColor(s))}
@@ -1567,6 +1574,7 @@ function renderQueueJob(j,i=0){
         ${platformIcon(j.platform,"sm")}
         <span class="badge ${badgeClass(s)}">${esc(stageLabel(s))}</span>
         ${isCancellable(s)?`<button class="secondary cancel-job-btn" data-cancel-job="${esc(j.id)}" type="button">Cancel</button>`:""}
+        ${s==="failed"?`<button class="secondary cancel-job-btn" data-retry-job="${esc(j.id)}" type="button">Retry</button>`:""}
       </div>
     </div>
     ${done?"":miniProgressBar(p,stageColor(s))}
@@ -1685,6 +1693,10 @@ function renderCandidate(c,jid,platform,job={}){
         <button class="secondary preview-edit" data-edit="${esc(c.id)}" type="button" aria-expanded="${document.getElementById("candidate-"+c.id)?.classList.contains("editing")?"true":"false"}">${document.getElementById("candidate-"+c.id)?.classList.contains("editing")?"Close edit":"Edit"}</button>
       </div>
     </div>
+    ${c.status==="failed"?`<div class="retry-banner ${c.error_class==="transient"?"transient":"permanent"}" role="status">
+      <span>${esc(c.message||"This clip failed.")}</span>
+      <button class="secondary" data-retry-candidate="${esc(jid)}" data-cid="${esc(c.id)}" type="button">Retry</button>
+    </div>`:""}
     <div class="candidate-hook-row">
       <button class="secondary ai-highlight${busy?" is-busy":""}" data-hook="${esc(jid)}" data-cid="${esc(c.id)}" type="button" ${busy?'disabled aria-busy="true"':""}>${busy?"Finding hook…":"Get another hook"}</button>
     </div>
@@ -1968,7 +1980,7 @@ function renderDetail(j){
   return `<div class="panel detail-head">
     <div class="job-header">
       <div><h2>${esc(jobDisplayTitle(j))}</h2><div class="job-id">${esc(j.id)}</div><div class="detail-meta"><span class="tag">${esc(stageLabel(j.status))}</span><span class="tag">${platformIcon(j.platform,"sm")}${esc(platformLabel(j.platform))}</span><span class="tag">${esc(String(j.split_ratio||70))}:${esc(String(100-Number(j.split_ratio||70)))}</span></div></div>
-      <div class="actions" style="margin-top:0">${isCancellable(j.status)?`<button class="secondary cancel-job-btn" data-cancel-job="${esc(j.id)}" type="button">Cancel job</button>`:""}<button class="secondary" data-back-queue type="button">Back</button></div>
+      <div class="actions" style="margin-top:0">${isCancellable(j.status)?`<button class="secondary cancel-job-btn" data-cancel-job="${esc(j.id)}" type="button">Cancel job</button>`:""}${j.status==="failed"?`<button class="secondary cancel-job-btn" data-retry-job="${esc(j.id)}" type="button">Retry job</button>`:""}<button class="secondary" data-back-queue type="button">Back</button></div>
     </div>
     <div class="muted" style="margin-top:7px">${esc(j.youtube_url||"")}</div>
   </div>
@@ -2066,6 +2078,20 @@ function startPolling(id){if(!id)return;stopPolling();activeJobId=id;saveActive(
 function stopPolling(){if(pollTimer){clearInterval(pollTimer);pollTimer=null}}
 // Global on purpose: the Dynamic Island (073) shows its Cancel only when window.cancelJob exists.
 window.cancelJob=cancelJob;
+// R-15: manual retry. Edits and version history are kept; the server resets the attempt counter.
+async function retryJob(id,btn){
+  setBusy(btn,true,"Retrying…");
+  try{
+    await api(`/api/jobs/${id}/retry`,{method:"POST"});
+    startPolling(id);
+    await Promise.allSettled([loadCurrentJobs(),refreshRunningJobs(),currentTab==="queue"?loadQueue():null]);
+  }catch(e){setBusy(btn,false);alert("Could not retry: "+e.message)}
+}
+async function retryCandidate(jid,cid,btn){
+  setBusy(btn,true,"Retrying…");
+  try{await api(`/api/jobs/${jid}/candidates/${cid}/retry`,{method:"POST"});watchCandidate(jid,cid)}
+  catch(e){setBusy(btn,false);alert("Could not retry: "+e.message)}
+}
 async function cancelJob(id,btn){
   if(!confirm("Cancel this job? Work in progress stops and can't be resumed."))return;
   setBusy(btn,true,"Cancelling…");
@@ -2641,6 +2667,8 @@ document.addEventListener("click",e=>{
   const ce=e.target.closest("[data-edit]");if(ce)return toggleCandidateEdit(ce.dataset.edit);
   const rn=e.target.closest("[data-rename]");if(rn)return renameJob(rn.dataset.rename);
   const cj=e.target.closest("[data-cancel-job]");if(cj)return cancelJob(cj.dataset.cancelJob,cj);
+  const rj=e.target.closest("[data-retry-job]");if(rj)return retryJob(rj.dataset.retryJob,rj);
+  const rc=e.target.closest("[data-retry-candidate]");if(rc)return retryCandidate(rc.dataset.retryCandidate,rc.dataset.cid,rc);
   const o=e.target.closest("[data-open]");if(o)return openAsCurrent(o.dataset.open);
   const m=e.target.closest("[data-move]");if(m)return moveToQueue(m.dataset.move);
   const qo=e.target.closest("[data-queue-open-button]");if(qo)return openQueueJob(qo.dataset.queueOpenButton);
