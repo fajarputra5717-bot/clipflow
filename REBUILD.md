@@ -42,6 +42,39 @@ Those notes beat the original spec wherever they disagree.
 
 ---
 
+## Rebuild status (2026-09-30): complete except deferred items
+
+| R | Item | Status | Commit(s) | Change doc(s) |
+|---|---|---|---|---|
+| R-01 | Baseline boots | DONE (+ OpenCV <5 fix: face detection was dead) | 6fefda1, 139c0b9 | 000, 007 |
+| R-02 | Runtime settings precedence | DONE | a061467 | 001 |
+| R-03 | Auth + CORS + media tokens | DONE | 291fee8 | 002 |
+| R-04 | Bigger, centered facecam | DONE | 0587875 | 008 |
+| R-05 | Per-job watermark size/opacity | DONE (+ edit-panel style bugs fixed) | c3ce2fb | 009 |
+| R-06 | Submagic clean plate | DONE (Submagic upload not run: billable) | 3231a5e | 010 |
+| R-07 | Faster analysis | DONE (faster-whisper medium, H.264 ≤1080p) | 6a3652b, 49b8657 | 011 |
+| R-08 | Cancel job | DONE (+ Dynamic Island Cancel) | a3a9006, 50d673f | 014 |
+| R-09 | Optional burn-in | DONE | bca537f | 015 |
+| R-10 | Browser-playable video | DONE (Chromium + WebKit) | 8628d91 | 016 |
+| R-11 | UI polish pass | DONE (lane B) | c655474 | 052 |
+| R-12 | Left sidebar + simplified Import | DONE (lane B) | b1f5319 | 050 |
+| R-13 | Tabs pill + job island | DONE (lane B; superseded by 072/073) | 8b5b599 | 051 |
+| R-14 | Disk retention + guards | DONE | 4c24d83 | 017 |
+| R-15 | Failure recovery | DONE (approved 2026-09-30) + render watchdog | 7bd2680, b8284b7 | 018, 021 |
+| R-16 | One watermark geometry + collision fix | DONE | f4404a9 | 019 |
+| R-17 | New default positions | DONE (25 % / 1.5 %) | 331e121 | 020 |
+| R-18 | libass spike findings | DONE (lane B) | ef96dcf | 065 |
+| R-19 | Display fonts | DONE | 30d78b2, b30dd07 | 064, 013 |
+| R-20 | AI provider abstraction | DONE | 15f06be | 004 |
+| R-21 | Claude provider | DONE | 2b94832 | 005 |
+| R-22 | AI failover policy | DONE | 106e228, 7c20227 | 006 |
+| R-23 | Performance feedback | **DEFERRED** (user, 2026-09-30) | | |
+| R-24 | Other phase-2 items | **DEFERRED** (user, 2026-09-30) | | |
+
+Also landed outside the R-list: yt-dlp `--` + download retries (253162e, 012), security audit 001 +
+URL allowlist/upload re-encode (0ffb8a0, 5d1b7ff; 060, 063), UI-QA badges/chevrons (061, 062), Telegram notifier
+(db184d4, c80b887; 066), lane B UX 067–073 (50d673f). Next: TASKS-5 T4 prompt evaluation.
+
 ## Phase A — Foundations (do first; everything else depends on them)
 
 ### R-01 · Baseline boots · LANDED (already handled in this kit)
@@ -156,7 +189,7 @@ The old disk hit 100% and corrupted a Postgres recovery. Rebuild with:
   refuse with **HTTP 507** if it won't fit.
 - Show free disk space in the settings sidebar.
 
-### R-15 · Failure recovery · UNKNOWN (T3): ask the user
+### R-15 · Failure recovery · DONE (approved 2026-09-30; was UNKNOWN (T3))
 Heartbeat + stale-claim reclaim, Retry button, transient vs permanent errors.
 (`shared/errors.py` from R-19 already gives the classifier.)
 
@@ -234,14 +267,14 @@ records who produced each hook; log every failover.
 
 ## Phase H — Growth features
 
-### R-23 · Performance feedback · LIKELY (TASKS-2 T4)
+### R-23 · Performance feedback · DEFERRED (was LIKELY, TASKS-2 T4)
 The sidebar had "Performance · leaderboard & correlations". Needs YouTube
 OAuth (client id/secret/refresh token) + YouTube Analytics API.
 `clip_performance` table, scheduled pull, leaderboard sorted by retention/CTR,
 honest "sample too small" messaging. **Ask the user** whether it was wired
 to real analytics or UI-only before building the fetcher.
 
-### R-24 · Other phase-2 items · UNKNOWN: ask the user
+### R-24 · Other phase-2 items · DEFERRED (was UNKNOWN)
 TASKS-2: T5 retention editing (silence trim, loudnorm −14 LUFS, punch-in),
 T6 platform safe zones, T7 hook prompt quality, T8 SSE, T9 batch, T10 edit-panel IA.
 

@@ -1,9 +1,9 @@
 # ClipFlow — agent context (read this first, don't re-crawl the repo)
 
-> **REBUILD IN PROGRESS.** The original server was lost (2026-09). This repo
-> starts from the v2.1100 baseline. Work through `REBUILD.md` in order;
-> it lists every feature that existed before and must be rebuilt, with the
-> gotchas learned the first time. Update this file as invariants change.
+> **REBUILD COMPLETE (2026-09-30).** The original server was lost (2026-09) and
+> everything in `REBUILD.md` was rebuilt except R-23/R-24 (deferred); its status
+> table lists each item's commits and change docs. Keep this file current as
+> invariants change.
 
 ## Layout (this server: /opt/clipflow, VM on Proxmox)
 
@@ -277,7 +277,7 @@ must be added to `MEDIA_PATH_RE`** and its frontend URL wrapped in
 CORS middleware must stay added *after* the auth middleware (outermost),
 or preflights get 401.
 
-## Frontend shell (R-11/R-12/R-13, lane B 067-073; badge v2.1110)
+## Frontend shell (R-11/R-12/R-13, lane B 067-073; badge v2.1114)
 
 - **Layout:** `.app-shell` grid = left `<aside id="sidebar">` (068: navigation
   only: `[data-nav]` Import/Publish switch views via `showTab()`,
