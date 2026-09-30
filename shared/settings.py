@@ -52,6 +52,14 @@ DEFAULT_SETTINGS = {
     # scaled the whole (often full-canvas) PNG instead.
     "WATERMARK_WIDTH": "320",
     "WATERMARK_OPACITY": "1.0",
+    # R-17 default positions, copied onto each NEW job at creation
+    # (jobs.watermark_position_y / subtitle_seam_gap). Older jobs have
+    # NULL there and keep the legacy 50 % / 4 %.
+    # Centre of the watermark, % of video height from the top.
+    "WATERMARK_POSITION_Y": "25",
+    # Gap between the caption's bottom and the facecam seam, % of height
+    # (floored at 2x the caption outline so it never crosses the seam).
+    "SUBTITLE_SEAM_GAP": "1.5",
     "DEFAULT_SUBTITLE_STYLE": "outline",
     "DEFAULT_SUBTITLE_FONT": "Liberation Sans Bold",
     "DEFAULT_SUBTITLE_SIZE": "42",

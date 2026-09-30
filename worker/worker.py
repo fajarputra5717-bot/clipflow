@@ -161,7 +161,25 @@ def resolve_watermark_path():
 # ------------------------------------------------------------
 
 WATERMARK_EDGE_MARGIN_FRAC = 0.04   # keep the mark this far from edges
-WATERMARK_CENTER_Y_FRAC = 0.5       # vertical centre; R-17 makes it a setting
+# Legacy layout for jobs created before R-17 (their position columns
+# are NULL): watermark centred, captions 4 % above the seam.
+LEGACY_WATERMARK_CENTER_Y_FRAC = 0.5
+LEGACY_SUBTITLE_SEAM_GAP_FRAC = 0.04
+WATERMARK_CENTER_Y_FRAC = LEGACY_WATERMARK_CENTER_Y_FRAC
+
+
+def job_layout(job):
+    """(watermark centre y, caption seam gap) as fractions of the video
+    height for this job (R-17): the values stored on the job at
+    creation, or the legacy layout when it predates R-17."""
+    position = job.get("watermark_position_y")
+    gap = job.get("subtitle_seam_gap")
+    return (
+        LEGACY_WATERMARK_CENTER_Y_FRAC if position is None
+        else max(0.05, min(0.95, float(position) / 100)),
+        LEGACY_SUBTITLE_SEAM_GAP_FRAC if gap is None
+        else max(0.0, min(0.2, float(gap) / 100)),
+    )
 
 _wm_bbox_cache = {}
 
@@ -3144,6 +3162,8 @@ def make_ass(
     animation="karaoke",
     watermark_width=None,
     watermark_path=None,
+    watermark_center_y=None,
+    seam_gap_frac=None,
 ):
     """Writes the ASS file. Returns the watermark rect the render must
     use (see get_watermark_rect): possibly moved up so it clears the
@@ -3275,7 +3295,15 @@ def make_ass(
         min(100, 100 - split_ratio),
     ) / 100
 
-    seam_gap = canvas_height * 0.04
+    # R-17: the gap is per job (job_layout); never less than twice the
+    # caption outline, so the outline can't spill across the seam.
+    seam_gap = max(
+        canvas_height * (
+            LEGACY_SUBTITLE_SEAM_GAP_FRAC if seam_gap_frac is None
+            else seam_gap_frac
+        ),
+        2 * setting.get("outline", 0),
+    )
 
     margin_v = int(
         canvas_height * bottom_pane_ratio
@@ -3299,6 +3327,7 @@ def make_ass(
             canvas_height,
             watermark_width=watermark_width or setting_int("WATERMARK_WIDTH"),
             watermark_path=watermark_path,
+            center_y_frac=watermark_center_y,
         )
     except Exception as exc:
         log(f"Watermark geometry unavailable ({exc}); captions unchanged")
@@ -3625,6 +3654,7 @@ def apply_watermark_overlay(
     *,
     watermark_width,
     watermark_opacity,
+    watermark_center_y=None,
 ):
     """One overlay pass on an already-rendered vertical video (used
     after the Submagic download, R-05): same centered geometry as
@@ -3651,6 +3681,7 @@ def apply_watermark_overlay(
         video_height,
         watermark_width=watermark_width,
         watermark_path=watermark,
+        center_y_frac=watermark_center_y,
     )
 
     run_command(
@@ -3714,6 +3745,7 @@ def render_vertical(
     watermark=True,
     watermark_rect=None,
     watermark_path=None,
+    watermark_center_y=None,
 ):
     """Stack content (top) + facecam (bottom), then optionally the
     watermark and burned-in subtitles. subtitle_path=None skips the
@@ -3844,6 +3876,7 @@ def render_vertical(
                 height,
                 watermark_width=watermark_width,
                 watermark_path=watermark_path,
+                center_y_frac=watermark_center_y,
             )
 
         filters.append(
@@ -4183,6 +4216,7 @@ def create_preview(
     # returns the watermark rect cleared of the captions.
     wm_path = resolve_watermark_path()
     watermark_rect = None
+    wm_center_y, seam_gap_frac = job_layout(job)
 
     # R-09: burn-in off -> no .ass at all, render without subtitles.
     if subtitle_file:
@@ -4199,6 +4233,8 @@ def create_preview(
             animation=normalize_subtitle_animation(job),
             watermark_width=wm_width,
             watermark_path=wm_path,
+            watermark_center_y=wm_center_y,
+            seam_gap_frac=seam_gap_frac,
         )
 
     # --------------------------------------------------------
@@ -4227,6 +4263,7 @@ def create_preview(
         watermark_opacity=wm_opacity,
         watermark_rect=watermark_rect,
         watermark_path=wm_path,
+        watermark_center_y=wm_center_y,
     )
 
     # A locked thumbnail (an AI option or a manual upload the user
@@ -4445,6 +4482,7 @@ def render_final_candidate(
     # returns the watermark rect cleared of the captions.
     wm_path = resolve_watermark_path()
     watermark_rect = None
+    wm_center_y, seam_gap_frac = job_layout(job)
 
     # R-09: burn-in off -> no .ass at all, render without subtitles.
     if subtitle_file:
@@ -4472,6 +4510,8 @@ def render_final_candidate(
             animation=normalize_subtitle_animation(job),
             watermark_width=wm_width,
             watermark_path=wm_path,
+            watermark_center_y=wm_center_y,
+            seam_gap_frac=seam_gap_frac,
         )
 
     output_path = (
@@ -4495,6 +4535,7 @@ def render_final_candidate(
         watermark_opacity=wm_opacity,
         watermark_rect=watermark_rect,
         watermark_path=wm_path,
+        watermark_center_y=wm_center_y,
     )
 
     # Same rule as the preview: don't clobber a thumbnail the user
@@ -5655,6 +5696,8 @@ def claim_candidate_task():
                 j.watermark_width,
                 j.watermark_opacity,
                 j.burn_subtitles,
+                j.watermark_position_y,
+                j.subtitle_seam_gap,
                 j.transcript_segments,
                 sv.source_path
             FROM clip_candidates c
@@ -5781,6 +5824,12 @@ def _process_candidate_task(
             "burn_subtitles":
                 task.get("burn_subtitles"),
 
+            "watermark_position_y":
+                task.get("watermark_position_y"),
+
+            "subtitle_seam_gap":
+                task.get("subtitle_seam_gap"),
+
             "transcript_segments":
                 task["transcript_segments"],
         }
@@ -5899,7 +5948,7 @@ def claim_submagic_task():
             """
             SELECT c.*, sv.source_path,
                    j.watermark_width, j.watermark_opacity,
-                   j.split_ratio, j.layout
+                   j.split_ratio, j.layout, j.watermark_position_y
             FROM clip_candidates c
             JOIN jobs j ON j.id = c.job_id
             JOIN source_videos sv ON sv.id = j.source_video_id
@@ -6138,6 +6187,7 @@ def process_submagic_task(candidate):
                 output_path,
                 watermark_width=wm_width,
                 watermark_opacity=wm_opacity,
+                watermark_center_y=job_layout(candidate)[0],
             )
 
             raw_path.unlink(missing_ok=True)

@@ -237,6 +237,9 @@ def ensure_schema():
         "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS burn_subtitles BOOLEAN DEFAULT TRUE",
         # R-15 failure recovery: heartbeat of the claiming worker, attempt
         # counter, transient/permanent class, earliest automatic retry.
+        # R-17: positions stored per job at creation; NULL = legacy layout.
+        "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS watermark_position_y REAL",
+        "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS subtitle_seam_gap REAL",
         "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS heartbeat_at TIMESTAMPTZ",
         "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS attempts INT NOT NULL DEFAULT 0",
         "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS error_class TEXT",
@@ -609,6 +612,14 @@ def media_token():
 # CREATE JOB
 # ============================================================
 
+def percent_setting(key: str, fallback: float, lo: float, hi: float) -> float:
+    try:
+        value = float(runtime_setting(key))
+    except (TypeError, ValueError):
+        value = fallback
+    return max(lo, min(hi, value))
+
+
 def disk_status() -> dict:
     usage = shutil.disk_usage(DATA_ROOT)
     try:
@@ -724,7 +735,9 @@ def create_job(req: ClipRequest):
                         subtitle_style,
                         subtitle_font,
                         subtitle_size,
-                        subtitle_animation
+                        subtitle_animation,
+                        watermark_position_y,
+                        subtitle_seam_gap
                     )
                     VALUES (
                         %s,
@@ -737,6 +750,8 @@ def create_job(req: ClipRequest):
                         %s,
                         %s,
                         %s::jsonb,
+                        %s,
+                        %s,
                         %s,
                         %s,
                         %s
@@ -753,6 +768,10 @@ def create_job(req: ClipRequest):
                         style["font"],
                         style["size"],
                         style["animation"],
+                        # R-17: freeze today's defaults onto the job so a
+                        # later settings change doesn't move its layout.
+                        percent_setting("WATERMARK_POSITION_Y", 25.0, 5, 95),
+                        percent_setting("SUBTITLE_SEAM_GAP", 1.5, 0, 20),
                     ),
                 )
 
@@ -864,7 +883,9 @@ def list_jobs(
                         j.burn_subtitles,
                         j.attempts,
                         j.error_class,
-                        j.retry_after
+                        j.retry_after,
+                        j.watermark_position_y,
+                        j.subtitle_seam_gap
                     FROM jobs j
                     LEFT JOIN source_videos sv
                         ON sv.id = j.source_video_id
@@ -942,7 +963,9 @@ def get_job(job_id: str):
                         j.burn_subtitles,
                         j.attempts,
                         j.error_class,
-                        j.retry_after
+                        j.retry_after,
+                        j.watermark_position_y,
+                        j.subtitle_seam_gap
                     FROM jobs j
                     LEFT JOIN source_videos sv
                         ON sv.id = j.source_video_id
