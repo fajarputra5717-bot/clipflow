@@ -146,19 +146,87 @@ def resolve_watermark_path():
     return WATERMARK_PATH
 
 
-def _watermark_pixel_size():
-    """Natural (width, height) of the currently active watermark
-    asset, or None if it can't be read. Used only to keep captions
-    clear of the watermark's actual footprint instead of guessing its
-    shape."""
-    try:
-        img = cv2.imread(str(resolve_watermark_path()))
+# ------------------------------------------------------------
+# WATERMARK GEOMETRY (R-16): the ONE place that decides where the
+# watermark goes. The ffmpeg overlay (render_vertical,
+# apply_watermark_overlay) and make_ass()'s caption clearance both use
+# get_watermark_rect(), so they can't disagree again.
+#
+# Assets can be full-canvas transparent PNGs (the active
+# "instgrm : @motion.klip" mark is a 1080x1920 canvas with a 394x163
+# visible mark near its bottom), so geometry comes from the ALPHA
+# BOUNDING BOX: the PNG is cropped to it and the visible mark is scaled
+# to the watermark width. Using the canvas size put the rect in the
+# wrong place and pushed captions into the facecam on the old VM.
+# ------------------------------------------------------------
+
+WATERMARK_EDGE_MARGIN_FRAC = 0.04   # keep the mark this far from edges
+WATERMARK_CENTER_Y_FRAC = 0.5       # vertical centre; R-17 makes it a setting
+
+_wm_bbox_cache = {}
+
+
+def watermark_alpha_bbox(path):
+    """(x, y, w, h) of the visible (alpha > 8) part of the asset, in
+    asset pixels; the whole image if it has no alpha. Cached per file
+    path + mtime."""
+    path = Path(path)
+    key = (str(path), path.stat().st_mtime)
+    if key not in _wm_bbox_cache:
+        img = cv2.imread(str(path), cv2.IMREAD_UNCHANGED)
         if img is None:
-            return None
+            raise RuntimeError(f"Watermark unreadable: {path}")
         h, w = img.shape[:2]
-        return (w, h) if w and h else None
-    except Exception:
-        return None
+        box = (0, 0, w, h)
+        if img.ndim == 3 and img.shape[2] == 4:
+            ys, xs = (img[:, :, 3] > 8).nonzero()
+            if len(xs):
+                box = (
+                    int(xs.min()), int(ys.min()),
+                    int(xs.max() - xs.min() + 1),
+                    int(ys.max() - ys.min() + 1),
+                )
+        _wm_bbox_cache.clear()
+        _wm_bbox_cache[key] = box
+    return _wm_bbox_cache[key]
+
+
+def get_watermark_rect(canvas_width, canvas_height, *, watermark_width,
+                       watermark_path, center_y_frac=None):
+    """Where the visible watermark goes on this canvas: dict with x, y,
+    w, h (canvas pixels, even sizes) and crop (x, y, w, h) in asset
+    pixels. watermark_width = width of the VISIBLE mark on a 1080-wide
+    video."""
+    bx, by, bw, bh = watermark_alpha_bbox(watermark_path)
+    w = max(2, int(round(watermark_width * canvas_width / FINAL_WIDTH)))
+    w -= w % 2
+    h = max(2, int(round(bh * w / bw)))
+    h -= h % 2
+    edge = int(canvas_height * WATERMARK_EDGE_MARGIN_FRAC)
+    if center_y_frac is None:
+        center_y_frac = WATERMARK_CENTER_Y_FRAC
+    y = int(canvas_height * center_y_frac - h / 2)
+    y = max(edge, min(y, canvas_height - h - edge))
+    return {
+        "x": (canvas_width - w) // 2,
+        "y": y,
+        "w": w,
+        "h": h,
+        "crop": (bx, by, bw, bh),
+    }
+
+
+def watermark_filter(rect, opacity, *, source_label, input_label="1:v",
+                     out_label="watermarked"):
+    """ffmpeg filter chain drawing the watermark at rect."""
+    cx, cy, cw, ch = rect["crop"]
+    return (
+        f"[{input_label}]crop={cw}:{ch}:{cx}:{cy},"
+        f"scale={rect['w']}:{rect['h']},format=rgba,"
+        f"colorchannelmixer=aa={opacity}[wm];"
+        f"[{source_label}][wm]overlay={rect['x']}:{rect['y']}:shortest=1"
+        f"[{out_label}];"
+    )
 
 
 # ============================================================
@@ -3058,6 +3126,12 @@ def strip_emoji(text):
     return re.sub(r"[ \t]{2,}", " ", _EMOJI_RE.sub("", text or ""))
 
 
+# Caption height estimate for the watermark clearance check (R-16).
+CAPTION_EST_LINES = 3
+CAPTION_LINE_SPACING = 1.2
+WATERMARK_CAPTION_GAP_FRAC = 0.015
+
+
 def make_ass(
     segments,
     path,
@@ -3069,7 +3143,11 @@ def make_ass(
     split_ratio=70,
     animation="karaoke",
     watermark_width=None,
+    watermark_path=None,
 ):
+    """Writes the ASS file. Returns the watermark rect the render must
+    use (see get_watermark_rect): possibly moved up so it clears the
+    captions (R-16), or None if there's no readable watermark."""
 
     # IMPORTANT:
     # JSONB subtitle_style can arrive as a dict.
@@ -3204,41 +3282,54 @@ def make_ass(
         + seam_gap
     )
 
-    # The watermark just got bigger and fully opaque, which shrinks
-    # the safe gap above the facecam seam — enough that the 60:40
-    # split combined with a large preset (Big Word Pop) could push
-    # captions up into the watermark's own footprint. Read the
-    # watermark's real pixel size and pull margin_v down if needed
-    # so captions always clear its bottom edge, with a bit of buffer.
-    wm_size = _watermark_pixel_size()
+    # R-16: the seam margin above is a FLOOR (captions never move down
+    # into the facecam). The old clamp here did min(margin_v, …) against
+    # the watermark and could push captions below the seam at 60:40.
+    # Collisions are now checked on the caption's TOP edge (ASS text
+    # with Alignment=2 grows upward from MarginV) and resolved by moving
+    # the watermark up, deterministically, with a log line.
+    watermark_rect = None
 
-    if wm_size:
+    if watermark_path is None:
+        watermark_path = resolve_watermark_path()
 
-        wm_natural_w, wm_natural_h = wm_size
-
-        wm_render_w = (
-            (watermark_width or setting_int("WATERMARK_WIDTH"))
-            * canvas_width / FINAL_WIDTH
+    try:
+        watermark_rect = get_watermark_rect(
+            canvas_width,
+            canvas_height,
+            watermark_width=watermark_width or setting_int("WATERMARK_WIDTH"),
+            watermark_path=watermark_path,
         )
+    except Exception as exc:
+        log(f"Watermark geometry unavailable ({exc}); captions unchanged")
 
-        wm_render_h = (
-            wm_natural_h * wm_render_w / wm_natural_w
+    if watermark_rect:
+
+        # Conservative: assume 3 wrapped lines of the effective size,
+        # 1.2 line spacing, plus outline top and bottom.
+        caption_block = (
+            effective_size * CAPTION_EST_LINES * CAPTION_LINE_SPACING
+            + 2 * setting.get("outline", 0)
         )
+        caption_top = canvas_height - margin_v - caption_block
+        gap = canvas_height * WATERMARK_CAPTION_GAP_FRAC
+        wm_bottom = watermark_rect["y"] + watermark_rect["h"]
 
-        wm_bottom = (
-            canvas_height + wm_render_h
-        ) / 2
-
-        buffer = canvas_height * 0.035
-
-        safe_margin_v = int(
-            canvas_height - wm_bottom - buffer
-        )
-
-        margin_v = min(
-            margin_v,
-            max(0, safe_margin_v),
-        )
+        if wm_bottom > caption_top - gap:
+            edge = int(canvas_height * WATERMARK_EDGE_MARGIN_FRAC)
+            new_y = max(edge, int(caption_top - gap - watermark_rect["h"]))
+            log(
+                f"Watermark/caption collision at {canvas_width}x"
+                f"{canvas_height} split {split_ratio}: watermark bottom "
+                f"{wm_bottom} vs caption top {int(caption_top)}; moving "
+                f"watermark y {watermark_rect['y']} -> {new_y}"
+            )
+            watermark_rect["y"] = new_y
+            if new_y + watermark_rect["h"] > caption_top - gap:
+                log(
+                    "Watermark still overlaps the caption band after "
+                    "moving to the top margin (very tall captions)"
+                )
 
     # PrimaryColour is the "already spoken" fill color words sweep
     # into (karaoke highlight); SecondaryColour is the resting/
@@ -3491,6 +3582,8 @@ def make_ass(
         encoding="utf-8",
     )
 
+    return watermark_rect
+
 
 # ============================================================
 # VIDEO RENDER
@@ -3548,9 +3641,17 @@ def apply_watermark_overlay(
 
     cap = cv2.VideoCapture(str(source_path))
     video_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH) or FINAL_WIDTH)
+    video_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or FINAL_HEIGHT)
     cap.release()
 
-    wm_width = max(2, int(watermark_width * video_width / FINAL_WIDTH))
+    # R-16: same geometry as native renders (Submagic's own captions
+    # can't be measured, so no caption clearance here).
+    rect = get_watermark_rect(
+        video_width,
+        video_height,
+        watermark_width=watermark_width,
+        watermark_path=watermark,
+    )
 
     run_command(
         [
@@ -3565,11 +3666,12 @@ def apply_watermark_overlay(
             "-i",
             str(watermark),
             "-filter_complex",
-            (
-                f"[1:v]scale={wm_width}:-1,format=rgba,"
-                f"colorchannelmixer=aa={watermark_opacity}[wm];"
-                "[0:v][wm]overlay=(W-w)/2:(H-h)/2:shortest=1[video]"
-            ),
+            watermark_filter(
+                rect,
+                watermark_opacity,
+                source_label="0:v",
+                out_label="video",
+            ).rstrip(";"),
             "-map",
             "[video]",
             "-map",
@@ -3610,6 +3712,8 @@ def render_vertical(
     watermark_width=None,
     watermark_opacity=None,
     watermark=True,
+    watermark_rect=None,
+    watermark_path=None,
 ):
     """Stack content (top) + facecam (bottom), then optionally the
     watermark and burned-in subtitles. subtitle_path=None skips the
@@ -3708,15 +3812,16 @@ def render_vertical(
     # WATERMARK (optional)
     # --------------------------------------------------------
 
-    watermark_path = None
+    if not watermark:
 
-    if watermark:
+        watermark_path = None
 
-        watermark_path = (
-            resolve_watermark_path()
-        )
+    else:
 
-        if not watermark_path.exists():
+        if watermark_path is None:
+            watermark_path = resolve_watermark_path()
+
+        if not Path(watermark_path).exists():
 
             raise RuntimeError(
                 "Required watermark missing: "
@@ -3731,31 +3836,21 @@ def render_vertical(
             if watermark_opacity is None:
                 watermark_opacity = default_opacity
 
-        wm_width = int(
-            watermark_width
-            * width
-            / FINAL_WIDTH
-        )
-
-        filters.append(
-            (
-                "[1:v]"
-                f"scale={wm_width}:-1,"
-                "format=rgba,"
-                "colorchannelmixer="
-                f"aa={watermark_opacity}"
-                "[wm];"
+        # R-16: one geometry. make_ass() returns the rect (possibly
+        # moved clear of the captions); without captions compute it here.
+        if watermark_rect is None:
+            watermark_rect = get_watermark_rect(
+                width,
+                height,
+                watermark_width=watermark_width,
+                watermark_path=watermark_path,
             )
-        )
 
         filters.append(
-            (
-                f"[{last}][wm]"
-                "overlay="
-                "(W-w)/2:"
-                "(H-h)/2:"
-                "shortest=1"
-                "[watermarked];"
+            watermark_filter(
+                watermark_rect,
+                watermark_opacity,
+                source_label=last,
             )
         )
 
@@ -4084,10 +4179,15 @@ def create_preview(
         )
     )
 
+    # R-16: one asset + one geometry for this render; make_ass()
+    # returns the watermark rect cleared of the captions.
+    wm_path = resolve_watermark_path()
+    watermark_rect = None
+
     # R-09: burn-in off -> no .ass at all, render without subtitles.
     if subtitle_file:
 
-        make_ass(
+        watermark_rect = make_ass(
             clip_segments,
             subtitle_file,
             subtitle_font,
@@ -4098,6 +4198,7 @@ def create_preview(
             split_ratio=split_ratio,
             animation=normalize_subtitle_animation(job),
             watermark_width=wm_width,
+            watermark_path=wm_path,
         )
 
     # --------------------------------------------------------
@@ -4124,6 +4225,8 @@ def create_preview(
         size=(preview_width, preview_height),
         watermark_width=wm_width,
         watermark_opacity=wm_opacity,
+        watermark_rect=watermark_rect,
+        watermark_path=wm_path,
     )
 
     # A locked thumbnail (an AI option or a manual upload the user
@@ -4338,10 +4441,15 @@ def render_final_candidate(
     if not job_burn_subtitles(job):
         subtitle_file = None
 
+    # R-16: one asset + one geometry for this render; make_ass()
+    # returns the watermark rect cleared of the captions.
+    wm_path = resolve_watermark_path()
+    watermark_rect = None
+
     # R-09: burn-in off -> no .ass at all, render without subtitles.
     if subtitle_file:
 
-        make_ass(
+        watermark_rect = make_ass(
             clip_segments,
             subtitle_file,
 
@@ -4363,6 +4471,7 @@ def render_final_candidate(
             split_ratio=split_ratio,
             animation=normalize_subtitle_animation(job),
             watermark_width=wm_width,
+            watermark_path=wm_path,
         )
 
     output_path = (
@@ -4384,6 +4493,8 @@ def render_final_candidate(
         preview=False,
         watermark_width=wm_width,
         watermark_opacity=wm_opacity,
+        watermark_rect=watermark_rect,
+        watermark_path=wm_path,
     )
 
     # Same rule as the preview: don't clobber a thumbnail the user

@@ -172,6 +172,11 @@ fallback only. The real source of truth is `watermark_assets` table +
 `resolve_watermark_path()` in worker.py — never read `WATERMARK_PATH`
 directly in new code, call the resolver.
 
+Geometry (R-16): `get_watermark_rect()` is the only placement logic
+(alpha-bbox crop; `WATERMARK_WIDTH` = visible mark width at 1080).
+`make_ass()` returns the rect after clearing the caption top edge (the
+watermark moves up; captions never go below the seam) and the render
+must use that same rect via `render_vertical(watermark_rect=…)`.
 Burn-in toggle (R-09): `jobs.burn_subtitles` (NULL = on, `job_burn_subtitles()`); off = no `make_ass()`, `render_vertical(subtitle_path=None)`.
 Per-job override (R-05): `jobs.watermark_width` / `watermark_opacity`
 (NULL = global setting), set via `PATCH /api/jobs/{id}/render-options`.

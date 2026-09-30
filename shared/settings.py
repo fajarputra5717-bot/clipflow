@@ -47,10 +47,10 @@ DEFAULT_SETTINGS = {
     "FFMPEG_PREVIEW_CRF": "30",
     "FFMPEG_PRESET": "veryfast",
     "FFMPEG_CRF": "23",
-    # 630 = what the worker actually rendered with in the baseline
-    # (its code default); the old UI default of 480 was never used.
-    # R-16 revisits this with the alpha-bbox geometry.
-    "WATERMARK_WIDTH": "630",
+    # Width of the VISIBLE mark (PNG cropped to its alpha bbox) on a
+    # 1080-wide video. R-16: 320, as on the old VM; the baseline's 630
+    # scaled the whole (often full-canvas) PNG instead.
+    "WATERMARK_WIDTH": "320",
     "WATERMARK_OPACITY": "1.0",
     "DEFAULT_SUBTITLE_STYLE": "outline",
     "DEFAULT_SUBTITLE_FONT": "Liberation Sans Bold",

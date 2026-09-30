@@ -1055,10 +1055,11 @@ img.topbar-logo-icon{background:none;padding:0;object-fit:cover}
     </button>
       <h1 class="page-title" id="pageTitle">Import</h1>
       <div class="toolbar-trail">
-        <div class="version-wrap"><button class="version-badge" id="versionBadge" type="button" aria-expanded="false">Beta · v2.1112</button>
+        <div class="version-wrap"><button class="version-badge" id="versionBadge" type="button" aria-expanded="false">Beta · v2.1113</button>
         <div class="version-popover" id="versionPopover" role="dialog" aria-hidden="true">
-        <div class="version-popover-title">What's new in v2.1112</div>
+        <div class="version-popover-title">What's new in v2.1113</div>
         <ul>
+          <li>Watermark sized by its visible mark and kept clear of captions (it moves up instead of overlapping); captions never drop into the facecam</li>
           <li>Retry failed jobs and clips in one tap; temporary problems (network, rate limits, a worker restart) now retry on their own</li>
           <li>Free disk space shown in Settings; new jobs are refused when the disk is nearly full, old downloads are cleaned up automatically</li>
           <li>Cancel a running job straight from the Dynamic Island</li>
@@ -1680,7 +1681,7 @@ function renderCandidate(c,jid,platform,job={}){
   const size=Number(c.subtitle_size||job.subtitle_size||ss?.size||42);
   const animName=(typeof ss==="object"&&ss?ss.animation:null)||c.subtitle_animation||job.subtitle_animation||"karaoke";
   const burnSubs=job.burn_subtitles!==false;  // R-09: NULL/missing = on
-  const wmW=Number(job.watermark_width??settingsCache.WATERMARK_WIDTH?.value??630)||630;
+  const wmW=Number(job.watermark_width??settingsCache.WATERMARK_WIDTH?.value??320)||320;
   const wmPct=Math.round(100*Number(job.watermark_opacity??settingsCache.WATERMARK_OPACITY?.value??1));
   const busy=isBusy(c.status);
   const thumbOptions=Array.isArray(c.thumbnail_options)?c.thumbnail_options:[];
