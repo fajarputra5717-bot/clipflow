@@ -13,3 +13,6 @@ tests/output/
 *.swo
 .*.sw?
 *~
+
+# Playwright UI recordings (072/073): kept on disk for review, never committed
+docs/ui-recordings/
