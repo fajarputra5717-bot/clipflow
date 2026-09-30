@@ -1,0 +1,1508 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#f5f5f7">
+<script>
+/* Same theme bootstrap + storage key as index.html, so the preview opens in the app's theme. */
+(function(){
+  try{
+    var t=localStorage.getItem("clipflow-theme");
+    if(!t)t=(window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches)?"dark":"light";
+    document.documentElement.setAttribute("data-theme",t);
+    document.documentElement.style.colorScheme=t;
+  }catch(e){}
+})();
+</script>
+<title>ClipFlow — Campaign Flow Preview</title>
+<link rel="icon" href="clipflow-mark.svg" type="image/svg+xml">
+<style>
+@font-face{font-family:"CF Montserrat";src:url("/fonts/montserrat/Montserrat%5Bwght%5D.ttf") format("truetype");font-weight:100 900;font-display:swap}
+/* Flow preview (076): static, mock data only, no API calls. Tokens are a
+   copy of index.html's :root / dark blocks (067 motion + 052/061 badges);
+   keep them in step if either side changes. */
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+:root{
+  --bg:#f5f5f7;--panel:#ffffff;--panel2:#fbfbfd;--input:#ffffff;
+  --line:rgba(0,0,0,.08);--line2:rgba(0,0,0,.13);--text:#1d1d1f;--muted:#6e6e73;
+  --muted2:#86868b;--accent:#0071e3;--accent2:#2997ff;
+  --good:#1eb85a;--bad:#ff3b30;--warn:#ff9500;--radius:20px;
+  --ease-out:cubic-bezier(.32,.72,0,1);
+  --ease-spring:cubic-bezier(.34,1.4,.64,1);
+  --ease-in-out:cubic-bezier(.65,0,.35,1);
+  --ease:var(--ease-out);
+  --dur-1:120ms;--dur-2:200ms;--dur-3:320ms;--dur-4:450ms;
+  --press:.97;
+  --sp-h:4px;--sp-1:8px;--sp-2:16px;--sp-3:24px;--sp-4:32px;--sp-5:40px;
+  --hit:44px;
+  --font-text:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI Variable Text","Segoe UI",system-ui,Roboto,"Helvetica Neue",Arial,sans-serif;
+  --font-display:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI Variable Display","Segoe UI",system-ui,Roboto,"Helvetica Neue",Arial,sans-serif;
+  --ring:0 0 0 4px rgba(0,113,227,.28);
+  --material-thin:rgba(255,255,255,.6);--material:rgba(255,255,255,.74);--material-thick:rgba(255,255,255,.88);
+  --material-blur:saturate(180%) blur(24px);
+  --hairline:rgba(0,0,0,.1);
+  --shadow:0 1px 2px rgba(0,0,0,.04),0 8px 24px rgba(0,0,0,.05);
+  --fill:rgba(120,120,128,.12);--fill2:rgba(120,120,128,.2);
+  --badge-idle-fg:#545458;--badge-idle-bg:rgba(120,120,128,.12);--badge-idle-line:rgba(120,120,128,.24);
+  --badge-run-fg:#0058b0;--badge-run-bg:rgba(0,113,227,.09);--badge-run-line:rgba(0,113,227,.22);
+  --badge-warn-fg:#8f4a00;--badge-warn-bg:rgba(255,149,0,.13);--badge-warn-line:rgba(255,149,0,.3);
+  --badge-good-fg:#137035;--badge-good-bg:rgba(30,184,90,.11);--badge-good-line:rgba(30,184,90,.26);
+  --badge-bad-fg:#b3000f;--badge-bad-bg:rgba(255,59,48,.09);--badge-bad-line:rgba(255,59,48,.24);
+  --frame-bg:#1d1d1f;--frame-fg:#3a3a3c;--frame-hi:#8e8e93;
+  --seg-thumb:#ffffff;
+}
+html{color-scheme:light}
+html[data-theme="dark"]{color-scheme:dark}
+:root[data-theme="dark"]{
+  --bg:#000000;--panel:#1c1c1e;--panel2:#232325;--input:#1c1c1e;
+  --line:rgba(255,255,255,.11);--line2:rgba(255,255,255,.17);--text:#f5f5f7;--muted:#98989d;
+  --muted2:#8e8e93;--accent:#0a84ff;--accent2:#409cff;
+  --good:#30d158;--bad:#ff453a;--warn:#ff9f0a;
+  --ring:0 0 0 4px rgba(10,132,255,.4);
+  --material-thin:rgba(28,28,30,.55);--material:rgba(28,28,30,.72);--material-thick:rgba(28,28,30,.88);
+  --hairline:rgba(255,255,255,.12);
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.35);
+  --fill:rgba(142,142,147,.16);--fill2:rgba(142,142,147,.28);
+  --badge-idle-fg:#c7c7cc;--badge-idle-bg:rgba(142,142,147,.18);--badge-idle-line:rgba(142,142,147,.3);
+  --badge-run-fg:#6cb2ff;--badge-run-bg:rgba(10,132,255,.17);--badge-run-line:rgba(10,132,255,.36);
+  --badge-warn-fg:#ffb340;--badge-warn-bg:rgba(255,159,10,.15);--badge-warn-line:rgba(255,159,10,.32);
+  --badge-good-fg:#4cd97b;--badge-good-bg:rgba(48,209,88,.14);--badge-good-line:rgba(48,209,88,.3);
+  --badge-bad-fg:#ff8a82;--badge-bad-bg:rgba(255,69,58,.16);--badge-bad-line:rgba(255,69,58,.34);
+  --frame-bg:#0e0e10;--frame-fg:#2c2c2e;--frame-hi:#636366;
+  --seg-thumb:#636366;
+}
+html{background:var(--bg)}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.47 var(--font-text);-webkit-font-smoothing:antialiased;overflow-x:hidden}
+h1,h2,h3{font-family:var(--font-display);margin:0;letter-spacing:-.01em}
+h2{font-size:24px;font-weight:700}
+h3{font-size:17px;font-weight:600}
+p{margin:0}
+a{color:var(--accent)}
+.muted{color:var(--muted)}
+.small{font-size:13px}
+.tiny{font-size:12px}
+.row{display:flex;align-items:center;gap:var(--sp-1);flex-wrap:wrap}
+.spacer{flex:1}
+
+/* Buttons: pill, 44 px hit, press scale */
+button,.btn{font:inherit;font-size:15px;font-weight:600;min-height:var(--hit);padding:0 18px;border-radius:999px;border:1px solid transparent;
+  background:var(--accent);color:#fff;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;text-decoration:none;
+  transition:transform var(--dur-1) var(--ease),background var(--dur-2) var(--ease),opacity var(--dur-2) var(--ease),box-shadow var(--dur-2) var(--ease)}
+button:active:not(:disabled),.btn:active{transform:scale(var(--press))}
+button:focus-visible,.btn:focus-visible,[tabindex]:focus-visible{outline:none;box-shadow:var(--ring)}
+button:disabled{opacity:.4;cursor:not-allowed}
+button.secondary,.btn.secondary{background:var(--fill);color:var(--text)}
+button.secondary:hover:not(:disabled){background:var(--fill2)}
+button.plain{background:transparent;color:var(--accent);padding:0 10px}
+button.sm{min-height:32px;font-size:13px;padding:0 12px;position:relative}
+button.sm::after{content:"";position:absolute;inset:-6px 0}/* keep 44 px effective hit */
+.icon{width:18px;height:18px;flex:none}
+
+/* Toolbar */
+.toolbar{position:sticky;top:0;z-index:50;background:var(--material);-webkit-backdrop-filter:var(--material-blur);backdrop-filter:var(--material-blur);border-bottom:1px solid var(--hairline)}
+.toolbar-inner{max-width:1120px;margin:0 auto;padding:10px var(--sp-2);display:flex;align-items:center;gap:var(--sp-1)}
+.brand{display:flex;align-items:center;gap:8px;font-weight:700;font-family:var(--font-display);font-size:17px;color:var(--text);text-decoration:none;min-height:var(--hit)}
+.brand img{width:26px;height:26px}
+.preview-pill{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:4px 10px;border-radius:999px;
+  background:var(--badge-warn-bg);color:var(--badge-warn-fg);border:1px solid var(--badge-warn-line);white-space:nowrap}
+.icon-btn{width:var(--hit);padding:0;background:var(--fill);color:var(--text)}
+
+.wrap{max-width:1120px;margin:0 auto;padding:var(--sp-3) var(--sp-2) 120px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:var(--sp-3)}
+.panel+.panel{margin-top:var(--sp-2)}
+.section-head{display:flex;align-items:flex-end;gap:var(--sp-2);margin-bottom:var(--sp-2);flex-wrap:wrap}
+.section-head p{margin-top:4px}
+.eyebrow{font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+
+/* 1) Flow overview */
+.flow-card{padding:var(--sp-2) var(--sp-2) var(--sp-1)}
+.flow{list-style:none;margin:0;padding:4px 4px 10px;display:grid;grid-template-columns:repeat(8,1fr);gap:0}
+.flow li{position:relative;display:flex;justify-content:center}
+.flow li+li::before{content:"";position:absolute;top:22px;right:calc(50% + 26px);left:calc(-50% + 26px);height:2px;border-radius:2px;background:var(--line2);transition:background var(--dur-3) var(--ease)}
+.flow li.done::before,.flow li.active::before{background:var(--accent)}
+.flow-node{flex-direction:column;background:transparent;color:var(--text);min-height:0;padding:0 2px;gap:6px;border-radius:14px;font-weight:500;width:100%}
+.flow-dot{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:var(--fill);color:var(--muted);transition:background var(--dur-2) var(--ease),color var(--dur-2) var(--ease),transform var(--dur-3) var(--ease-spring)}
+.flow-dot svg{width:20px;height:20px}
+.flow li.done .flow-dot{background:var(--badge-run-bg);color:var(--accent)}
+.flow li.active .flow-dot{background:var(--accent);color:#fff;transform:scale(1.08)}
+.flow-label{font-size:13px;font-weight:600}
+.flow-sub{font-size:11px;color:var(--muted);line-height:1.3;text-align:center}
+.flow li.active .flow-label{color:var(--accent)}
+.flow-node:hover .flow-dot{background:var(--fill2)}
+.flow li.active .flow-node:hover .flow-dot{background:var(--accent)}
+
+/* Step panels */
+.step{animation:stepIn var(--dur-4) var(--ease-out)}
+@keyframes stepIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.step-nav{display:flex;gap:var(--sp-1);margin-top:var(--sp-3);justify-content:space-between}
+
+/* Cards / lists */
+.grid{display:grid;gap:var(--sp-2)}
+.grid-3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.grid-2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.card{background:var(--panel2);border:1px solid var(--line);border-radius:16px;padding:var(--sp-2);text-align:left;color:var(--text);font-weight:400;display:block;width:100%;min-height:0}
+button.card{background:var(--panel2);transition:transform var(--dur-1) var(--ease),border-color var(--dur-2) var(--ease),box-shadow var(--dur-2) var(--ease)}
+button.card:hover{border-color:var(--line2);box-shadow:var(--shadow)}
+.card.is-new{animation:pop var(--dur-4) var(--ease-spring)}
+@keyframes pop{from{opacity:0;transform:scale(.94)}to{opacity:1;transform:none}}
+.kv{display:flex;gap:var(--sp-2);flex-wrap:wrap;margin-top:10px;font-size:13px;color:var(--muted)}
+.kv b{color:var(--text);font-weight:600}
+.meter{height:6px;border-radius:3px;background:var(--fill);overflow:hidden;margin-top:12px}
+.meter i{display:block;height:100%;border-radius:3px;background:var(--accent);transform-origin:left;transition:transform var(--dur-4) var(--ease-out)}
+
+.badge{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:600;padding:3px 9px;border-radius:999px;border:1px solid var(--badge-idle-line);background:var(--badge-idle-bg);color:var(--badge-idle-fg);white-space:nowrap}
+.badge.run{border-color:var(--badge-run-line);background:var(--badge-run-bg);color:var(--badge-run-fg)}
+.badge.warn{border-color:var(--badge-warn-line);background:var(--badge-warn-bg);color:var(--badge-warn-fg)}
+.badge.good{border-color:var(--badge-good-line);background:var(--badge-good-bg);color:var(--badge-good-fg)}
+.badge.bad{border-color:var(--badge-bad-line);background:var(--badge-bad-bg);color:var(--badge-bad-fg)}
+.badge.run::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;animation:breathe 1.6s var(--ease-in-out) infinite}
+@keyframes breathe{50%{opacity:.35}}
+
+/* Rule chips */
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:13px;padding:6px 12px;border-radius:999px;background:var(--fill);color:var(--text);border:1px solid transparent}
+.chip .k{color:var(--muted);font-weight:500}
+.chip.off{background:var(--badge-bad-bg);border-color:var(--badge-bad-line);color:var(--badge-bad-fg)}
+.chip.off .k{color:inherit;opacity:.8}
+.chip.in{animation:chipIn var(--dur-3) var(--ease-spring) both}
+@keyframes chipIn{from{opacity:0;transform:translateY(6px) scale(.92)}to{opacity:1;transform:none}}
+
+/* Toggle chips (platforms, language) */
+.seg{display:inline-flex;padding:3px;border-radius:999px;background:var(--fill);gap:2px;flex-wrap:wrap}
+.seg button{min-height:36px;background:transparent;color:var(--text);font-weight:500;padding:0 14px}
+.seg button[aria-pressed="true"]{background:var(--seg-thumb);box-shadow:0 1px 3px rgba(0,0,0,.12);font-weight:600}
+.tchip{min-height:36px;padding:0 14px;font-size:13px;font-weight:600;background:var(--fill);color:var(--muted)}
+.tchip[aria-pressed="true"]{background:var(--badge-run-bg);color:var(--badge-run-fg);box-shadow:inset 0 0 0 1px var(--badge-run-line)}
+.tchip svg{width:14px;height:14px}
+
+/* Switch */
+.switch{position:relative;width:51px;height:31px;min-height:0;padding:0;border-radius:999px;background:var(--fill2);flex:none}
+.switch::after{content:"";position:absolute;top:2px;left:2px;width:27px;height:27px;border-radius:50%;background:#fff;box-shadow:0 2px 6px rgba(0,0,0,.2);transition:transform var(--dur-3) var(--ease-spring)}
+.switch[aria-checked="true"]{background:var(--good)}
+.switch[aria-checked="true"]::after{transform:translateX(20px)}
+
+/* Lists */
+.list{display:flex;flex-direction:column}
+.li{display:flex;align-items:center;gap:var(--sp-2);padding:12px 0;border-top:1px solid var(--line)}
+.li:first-child{border-top:0}
+.li .grow{flex:1;min-width:0}
+.li .badge{white-space:normal;text-align:right;max-width:45%}
+.li .title{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.avatar{width:40px;height:40px;border-radius:50%;background:var(--fill2);display:grid;place-items:center;font-weight:700;color:var(--muted);flex:none}
+.thumb{width:40px;height:56px;border-radius:8px;flex:none;background:linear-gradient(160deg,#3a3a3c,#1d1d1f)}
+
+/* Forms */
+label.field{display:block;font-size:13px;font-weight:600;color:var(--muted);margin-bottom:6px}
+input[type=text],textarea,select{font:inherit;width:100%;border:1px solid var(--line2);border-radius:12px;padding:11px 14px;background:var(--input);color:var(--text)}
+textarea{min-height:220px;resize:vertical;font-size:14px;line-height:1.5}
+input:focus,textarea:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:var(--ring)}
+.form-row{margin-top:var(--sp-3)}
+
+/* Layout choices with mini previews */
+.layouts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.layout-opt{flex-direction:column;align-items:stretch;background:var(--panel2);color:var(--text);border:1px solid var(--line2);border-radius:16px;padding:12px;gap:10px;font-weight:600;font-size:13px;min-height:0;text-align:center}
+.layout-opt[aria-pressed="true"]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent);background:var(--badge-run-bg)}
+.layout-opt svg{width:64px;height:auto;margin:0 auto;display:block;border-radius:8px}
+.layout-opt small{display:block;font-weight:400;color:var(--muted);font-size:12px;line-height:1.3}
+.mini .bg{fill:var(--frame-bg)}.mini .p{fill:var(--frame-hi)}.mini .f{fill:var(--frame-fg)}.mini .a{fill:var(--accent)}.mini .ln{stroke:var(--frame-hi);stroke-width:1;fill:none}
+
+/* Analysis progress */
+.stages{list-style:none;margin:var(--sp-2) 0 0;padding:0;display:flex;flex-direction:column;gap:10px}
+.stages li{display:flex;align-items:center;gap:10px;font-size:14px;color:var(--muted);transition:color var(--dur-2) var(--ease)}
+.stages li .dot{width:22px;height:22px;border-radius:50%;border:2px solid var(--line2);display:grid;place-items:center;flex:none;transition:all var(--dur-2) var(--ease)}
+.stages li.run{color:var(--text)}
+.stages li.run .dot{border-color:var(--accent);border-top-color:transparent;animation:spin .8s linear infinite}
+.stages li.done{color:var(--text)}
+.stages li.done .dot{background:var(--good);border-color:var(--good);color:#fff}
+.stages li.done .dot::after{content:"✓";font-size:12px;font-weight:700}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* Review */
+.clips{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--sp-2)}
+.clip{display:grid;grid-template-columns:150px minmax(0,1fr);gap:var(--sp-2);padding:var(--sp-2);background:var(--panel2);border:1px solid var(--line);border-radius:18px;transition:opacity var(--dur-3) var(--ease)}
+.clip.approved{opacity:.6}
+.vframe{position:relative;aspect-ratio:9/16;border-radius:12px;overflow:hidden;background:var(--frame-bg)}
+.vframe svg{position:absolute;inset:0;width:100%;height:100%}
+.vcap{position:absolute;left:6px;right:6px;bottom:22%;text-align:center;font:900 13px/1.15 "CF Montserrat",var(--font-display);color:#fff;text-transform:uppercase;
+  text-shadow:0 0 3px #000,0 1px 2px #000;letter-spacing:.01em}
+.vcap span{transition:color var(--dur-1) linear}
+.vcap span.on{color:#ffd60a}
+.vtime{position:absolute;right:6px;top:6px;font-size:11px;font-weight:600;color:#fff;background:rgba(0,0,0,.55);padding:1px 6px;border-radius:6px}
+.wm{position:absolute;left:50%;top:25%;transform:translateX(-50%);font-size:9px;font-weight:700;color:rgba(255,255,255,.75);letter-spacing:.08em;transition:opacity var(--dur-3) var(--ease)}
+.score{font-family:var(--font-display);font-weight:700;font-size:13px;color:var(--accent)}
+.reason{font-size:13px;color:var(--muted);margin-top:6px}
+.reason b{color:var(--text);font-weight:600}
+.checks{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.check-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-width:0}
+.approve-hint{font-size:12px;color:var(--muted);margin-top:6px;min-height:1em}
+
+/* Schedule */
+.slots{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:10px}
+.slot{flex-direction:column;align-items:flex-start;gap:2px;min-height:0;padding:10px 12px;border-radius:14px;background:var(--panel);border:1px solid var(--line2);color:var(--text);font-weight:600;text-align:left}
+.slot small{font-weight:400;color:var(--muted);font-size:12px}
+.slot[aria-pressed="true"]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent);background:var(--badge-run-bg)}
+.tzline{display:flex;gap:6px;flex-wrap:wrap;align-items:center;font-size:13px;color:var(--muted)}
+
+/* Queue */
+.qday{margin-top:var(--sp-2)}
+.qday h3{font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-bottom:4px}
+.qrow{display:grid;grid-template-columns:40px minmax(0,1fr) 120px 180px 150px;align-items:center;gap:var(--sp-2);padding:10px 0;border-top:1px solid var(--line)}
+.qrow .when b{display:block;font-size:14px}
+.qrow .when small{color:var(--muted);font-size:12px}
+.pchip{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600}
+.pchip svg{width:16px;height:16px}
+.qrow.flash{animation:flash 1.2s var(--ease-out)}
+@keyframes flash{from{background:var(--badge-run-bg)}to{background:transparent}}
+
+/* Performance */
+.tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--sp-2)}
+.tile{background:var(--panel2);border:1px solid var(--line);border-radius:16px;padding:var(--sp-2)}
+.tile .v{font-family:var(--font-display);font-size:28px;font-weight:700;letter-spacing:-.02em;margin-top:2px;font-variant-numeric:tabular-nums}
+.tile .d{font-size:12px;color:var(--muted);margin-top:2px}
+.bars{display:flex;flex-direction:column;gap:10px;margin-top:var(--sp-2)}
+.bar-row{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,2fr) 150px;gap:var(--sp-2);align-items:center;font-size:14px}
+.bar-row .name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bar-track{height:12px;border-radius:4px;position:relative}
+.bar-fill{height:100%;border-radius:0 4px 4px 0;background:var(--accent);transform-origin:left;transition:transform var(--dur-4) var(--ease-out)}
+.bar-row .num{text-align:right;font-variant-numeric:tabular-nums}
+.bar-row .num small{display:block;color:var(--muted);font-size:12px}
+s{color:var(--muted)}
+.formula{font-size:13px;color:var(--muted);margin-top:var(--sp-2);padding:10px 14px;background:var(--fill);border-radius:12px}
+
+/* Sheet (New campaign). Closed = visibility hidden + no pointer events (see CLAUDE.md). */
+.sheet-scrim{position:fixed;inset:0;z-index:90;background:rgba(0,0,0,.32);opacity:0;visibility:hidden;pointer-events:none;transition:opacity var(--dur-3) var(--ease),visibility 0s linear var(--dur-3)}
+.sheet{position:fixed;z-index:100;left:50%;top:50%;width:min(720px,calc(100vw - 32px));max-height:calc(100vh - 48px);overflow:auto;transform:translate(-50%,-46%) scale(.98);
+  opacity:0;visibility:hidden;pointer-events:none;background:var(--material-thick);-webkit-backdrop-filter:var(--material-blur);backdrop-filter:var(--material-blur);
+  border:1px solid var(--hairline);border-radius:24px;padding:var(--sp-3);box-shadow:0 24px 60px rgba(0,0,0,.25);
+  transition:transform var(--dur-3) var(--ease-out),opacity var(--dur-3) var(--ease),visibility 0s linear var(--dur-3)}
+body.sheet-open .sheet-scrim{opacity:1;visibility:visible;pointer-events:auto;transition:opacity var(--dur-3) var(--ease)}
+body.sheet-open .sheet{opacity:1;visibility:visible;pointer-events:auto;transform:translate(-50%,-50%);transition:transform var(--dur-3) var(--ease-out),opacity var(--dur-3) var(--ease)}
+.extract{margin-top:var(--sp-2)}
+.extract-steps{list-style:none;padding:0;margin:0 0 var(--sp-2);display:flex;flex-direction:column;gap:6px}
+.extract-steps li{display:flex;gap:8px;align-items:center;font-size:13px;color:var(--muted)}
+.extract-steps li .dot{width:16px;height:16px;border-radius:50%;border:2px solid var(--line2);flex:none}
+.extract-steps li.run .dot{border-color:var(--accent);border-top-color:transparent;animation:spin .8s linear infinite}
+.extract-steps li.done{color:var(--text)}
+.extract-steps li.done .dot{border-color:var(--good);background:var(--good)}
+.rule-group{margin-top:12px}
+.rule-group .eyebrow{margin-bottom:6px}
+
+.note{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:14px;background:var(--badge-run-bg);color:var(--text);font-size:13px;margin-top:var(--sp-2)}
+.note svg{color:var(--accent);flex:none;margin-top:1px}
+
+/* ---------- Editor (077): player + tabbed inspector + timeline ---------- */
+.vchip{display:inline-flex;align-items:center;gap:6px;padding:6px 12px 6px 8px;border-radius:999px;background:var(--badge-run-bg);color:var(--badge-run-fg);border:1px solid var(--badge-run-line);font-weight:700;font-size:13px}
+.vchip svg{width:16px;height:16px}
+.vchip b{font-family:var(--font-display);font-size:15px}
+.ed-grid{display:grid;grid-template-columns:288px minmax(0,1fr);grid-template-areas:"player insp" "tl tl";gap:var(--sp-3);margin-top:var(--sp-2)}
+.ed-player{grid-area:player}.ed-insp{grid-area:insp;min-width:0}.ed-tl{grid-area:tl;min-width:0}
+.pframe{position:relative;aspect-ratio:9/16;border-radius:18px;overflow:hidden;background:var(--frame-bg);box-shadow:0 12px 32px rgba(0,0,0,.18);--kw:#ffd60a;--prog:#ffd60a;--p:0;isolation:isolate}
+.pzoom,.pbump{position:absolute;inset:0;transform-origin:50% 42%;will-change:transform}
+.pzoom svg{width:100%;height:100%;display:block}
+.pflash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}
+.pframe.cut-flash .pflash{animation:cutFlash 300ms var(--ease-out)}
+.pframe.cut-zoom .pbump{animation:cutZoom 320ms var(--ease-out)}
+.pframe.cut-slide .pbump{animation:cutSlide 300ms var(--ease-out)}
+@keyframes cutFlash{from{opacity:.8}to{opacity:0}}
+@keyframes cutZoom{from{transform:scale(1.14);filter:blur(2px)}to{transform:none;filter:none}}
+@keyframes cutSlide{from{transform:translateX(14%)}to{transform:none}}
+.pprog{position:absolute;left:0;right:0;top:0;height:5px;background:rgba(255,255,255,.18);z-index:3}
+.pprog i{display:block;height:100%;background:var(--prog);transform-origin:left;transform:scaleX(var(--p))}
+.phook{position:absolute;top:10%;left:8%;right:8%;display:flex;justify-content:center;z-index:3;opacity:0;transform:translateY(-8px) scale(.94);
+  transition:opacity var(--dur-2) var(--ease),transform var(--dur-3) var(--ease-spring);pointer-events:none}
+.phook.show{opacity:1;transform:none}
+.phook span{background:#fff;color:#000;font:800 15px/1.2 var(--font-display);padding:8px 12px;border-radius:12px;box-shadow:0 6px 18px rgba(0,0,0,.35);text-align:center}
+.pwm{position:absolute;left:50%;transform:translate(-50%,-50%);z-index:2;pointer-events:none;color:#fff}
+.pwm svg{width:100%;height:auto;display:block}
+.psfx{position:absolute;right:10px;bottom:10px;z-index:3;font-size:11px;font-weight:700;color:#fff;background:rgba(0,0,0,.55);padding:3px 8px;border-radius:999px;opacity:0;transform:scale(.9);transition:opacity var(--dur-2) var(--ease),transform var(--dur-2) var(--ease-spring)}
+.psfx.show{opacity:1;transform:none}
+.pctrl{margin-top:10px}
+.pctrl .icon-btn svg{width:18px;height:18px}
+.tabnum{font-variant-numeric:tabular-nums;font-weight:600}
+
+/* Caption presets: shared by player (.pcap) and gallery tiles (.pcap-mini). Mirrors ASS styles loosely. */
+.pcap{position:absolute;left:7%;right:7%;top:63%;z-index:2;text-align:center;font:900 21px/1.15 "CF Montserrat",var(--font-display);color:#fff;text-transform:uppercase;
+  text-shadow:0 0 3px #000,0 2px 3px #000;pointer-events:none}
+.pcap-mini{font:900 12px/1.15 "CF Montserrat",var(--font-display);color:#fff;text-transform:uppercase;text-shadow:0 0 2px #000,0 1px 2px #000;text-align:center}
+.w{display:inline-block;transition:transform var(--dur-2) var(--ease-spring),color var(--dur-1) linear,opacity var(--dur-1) linear,background var(--dur-1) linear}
+.w.kw{color:var(--kw)}
+.preset-karaoke .w{opacity:.55}.preset-karaoke .w.said,.preset-karaoke .w.on{opacity:1}.preset-karaoke .w.on{color:var(--kw)}
+.preset-pop .w{transform:scale(.92)}.preset-pop .w.on{transform:scale(1.2);color:var(--kw)}
+.preset-hormozi{font-size:24px;letter-spacing:-.01em;text-shadow:0 0 2px #000,0 0 4px #000,0 3px 0 #000}.pcap-mini.preset-hormozi{font-size:13px}
+.preset-hormozi .w.on{transform:scale(1.08) rotate(-2deg)}
+.preset-clean{text-transform:none;font:700 18px/1.25 var(--font-display);text-shadow:0 1px 8px rgba(0,0,0,.7)}.pcap-mini.preset-clean{font-size:12px}
+.preset-clean .w.kw{color:#fff;text-decoration:underline 2px var(--kw);text-underline-offset:3px}
+.preset-neon .w.on{color:var(--kw);text-shadow:0 0 6px var(--kw),0 0 16px var(--kw)}
+.preset-boxed .w{padding:0 .18em;border-radius:.2em}.preset-boxed .w.on{background:var(--kw);color:#000;text-shadow:none}
+
+/* Segmented control with a spring thumb (Apple style) */
+.segx{position:relative;display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);padding:3px;border-radius:12px;background:var(--fill)}
+.segx button{position:relative;z-index:1;background:transparent;color:var(--text);min-height:36px;padding:0 6px;font-size:13px;font-weight:500;border-radius:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.segx button[aria-selected="true"]{font-weight:600}
+.segx button:active:not(:disabled){transform:none}
+.segx-ind{position:absolute;top:3px;bottom:3px;left:0;border-radius:9px;background:var(--seg-thumb);box-shadow:0 3px 8px rgba(0,0,0,.12),0 0 0 .5px rgba(0,0,0,.04);
+  transition:transform var(--dur-4) var(--ease-spring),width var(--dur-4) var(--ease-spring)}
+.tabpanel{padding-top:var(--sp-2)}
+.tabpanel.in-r{animation:tabInR var(--dur-3) var(--ease-spring)}
+.tabpanel.in-l{animation:tabInL var(--dur-3) var(--ease-spring)}
+@keyframes tabInR{from{opacity:0;transform:translateX(18px)}to{opacity:1;transform:none}}
+@keyframes tabInL{from{opacity:0;transform:translateX(-18px)}to{opacity:1;transform:none}}
+.igroup{padding:14px 0;border-top:1px solid var(--line)}
+.igroup:first-child{border-top:0;padding-top:0}
+.irow{display:flex;align-items:center;gap:var(--sp-2);min-height:var(--hit)}
+.irow>div:first-child{flex:1;min-width:0}
+.il{font-weight:600;font-size:14px}
+.isub{margin-top:8px}
+.dep{transition:opacity var(--dur-2) var(--ease)}
+.dep.dim{opacity:.4;pointer-events:none}
+.range{display:grid;grid-template-columns:110px minmax(0,1fr) 64px;align-items:center;gap:12px;min-height:var(--hit);font-size:14px}
+.range output{text-align:right;font-variant-numeric:tabular-nums;color:var(--muted);font-size:13px}
+input[type=range]{width:100%;accent-color:var(--accent);min-height:28px}
+.swatches{display:flex;gap:10px;flex-wrap:wrap}
+.sw{width:32px;height:32px;min-height:0;padding:0;border-radius:50%;border:2px solid var(--panel);box-shadow:0 0 0 1px var(--line2);position:relative}
+.sw::after{content:"";position:absolute;inset:-6px}
+.sw[aria-pressed="true"]{box-shadow:0 0 0 2px var(--accent)}
+.presets{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.preset{flex-direction:column;align-items:stretch;gap:6px;padding:6px;min-height:0;border-radius:14px;background:var(--panel2);border:1px solid var(--line2);color:var(--text);font-size:12px;font-weight:600}
+.preset[aria-pressed="true"]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.ptile{height:62px;border-radius:9px;background:linear-gradient(160deg,#48484a,#1c1c1e);display:grid;place-items:center;padding:0 6px;--kw:#ffd60a}
+.wm-pick{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}
+.wm-opt{flex-direction:column;gap:6px;padding:6px;min-height:0;border-radius:14px;background:var(--panel2);border:1px solid var(--line2);color:var(--text);font-size:12px;font-weight:600;text-align:center;line-height:1.2}
+.wm-opt[aria-pressed="true"]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.wm-thumb{height:48px;width:100%;border-radius:9px;display:grid;place-items:center;color:#fff;padding:0 8px;
+  background:repeating-conic-gradient(#3a3a3c 0 25%,#2c2c2e 0 50%) 0 0/12px 12px}
+.wm-thumb svg{width:100%;max-height:32px}
+.warnbox{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:12px 14px;border-radius:14px;font-size:13px;margin-bottom:var(--sp-2);
+  background:var(--badge-bad-bg);border:1px solid var(--badge-bad-line);color:var(--badge-bad-fg)}
+.warnbox.ok{background:var(--badge-good-bg);border-color:var(--badge-good-line);color:var(--badge-good-fg)}
+.warnbox b{font-weight:700}
+
+/* Timeline */
+.tl-scroll{overflow-x:auto;border-radius:14px;background:var(--panel2);border:1px solid var(--line);margin-top:8px;overscroll-behavior-x:contain}
+.tl{position:relative;height:132px;user-select:none;-webkit-user-select:none;touch-action:pan-x}
+.tl-ruler{position:absolute;left:0;right:0;top:0;height:18px;font-size:10px;color:var(--muted2);font-variant-numeric:tabular-nums}
+.tl-ruler span{position:absolute;top:3px;transform:translateX(3px)}
+.tl-ruler i{position:absolute;top:0;width:1px;height:6px;background:var(--line2)}
+.tl-marks{position:absolute;left:0;right:0;top:18px;height:16px}
+.zm{position:absolute;top:3px;width:10px;height:10px;margin-left:-5px;background:var(--warn);transform:rotate(45deg);border-radius:2px;transition:opacity var(--dur-2) var(--ease)}
+.cutm{position:absolute;top:0;width:2px;height:132px;margin-left:-1px;background:var(--accent);opacity:.35;pointer-events:none}
+.tl-wave{position:absolute;left:0;top:36px;height:48px;color:var(--muted2)}
+.tl-cut{position:absolute;top:36px;height:48px;pointer-events:none;background:repeating-linear-gradient(135deg,var(--badge-bad-bg) 0 4px,transparent 4px 8px);border-left:1px solid var(--badge-bad-line);border-right:1px solid var(--badge-bad-line)}
+.tl-words{position:absolute;left:0;top:90px;height:32px}
+.wchip{position:absolute;top:0;height:30px;min-height:0;padding:0 3px;border-radius:7px;font-size:12px;font-weight:500;background:var(--fill);color:var(--text);overflow:hidden;white-space:nowrap;justify-content:center}
+.wchip.kw{box-shadow:inset 0 -2px 0 var(--warn)}
+.wchip.gap{background:transparent;color:var(--muted);font-size:11px;border:1px dashed var(--line2)}
+.wchip.removed{background:var(--badge-bad-bg);color:var(--badge-bad-fg);text-decoration:line-through;border:0}
+.wchip.now{background:var(--accent);color:#fff}
+.wchip:hover:not(.now){background:var(--fill2)}
+.tl-shade{position:absolute;top:0;bottom:0;background:var(--bg);opacity:.72;pointer-events:none}
+.tl-shade.l{left:0}.tl-shade.r{right:0}
+.tl-handle{position:absolute;top:0;bottom:0;width:16px;margin-left:-8px;cursor:ew-resize;z-index:4;touch-action:none;display:flex;justify-content:center}
+.tl-handle::before{content:"";width:6px;height:100%;border-radius:3px;background:var(--warn)}
+.tl-handle::after{content:"";position:absolute;top:50%;width:2px;height:18px;margin-top:-9px;border-radius:1px;background:rgba(0,0,0,.35)}
+.tl-handle:focus-visible{outline:none}.tl-handle:focus-visible::before{box-shadow:var(--ring)}
+.tl-playhead{position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;background:var(--bad);z-index:3;pointer-events:none}
+.tl-playhead::before{content:"";position:absolute;top:0;left:-4px;width:10px;height:10px;border-radius:50%;background:var(--bad)}
+.tl-legend{display:flex;gap:var(--sp-2);flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:8px}
+.tl-legend span{display:inline-flex;align-items:center;gap:6px}
+.lg{width:12px;height:12px;border-radius:3px;display:inline-block}
+
+/* Sticky footer */
+.ed-foot{position:sticky;bottom:12px;z-index:20;margin-top:var(--sp-3);display:flex;align-items:center;gap:var(--sp-1);flex-wrap:wrap;padding:10px 10px 10px 16px;border-radius:999px;
+  background:var(--material-thick);-webkit-backdrop-filter:var(--material-blur);backdrop-filter:var(--material-blur);border:1px solid var(--hairline);box-shadow:0 10px 30px rgba(0,0,0,.14)}
+.ed-foot .state{font-size:13px;color:var(--muted);display:inline-flex;align-items:center;gap:6px;min-width:0}
+.ed-foot .state i{width:8px;height:8px;border-radius:50%;background:var(--warn);flex:none}
+.ed-foot .state.ok i{background:var(--good)}
+.spin{width:14px;height:14px;border-radius:50%;border:2px solid currentColor;border-top-color:transparent;animation:spin .8s linear infinite;display:inline-block}
+@media (max-width:900px){
+  .ed-grid{grid-template-columns:minmax(0,1fr);grid-template-areas:"player" "tl" "insp"}
+  .ed-player{width:min(100%,280px);margin:0 auto}
+}
+@media (max-width:600px){
+  .segx button{font-size:12px;padding:0 2px}
+  .wm-pick{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .range{grid-template-columns:84px minmax(0,1fr) 52px;gap:8px}
+  .ed-foot{border-radius:20px;padding:10px}
+  .ed-foot .state{flex-basis:100%;padding-left:6px}
+  .ed-foot button{flex:1;padding:0 10px;font-size:14px;white-space:nowrap}
+}
+
+/* 390 px */
+@media (max-width:900px){
+  .grid-3{grid-template-columns:minmax(0,1fr)}
+  .clips{grid-template-columns:minmax(0,1fr)}
+  .tiles{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .layouts{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .qrow{grid-template-columns:40px minmax(0,1fr) auto;grid-template-areas:"t n n" "t w p" "t s s"}
+  .qrow .thumb{grid-area:t;align-self:start}.qrow .qn{grid-area:n}.qrow .when{grid-area:w}.qrow .qp{grid-area:p;justify-self:end}.qrow .qs{grid-area:s;justify-self:start}
+  .qrow .qs .badge{white-space:normal}
+}
+@media (max-width:600px){
+  .wrap{padding:var(--sp-2) var(--sp-2) 120px}
+  .panel{padding:var(--sp-2);border-radius:18px}
+  h2{font-size:21px}
+  .grid-2{grid-template-columns:minmax(0,1fr)}
+  .brand span{display:none}
+  .flow{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;gap:0;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+  .flow::-webkit-scrollbar{display:none}
+  .flow li{flex:0 0 84px;scroll-snap-align:center}
+  .flow li+li::before{right:calc(50% + 24px);left:calc(-50% + 24px)}
+  .flow-sub{display:none}
+  .clip{grid-template-columns:110px minmax(0,1fr);gap:12px;padding:12px}
+  .vcap{font-size:10px}
+  .slots{grid-template-columns:1fr}
+  .bar-row{grid-template-columns:minmax(0,1fr) 96px;grid-template-areas:"n v" "b b";row-gap:4px}
+  .bar-row .name{grid-area:n}.bar-row .bar-track{grid-area:b}.bar-row .num{grid-area:v}
+  .tile .v{font-size:22px}
+  .step-nav button{flex:1}
+  .sheet{padding:var(--sp-2);border-radius:20px}
+}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:1ms!important;animation-iteration-count:1!important;transition-duration:1ms!important}
+}
+</style>
+</head>
+<body>
+
+<header class="toolbar">
+  <div class="toolbar-inner">
+    <a class="brand" href="index.html" aria-label="Back to ClipFlow"><img src="clipflow-mark.svg" alt=""><span>ClipFlow</span></a>
+    <span class="preview-pill" role="note">Preview — mock data</span>
+    <span class="spacer"></span>
+    <button class="icon-btn" type="button" data-theme-toggle aria-label="Toggle dark mode">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+    </button>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="panel flow-card" aria-label="Workflow overview">
+    <div class="row" style="padding:0 4px 12px">
+      <div>
+        <div class="eyebrow">Planned workflow</div>
+        <h2 style="font-size:19px;margin-top:2px">Campaign → post → paid</h2>
+      </div>
+      <span class="spacer"></span>
+      <span class="tiny muted">Tap a step to jump to it</span>
+    </div>
+    <ol class="flow" id="flow"></ol>
+  </section>
+
+  <div id="stepHost" style="margin-top:var(--sp-2)"></div>
+
+  <div class="step-nav">
+    <button class="secondary" type="button" data-step-prev>← Back</button>
+    <button type="button" data-step-next>Next →</button>
+  </div>
+</main>
+
+<div class="sheet-scrim" data-sheet-close></div>
+<div class="sheet" id="campaignSheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle" inert></div>
+
+<script>
+"use strict";
+/* ---------- motion helpers (same contract as index.html) ---------- */
+const REDUCED_MOTION = matchMedia("(prefers-reduced-motion: reduce)");
+const motionMs = ms => REDUCED_MOTION.matches ? 0 : ms;
+const scrollMode = () => REDUCED_MOTION.matches ? "auto" : "smooth";
+const wait = ms => new Promise(r => setTimeout(r, motionMs(ms)));
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+/* ---------- icons ---------- */
+const I = {
+  flag:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4m0 0h11l-2 4 2 4H5"/></svg>',
+  import:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0-4-4m4 4 4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>',
+  spark:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/></svg>',
+  eye:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>',
+  cal:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4m8-4v4"/></svg>',
+  send:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4z"/></svg>',
+  edit:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>',
+  play:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l13-7.5z"/></svg>',
+  pause:'<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4.5" width="4" height="15" rx="1"/><rect x="14" y="4.5" width="4" height="15" rx="1"/></svg>',
+  chart:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10m6 10V4m6 16v-7m4 7H2"/></svg>',
+  info:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5m0-8h.01"/></svg>',
+  yt:'<svg viewBox="0 0 24 24" fill="currentColor"><rect x="2" y="5" width="20" height="14" rx="4" opacity=".2"/><path d="M10 9v6l5-3z"/></svg>',
+  tt:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M14 4v10.5a3.5 3.5 0 1 1-3.5-3.5M14 4c.5 2.5 2.5 4 5 4"/></svg>',
+  ig:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor"/></svg>',
+};
+const PLATFORMS = {yt:{name:"YouTube",icon:I.yt},tt:{name:"TikTok",icon:I.tt},ig:{name:"Reels",icon:I.ig}};
+
+/* ---------- mock data ---------- */
+const STEPS = [
+  {id:"campaign", label:"Campaign", sub:"Paste brief → rules", icon:I.flag},
+  {id:"import",   label:"Auto-import", sub:"Watch source channels", icon:I.import},
+  {id:"analyze",  label:"Analyze", sub:"Language + layout", icon:I.spark},
+  {id:"review",   label:"Review", sub:"Hooks + rule checks", icon:I.eye},
+  {id:"editor",   label:"Editor", sub:"Trim, captions, effects", icon:I.edit},
+  {id:"schedule", label:"Schedule", sub:"Prime time, your TZ", icon:I.cal},
+  {id:"publish",  label:"Publish", sub:"Per-platform queue", icon:I.send},
+  {id:"track",    label:"Track", sub:"Views → earnings", icon:I.chart},
+];
+
+const SAMPLE_BRIEF = `The Build Room Podcast — Clipping Campaign
+
+We're paying clippers to turn The Build Room (weekly founder interviews, English) into short-form.
+
+PAYOUT
+• $1.50 per 1,000 views (CPM)
+• Max $300 per clip · total budget $6,000
+
+WHERE TO POST
+• YouTube Shorts, TikTok, Instagram Reels
+
+REQUIREMENTS
+• Clips must be 20–60 seconds
+• Caption must include #buildroom and #founderclips
+• Tag @buildroompod in every post
+• NO personal watermarks, logos or channel tags on the video
+• Burned-in captions required
+• Only clip from youtube.com/@BuildRoomPod and youtube.com/@BuildRoomLive
+
+DEADLINE
+• Submit views by Oct 31, 2026 (11:59 pm ET)`;
+
+const RULES = [
+  {group:"Platforms", chips:[{k:"",v:"YouTube Shorts"},{k:"",v:"TikTok"},{k:"",v:"Instagram Reels"}]},
+  {group:"Required in caption", chips:[{k:"tag",v:"#buildroom"},{k:"tag",v:"#founderclips"},{k:"mention",v:"@buildroompod"}]},
+  {group:"Video", chips:[{k:"length",v:"20–60 s"},{k:"captions",v:"burned-in"},{k:"watermark",v:"OFF",off:true}]},
+  {group:"Payout", chips:[{k:"CPM",v:"$1.50"},{k:"cap",v:"$300 / clip"},{k:"budget",v:"$6,000"}]},
+  {group:"Deadline & sources", chips:[{k:"deadline",v:"Oct 31, 2026"},{k:"source",v:"@BuildRoomPod"},{k:"source",v:"@BuildRoomLive"}]},
+];
+
+const state = {
+  step:"campaign",
+  created:false,
+  campaigns:[
+    {id:"fh", name:"Founder Hours", brand:"Founder Hours Media", status:"Active", badge:"good", cpm:1.2, cap:250, deadline:"Oct 18", posted:14, budgetUsed:.62},
+    {id:"ll", name:"Late Night Lab", brand:"Lab Studios", status:"Ended", badge:"", cpm:0.9, cap:150, deadline:"Sep 12", posted:22, budgetUsed:1},
+  ],
+  channels:[
+    {id:"c1", name:"@BuildRoomPod", handle:"Main episodes · 2/week", on:true, checked:"4 min ago"},
+    {id:"c2", name:"@BuildRoomLive", handle:"Live streams · irregular", on:false, checked:"—"},
+  ],
+  imports:[
+    {title:"Ep. 112 — Bootstrapping to $2M ARR with 3 people", dur:"1:24:10", when:"Today, 09:12", status:"Ready for review", badge:"attention"},
+    {title:"Ep. 111 — The pricing page that doubled signups", dur:"58:44", when:"Mon, 08:40", status:"Scheduled 6/6", badge:"good"},
+    {title:"Clip dump — audience Q&A", dur:"0:52", when:"Sun, 21:03", status:"Skipped · under 5 min", badge:""},
+    {title:"Ep. 110 — Hiring your first salesperson", dur:"1:10:02", when:"Thu, 10:15", status:"Analyzing", badge:"run"},
+  ],
+  lang:"auto",
+  layout:"stacked",
+  analyzed:false,
+  clips:[
+    {id:"k1", title:"Why most founders quit at month 7", dur:42, score:94, layout:"stacked",
+     reason:"<b>Contrarian claim in the first 2 s</b> (“month 7, not month 1”), a concrete number, and a story payoff at 0:38.",
+     caption:"Most founders don't quit in month one they quit in month seven", tags:true, watermark:true, approved:false},
+    {id:"k2", title:"The $0 channel nobody uses", dur:36, score:88, layout:"follow",
+     reason:"<b>Curiosity gap</b> opened in line one, resolved at 0:30 with a specific, repeatable tactic.",
+     caption:"The best marketing channel we have costs zero dollars", tags:true, watermark:false, approved:false},
+    {id:"k3", title:"“We fired our biggest customer”", dur:74, score:83, layout:"stacked",
+     reason:"<b>High-stakes confession</b>; emotional peak at 0:21. Runs long — trim the setup to hit 60 s.",
+     caption:"We fired our biggest customer and revenue went up", tags:true, watermark:false, approved:false},
+    {id:"k4", title:"3 people, $2M ARR — the org chart", dur:51, score:79, layout:"wide",
+     reason:"<b>Specific numbers</b> + visual whiteboard moment; works best in wide-with-blur.",
+     caption:"Three people two million in revenue here is the org chart", tags:false, watermark:false, approved:false},
+  ],
+  toSchedule:[], // {clipId, platforms:Set, slot:index}
+  queue:[
+    {clip:"The pricing page that doubled signups", p:"yt", day:0, slot:0, status:"Published", badge:"good"},
+    {clip:"The pricing page that doubled signups", p:"tt", day:0, slot:0, status:"Published", badge:"good"},
+    {clip:"The pricing page that doubled signups", p:"ig", day:0, slot:0, status:"Needs attention · caption >2,200 chars", badge:"warn"},
+    {clip:"Stop hiring generalists", p:"yt", day:0, slot:2, status:"Uploading 64 %", badge:"run"},
+    {clip:"Stop hiring generalists", p:"tt", day:0, slot:2, status:"Scheduled", badge:""},
+    {clip:"Stop hiring generalists", p:"ig", day:1, slot:0, status:"Failed · token expired — retry", badge:"bad"},
+  ],
+  queueFilter:"all",
+  perf:"br",
+};
+
+/* Performance mock: views per clip; earnings = min(views × CPM / 1000, cap) */
+const PERF = {
+  br:{name:"The Build Room", cpm:1.5, cap:300, budget:6000, platforms:{yt:612000,tt:1180000,ig:338000},
+      clips:[["The pricing page that doubled signups",412000],["Stop hiring generalists",268000],["Your first 10 customers are friends",173000],["Cold email that actually works",96000],["Why we killed the free plan",41000]]},
+  fh:{name:"Founder Hours", cpm:1.2, cap:250, budget:4000, platforms:{yt:420000,tt:910000,ig:240000},
+      clips:[["The 4-day week experiment",390000],["Raising from angels in 2026",220000],["I almost sold the company",130000],["Pricing is a product",88000],["Remote hiring mistakes",52000]]},
+};
+
+/* ---------- time zones: slots defined in ET, shown in viewer TZ + ET + WIB ---------- */
+const VIEWER_TZ = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"; } catch(e) { return "UTC"; } })();
+function tzOffset(t, tz){
+  const p = Object.fromEntries(new Intl.DateTimeFormat("en-US",{timeZone:tz,hourCycle:"h23",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit"})
+    .formatToParts(new Date(t)).map(x => [x.type, x.value]));
+  return Date.UTC(+p.year, p.month-1, +p.day, +p.hour, +p.minute, +p.second) - t;
+}
+function zoned(y, mo, d, h, mi, tz){
+  const naive = Date.UTC(y, mo-1, d, h, mi);
+  let t = naive;
+  for (let i = 0; i < 2; i++) t = naive - tzOffset(t, tz);
+  return new Date(t);
+}
+const fmtTime = (d, tz, h12=true) => new Intl.DateTimeFormat("en-US",{timeZone:tz,hour:"numeric",minute:"2-digit",hour12:h12}).format(d);
+const fmtDay  = (d, tz) => new Intl.DateTimeFormat("en-US",{timeZone:tz,weekday:"short",month:"short",day:"numeric"}).format(d);
+const fmtWd   = (d, tz) => new Intl.DateTimeFormat("en-US",{timeZone:tz,weekday:"short"}).format(d);
+const tzShort = tz => { try { return new Intl.DateTimeFormat("en-US",{timeZone:tz,timeZoneName:"short"}).formatToParts(new Date()).find(p=>p.type==="timeZoneName").value; } catch(e){ return tz; } };
+// Prime-time window 7–10 pm ET; three default slots. Days are Thu Oct 1 onward (mock "tomorrow").
+const SLOT_ET = [[19,0],[20,30],[22,0]];
+const DAYS = [[2026,10,1],[2026,10,2],[2026,10,3]];
+const slotDate = (day, slot) => zoned(...DAYS[day], ...SLOT_ET[slot], "America/New_York");
+function whenHtml(d){
+  return `<b>${fmtDay(d, VIEWER_TZ)} · ${fmtTime(d, VIEWER_TZ)}</b><small>${fmtTime(d,"America/New_York")} ET · ${fmtWd(d,"Asia/Jakarta")} ${fmtTime(d,"Asia/Jakarta",false)} WIB</small>`;
+}
+
+/* ---------- layout mini previews (9:16) ---------- */
+function layoutSvg(kind, cls="mini"){
+  const head = (cx, cy, r) => `<circle class="p" cx="${cx}" cy="${cy}" r="${r}"/><path class="p" d="M${cx-r*1.9} ${cy+r*3.2}q${r*1.9}-${r*2.6} ${r*3.8} 0z"/>`;
+  let body = "";
+  if (kind === "gameplay") body = `<rect class="f" x="0" y="0" width="45" height="30"/>${head(22.5,12,5)}<rect class="bg" x="0" y="30" width="45" height="50"/><path class="a" d="M8 66l8-14 8 14z" opacity=".8"/><rect class="f" x="26" y="46" width="12" height="20" rx="2"/><line class="ln" x1="0" y1="30" x2="45" y2="30"/>`;
+  else if (kind === "follow") body = `${head(22.5,34,7.5)}<path class="ln" d="M6 14v-6h6M39 14v-6h-6M6 60v6h6M39 60v6h-6" stroke-width="1.5"/>`;
+  else if (kind === "stacked") body = `<rect class="f" x="0" y="0" width="45" height="40"/>${head(22.5,14,5.5)}${head(22.5,54,5.5)}<line class="ln" x1="0" y1="40" x2="45" y2="40"/>`;
+  else body = `<rect class="f" x="-6" y="0" width="57" height="80" opacity=".6"/><circle class="p" cx="10" cy="14" r="9" opacity=".18"/><circle class="p" cx="36" cy="66" r="10" opacity=".18"/><rect class="bg" x="0" y="27" width="45" height="26"/>${head(14,36,3.2)}${head(31,36,3.2)}`;
+  return `<svg class="${cls}" viewBox="0 0 45 80" aria-hidden="true" preserveAspectRatio="xMidYMid slice"><rect class="bg" width="45" height="80"/>${body}</svg>`;
+}
+const LAYOUTS = [
+  {id:"gameplay", name:"Gameplay + facecam", note:"Cam top, game bottom"},
+  {id:"follow",   name:"Speaker follow", note:"Crop tracks the speaker"},
+  {id:"stacked",  name:"Two-speaker stacked", note:"Host top, guest bottom"},
+  {id:"wide",     name:"Wide + blur", note:"Full frame on blurred fill"},
+];
+
+/* ---------- rule checks ---------- */
+function checks(c){
+  return [
+    {id:"len", ok:c.dur>=20 && c.dur<=60, okText:`Length ${c.dur} s`, badText:`Length ${c.dur} s > 60`, fix:"Trim to 58 s"},
+    {id:"tags", ok:c.tags, okText:"Tags", badText:"Missing @buildroompod", fix:"Add tags"},
+    {id:"wm", ok:!c.watermark, okText:"No watermark", badText:"Watermark present", fix:"Remove watermark"},
+  ];
+}
+
+/* ---------- renderers ---------- */
+function renderFlow(){
+  const idx = STEPS.findIndex(s => s.id === state.step);
+  $("#flow").innerHTML = STEPS.map((s, i) => `
+    <li class="${i < idx ? "done" : i === idx ? "active" : ""}">
+      <button class="flow-node" type="button" data-step="${s.id}" ${i===idx?'aria-current="step"':""}>
+        <span class="flow-dot">${s.icon}</span>
+        <span class="flow-label">${s.label}</span>
+        <span class="flow-sub">${s.sub}</span>
+      </button>
+    </li>`).join("");
+  const active = $("#flow li.active");
+  if (active && matchMedia("(max-width:600px)").matches) active.scrollIntoView({behavior:scrollMode(), block:"nearest", inline:"center"});
+  $("[data-step-prev]").disabled = idx === 0;
+  const next = $("[data-step-next]");
+  next.disabled = idx === STEPS.length - 1;
+  next.textContent = idx < STEPS.length - 1 ? `Next: ${STEPS[idx+1].label} →` : "End of flow";
+}
+
+function head(eyebrow, title, desc, right=""){
+  return `<div class="section-head"><div><div class="eyebrow">${eyebrow}</div><h2>${title}</h2>${desc?`<p class="muted small">${desc}</p>`:""}</div><span class="spacer"></span>${right}</div>`;
+}
+
+const VIEWS = {
+  campaign(){
+    const br = state.created ? `
+      <button class="card is-new" type="button" data-open-campaign>
+        <div class="row"><h3>The Build Room</h3><span class="spacer"></span><span class="badge good">Active</span></div>
+        <div class="muted small">The Build Room Podcast</div>
+        <div class="kv"><span><b>$1.50</b> CPM</span><span>cap <b>$300</b>/clip</span><span>due <b>Oct 31</b></span></div>
+        <div class="kv"><span><b>0</b> clips posted</span><span>auto-import <b>on</b></span></div>
+        <div class="meter" aria-label="Budget used 0%"><i style="transform:scaleX(0.01)"></i></div>
+      </button>` : "";
+    return `<section class="panel step">
+      ${head("Step 1 · Campaign","Campaigns","A campaign holds the brand's rules. Every clip is checked against them before it can be scheduled.",
+        `<button type="button" data-new-campaign>+ New campaign</button>`)}
+      <div class="grid grid-3">${br}${state.campaigns.map(c => `
+        <button class="card" type="button" data-open-campaign>
+          <div class="row"><h3>${esc(c.name)}</h3><span class="spacer"></span><span class="badge ${c.badge}">${c.status}</span></div>
+          <div class="muted small">${esc(c.brand)}</div>
+          <div class="kv"><span><b>$${c.cpm.toFixed(2)}</b> CPM</span><span>cap <b>$${c.cap}</b>/clip</span><span>due <b>${c.deadline}</b></span></div>
+          <div class="kv"><span><b>${c.posted}</b> clips posted</span></div>
+          <div class="meter" aria-label="Budget used ${Math.round(c.budgetUsed*100)}%"><i style="transform:scaleX(${c.budgetUsed})"></i></div>
+        </button>`).join("")}
+      </div>
+      ${state.created ? "" : `<div class="note">${I.info}<span>Try <b>New campaign</b>: a sample brief is pre-filled. Rules are extracted automatically; you confirm them before saving.</span></div>`}
+    </section>`;
+  },
+
+  import(){
+    return `<section class="panel step">
+      ${head("Step 2 · Auto-import","The Build Room","New uploads on the source channels are imported and analysed without you pasting links.",
+        `<span class="badge good">Active</span>`)}
+      <div class="chips">${RULES.flatMap(g => g.chips).slice(0,9).map(c => `<span class="chip ${c.off?"off":""}">${c.k?`<span class="k">${c.k}</span>`:""}${esc(c.v)}</span>`).join("")}</div>
+    </section>
+    <section class="panel step">
+      <div class="grid grid-2">
+        <div>
+          <h3>Source channels</h3>
+          <p class="muted small" style="margin-top:2px">From the brief. Only these channels may be clipped.</p>
+          <div class="list" style="margin-top:8px">${state.channels.map(ch => `
+            <div class="li">
+              <div class="avatar">${ch.name[1]}</div>
+              <div class="grow"><div class="title">${ch.name}</div><div class="muted tiny">${ch.handle} · ${ch.on ? `checked ${ch.checked}` : "not watched"}</div></div>
+              <div style="text-align:right">
+                <div class="tiny muted" id="lbl-${ch.id}" style="margin-bottom:4px">Auto-import new videos</div>
+                <button class="switch" type="button" role="switch" aria-checked="${ch.on}" aria-labelledby="lbl-${ch.id}" data-channel="${ch.id}"></button>
+              </div>
+            </div>`).join("")}
+          </div>
+          <div class="note">${I.info}<span>Checked every 15 min. Videos under 5 min or older than the campaign start are skipped. Language, layout and clip count come from the campaign's default job options.</span></div>
+        </div>
+        <div>
+          <h3>Recent imports</h3>
+          <div class="list" style="margin-top:8px">${state.imports.map(v => `
+            <div class="li">
+              <div class="thumb"></div>
+              <div class="grow"><div class="title">${esc(v.title)}</div><div class="muted tiny">${v.dur} · ${v.when}</div></div>
+              <span class="badge ${v.badge==="attention"?"warn":v.badge}">${v.status}</span>
+            </div>`).join("")}
+          </div>
+        </div>
+      </div>
+    </section>`;
+  },
+
+  analyze(){
+    const langs = [["auto","Auto-detect"],["en","English"],["id","Indonesian"]];
+    return `<section class="panel step">
+      ${head("Step 3 · Analyze","New job options","Auto-imports use these as defaults; a manual import can override them per video.")}
+      <label class="field" for="url">Video</label>
+      <input id="url" type="text" value="https://youtube.com/watch?v=br-ep112 · Ep. 112 — Bootstrapping to $2M ARR" readonly>
+      <div class="form-row grid grid-2">
+        <div>
+          <label class="field" for="camp">Campaign</label>
+          <select id="camp"><option>The Build Room</option><option>Founder Hours</option><option>None (no rule checks)</option></select>
+        </div>
+        <div>
+          <span class="field" style="display:block;font-size:13px;font-weight:600;color:var(--muted);margin-bottom:6px" id="langLbl">Language</span>
+          <div class="seg" role="group" aria-labelledby="langLbl">${langs.map(([id,n]) => `<button type="button" data-lang="${id}" aria-pressed="${state.lang===id}">${n}</button>`).join("")}</div>
+          <p class="tiny muted" style="margin-top:6px" id="langNote">${langNote()}</p>
+        </div>
+      </div>
+      <div class="form-row">
+        <span class="field" style="display:block;font-size:13px;font-weight:600;color:var(--muted);margin-bottom:6px" id="layoutLbl">Layout</span>
+        <div class="layouts" role="group" aria-labelledby="layoutLbl">${LAYOUTS.map(l => `
+          <button class="layout-opt" type="button" data-layout="${l.id}" aria-pressed="${state.layout===l.id}">${layoutSvg(l.id)}<span>${l.name}<small>${l.note}</small></span></button>`).join("")}
+        </div>
+      </div>
+      <div class="form-row row">
+        <button type="button" data-analyze>${state.analyzed ? "Analyze again" : "Start analysis"}</button>
+        <span class="muted small">≈ 6 min for a 1 h 24 min episode</span>
+      </div>
+      <ol class="stages" id="stages" ${state.analyzed ? "" : "hidden"}>
+        ${["Download & normalise","Transcribe (Whisper, "+(state.lang==="id"?"Indonesian":state.lang==="en"?"English":"auto → English")+")","Find hooks (AI)","Render previews","Check campaign rules"].map(s => `<li class="${state.analyzed?"done":""}"><span class="dot"></span>${s}</li>`).join("")}
+      </ol>
+      <div id="analyzeDone" ${state.analyzed ? "" : "hidden"} class="note">${I.info}<span><b>4 clips ready for review</b>, 2 need a fix before they can be scheduled. <button class="plain sm" type="button" data-step="review">Open review →</button></span></div>
+    </section>`;
+  },
+
+  review(){
+    return `<section class="panel step">
+      ${head("Step 4 · Review","Ep. 112 — Bootstrapping to $2M ARR","Clips are sorted by hook score. A clip can be scheduled only when every campaign rule passes.",
+        `<span class="badge warn">${state.clips.filter(c=>!c.approved).length} to review</span>`)}
+      <div class="clips">${state.clips.map(clipCard).join("")}</div>
+    </section>`;
+  },
+
+  schedule(){
+    const items = state.toSchedule;
+    return `<section class="panel step">
+      ${head("Step 6 · Schedule","Pick a slot","Default window is US prime time, 7–10 pm ET. Times are shown in your time zone first.",
+        `<span class="tzline">${I.info}<span>Your time zone: <b>${esc(VIEWER_TZ)}</b> (${tzShort(VIEWER_TZ)})</span></span>`)}
+      ${items.length ? items.map((it, n) => scheduleItem(it, n)).join("") : `
+        <div class="note">${I.info}<span>Nothing approved yet. Approve a clip in <button class="plain sm" type="button" data-step="review">Review</button> — it lands here with the next free prime-time slot pre-selected.</span></div>`}
+      ${items.length ? `<div class="row" style="margin-top:var(--sp-3)"><button type="button" data-queue-all>Add ${items.reduce((a,it)=>a+it.platforms.size,0)} posts to queue</button><span class="muted small">Platforms are staggered 10 min apart.</span></div>` : ""}
+    </section>`;
+  },
+
+  publish(){
+    const f = state.queueFilter;
+    const rows = state.queue.map((q,i)=>({...q,i})).filter(q => f==="all" || q.p===f);
+    const byDay = {};
+    rows.sort((a,b)=>(a.day-b.day)||(a.slot-b.slot)).forEach(q => (byDay[q.day] ??= []).push(q));
+    return `<section class="panel step">
+      ${head("Step 7 · Publish","Publish queue","Every platform is its own post with its own status and retry.",
+        `<div class="seg" role="group" aria-label="Filter platform">${[["all","All"],["yt","YouTube"],["tt","TikTok"],["ig","Reels"]].map(([id,n]) => `<button type="button" data-qfilter="${id}" aria-pressed="${f===id}">${n}</button>`).join("")}</div>`)}
+      ${Object.keys(byDay).map(day => `
+        <div class="qday"><h3>${fmtDay(slotDate(+day,0), VIEWER_TZ)}</h3>
+          ${byDay[day].map(q => `
+            <div class="qrow ${q.fresh?"flash":""}">
+              <div class="thumb"></div>
+              <div class="qn" style="min-width:0"><div style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(q.clip)}</div><div class="tiny muted">#buildroom #founderclips @buildroompod</div></div>
+              <div class="qp"><span class="pchip">${PLATFORMS[q.p].icon}${PLATFORMS[q.p].name}</span></div>
+              <div class="when">${whenHtml(new Date(slotDate(q.day,q.slot).getTime() + ({yt:0,tt:10,ig:20}[q.p])*60000))}</div>
+              <div class="qs">${q.badge==="bad" ? `<button class="sm secondary" type="button" data-retry="${q.i}">Retry</button> ` : ""}<span class="badge ${q.badge}">${esc(q.status)}</span></div>
+            </div>`).join("")}
+        </div>`).join("") || `<p class="muted">No posts for this platform.</p>`}
+    </section>`;
+  },
+
+  track(){
+    const d = PERF[state.perf];
+    const earn = v => Math.min(v * d.cpm / 1000, d.cap);
+    const views = Object.values(d.platforms).reduce((a,b)=>a+b,0);
+    const est = d.clips.reduce((a,[,v]) => a + earn(v), 0) * (views / d.clips.reduce((a,[,v])=>a+v,0)); // scale top-5 to all posts
+    const capped = d.clips.filter(([,v]) => v*d.cpm/1000 > d.cap).length;
+    const max = d.clips[0][1];
+    const k = n => n >= 1e6 ? (n/1e6).toFixed(2).replace(/\.?0+$/,"")+"M" : n >= 1e3 ? Math.round(n/1e3)+"K" : String(n);
+    const usd = n => "$" + Math.round(n).toLocaleString("en-US");
+    return `<section class="panel step">
+      ${head("Step 8 · Track","Performance","Views are pulled from each platform daily. Earnings are an estimate until the brand approves them.",
+        `<div class="seg" role="group" aria-label="Campaign">${[["br","The Build Room"],["fh","Founder Hours"]].map(([id,n]) => `<button type="button" data-perf="${id}" aria-pressed="${state.perf===id}">${n}</button>`).join("")}</div>`)}
+      <div class="tiles">
+        <div class="tile"><div class="eyebrow">Views</div><div class="v">${k(views)}</div><div class="d">${Object.entries(d.platforms).map(([p,v]) => `${PLATFORMS[p].name} ${k(v)}`).join(" · ")}</div></div>
+        <div class="tile"><div class="eyebrow">Est. earnings</div><div class="v">${usd(Math.min(est, d.budget))}</div><div class="d">of ${usd(d.budget)} budget</div></div>
+        <div class="tile"><div class="eyebrow">CPM</div><div class="v">$${d.cpm.toFixed(2)}</div><div class="d">cap ${usd(d.cap)} per clip</div></div>
+        <div class="tile"><div class="eyebrow">Clips at cap</div><div class="v">${capped}</div><div class="d">views past the cap earn $0</div></div>
+      </div>
+      <h3 style="margin-top:var(--sp-3)">Top clips by views</h3>
+      <div class="bars" role="table" aria-label="Top clips: views and estimated earnings">
+        ${d.clips.map(([name,v]) => {
+          const raw = v * d.cpm / 1000, e = earn(v);
+          return `<div class="bar-row" role="row" title="${esc(name)}: ${v.toLocaleString("en-US")} views → ${usd(raw)} raw, ${usd(e)} paid">
+            <div class="name" role="cell">${esc(name)}</div>
+            <div class="bar-track" role="cell" aria-hidden="true"><div class="bar-fill" style="transform:scaleX(${v/max})"></div></div>
+            <div class="num" role="cell">${k(v)} views<small>${raw > e ? `<s>${usd(raw)}</s> ` : ""}${usd(e)}${raw > e ? " · capped" : ""}</small></div>
+          </div>`; }).join("")}
+      </div>
+      <div class="formula">Estimate per clip = min(views × $${d.cpm.toFixed(2)} / 1,000, ${usd(d.cap)}). Campaign total never exceeds the ${usd(d.budget)} budget.</div>
+    </section>`;
+  },
+};
+
+function langNote(){
+  return state.lang === "auto" ? "Detected from the first 30 s of audio. Brief says English."
+       : state.lang === "en" ? "Transcribe and write hooks in English."
+       : "Transcribe in Indonesian; hooks and captions stay Indonesian.";
+}
+
+function clipCard(c){
+  const cs = checks(c);
+  const bad = cs.filter(x => !x.ok);
+  const words = c.caption.split(" ").slice(0, 5);
+  return `<article class="clip ${c.approved?"approved":""}" data-clip="${c.id}">
+    <div class="vframe">${layoutSvg(c.layout)}
+      <span class="wm" style="opacity:${c.watermark?1:0}">YOUR LOGO</span>
+      <span class="vtime">0:${String(c.dur).padStart(2,"0")}</span>
+      <div class="vcap" data-cap>${words.map((w,i) => `<span class="${i===0?"on":""}">${esc(w)}</span>`).join(" ")}</div>
+    </div>
+    <div style="min-width:0">
+      <div class="row"><span class="score">Hook ${c.score}</span><span class="spacer"></span>${c.approved?'<span class="badge good">Approved</span>':""}</div>
+      <h3 style="margin-top:2px">${esc(c.title)}</h3>
+      <p class="reason">${c.reason}</p>
+      <div class="checks">${cs.map(x => x.ok
+        ? `<span class="badge good">✓ ${x.okText}</span>`
+        : `<span class="check-row"><span class="badge bad">✗ ${x.badText}</span>${c.approved?"":`<button class="plain sm" type="button" data-fix="${c.id}:${x.id}">${x.fix}</button>`}</span>`).join("")}
+      </div>
+      <div class="row" style="margin-top:12px">
+        <button type="button" data-approve="${c.id}" ${bad.length||c.approved?"disabled":""}>${c.approved?"Scheduled ✓":"Approve & schedule"}</button>
+        ${c.approved?"":`<button class="secondary" type="button" data-edit="${c.id}">Open editor</button>`}
+      </div>
+      <p class="approve-hint">${c.approved ? "" : bad.length ? `Fix ${bad.length} rule${bad.length>1?"s":""} to approve.` : "All campaign rules pass."}</p>
+    </div>
+  </article>`;
+}
+
+function scheduleItem(it, n){
+  const c = state.clips.find(x => x.id === it.clipId);
+  const slots = [];
+  for (let d = 0; d < 2; d++) for (let s = 0; s < 3; s++) slots.push([d,s]);
+  return `<div class="card" style="margin-top:${n?"var(--sp-2)":"0"}">
+    <div class="row"><h3 style="flex:1;min-width:0">${esc(c.title)}</h3><span class="muted small">${c.dur} s · hook ${c.score}</span></div>
+    <div class="row" style="margin-top:10px" role="group" aria-label="Platforms">${Object.entries(PLATFORMS).map(([p,v]) =>
+      `<button class="tchip" type="button" data-plat="${n}:${p}" aria-pressed="${it.platforms.has(p)}">${v.icon}${v.name}</button>`).join("")}</div>
+    <div class="slots" role="group" aria-label="Time slot">${slots.map(([d,s]) => {
+      const dt = slotDate(d,s), on = it.day===d && it.slot===s;
+      return `<button class="slot" type="button" data-slot="${n}:${d}:${s}" aria-pressed="${on}">
+        ${fmtDay(dt, VIEWER_TZ)} · ${fmtTime(dt, VIEWER_TZ)}
+        <small>${fmtTime(dt,"America/New_York")} ET · ${fmtWd(dt,"Asia/Jakarta")} ${fmtTime(dt,"Asia/Jakarta",false)} WIB</small></button>`; }).join("")}
+    </div>
+  </div>`;
+}
+
+/* ---------- caption karaoke loop (paused when not on Review / reduced motion) ---------- */
+let capTimer = 0, capTick = 0;
+function syncCaptionLoop(){
+  clearInterval(capTimer);
+  if (state.step !== "review" || REDUCED_MOTION.matches) return;
+  capTimer = setInterval(() => {
+    capTick++;
+    document.querySelectorAll("[data-cap]").forEach(el => {
+      const sp = el.children;
+      [...sp].forEach((w, i) => w.classList.toggle("on", i === capTick % sp.length));
+    });
+  }, 420);
+}
+
+/* ---------- navigation ---------- */
+function render(){
+  renderFlow();
+  $("#stepHost").innerHTML = VIEWS[state.step]();
+  syncCaptionLoop();
+  if (typeof onStepRendered === "function") onStepRendered(state.step);
+}
+function go(step){
+  if (!VIEWS[step] || step === state.step) return;
+  state.step = step;
+  render();
+  window.scrollTo({top:0, behavior:scrollMode()});
+}
+const stepIdx = () => STEPS.findIndex(s => s.id === state.step);
+
+/* ---------- sheet: new campaign ---------- */
+let lastFocus = null;
+function openSheet(){
+  lastFocus = document.activeElement;
+  const sheet = $("#campaignSheet");
+  sheet.innerHTML = `
+    <div class="row"><h2 id="sheetTitle" style="flex:1">New campaign</h2><button class="icon-btn" type="button" data-sheet-close aria-label="Close">✕</button></div>
+    <p class="muted small" style="margin-top:4px">Paste the brand's brief (Whop, Discord, email…). ClipFlow extracts the rules; you confirm them.</p>
+    <div class="form-row"><label class="field" for="brief">Campaign brief</label><textarea id="brief">${esc(SAMPLE_BRIEF)}</textarea></div>
+    <div class="row" style="margin-top:var(--sp-2)"><button type="button" data-extract>Extract rules</button><span class="muted small">Mock: no AI call in this preview.</span></div>
+    <div class="extract" id="extract" hidden></div>`;
+  sheet.inert = false;
+  document.body.classList.add("sheet-open");
+  $("main").inert = true; $(".toolbar").inert = true;
+  setTimeout(() => $("#brief")?.focus({preventScroll:true}), motionMs(200));
+}
+function closeSheet(){
+  document.body.classList.remove("sheet-open");
+  $("#campaignSheet").inert = true;
+  $("main").inert = false; $(".toolbar").inert = false;
+  lastFocus?.focus?.();
+}
+async function extractRules(btn){
+  btn.disabled = true; btn.textContent = "Extracting…";
+  const box = $("#extract"); box.hidden = false;
+  const steps = ["Reading brief","Platforms & payout","Caption requirements","Video rules","Deadline & source channels"];
+  box.innerHTML = `<ol class="extract-steps">${steps.map(s => `<li><span class="dot"></span>${s}</li>`).join("")}</ol><div id="ruleOut"></div>`;
+  const lis = box.querySelectorAll("li");
+  for (let i = 0; i < lis.length; i++){
+    lis[i].className = "run";
+    await wait(380);
+    lis[i].className = "done";
+  }
+  let delay = 0;
+  $("#ruleOut").innerHTML = RULES.map(g => `<div class="rule-group"><div class="eyebrow">${g.group}</div><div class="chips">${g.chips.map(c =>
+    `<span class="chip in ${c.off?"off":""}" style="animation-delay:${motionMs((delay++)*45)}ms">${c.k?`<span class="k">${c.k}</span>`:""}${esc(c.v)}</span>`).join("")}</div></div>`).join("")
+    + `<div class="row" style="margin-top:var(--sp-3)"><button type="button" data-create-campaign>Create campaign</button><button class="secondary" type="button" data-sheet-close>Cancel</button><span class="muted small">Chips are editable in the real build.</span></div>`;
+  btn.textContent = "Extracted ✓";
+}
+
+/* ---------- mock analysis ---------- */
+async function runAnalysis(btn){
+  btn.disabled = true;
+  state.analyzed = false;
+  const ol = $("#stages"); ol.hidden = false; $("#analyzeDone").hidden = true;
+  const lis = ol.querySelectorAll("li");
+  lis.forEach(li => li.className = "");
+  for (const li of lis){ li.className = "run"; await wait(520); li.className = "done"; }
+  state.analyzed = true;
+  $("#analyzeDone").hidden = false;
+  btn.disabled = false; btn.textContent = "Analyze again";
+}
+
+function approveClip(id){
+  const c = state.clips.find(x => x.id === id);
+  c.approved = true;
+  const taken = state.toSchedule.length + 1; // next free slot after existing queue
+  state.toSchedule.push({clipId:c.id, platforms:new Set(["yt","tt","ig"]), day:Math.floor(taken/3), slot:taken%3});
+  go("schedule");
+}
+
+/* ---------- delegated events (same pattern as index.html) ---------- */
+document.addEventListener("click", e => {
+  const t = e.target.closest("button,[data-sheet-close]");
+  if (!t) return;
+  if (typeof editorClick === "function" && editorClick(t)) return;
+  const d = t.dataset;
+  if (d.step) return go(d.step);
+  if ("stepPrev" in d) return go(STEPS[Math.max(0, stepIdx()-1)].id);
+  if ("stepNext" in d) return go(STEPS[Math.min(STEPS.length-1, stepIdx()+1)].id);
+  if ("themeToggle" in d){
+    const next = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", next);
+    document.documentElement.style.colorScheme = next;
+    try { localStorage.setItem("clipflow-theme", next); } catch(err){}
+    return;
+  }
+  if ("newCampaign" in d) return openSheet();
+  if ("sheetClose" in d) return closeSheet();
+  if ("extract" in d) return extractRules(t);
+  if ("createCampaign" in d){ state.created = true; closeSheet(); render(); return; }
+  if ("openCampaign" in d) return go("import");
+  if (d.channel){
+    const ch = state.channels.find(c => c.id === d.channel);
+    ch.on = !ch.on; ch.checked = ch.on ? "just now" : "—";
+    render(); return;
+  }
+  if (d.lang){ state.lang = d.lang; render(); return; }
+  if (d.layout){ state.layout = d.layout; render(); return; }
+  if ("analyze" in d) return runAnalysis(t);
+  if (d.fix){
+    const [cid, rule] = d.fix.split(":");
+    const c = state.clips.find(x => x.id === cid);
+    if (rule === "wm") c.watermark = false;
+    if (rule === "tags") c.tags = true;
+    if (rule === "len") c.dur = 58;
+    render(); return;
+  }
+  if (d.approve){ approveClip(d.approve); return; }
+  if (d.edit){ state.edClip = d.edit; go("editor"); return; }
+  if (d.plat){
+    const [n, p] = d.plat.split(":"); const s = state.toSchedule[n].platforms;
+    s.has(p) ? s.delete(p) : s.add(p); render(); return;
+  }
+  if (d.slot){
+    const [n, day, slot] = d.slot.split(":").map(Number);
+    Object.assign(state.toSchedule[n], {day, slot}); render(); return;
+  }
+  if ("queueAll" in d){
+    state.queue.forEach(q => q.fresh = false);
+    state.toSchedule.forEach(it => {
+      const c = state.clips.find(x => x.id === it.clipId);
+      it.platforms.forEach(p => state.queue.push({clip:c.title, p, day:it.day, slot:it.slot, status:"Scheduled", badge:"", fresh:true}));
+    });
+    state.toSchedule = [];
+    go("publish"); return;
+  }
+  if (d.qfilter){ state.queueFilter = d.qfilter; render(); return; }
+  if (d.retry){
+    const q = state.queue[d.retry]; q.status = "Uploading 5 %"; q.badge = "run"; render();
+    setTimeout(() => { q.status = "Scheduled"; q.badge = ""; if (state.step === "publish") render(); }, motionMs(1400) || 1);
+    return;
+  }
+  if (d.perf){ state.perf = d.perf; render(); return; }
+});
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape" && document.body.classList.contains("sheet-open")) closeSheet();
+});
+REDUCED_MOTION.addEventListener?.("change", syncCaptionLoop);
+
+render();
+</script>
+<script>
+"use strict";
+/* ---------- Editor (077): mock player + timeline + inspector. Mock data, no API. ----------
+   One rAF loop drives the player (captions, zoom, hook card, progress, cuts) and the
+   timeline playhead. Inspector changes mutate ED and call applyEd(); no re-render,
+   so playback and the open tab survive every edit. */
+const PPS = 110; // timeline px per second of source
+const ED_SCRIPT = "Most founders don't quit in month one. |0.9 They quit in month seven, um, when the novelty is gone |0.7 and the revenue, like, still isn't there. |1.1 That's the wall. And here's how we got past it. |0.6 We stopped adding features |0.8 and we, uh, called every single customer who had churned. Every one. That changed everything.";
+const KEYWORDS = new Set(["month","seven","revenue","wall","churned","everything"]);
+function buildTranscript(){
+  const items = []; let t = 0.6;
+  for (const tok of ED_SCRIPT.split(/\s+/)){
+    if (tok[0] === "|"){ const d = +tok.slice(1); items.push({kind:"silence", start:t, end:t+d, removed:true}); t += d; continue; }
+    const bare = tok.replace(/[^A-Za-z']/g,"").toLowerCase();
+    const filler = ["um","uh","like"].includes(bare);
+    const dur = 0.16 + 0.055*bare.length + (/[.,]$/.test(tok) ? 0.14 : 0);
+    items.push({kind:filler ? "filler" : "word", text:filler ? tok.replace(/,$/,"") : tok, cap:tok.replace(/[.,]$/,""), key:KEYWORDS.has(bare), start:t, end:t+dur, removed:filler});
+    t += dur + 0.06;
+  }
+  return {items, dur:t + 1.4};
+}
+const SRC = buildTranscript();
+const lastWord = SRC.items.filter(i => i.kind !== "silence").at(-1);
+const WM_ASSETS = [
+  {id:"mark", name:"ClipFlow mark", svg:'<svg viewBox="0 0 120 40"><rect x="40" y="2" width="40" height="36" rx="10" fill="#0a84ff"/><path d="M55 12v16l13-8z" fill="#fff"/></svg>'},
+  {id:"wordmark", name:"Wordmark", svg:'<svg viewBox="0 0 120 40"><text x="60" y="27" text-anchor="middle" font-family="Arial Black,Arial,sans-serif" font-weight="900" font-size="20" fill="#fff" letter-spacing="1">CLIPFLOW</text></svg>'},
+  {id:"handle", name:"@buildroomclips", svg:'<svg viewBox="0 0 120 40"><rect x="2" y="6" width="116" height="28" rx="14" fill="rgba(0,0,0,.45)"/><text x="60" y="25" text-anchor="middle" font-family="Arial,sans-serif" font-weight="700" font-size="13" fill="#fff">@buildroomclips</text></svg>'},
+];
+const JOB_DEFAULT_WM = "handle";
+const PRESETS = [["karaoke","Karaoke"],["pop","Word pop"],["hormozi","Hormozi"],["clean","Clean"],["neon","Neon"],["boxed","Boxed"]];
+const KW_COLORS = [["#ffd60a","Yellow"],["#30d158","Green"],["#ff453a","Red"],["#64d2ff","Cyan"],["#bf5af2","Purple"]];
+const PROG_COLORS = [["#ffd60a","Yellow"],["#ffffff","White"],["#ff453a","Red"],["#0a84ff","Blue"]];
+const TABS = [["captions","Captions"],["effects","Effects"],["audio","Audio"],["watermark","Watermark"],["export","Export"]];
+
+const ED = {
+  trimStart:0.35, trimEnd:+(lastWord.end + 0.35).toFixed(2), t:0.35, playing:false, raf:0, last:0, lastCap:"", tab:"captions",
+  preset:"karaoke", kw:"#ffd60a", hook:true, hookText:"Month 7 is the real test", hookDur:"2.5",
+  zoom:true, zoomAmt:60, trans:true, transStyle:"flash", sfx:true, sfxStyle:"whoosh", progress:true, progColor:"#ffd60a", loud:true, lufs:"-14",
+  rmSilence:true, rmFiller:true, music:false, musicVol:18,
+  wm:"default", wmY:25, wmW:220, wmOpacity:70,
+  res:"1080", fps:"30", burn:true,
+  rendered:false, rendering:false,
+};
+
+/* ---------- time maps ---------- */
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const fmtT = s => { s = Math.max(0, s); return Math.floor(s/60) + ":" + String(Math.floor(s%60)).padStart(2,"0"); };
+const cuts = () => SRC.items.filter(i => i.removed).map(i => [Math.max(i.start, ED.trimStart), Math.min(i.end, ED.trimEnd)]).filter(([a,b]) => b > a);
+function outTime(t){ return (t - ED.trimStart) - cuts().reduce((a,[s,e]) => a + Math.max(0, Math.min(e,t) - s), 0); }
+const outDur = () => outTime(ED.trimEnd);
+const wmId = () => ED.wm === "default" ? JOB_DEFAULT_WM : ED.wm;
+function zoomMarks(){
+  const out = [];
+  SRC.items.forEach(i => { if (i.key && !i.removed && i.start >= ED.trimStart && i.start < ED.trimEnd && (!out.length || i.start - out.at(-1) > 1.8)) out.push(i.start); });
+  return out;
+}
+function zoomScale(t){
+  if (!ED.zoom) return 1;
+  let env = 0;
+  for (const m of zoomMarks()){
+    const d = t - m;
+    if (d < 0 || d > 1.7) continue;
+    const e = d < .14 ? 1 - Math.pow(1 - d/.14, 3) : d < 1.3 ? 1 : 1 - (d-1.3)/.4;
+    env = Math.max(env, e);
+  }
+  return 1 + env * ED.zoomAmt/100 * .22;
+}
+function rules(){
+  const d = outDur();
+  return [
+    {ok:d >= 20 && d <= 60, text:d < 20 ? `Length ${Math.round(d)} s < 20` : d > 60 ? `Length ${Math.round(d)} s > 60` : `Length ${Math.round(d)} s`},
+    {ok:true, text:"Tags"},
+    {ok:ED.wm === "none", text:ED.wm === "none" ? "No watermark" : "Watermark present"},
+  ];
+}
+
+/* ---------- markup ---------- */
+const toggle = (key, label, sub="") => `<div class="irow"><div><div class="il" id="lb-${key}">${label}</div>${sub?`<div class="tiny muted">${sub}</div>`:""}</div>
+  <button class="switch" type="button" role="switch" aria-checked="${!!ED[key]}" aria-labelledby="lb-${key}" data-ed-toggle="${key}"></button></div>`;
+const segSet = (key, opts, label) => `<div class="seg" role="group" aria-label="${label}">${opts.map(([v,n]) => `<button type="button" data-ed-set="${key}=${v}" aria-pressed="${String(ED[key])===v}">${n}</button>`).join("")}</div>`;
+const range = (key, label, min, max, step, unit) => `<label class="range"><span>${label}</span><input type="range" min="${min}" max="${max}" step="${step}" value="${ED[key]}" data-ed-range="${key}" data-unit="${unit}"><output id="out-${key}">${ED[key]}${unit}</output></label>`;
+const swatches = (key, list, label) => `<div class="swatches" role="group" aria-label="${label}">${list.map(([c,n]) => `<button class="sw" type="button" style="background:${c}" aria-label="${n}" data-ed-set="${key}=${c}" aria-pressed="${ED[key]===c}"></button>`).join("")}</div>`;
+
+function panelHtml(id){
+  if (id === "captions") return `
+    <div class="igroup"><div class="il">Preset</div>
+      <div class="presets isub">${PRESETS.map(([v,n]) => `<button class="preset" type="button" data-ed-set="preset=${v}" aria-pressed="${ED.preset===v}">
+        <span class="ptile" style="--kw:${ED.kw}"><span class="pcap-mini preset-${v}" data-tile><span class="w">This</span> <span class="w kw">changes</span> <span class="w">everything</span></span></span>${n}</button>`).join("")}</div></div>
+    <div class="igroup"><div class="il">Keyword highlight</div><p class="tiny muted" style="margin:2px 0 10px">AI-picked keywords: month, seven, revenue, wall, churned.</p>${swatches("kw", KW_COLORS, "Keyword colour")}</div>
+    <div class="igroup">${toggle("hook","Hook title card","Big text over the first seconds, before captions take over.")}
+      <div class="dep isub" data-ed-dep="hook"><input type="text" maxlength="42" value="${esc(ED.hookText)}" data-ed-text="hookText" aria-label="Hook title text">
+        <div class="row" style="margin-top:10px"><span class="small muted">Show for</span>${segSet("hookDur",[["2","2 s"],["2.5","2.5 s"],["3","3 s"]],"Hook duration")}</div></div></div>`;
+  if (id === "effects") return `
+    <div class="igroup">${toggle("zoom","Auto zoom punch-ins","Punches in on keywords. ◆ marks them on the timeline.")}
+      <div class="dep" data-ed-dep="zoom">${range("zoomAmt","Intensity",0,100,5,"%")}<p class="tiny muted" id="zoomNote"></p></div></div>
+    <div class="igroup">${toggle("trans","Transitions on cuts","Where silences and fillers were removed.")}
+      <div class="dep isub" data-ed-dep="trans">${segSet("transStyle",[["flash","Flash"],["zoom","Zoom"],["slide","Slide"]],"Transition style")}</div>
+      ${toggle("sfx","Sound effect on cuts")}
+      <div class="dep isub" data-ed-dep="sfx">${segSet("sfxStyle",[["whoosh","Whoosh"],["pop","Pop"],["click","Click"]],"Sound effect")}</div></div>
+    <div class="igroup">${toggle("progress","Progress bar overlay","Thin bar across the top.")}
+      <div class="dep isub" data-ed-dep="progress">${swatches("progColor", PROG_COLORS, "Progress bar colour")}</div></div>
+    <div class="igroup">${toggle("loud","Loudness normalise","On by default. Platforms play back near −14 LUFS.")}
+      <div class="dep isub" data-ed-dep="loud">${segSet("lufs",[["-14","−14 LUFS"],["-16","−16 LUFS"]],"Loudness target")}</div></div>`;
+  if (id === "audio") return `
+    <div class="igroup">${toggle("rmSilence","Remove silences","Pauses over 0.5 s.")}${toggle("rmFiller","Remove filler words","um, uh, like.")}
+      <p class="tiny muted" id="cutNote" style="margin-top:6px"></p></div>
+    <div class="igroup">${toggle("music","Background music","Lo-fi bed, royalty-free (mock).")}
+      <div class="dep" data-ed-dep="music">${range("musicVol","Volume",0,60,1,"%")}</div></div>`;
+  if (id === "watermark") return `
+    <div id="wmWarn"></div>
+    <div class="igroup"><div class="il">Watermark</div>
+      <div class="wm-pick isub" role="group" aria-label="Watermark asset">
+        <button class="wm-opt" type="button" data-ed-set="wm=none" aria-pressed="${ED.wm==="none"}"><span class="wm-thumb" style="color:var(--muted2)">—</span>None</button>
+        ${WM_ASSETS.map(a => `<button class="wm-opt" type="button" data-ed-set="wm=${a.id}" aria-pressed="${ED.wm===a.id}"><span class="wm-thumb">${a.svg}</span>${esc(a.name)}</button>`).join("")}
+        <button class="wm-opt" type="button" data-ed-set="wm=default" aria-pressed="${ED.wm==="default"}"><span class="wm-thumb">${WM_ASSETS.find(a=>a.id===JOB_DEFAULT_WM).svg}</span>Job default</button>
+      </div>
+      <p class="tiny muted" style="margin-top:8px">Applies to this preview and the final render.</p></div>
+    <div class="igroup dep" data-ed-dep="wmOn">${range("wmY","Position",5,60,1,"%")}${range("wmW","Size",120,400,10," px")}${range("wmOpacity","Opacity",20,100,5,"%")}</div>`;
+  return `
+    <div class="igroup"><div class="irow"><div class="il">Resolution</div>${segSet("res",[["1080","1080×1920"],["720","720×1280"]],"Resolution")}</div>
+      <div class="irow"><div class="il">Frame rate</div>${segSet("fps",[["30","30"],["60","60"]],"Frame rate")}</div></div>
+    <div class="igroup">${toggle("burn","Burn in captions","Off exports a clean video (captions as a separate file).")}</div>
+    <div class="igroup"><div class="il">Output</div><p class="small muted" id="exportNote" style="margin-top:4px"></p></div>`;
+}
+
+function timelineHtml(){
+  const W = SRC.dur * PPS;
+  let ruler = "";
+  for (let s = 0; s <= SRC.dur; s++) ruler += `<i style="left:${s*PPS}px"></i>${s % 2 === 0 ? `<span style="left:${s*PPS}px">${fmtT(s)}</span>` : ""}`;
+  // deterministic waveform: louder inside words, near-silent in pauses
+  let bars = "", seed = 7;
+  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  for (let t = 0; t < SRC.dur; t += .05){
+    const inWord = SRC.items.some(i => i.kind !== "silence" && t >= i.start && t < i.end);
+    const h = inWord ? 10 + rnd() * 34 : 2 + rnd() * 3;
+    bars += `<rect x="${(t*PPS).toFixed(1)}" y="${(24 - h/2).toFixed(1)}" width="3" height="${h.toFixed(1)}" rx="1.5"/>`;
+  }
+  const chips = SRC.items.map((i, n) => `<button class="wchip ${i.kind==="silence"?"gap":""} ${i.key?"kw":""}" type="button" data-ed-item="${n}"
+    style="left:${(i.start*PPS).toFixed(1)}px;width:${Math.max(14,(i.end-i.start)*PPS-3).toFixed(1)}px"
+    title="${i.kind==="silence" ? `Silence ${(i.end-i.start).toFixed(1)} s` : esc(i.text)}">${i.kind==="silence" ? `${(i.end-i.start).toFixed(1)}s` : esc(i.text)}</button>`).join("");
+  return `<div class="row"><h3>Timeline</h3><span class="spacer"></span><span class="small muted">Output <b class="tabnum" id="tlDur"></b></span></div>
+    <div class="tl-scroll" id="tlScroll"><div class="tl" id="tl" style="width:${W}px">
+      <div class="tl-ruler">${ruler}</div>
+      <div class="tl-marks" id="tlMarks"></div>
+      <svg class="tl-wave" width="${W}" height="48" fill="currentColor" aria-hidden="true">${bars}</svg>
+      <div id="tlCuts"></div>
+      <div class="tl-words" style="width:${W}px">${chips}</div>
+      <div class="tl-shade l" id="shadeL"></div><div class="tl-shade r" id="shadeR"></div>
+      <div class="tl-handle" id="hStart" role="slider" tabindex="0" aria-label="Clip start" data-ed-handle="start"></div>
+      <div class="tl-handle" id="hEnd" role="slider" tabindex="0" aria-label="Clip end" data-ed-handle="end"></div>
+      <div class="tl-playhead" id="playhead"></div>
+    </div></div>
+    <div class="tl-legend"><span>Click a word to seek</span><span><i class="lg" style="background:var(--badge-bad-bg);outline:1px solid var(--badge-bad-line)"></i>Cut (struck through): click to restore</span>
+      <span><i class="lg" style="background:var(--warn);transform:rotate(45deg) scale(.75)"></i>Zoom punch-in</span><span><i class="lg" style="background:var(--warn);width:4px"></i>Drag handles to trim</span></div>`;
+}
+
+VIEWS.editor = function(){
+  const c = state.clips.find(x => x.id === (state.edClip || "k1"));
+  ED.clipId = c.id;
+  return `<section class="panel step ed">
+    ${head("Step 5 · Editor", esc(c.title), "", `<span class="vchip" title="Virality score">${I.spark}Virality <b>${c.score}</b></span>`)}
+    <p class="small muted" style="margin-top:-6px">${c.reason} Strong fit for Shorts and Reels.</p>
+    <div class="checks" id="edRules"></div>
+    <div class="ed-grid">
+      <div class="ed-player">
+        <div class="pframe" id="pframe">
+          <div class="pzoom" id="pzoom"><div class="pbump">${layoutSvg("stacked")}</div></div>
+          <div class="pflash"></div>
+          <div class="pprog" id="pprog"><i></i></div>
+          <div class="phook" id="phook"><span></span></div>
+          <div class="pwm" id="pwm"></div>
+          <div class="pcap" id="pcap"></div>
+          <div class="psfx" id="psfx"></div>
+        </div>
+        <div class="pctrl row">
+          <button class="icon-btn" type="button" data-ed-play aria-label="Play"></button>
+          <span class="tabnum small" id="ptime"></span><span class="spacer"></span>
+          <span class="tiny muted" id="pnote"></span>
+        </div>
+      </div>
+      <div class="ed-insp">
+        <div class="segx" role="tablist" aria-label="Inspector">
+          <span class="segx-ind" aria-hidden="true"></span>
+          ${TABS.map(([id,n]) => `<button type="button" role="tab" id="tab-${id}" aria-controls="panel-${id}" aria-selected="${ED.tab===id}" tabindex="${ED.tab===id?0:-1}" data-ed-tab="${id}">${n}</button>`).join("")}
+        </div>
+        ${TABS.map(([id]) => `<div class="tabpanel" role="tabpanel" id="panel-${id}" aria-labelledby="tab-${id}" ${ED.tab===id?"":"hidden"}>${panelHtml(id)}</div>`).join("")}
+      </div>
+      <div class="ed-tl">${timelineHtml()}</div>
+    </div>
+    <div class="ed-foot">
+      <span class="state" id="edState"></span><span class="spacer"></span>
+      <button class="secondary" type="button" data-ed-render>Render preview</button>
+      <button type="button" data-ed-approve>Approve &amp; schedule</button>
+    </div>
+  </section>`;
+};
+
+/* ---------- sync state → DOM ---------- */
+function moveSegThumb(){
+  const seg = document.querySelector(".segx"); if (!seg) return;
+  const b = seg.querySelector('[aria-selected="true"]'), ind = seg.querySelector(".segx-ind");
+  ind.style.width = b.offsetWidth + "px";
+  ind.style.transform = `translateX(${b.offsetLeft}px)`;
+}
+function applyEd(){
+  if (state.step !== "editor") return;
+  const q = s => document.querySelector(s);
+  document.querySelectorAll("[data-ed-set]").forEach(b => { const [k,v] = b.dataset.edSet.split("="); b.setAttribute("aria-pressed", String(ED[k]) === v); });
+  document.querySelectorAll("[data-ed-toggle]").forEach(b => b.setAttribute("aria-checked", !!ED[b.dataset.edToggle]));
+  document.querySelectorAll("[data-ed-dep]").forEach(el => { const on = el.dataset.edDep === "wmOn" ? ED.wm !== "none" : !!ED[el.dataset.edDep]; el.classList.toggle("dim", !on); el.inert = !on; });
+  document.querySelectorAll("[data-tile]").forEach(el => el.parentElement.style.setProperty("--kw", ED.kw));
+  // player look
+  const f = q("#pframe");
+  f.style.setProperty("--kw", ED.kw); f.style.setProperty("--prog", ED.progColor);
+  q("#pcap").className = `pcap preset-${ED.preset}`; q("#pcap").hidden = !ED.burn;
+  q("#pprog").hidden = !ED.progress;
+  q("#phook span").textContent = ED.hookText || " ";
+  const wm = q("#pwm"), a = WM_ASSETS.find(x => x.id === wmId());
+  wm.hidden = ED.wm === "none";
+  if (a){ wm.innerHTML = a.svg; wm.style.top = ED.wmY + "%"; wm.style.width = (ED.wmW/1080*100) + "%"; wm.style.opacity = ED.wmOpacity/100; }
+  // timeline
+  SRC.items.forEach((i, n) => q(`[data-ed-item="${n}"]`).classList.toggle("removed", i.removed));
+  q("#tlCuts").innerHTML = SRC.items.filter(i => i.removed).map(i => `<div class="tl-cut" style="left:${i.start*PPS}px;width:${(i.end-i.start)*PPS}px"></div>`).join("");
+  q("#tlMarks").innerHTML = (ED.zoom ? zoomMarks().map(m => `<span class="zm" style="left:${m*PPS}px" title="Zoom punch-in"></span>`).join("") : "")
+    + (ED.trans ? cuts().map(([s]) => `<span class="cutm" style="left:${s*PPS}px"></span>`).join("") : "");
+  q("#shadeL").style.width = ED.trimStart*PPS + "px";
+  q("#shadeR").style.width = (SRC.dur - ED.trimEnd)*PPS + "px";
+  q("#hStart").style.left = ED.trimStart*PPS + "px"; q("#hEnd").style.left = ED.trimEnd*PPS + "px";
+  [["#hStart",ED.trimStart],["#hEnd",ED.trimEnd]].forEach(([s,v]) => { const h = q(s); h.setAttribute("aria-valuenow", v.toFixed(1)); h.setAttribute("aria-valuetext", fmtT(v) + "." + Math.floor(v%1*10)); h.setAttribute("aria-valuemin", 0); h.setAttribute("aria-valuemax", SRC.dur.toFixed(1)); });
+  const d = outDur();
+  q("#tlDur").textContent = `${d.toFixed(1)} s`;
+  // notes
+  const zn = q("#zoomNote"); if (zn) zn.textContent = `${zoomMarks().length} punch-ins placed on keywords.`;
+  const cn = q("#cutNote"); if (cn){ const rm = SRC.items.filter(i => i.removed); cn.textContent = `${rm.length} cuts, ${rm.reduce((a,i)=>a+i.end-i.start,0).toFixed(1)} s saved. Restore any cut on the timeline.`; }
+  const en = q("#exportNote"); if (en) en.textContent = `MP4 · H.264 · AAC · ${ED.res === "1080" ? "1080×1920" : "720×1280"} @ ${ED.fps} fps · ${d.toFixed(1)} s · ≈ ${Math.round(d * (ED.res === "1080" ? .75 : .38) * (ED.fps === "60" ? 1.35 : 1))} MB. Captions ${ED.burn ? "burned in" : "off"}, loudness ${ED.loud ? ED.lufs + " LUFS" : "untouched"}.`;
+  const ww = q("#wmWarn");
+  if (ww) ww.innerHTML = ED.wm === "none"
+    ? `<div class="warnbox ok">✓ <span>Matches the campaign rule: <b>no watermark</b>.</span></div>`
+    : `<div class="warnbox"><span>✗ <b>Campaign requires no watermark.</b> This clip fails the rule check while a watermark is set.</span><span class="spacer"></span><button class="sm" type="button" data-ed-set="wm=none">Set to None</button></div>`;
+  // rules + footer
+  const rs = rules(), bad = rs.filter(r => !r.ok);
+  q("#edRules").innerHTML = rs.map(r => `<span class="badge ${r.ok?"good":"bad"}">${r.ok?"✓":"✗"} ${r.text}</span>`).join("");
+  q("[data-ed-approve]").disabled = bad.length > 0;
+  const st = q("#edState");
+  st.className = "state" + (ED.rendered && !bad.length ? " ok" : "");
+  st.innerHTML = ED.rendering ? `<span class="spin"></span>Rendering preview…`
+    : bad.length ? `<i></i>Fix ${bad.length} rule${bad.length>1?"s":""} to approve`
+    : ED.rendered ? `<i></i>Preview is up to date` : `<i></i>Changes not rendered yet`;
+  const rb = q("[data-ed-render]"); rb.disabled = ED.rendering;
+  paint(ED.t);
+}
+
+function setPlayBtn(){
+  const b = document.querySelector("[data-ed-play]"); if (!b) return;
+  b.innerHTML = ED.playing ? I.pause : I.play; b.setAttribute("aria-label", ED.playing ? "Pause" : "Play");
+  const n = document.querySelector("#pnote");
+  if (n) n.textContent = ED.playing ? "Mock clip · loops" : REDUCED_MOTION.matches ? "Autoplay off (reduced motion)" : "Paused";
+}
+
+/* ---------- playback ---------- */
+// Kept words grouped into caption chunks: max 3 words, never across a sentence end.
+function captionWords(){
+  let c = 0, n = 0, prev = null;
+  return SRC.items.filter(i => i.kind !== "silence" && !i.removed).map(w => {
+    if (prev && (n === 3 || /[.!?]$/.test(prev.text))){ c++; n = 0; }
+    n++; prev = w; return {...w, chunk:c};
+  });
+}
+function paint(t){
+  const q = s => document.querySelector(s);
+  const f = q("#pframe"); if (!f) return;
+  const ot = outTime(t), od = outDur();
+  q("#playhead").style.left = t*PPS + "px";
+  q("#ptime").textContent = `${fmtT(ot)} / ${fmtT(od)}`;
+  f.style.setProperty("--p", clamp(ot/od, 0, 1).toFixed(4));
+  q("#pzoom").style.transform = `scale(${zoomScale(t).toFixed(4)})`;
+  q("#phook").classList.toggle("show", ED.hook && ot < +ED.hookDur);
+  // captions: chunks of 3 kept words; active = last word started
+  const ws = captionWords();
+  let idx = -1; for (let i = 0; i < ws.length; i++) if (ws[i].start <= t) idx = i;
+  const showCap = !(ED.hook && ot < +ED.hookDur) && idx >= 0;
+  const chunk = idx >= 0 ? ws[idx].chunk : 0, key = showCap ? String(chunk) + ED.preset : "";
+  const cap = q("#pcap");
+  if (key !== ED.lastCap){
+    ED.lastCap = key;
+    cap.innerHTML = showCap ? ws.map((w,i) => w.chunk === chunk ? `<span class="w ${w.key?"kw":""}" data-wi="${i}">${esc(w.cap)}</span>` : "").filter(Boolean).join(" ") : "";
+  }
+  cap.querySelectorAll(".w").forEach(el => { const i = +el.dataset.wi; el.classList.toggle("on", i === idx && t < ws[i].end + .25); el.classList.toggle("said", i < idx); });
+  document.querySelectorAll(".wchip.now").forEach(el => el.classList.remove("now"));
+  const cur = SRC.items.findIndex(i => i.kind !== "silence" && t >= i.start && t < i.end);
+  if (cur >= 0) document.querySelector(`[data-ed-item="${cur}"]`)?.classList.add("now");
+}
+function fireCut(){
+  const f = document.querySelector("#pframe"); if (!f) return;
+  if (ED.trans){ f.classList.remove("cut-flash","cut-zoom","cut-slide"); void f.offsetWidth; f.classList.add("cut-" + ED.transStyle); }
+  if (ED.sfx){
+    const s = document.querySelector("#psfx"); s.textContent = "♪ " + ED.sfxStyle[0].toUpperCase() + ED.sfxStyle.slice(1);
+    s.classList.add("show"); clearTimeout(fireCut.tm); fireCut.tm = setTimeout(() => s.classList.remove("show"), 650);
+  }
+}
+function tick(now){
+  if (!ED.playing) return;
+  const dt = Math.min(.1, (now - (ED.last || now)) / 1000); ED.last = now;
+  let t = ED.t + dt;
+  if (t >= ED.trimEnd){ t = ED.trimStart; ED.lastCap = ""; }
+  for (const [s,e] of cuts()) if (t >= s && t < e){ t = e; fireCut(); }
+  ED.t = t; paint(t); followPlayhead();
+  ED.raf = requestAnimationFrame(tick);
+}
+function followPlayhead(){
+  const sc = document.querySelector("#tlScroll"); if (!sc) return;
+  const x = ED.t*PPS;
+  if (x < sc.scrollLeft + 40 || x > sc.scrollLeft + sc.clientWidth - 60) sc.scrollLeft = x - 60;
+}
+function play(on){
+  ED.playing = on; cancelAnimationFrame(ED.raf); ED.last = 0;
+  if (on) ED.raf = requestAnimationFrame(tick);
+  setPlayBtn(); paint(ED.t);
+}
+function seek(t){ ED.t = clamp(t, ED.trimStart, ED.trimEnd - .01); for (const [s,e] of cuts()) if (ED.t >= s && ED.t < e) ED.t = e; ED.lastCap = ""; paint(ED.t); }
+
+/* Gallery tiles: small word loop, only while the Captions tab is visible */
+let tileTimer = 0, tileN = 0;
+function syncTiles(){
+  clearInterval(tileTimer);
+  const tiles = () => document.querySelectorAll("[data-tile]");
+  const set = n => tiles().forEach(el => [...el.children].forEach((w,i) => { w.classList.toggle("on", i === n); w.classList.toggle("said", i < n); }));
+  if (state.step !== "editor" || ED.tab !== "captions") return;
+  if (REDUCED_MOTION.matches) return set(1);
+  tileTimer = setInterval(() => set(tileN++ % 4), 480);
+}
+
+function onStepRendered(step){
+  if (step !== "editor"){ play(false); clearInterval(tileTimer); return; }
+  ED.lastCap = "";
+  applyEd(); setPlayBtn(); syncTiles();
+  requestAnimationFrame(moveSegThumb);
+  play(!REDUCED_MOTION.matches);
+}
+addEventListener("resize", moveSegThumb);
+
+/* ---------- tabs ---------- */
+function switchTab(id, focus){
+  if (id === ED.tab) return;
+  const from = TABS.findIndex(x => x[0] === ED.tab), to = TABS.findIndex(x => x[0] === id);
+  ED.tab = id;
+  document.querySelectorAll("[data-ed-tab]").forEach(b => { const on = b.dataset.edTab === id; b.setAttribute("aria-selected", on); b.tabIndex = on ? 0 : -1; });
+  document.querySelectorAll(".tabpanel").forEach(p => { p.hidden = p.id !== "panel-" + id; p.classList.remove("in-l","in-r"); });
+  const p = document.getElementById("panel-" + id); void p.offsetWidth; p.classList.add(to > from ? "in-r" : "in-l");
+  moveSegThumb(); applyEd(); syncTiles();
+  if (focus) document.getElementById("tab-" + id).focus();
+}
+
+/* ---------- events (hooked from the main delegated click handler) ---------- */
+function edChanged(key){
+  if (key === "rmSilence" || key === "rmFiller"){ const kind = key === "rmSilence" ? "silence" : "filler"; SRC.items.forEach(i => { if (i.kind === kind) i.removed = ED[key]; }); }
+  ED.rendered = false; seek(ED.t); applyEd();
+}
+function editorClick(t){
+  const d = t.dataset;
+  if (d.edTab){ switchTab(d.edTab); return true; }
+  if (d.edSet){ const [k,v] = d.edSet.split("="); ED[k] = v; edChanged(k); return true; }
+  if (d.edToggle){ ED[d.edToggle] = !ED[d.edToggle]; edChanged(d.edToggle); return true; }
+  if ("edPlay" in d){ play(!ED.playing); return true; }
+  if (d.edItem){
+    const i = SRC.items[+d.edItem];
+    if (i.removed){ i.removed = false; edChanged("item"); }
+    seek(Math.max(i.start, ED.trimStart));
+    return true;
+  }
+  if ("edRender" in d){
+    ED.rendering = true; applyEd(); setTimeout(() => { ED.rendering = false; ED.rendered = true; applyEd(); }, motionMs(1600) || 400);
+    return true;
+  }
+  if ("edApprove" in d){
+    const c = state.clips.find(x => x.id === ED.clipId);
+    c.watermark = false; c.tags = true; c.dur = Math.round(outDur());
+    play(false); approveClip(c.id); return true;
+  }
+  return false;
+}
+document.addEventListener("input", e => {
+  const el = e.target;
+  if (el.dataset.edRange){ const k = el.dataset.edRange; ED[k] = +el.value; document.getElementById("out-" + k).textContent = el.value + el.dataset.unit; edChanged(k); }
+  if (el.dataset.edText){ ED[el.dataset.edText] = el.value; edChanged(el.dataset.edText); }
+});
+document.addEventListener("keydown", e => {
+  const tab = e.target.closest?.("[data-ed-tab]");
+  if (tab && (e.key === "ArrowRight" || e.key === "ArrowLeft")){
+    const i = TABS.findIndex(x => x[0] === ED.tab), n = (i + (e.key === "ArrowRight" ? 1 : -1) + TABS.length) % TABS.length;
+    switchTab(TABS[n][0], true); e.preventDefault(); return;
+  }
+  const h = e.target.closest?.("[data-ed-handle]");
+  if (h && (e.key === "ArrowRight" || e.key === "ArrowLeft")){
+    setTrim(h.dataset.edHandle, (h.dataset.edHandle === "start" ? ED.trimStart : ED.trimEnd) + (e.key === "ArrowRight" ? 1 : -1) * (e.shiftKey ? 1 : .1));
+    e.preventDefault();
+  }
+  if (e.key === " " && state.step === "editor" && !e.target.closest("input,textarea,button,[role=slider]")){ play(!ED.playing); e.preventDefault(); }
+});
+function setTrim(which, v){
+  if (which === "start") ED.trimStart = +clamp(v, 0, ED.trimEnd - 3).toFixed(2);
+  else ED.trimEnd = +clamp(v, ED.trimStart + 3, SRC.dur).toFixed(2);
+  ED.rendered = false;
+  if (ED.t < ED.trimStart || ED.t > ED.trimEnd) ED.t = ED.trimStart;
+  applyEd();
+}
+/* Trim drag + click-to-seek on the timeline background (pointer events, touch-friendly) */
+let drag = null;
+document.addEventListener("pointerdown", e => {
+  const tl = e.target.closest?.("#tl"); if (!tl) return;
+  const h = e.target.closest("[data-ed-handle]");
+  if (h){ drag = h.dataset.edHandle; h.setPointerCapture(e.pointerId); h.focus({preventScroll:true}); e.preventDefault(); return; }
+  if (!e.target.closest("button")) seek((e.clientX - tl.getBoundingClientRect().left) / PPS);
+});
+document.addEventListener("pointermove", e => {
+  if (!drag) return;
+  const tl = document.getElementById("tl"); setTrim(drag, (e.clientX - tl.getBoundingClientRect().left) / PPS);
+});
+document.addEventListener("pointerup", () => { drag = null; });
+document.addEventListener("visibilitychange", () => { if (document.hidden && ED.playing) play(false); });
+</script>
+</body>
+</html>

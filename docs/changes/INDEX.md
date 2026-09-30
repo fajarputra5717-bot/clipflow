@@ -48,3 +48,4 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 073 · 2026-09-29 · Dynamic Island, Apple-style (springs, split, ready/failed events) (lane B) · index.html
 074 · 2026-09-30 · Import job cards keyed + patched in place, smooth bars, status-line fix, Details disclosure · index.html
 075 · 2026-09-30 · Job list own section, calm card motion (only the running job moves), 390 px overflow fix · index.html
+076 · 2026-09-30 · Clickable campaign flow preview incl. Editor step (mock data, static page) · flow-preview.html
