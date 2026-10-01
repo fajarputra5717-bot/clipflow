@@ -237,6 +237,10 @@ Failover (R-22): `CLIP_ANALYSIS_PROVIDER` / `TEXT_UTILITY_PROVIDER` ∈
 errors only). Circuit breaker 3 fails → 60 s, per process.
 `clip_candidates.hook_provider` records who produced each hook — set
 it on any new hook-producing path (pass `with_meta=True`).
+Hook input (077): `select_hooks()` sends the WHOLE timed transcript (no cut) up to
+`HOOKS_FULL_TRANSCRIPT_MAX_CHARS`; above it, 30-min windows (+2 min overlap) → `dedupe_hooks()` → one
+ranking call returning candidate ids. Providers return `(data, model, usage)`; router `meta["usage"]`.
+Keep prompt construction in `build_hooks_prompt()` so the eval and production send identical text.
 
 ## Runtime settings
 

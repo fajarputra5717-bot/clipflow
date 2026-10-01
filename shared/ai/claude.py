@@ -178,7 +178,9 @@ def generate_json(prompt, schema, *, task, max_tokens, setting):
                         "tool input has no 'clips'", provider=NAME,
                     )
                 data = data["clips"]
-            return data, getattr(response, "model", None) or model
+            u = response.usage
+            usage = {"input": u.input_tokens, "output": u.output_tokens}
+            return data, getattr(response, "model", None) or model, usage
 
     # tool_choice "auto" does not guarantee a call; a retry usually
     # gets one, so this is transient rather than a bad prompt.

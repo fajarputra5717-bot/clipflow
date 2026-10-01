@@ -25,7 +25,7 @@ def model_for(task, setting):
 
 
 def generate_json(prompt, schema, *, task, max_tokens, setting):
-    """Parsed JSON exactly as Gemini returned it (a list for hooks,
+    """(data, model, usage). Parsed JSON exactly as Gemini returned it (a list for hooks,
     an object elsewhere). `schema` and `max_tokens` are not sent: the
     baseline used only response_mime_type=application/json and adding
     either would change the output (R-20 is a no-behaviour-change
@@ -45,6 +45,12 @@ def generate_json(prompt, schema, *, task, max_tokens, setting):
             contents=prompt,
             config={"response_mime_type": "application/json"},
         )
-        return json.loads(response.text), model
+        m = response.usage_metadata
+        usage = {
+            "input": getattr(m, "prompt_token_count", None),
+            "output": (getattr(m, "candidates_token_count", None) or 0)
+            + (getattr(m, "thoughts_token_count", None) or 0),
+        }
+        return json.loads(response.text), model, usage
     except Exception as exc:
         raise classify_exception(exc, NAME) from exc

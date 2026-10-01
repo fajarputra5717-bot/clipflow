@@ -161,7 +161,7 @@ def _backoff(attempt):
 def ai_generate_json(prompt, schema, *, task, max_tokens, attempts=None,
                      with_meta=False):
     """Parsed JSON; with_meta=True returns (data, meta) where meta =
-    {"provider", "model", "failed_over"}. `attempts` overrides the
+    {"provider", "model", "failed_over", "usage"}. `attempts` overrides the
     per-provider attempt count (backend handlers pass 1 so a request
     doesn't block on backoff)."""
     if _setting is None:
@@ -185,7 +185,7 @@ def ai_generate_json(prompt, schema, *, task, max_tokens, attempts=None,
                 _log(f"AI: {name} circuit open, skipping for task={task}")
                 break
             try:
-                data, model = module.generate_json(
+                data, model, usage = module.generate_json(
                     prompt, schema, task=task, max_tokens=max_tokens,
                     setting=_setting,
                 )
@@ -235,6 +235,8 @@ def ai_generate_json(prompt, schema, *, task, max_tokens, attempts=None,
                     "provider": name,
                     "model": model,
                     "failed_over": index > 0,
+                    # {"input", "output"} tokens; output includes thinking.
+                    "usage": usage,
                 }
                 return (data, meta) if with_meta else data
 

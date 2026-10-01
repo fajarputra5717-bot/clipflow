@@ -1683,40 +1683,27 @@ def transcribe(
 # VIRAL HOOK ANALYSIS
 # ============================================================
 
-def analyze_hooks(
-    transcript,
-    segments,
-    platform="youtube_shorts",
-    clip_count=None,
-):
-
-    validate_ai()
-
-    if not segments:
-
-        raise RuntimeError(
-            "No transcript segments available"
-        )
-
-    if clip_count is None:
-        clip_count = setting_int("CLIP_COUNT")
-
-    clip_target_duration = setting_int("CLIP_TARGET_DURATION")
-    clip_min_duration = setting_int("CLIP_MIN_DURATION")
-    clip_max_duration = setting_int("CLIP_MAX_DURATION")
-
-    timed_transcript = "\n".join(
-        (
-            f"[{segment['start']:.1f}-"
-            f"{segment['end']:.1f}] "
-            f"{segment['text']}"
-        )
+def timed_transcript_text(segments):
+    return "\n".join(
+        f"[{segment['start']:.1f}-{segment['end']:.1f}] {segment['text']}"
         for segment in segments
     )
 
-    timed_transcript = (
-        timed_transcript[:24000]
-    )
+
+def build_hooks_prompt(
+    segments,
+    platform,
+    clip_count,
+    clip_target_duration,
+    clip_min_duration,
+    clip_max_duration,
+):
+    """The hook-selection prompt for these segments (the whole video or
+    one window of it: no truncation here, select_hooks() decides what
+    fits). Shared by analyze_hooks() and the TASKS-5 Task 4 provider
+    evaluation so both providers get byte-identical text."""
+
+    timed_transcript = timed_transcript_text(segments)
 
     prompt = f"""
 You are an expert short-form gaming video editor.
@@ -1775,20 +1762,12 @@ Transcript:
 {timed_transcript}
 """
 
-    raw, ai_meta = ai_router.ai_generate_json(
-        prompt,
-        HOOKS_SCHEMA,
-        task="hooks",
-        # Claude's adaptive thinking counts against this.
-        max_tokens=16000,
-        with_meta=True,
-    )
+    return prompt
 
-    log(
-        f"Hooks produced by {ai_meta['provider']} "
-        f"({ai_meta['model']})"
-        + (" after failover" if ai_meta["failed_over"] else "")
-    )
+
+def parse_hooks(raw, provider, clip_count):
+    """Validate/normalise a provider's raw hook list (same rules for
+    every provider) and keep the top `clip_count` by score."""
 
     if not isinstance(
         raw,
@@ -1796,7 +1775,7 @@ Transcript:
     ):
 
         raise RuntimeError(
-            f"{ai_meta['provider']} did not return a list"
+            f"{provider} did not return a list"
         )
 
     results = []
@@ -1910,14 +1889,14 @@ Transcript:
 
                 "rating": rating,
 
-                "provider": ai_meta["provider"],
+                "provider": provider,
             }
         )
 
     if len(results) < 1:
 
         raise RuntimeError(
-            f"{ai_meta['provider']} returned no usable clips"
+            f"{provider} returned no usable clips"
         )
 
     results.sort(
@@ -1929,6 +1908,213 @@ Transcript:
     return results[
         :clip_count
     ]
+
+
+def analyze_hooks(
+    transcript,
+    segments,
+    platform="youtube_shorts",
+    clip_count=None,
+):
+
+    validate_ai()
+
+    if not segments:
+
+        raise RuntimeError(
+            "No transcript segments available"
+        )
+
+    if clip_count is None:
+        clip_count = setting_int("CLIP_COUNT")
+
+    clip_target_duration = setting_int("CLIP_TARGET_DURATION")
+    clip_min_duration = setting_int("CLIP_MIN_DURATION")
+    clip_max_duration = setting_int("CLIP_MAX_DURATION")
+
+    hooks, _calls = select_hooks(
+        segments,
+        platform,
+        clip_count,
+        (clip_target_duration, clip_min_duration, clip_max_duration),
+        router_hooks_call,
+    )
+    return hooks
+
+
+def router_hooks_call(prompt, schema, max_tokens):
+    """Production AI call for hook selection: provider policy, retries
+    and failover from the router (R-20/R-22)."""
+    return ai_router.ai_generate_json(
+        prompt, schema, task="hooks", max_tokens=max_tokens,
+        with_meta=True,
+    )
+
+
+def transcript_windows(segments, window_s, overlap_s):
+    """Consecutive windows of `window_s` seconds, each starting
+    `overlap_s` before the previous one ends, so a moment on a
+    boundary is whole in at least one window."""
+    windows, start, last = [], 0.0, segments[-1]["end"]
+    while True:
+        stop = start + window_s
+        part = [x for x in segments if x["end"] > start and x["start"] < stop]
+        if part:
+            windows.append(part)
+        if stop >= last:
+            return windows
+        start = stop - overlap_s
+
+
+def dedupe_hooks(hooks):
+    """Highest score wins; drop any clip sharing more than half of the
+    shorter clip's length with one already kept (window overlaps make
+    the same moment appear twice)."""
+    kept = []
+    for h in sorted(hooks, key=lambda x: x["score"], reverse=True):
+        clash = False
+        for k in kept:
+            shared = min(h["end"], k["end"]) - max(h["start"], k["start"])
+            shorter = min(h["end"] - h["start"], k["end"] - k["start"])
+            if shared > 0.5 * shorter:
+                clash = True
+                break
+        if not clash:
+            kept.append(h)
+    return kept
+
+
+# Final ranking across windows: the model picks candidate ids, the
+# timestamps stay the ones the window call produced.
+HOOK_RANK_SCHEMA = {
+    "type": "array",
+    "items": {
+        "type": "object",
+        "properties": {
+            "id": {"type": "integer"},
+            "score": {"type": "integer"},
+            "reason": {"type": "string"},
+        },
+        "required": ["id", "score", "reason"],
+    },
+}
+
+
+def build_rank_prompt(candidates, segments, clip_count, platform):
+    blocks = []
+    for i, c in enumerate(candidates):
+        spoken = " ".join(
+            x["text"].strip() for x in segments
+            if x["end"] > c["start"] and x["start"] < c["end"]
+        )[:1500]
+        blocks.append(
+            f"### Candidate {i}\n"
+            f"Time: {c['start']:.1f}-{c['end']:.1f} "
+            f"({c['end'] - c['start']:.0f} s)\n"
+            f"Title: {c['title']}\n"
+            f"Type: {c['content_type']} · rating {c['rating']}/10\n"
+            f"Why it was picked: {c['reason']}\n"
+            f"Spoken: {spoken}"
+        )
+    return f"""
+You are an expert short-form gaming video editor.
+
+Below are candidate clips found in different parts of ONE long video
+(each part was judged on its own). Choose EXACTLY {clip_count} of them
+with the highest probability of working as a {platform} short-form
+clip, judged across the whole video.
+
+- Each clip must make sense by itself.
+- Prefer strong reactions, funny moments, conflict, surprise,
+  excitement, gameplay discoveries, impressive mechanics, punchlines.
+- Do not pick two candidates that cover the same moment.
+- Give each chosen candidate a score (0-100) and a short reason.
+
+Return ONLY JSON: [{{"id": 3, "score": 92, "reason": "..."}}]
+
+{chr(10).join(blocks)}
+"""
+
+
+def select_hooks(segments, platform, clip_count, durations, call):
+    """Hook selection over the WHOLE transcript (076; it used to see only
+    the first 24k characters). Fits → one call. Too long → one call per
+    window, dedupe, then one ranking call over the candidates.
+    `call(prompt, schema, max_tokens) -> (raw, meta)` is the only
+    provider-specific part, so the TASKS-5 evaluation reuses this
+    unchanged with a forced provider. Returns (hooks, calls) where
+    calls lists per-call {label, chars, provider, model, usage}."""
+    target, lo, hi = durations
+    full_max = setting_int("HOOKS_FULL_TRANSCRIPT_MAX_CHARS")
+    calls = []
+
+    def run(label, prompt, schema):
+        check_cancelled()
+        raw, meta = call(prompt, schema, 16000)  # Claude's adaptive thinking counts against this
+        usage = meta.get("usage") or {}
+        calls.append({"label": label, "chars": len(prompt), **meta})
+        log(
+            f"Hooks call {label}: {len(prompt)} chars → "
+            f"{meta['provider']} ({meta['model']})"
+            + (" after failover" if meta.get("failed_over") else "")
+            + f", tokens in {usage.get('input', '?')} / out {usage.get('output', '?')}"
+        )
+        return raw, meta
+
+    size = len(timed_transcript_text(segments))
+    if size <= full_max:
+        prompt = build_hooks_prompt(segments, platform, clip_count, target, lo, hi)
+        raw, meta = run("full", prompt, HOOKS_SCHEMA)
+        return parse_hooks(raw, meta["provider"], clip_count), calls
+
+    windows = transcript_windows(
+        segments,
+        setting_int("HOOKS_WINDOW_MINUTES") * 60,
+        setting_int("HOOKS_WINDOW_OVERLAP_MINUTES") * 60,
+    )
+    log(f"Transcript {size} chars > {full_max}: {len(windows)} windows")
+    per_window = max(clip_count, 3)
+    candidates = []
+    for i, part in enumerate(windows, 1):
+        prompt = build_hooks_prompt(part, platform, per_window, target, lo, hi)
+        try:
+            raw, meta = run(f"window {i}/{len(windows)}", prompt, HOOKS_SCHEMA)
+            candidates += parse_hooks(raw, meta["provider"], per_window)
+        except JobCancelled:
+            raise
+        except RuntimeError as exc:  # a window with nothing usable isn't fatal
+            log(f"Hooks window {i}: {exc}")
+    candidates = dedupe_hooks(candidates)
+    if not candidates:
+        raise RuntimeError("AI returned no usable clips in any window")
+    if len(candidates) <= clip_count:
+        return candidates, calls
+
+    raw, meta = run(
+        "rank",
+        build_rank_prompt(candidates, segments, clip_count, platform),
+        HOOK_RANK_SCHEMA,
+    )
+    chosen = []
+    for item in raw if isinstance(raw, list) else []:
+        try:
+            c = dict(candidates[int(item["id"])])
+        except (KeyError, IndexError, TypeError, ValueError):
+            continue
+        if any(c["start"] == x["start"] for x in chosen):
+            continue
+        c["score"] = int(item.get("score", c["score"]))
+        c["reason"] = str(item.get("reason") or c["reason"])[:1000]
+        chosen.append(c)
+    chosen = dedupe_hooks(chosen)
+    if len(chosen) < clip_count:  # ranking came back short: fill by window score
+        log(f"Hooks rank returned {len(chosen)}/{clip_count}; filling by score")
+        for c in candidates:
+            if len(chosen) >= clip_count:
+                break
+            if len(dedupe_hooks(chosen + [c])) == len(chosen) + 1:
+                chosen.append(c)
+    return chosen[:clip_count], calls
 
 
 # ============================================================

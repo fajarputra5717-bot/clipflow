@@ -37,6 +37,11 @@ DEFAULT_SETTINGS = {
     "CLIP_TARGET_DURATION": "35",
     "CLIP_MIN_DURATION": "20",
     "CLIP_MAX_DURATION": "55",
+    # Hook analysis input (076): the whole timed transcript up to this many
+    # characters; longer ones go in windows (+ overlap) and a final ranking call.
+    "HOOKS_FULL_TRANSCRIPT_MAX_CHARS": "400000",
+    "HOOKS_WINDOW_MINUTES": "30",
+    "HOOKS_WINDOW_OVERLAP_MINUTES": "2",
     "FACE_DETECTION_SAMPLE_COUNT": "16",
     "FACE_CONFIDENCE_THRESHOLD": "0.60",
     # Face height / crop height. 0.78 = face fills more of the bottom
