@@ -20,6 +20,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 
 from shared.ai import router as ai_router
+from shared import languages
 from shared.errors import AINotConfiguredError
 from shared.fonts import normalize_caption_font
 from shared.settings import (
@@ -248,6 +249,14 @@ def ensure_schema():
         "ALTER TABLE clip_candidates ADD COLUMN IF NOT EXISTS attempts INT NOT NULL DEFAULT 0",
         "ALTER TABLE clip_candidates ADD COLUMN IF NOT EXISTS error_class TEXT",
         "ALTER TABLE clip_candidates ADD COLUMN IF NOT EXISTS retry_after TIMESTAMPTZ",
+        # 079: per-job language. language = requested (auto|en|id, NULL = pre-079 job, Indonesian);
+        # language_fallback = the form's last explicit choice for a low-confidence Auto;
+        # effective_language = what the pipeline used (read via shared.languages.job_language).
+        "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS language TEXT",
+        "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS language_fallback TEXT",
+        "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS detected_language TEXT",
+        "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS language_confidence REAL",
+        "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS effective_language TEXT",
     ]
 
     try:
@@ -422,6 +431,12 @@ class ClipRequest(BaseModel):
     layout: str = "auto"
 
     platform: str = "youtube_shorts"
+
+    # 079: auto | en | id. language_fallback = the user's last explicit choice
+    # on the Import form, used when Auto-detect confidence is low.
+    language: str = "auto"
+
+    language_fallback: Optional[str] = None
 
     split_ratio: float = Field(
         default=70.0,
@@ -655,6 +670,16 @@ def create_job(req: ClipRequest):
             status_code=400,
             detail="layout must be auto, left, or right",
         )
+    if req.language not in languages.REQUESTABLE:
+        raise HTTPException(
+            status_code=400,
+            detail="language must be auto, en, or id",
+        )
+    if req.language_fallback not in (None,) + languages.SUPPORTED:
+        raise HTTPException(
+            status_code=400,
+            detail="language_fallback must be en or id",
+        )
     req.youtube_url = validate_youtube_url(req.youtube_url)
 
     # R-14: refuse up front instead of failing deep in the pipeline.
@@ -737,7 +762,9 @@ def create_job(req: ClipRequest):
                         subtitle_size,
                         subtitle_animation,
                         watermark_position_y,
-                        subtitle_seam_gap
+                        subtitle_seam_gap,
+                        language,
+                        language_fallback
                     )
                     VALUES (
                         %s,
@@ -750,6 +777,8 @@ def create_job(req: ClipRequest):
                         %s,
                         %s,
                         %s::jsonb,
+                        %s,
+                        %s,
                         %s,
                         %s,
                         %s,
@@ -772,6 +801,8 @@ def create_job(req: ClipRequest):
                         # later settings change doesn't move its layout.
                         percent_setting("WATERMARK_POSITION_Y", 25.0, 5, 95),
                         percent_setting("SUBTITLE_SEAM_GAP", 1.5, 0, 20),
+                        req.language,
+                        req.language_fallback,
                     ),
                 )
 
@@ -885,7 +916,11 @@ def list_jobs(
                         j.error_class,
                         j.retry_after,
                         j.watermark_position_y,
-                        j.subtitle_seam_gap
+                        j.subtitle_seam_gap,
+                        j.language,
+                        j.detected_language,
+                        j.language_confidence,
+                        j.effective_language
                     FROM jobs j
                     LEFT JOIN source_videos sv
                         ON sv.id = j.source_video_id
@@ -965,7 +1000,11 @@ def get_job(job_id: str):
                         j.error_class,
                         j.retry_after,
                         j.watermark_position_y,
-                        j.subtitle_seam_gap
+                        j.subtitle_seam_gap,
+                        j.language,
+                        j.detected_language,
+                        j.language_confidence,
+                        j.effective_language
                     FROM jobs j
                     LEFT JOIN source_videos sv
                         ON sv.id = j.source_video_id
@@ -1682,7 +1721,8 @@ def new_hook(
             f"already-used ranges:\n{avoid_ranges or '(none yet)'}\n\n"
             f"Respond ONLY with JSON: an object with 'start' "
             f"and 'end' (numbers, in seconds), 'title' "
-            f"(short, engaging), and 'reason' (short string).\n\n"
+            f"(short, engaging, in {languages.name(job_language_of(job_id))}), "
+            f"and 'reason' (short string).\n\n"
             f"Transcript:\n{transcript_with_times}"
         )
 
@@ -1803,6 +1843,21 @@ DESCRIPTION_SCHEMA = {
 }
 
 
+def job_language_of(job_id: str) -> str:
+    """'en' or 'id' for this job (079): what its prompts are written for."""
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT effective_language, language FROM jobs WHERE id = %s",
+                    (job_id,),
+                )
+                row = cur.fetchone()
+    except Exception:
+        row = None
+    return languages.job_language(*(row or (None, None)))
+
+
 def ai_generate_json(prompt: str, schema: dict, *, task: str,
                      max_tokens: int, with_meta: bool = False):
     """shared/ai/router.py call for request handlers. A missing key
@@ -1860,7 +1915,7 @@ def fix_subtitle_ai(job_id: str, candidate_id: str):
             )
 
         prompt = (
-            "The text below is an Indonesian subtitle for a "
+            f"The text below is an {languages.name(job_language_of(job_id))} subtitle for a "
             "short-form video, auto-transcribed from speech and "
             "written in ALL CAPS, one line per subtitle cue. "
             "Speech-to-text transcription may have introduced "
@@ -1964,6 +2019,9 @@ def generate_description(job_id: str, candidate_id: str):
         hashtags = runtime_setting("HASHTAGS", "") or ""
         campaign = runtime_setting("CAMPAIGN_NAME", "") or ""
 
+        lang = job_language_of(job_id)
+        lang_name = languages.name(lang)
+
         platform_label = {
             "youtube_shorts": "YouTube Shorts",
             "instagram_reels": "Instagram Reels",
@@ -1975,10 +2033,11 @@ def generate_description(job_id: str, candidate_id: str):
             f"caption/description for a vertical short-form clip.\n"
             f"Genre/mood: {content_type}\n"
             f"Clip title: {title}\n"
-            f"Spoken subtitle in the clip (Indonesian): {subtitle}\n\n"
+            f"Spoken subtitle in the clip ({lang_name}): {subtitle}\n\n"
             "Requirements: 1-3 short sentences or a punchy hook "
-            "line, native-sounding Indonesian (bilingual is fine "
-            "if it reads naturally), no markdown.\n\n"
+            f"line, native-sounding {lang_name}"
+            + (" (bilingual is fine if it reads naturally)" if lang == "id" else "")
+            + ", no markdown.\n\n"
             "Important: the title and subtitle above are all you "
             "know about this clip's content — you do not know the "
             "specific game, show, or brand name unless it is "
@@ -1986,8 +2045,10 @@ def generate_description(job_id: str, candidate_id: str):
             "reuse a made-up product/game name (e.g. never write "
             "something like \"Riftstorm\" unless that exact word "
             "appears in the title or subtitle above). Talk about "
-            "the moment itself instead (e.g. \"gameplay ini\", "
-            "\"video ini\", \"match ini\").\n\n"
+            "the moment itself instead ("
+            + ('e.g. "this gameplay", "this video", "this match"' if lang == "en"
+               else 'e.g. "gameplay ini", "video ini", "match ini"')
+            + ").\n\n"
             "End with 3-6 relevant hashtags"
             + (f" including {hashtags}" if hashtags else "")
             + (

@@ -21,6 +21,7 @@ from faster_whisper import WhisperModel
 from psycopg.rows import dict_row
 
 from shared.ai import router as ai_router
+from shared import languages
 from shared.errors import FAILURE_TRANSIENT, failure_class
 from shared.fonts import caption_font_bold, normalize_caption_font
 from shared.settings import RuntimeSettings
@@ -1581,19 +1582,59 @@ def whisper_model():
 
 
 def transcribe(
-    audio_path
+    audio_path,
+    language=None,
+    fallback=None,
+    with_info=False,
 ):
+    """language: 'en'/'id' forces it; 'auto' lets Whisper detect it and
+    falls back to `fallback` (the Import form's last explicit choice)
+    below languages.MIN_CONFIDENCE or for a language ClipFlow doesn't
+    support (079); None = legacy WHISPER_LANGUAGE setting. with_info adds
+    {requested, detected, confidence, used} as a third return value."""
 
     log(
         "Transcribing audio locally"
     )
 
-    raw_segments, _info = whisper_model().transcribe(
-        str(audio_path),
-        language=setting("WHISPER_LANGUAGE"),
-        task="transcribe",
-        word_timestamps=True,
-    )
+    model = whisper_model()
+    kwargs = dict(task="transcribe", word_timestamps=True)
+    info = {"requested": language, "detected": None, "confidence": None}
+
+    if language == "auto":
+        # The segment generator is lazy: detection runs here, decoding
+        # only when it's iterated, so a fallback costs just the detection.
+        raw_segments, whisper_info = model.transcribe(
+            str(audio_path), language=None,
+            language_detection_segments=3, **kwargs,
+        )
+        detected = whisper_info.language
+        confidence = float(whisper_info.language_probability or 0)
+        info.update(detected=detected, confidence=round(confidence, 3))
+        if (detected in languages.SUPPORTED
+                and confidence >= languages.MIN_CONFIDENCE):
+            used = detected
+            log(f"Language auto-detect: {detected} ({confidence:.2f})")
+        else:
+            used = (fallback if fallback in languages.SUPPORTED
+                    else languages.DEFAULT)
+            why = ("unsupported language"
+                   if detected not in languages.SUPPORTED
+                   else f"confidence below {languages.MIN_CONFIDENCE}")
+            log(
+                f"Language auto-detect: {detected} ({confidence:.2f}), "
+                f"{why} -> using {used} (last choice on the Import form)"
+            )
+            raw_segments, _ = model.transcribe(
+                str(audio_path), language=used, **kwargs,
+            )
+    else:
+        used = (language if language in languages.SUPPORTED
+                else setting("WHISPER_LANGUAGE"))
+        raw_segments, _ = model.transcribe(
+            str(audio_path), language=used, **kwargs,
+        )
+    info["used"] = used
 
     # The generator does the actual decoding (in-process, so it can't
     # be killed); check for a cancel after every segment (R-08).
@@ -1673,6 +1714,9 @@ def transcribe(
             }
         )
 
+    if with_info:
+        return transcript, segments, info
+
     return (
         transcript,
         segments,
@@ -1697,6 +1741,7 @@ def build_hooks_prompt(
     clip_target_duration,
     clip_min_duration,
     clip_max_duration,
+    language=languages.DEFAULT,
 ):
     """The hook-selection prompt for these segments (the whole video or
     one window of it: no truncation here, select_hooks() decides what
@@ -1704,6 +1749,13 @@ def build_hooks_prompt(
     evaluation so both providers get byte-identical text."""
 
     timed_transcript = timed_transcript_text(segments)
+    # 079: Indonesian keeps the exact pre-079 wording (the TASKS-5 eval
+    # measured it); English jobs get English titles.
+    title_language_rule = (
+        "- Write the title in natural English."
+        if language == "en"
+        else "- Create an Indonesian title when the content is Indonesian."
+    )
 
     prompt = f"""
 You are an expert short-form gaming video editor.
@@ -1723,7 +1775,7 @@ Important:
 - Minimum duration {clip_min_duration} seconds.
 - Maximum duration {clip_max_duration} seconds.
 - Keep start/end inside the transcript.
-- Create an Indonesian title when the content is Indonesian.
+{title_language_rule}
 - Title must be truthful and maximum 90 characters.
 
 Additionally, classify each clip with exactly ONE content_type
@@ -1915,6 +1967,7 @@ def analyze_hooks(
     segments,
     platform="youtube_shorts",
     clip_count=None,
+    language=languages.DEFAULT,
 ):
 
     validate_ai()
@@ -1938,6 +1991,7 @@ def analyze_hooks(
         clip_count,
         (clip_target_duration, clip_min_duration, clip_max_duration),
         router_hooks_call,
+        language,
     )
     return hooks
 
@@ -2036,7 +2090,8 @@ Return ONLY JSON: [{{"id": 3, "score": 92, "reason": "..."}}]
 """
 
 
-def select_hooks(segments, platform, clip_count, durations, call):
+def select_hooks(segments, platform, clip_count, durations, call,
+                 language=languages.DEFAULT):
     """Hook selection over the WHOLE transcript (076; it used to see only
     the first 24k characters). Fits → one call. Too long → one call per
     window, dedupe, then one ranking call over the candidates.
@@ -2063,7 +2118,8 @@ def select_hooks(segments, platform, clip_count, durations, call):
 
     size = len(timed_transcript_text(segments))
     if size <= full_max:
-        prompt = build_hooks_prompt(segments, platform, clip_count, target, lo, hi)
+        prompt = build_hooks_prompt(segments, platform, clip_count, target, lo, hi,
+                                    language)
         raw, meta = run("full", prompt, HOOKS_SCHEMA)
         return parse_hooks(raw, meta["provider"], clip_count), calls
 
@@ -2076,7 +2132,8 @@ def select_hooks(segments, platform, clip_count, durations, call):
     per_window = max(clip_count, 3)
     candidates = []
     for i, part in enumerate(windows, 1):
-        prompt = build_hooks_prompt(part, platform, per_window, target, lo, hi)
+        prompt = build_hooks_prompt(part, platform, per_window, target, lo, hi,
+                                    language)
         try:
             raw, meta = run(f"window {i}/{len(windows)}", prompt, HOOKS_SCHEMA)
             candidates += parse_hooks(raw, meta["provider"], per_window)
@@ -5048,11 +5105,16 @@ def _process_analysis_job(
                 message="Transcribing audio",
             )
 
-            transcript, segments = (
+            transcript, segments, lang_info = (
                 transcribe(
-                    audio
+                    audio,
+                    # NULL = a job from before 079: legacy setting.
+                    language=job.get("language"),
+                    fallback=job.get("language_fallback"),
+                    with_info=True,
                 )
             )
+            job["effective_language"] = lang_info["used"]
 
             with db() as conn:
 
@@ -5062,6 +5124,9 @@ def _process_analysis_job(
                     SET transcript = %s,
                         transcript_segments =
                             %s::jsonb,
+                        detected_language = %s,
+                        language_confidence = %s,
+                        effective_language = %s,
                         updated_at = NOW()
                     WHERE id = %s
                     """,
@@ -5070,6 +5135,9 @@ def _process_analysis_job(
                         json.dumps(
                             segments
                         ),
+                        lang_info["detected"],
+                        lang_info["confidence"],
+                        lang_info["used"],
                         job_id,
                     ),
                 )
@@ -5137,6 +5205,9 @@ def _process_analysis_job(
                 segments,
                 job.get("platform", "youtube_shorts"),
                 clip_count=clip_count,
+                language=languages.job_language(
+                    job.get("effective_language"), job.get("language"),
+                ),
             )
         )
 
@@ -6170,7 +6241,8 @@ def claim_submagic_task():
             """
             SELECT c.*, sv.source_path,
                    j.watermark_width, j.watermark_opacity,
-                   j.split_ratio, j.layout, j.watermark_position_y
+                   j.split_ratio, j.layout, j.watermark_position_y,
+                   j.language, j.effective_language
             FROM clip_candidates c
             JOIN jobs j ON j.id = c.job_id
             JOIN source_videos sv ON sv.id = j.source_video_id
@@ -6328,8 +6400,9 @@ def process_submagic_task(candidate):
                     },
                     data={
                         "title": hook_text,
-                        "language": setting(
-                            "WHISPER_LANGUAGE"
+                        "language": languages.job_language(
+                            candidate.get("effective_language"),
+                            candidate.get("language"),
                         ),
                         "templateName": setting(
                             "SUBMAGIC_TEMPLATE", "Hormozi 2"

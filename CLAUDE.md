@@ -131,6 +131,10 @@ has it as an app_setting because `.env` pins base). Models live in the
 `hf_cache` volume (`HF_HOME=/cache/huggingface`). `transcribe()` must
 keep returning per-word `{word,start,end}`: karaoke depends on it.
 Every analysis stage is timed (`StageTimer`, one summary log line).
+Language (079): `jobs.language` auto|en|id (NULL = legacy = id); read the resolved one with
+`shared.languages.job_language(effective_language, language)` everywhere (prompts, Submagic). Auto detects
+in `transcribe(language="auto", fallback=…)`; < 0.6 or not en/id → the form's last explicit choice.
+Indonesian hook-prompt wording is frozen (eval baseline); new language-specific text goes in a branch.
 
 ## Caption fonts (R-19)
 
