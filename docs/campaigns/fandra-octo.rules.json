@@ -1,0 +1,152 @@
+{
+  "campaign": "fandra-octo",
+  "name": "Fandra Octo X Motion Klip",
+  "category": "creator",
+  "status": "pilot fixture (third Campaigns test case); brief verbatim in fandra-octo.md",
+  "platforms": [
+    "tiktok",
+    "instagram",
+    "youtube"
+  ],
+  "payout": {
+    "currency": "IDR",
+    "model": "per view",
+    "per_view": 4,
+    "stated_as": "Rp 12.000 per 3.000 views (CPM 4.000)",
+    "min_views": 3000,
+    "max_paid_views_per_video": 500000,
+    "max_payout_per_video": 2000000,
+    "views_counted": "at submit time",
+    "claims_per_video": 1,
+    "payment_methods": [
+      "GoPay",
+      "DANA"
+    ],
+    "claim_form": "https://forms.gle/VAe8gZGxUaBsxewx6",
+    "claim_requires": "Discord server tag 'MKLP' (manual)"
+  },
+  "period": {
+    "start": "2026-09-30",
+    "end": null,
+    "until": "budget runs out",
+    "year_note": "brief says '30 September' without a year; read as 2026"
+  },
+  "sources": [
+    {
+      "platform": "youtube",
+      "channel": "@FandraOcto",
+      "content": "livestreams of any game Fandra Octoramonth plays",
+      "job_source": true
+    }
+  ],
+  "hashtags": {
+    "required_prefix": [
+      "#fandraoctoramonth",
+      "#fandraMK",
+      "#motionklip",
+      "#ezklip"
+    ],
+    "rule": "exactly these, in this order, first in the caption; nothing before them"
+  },
+  "content_rules": [
+    {
+      "id": "no_fake_views",
+      "text": "No botted, paid or boosted views"
+    },
+    {
+      "id": "no_reupload_without_editing",
+      "text": "No reupload without edits"
+    },
+    {
+      "id": "no_negative_narrative_about_others",
+      "text": "No negative narratives about other parties or other brands"
+    },
+    {
+      "id": "no_misleading_context",
+      "text": "No misleading context"
+    },
+    {
+      "id": "no_sara_or_insults",
+      "text": "No SARA (ethnicity, religion, race, inter-group) or insults"
+    },
+    {
+      "id": "no_copying_other_clippers",
+      "text": "No copying other clippers"
+    },
+    {
+      "id": "must_follow_brief",
+      "text": "Content must follow the brief and stay in the campaign's context"
+    },
+    {
+      "id": "no_sensitive_issues",
+      "text": "Don't show or steer the brand toward sensitive issues"
+    },
+    {
+      "id": "no_demeaning_third_party_media",
+      "text": "No third-party photos/videos used to demean or attack"
+    },
+    {
+      "id": "no_inappropriate_material",
+      "text": "No inappropriate material"
+    },
+    {
+      "id": "stay_public",
+      "text": "Submitted content must stay public (no delete, hide or restrict)"
+    }
+  ],
+  "watermark": {
+    "required": true,
+    "asset_name": "Motion Klip",
+    "asset_id": "8f7158d7-728c-4faf-bab9-2ed3adf3daf4",
+    "asset_match": "library asset 8f7158d7 (file watermark.png); shared with ime-roleplay and motionklip-windah",
+    "template_source": "https://drive.google.com/file/d/1mwmWHKKgZPs3ZUTtVFqe3GMUvbY7kc9H (same file id as ime-roleplay)",
+    "asset_note": "Drive template is pixel-identical to watermark.png, checked 2026-10-02",
+    "placement_guide": {
+      "source": "https://youtube.com/shorts/fgQXQW0XgJM",
+      "rule": "never covered by any overlay so it stays clearly visible",
+      "safe_zone_pct": {
+        "x": [
+          18.3,
+          81.5
+        ],
+        "y": [
+          15.9,
+          83.9
+        ]
+      },
+      "avoid_pct": {
+        "right_icon_column_from_x": 83.9,
+        "bottom_caption_band_from_y": 87.4,
+        "top_ui_band_above_y": 15.9
+      },
+      "measured_on": "1080x1920 frames of the guide; % of the phone screen in its TikTok mockup",
+      "note": "same Short as MotionKlip (fgQXQW0XgJM); measurements reused"
+    },
+    "preset": {
+      "status": "approved 2026-10-01",
+      "x": "centred",
+      "center_y_pct": 25,
+      "width_px_at_1080": 320,
+      "opacity": 1.0,
+      "min_y_pct": 16,
+      "clamp_to_safe_zone": true
+    }
+  },
+  "open_questions": {
+    "total_budget": "not stated in the brief ('hingga budget habis'); not assumed",
+    "rounding": "does payout round down to whole 3.000-view blocks? (not assumed)",
+    "per_account_limit": "any per-account video limit? (not assumed)"
+  },
+  "creator_socials": {
+    "instagram": "https://www.instagram.com/octoramonth/",
+    "tiktok": "https://www.tiktok.com/@fandraoctora",
+    "youtube": "https://www.youtube.com/@FandraOcto"
+  },
+  "manual_only": [
+    {
+      "id": "discord_tag",
+      "text": "Discord server tag \"MKLP\" required to claim",
+      "app_work": false
+    }
+  ]
+}

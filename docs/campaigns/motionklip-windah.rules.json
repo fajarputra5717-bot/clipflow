@@ -1,0 +1,99 @@
+{
+  "campaign": "motionklip-windah",
+  "status": "pilot fixture (first Campaigns test case); brief text: motionklip-windah.md",
+  "period": {
+    "start": null,
+    "end": null,
+    "note": "TBD"
+  },
+  "budget": {
+    "amount": null,
+    "currency": null,
+    "note": "TBD"
+  },
+  "sources": [
+    {
+      "platform": "youtube",
+      "channel": "@WindahBasudara"
+    },
+    {
+      "platform": "youtube",
+      "channel": "@brandochillgames"
+    }
+  ],
+  "platforms": [
+    "tiktok",
+    "youtube",
+    "instagram",
+    "facebook",
+    "x",
+    "threads"
+  ],
+  "watermark": {
+    "required": true,
+    "asset": "instgrm @motion.klip",
+    "asset_id": "8f7158d7-728c-4faf-bab9-2ed3adf3daf4",
+    "asset_note": "matched by eye on 2026-10-01: the library's watermark.png (visible mark 394x163) reads 'instgrm : @motion.klip'",
+    "placement_guide": {
+      "source": "https://youtube.com/shorts/fgQXQW0XgJM",
+      "rule": "never covered by any overlay so it stays clearly visible",
+      "safe_zone_pct": {
+        "x": [
+          18.3,
+          81.5
+        ],
+        "y": [
+          15.9,
+          83.9
+        ]
+      },
+      "avoid_pct": {
+        "right_icon_column_from_x": 83.9,
+        "bottom_caption_band_from_y": 87.4,
+        "top_ui_band_above_y": 15.9
+      },
+      "measured_on": "1080x1920 frames of the guide; % of the phone screen in its TikTok mockup"
+    },
+    "preset": {
+      "status": "approved 2026-10-01; the 16 % floor is global (078)",
+      "x": "centred",
+      "center_y_pct": 25,
+      "width_px_at_1080": 320,
+      "opacity": 1.0,
+      "min_y_pct": 16,
+      "clamp_to_safe_zone": true
+    }
+  },
+  "hashtags": {
+    "required_prefix": [
+      "#windahbasudara",
+      "#windahMKLIP2",
+      "#motionklip",
+      "#ezklip"
+    ],
+    "rule": "exactly these, in this order, first in the caption; nothing before them"
+  },
+  "content_rules": [
+    {
+      "id": "no_negative_narrative",
+      "text": "No negative narratives"
+    },
+    {
+      "id": "no_misleading_context",
+      "text": "No misleading context"
+    },
+    {
+      "id": "no_sara_or_inappropriate_language",
+      "text": "No SARA (ethnicity, religion, race, inter-group) or inappropriate language"
+    },
+    {
+      "id": "no_reupload_without_editing",
+      "text": "No reupload without editing"
+    }
+  ],
+  "title": {
+    "language": "id",
+    "tone_examples": [],
+    "note": "TBD: copy the Indonesian title tone examples from the brief verbatim"
+  }
+}

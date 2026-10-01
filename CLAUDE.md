@@ -183,6 +183,8 @@ Geometry (R-16): `get_watermark_rect()` is the only placement logic
 `make_ass()` returns the rect after clearing the caption top edge (the
 watermark moves up; captions never go below the seam) and the render
 must use that same rect via `render_vertical(watermark_rect=…)`.
+Floor (078): never above `WATERMARK_MIN_Y_FRAC` (16 %, platform top UI); the caption push-up
+stops there and logs a WARNING instead of going higher.
 Positions (R-17): `jobs.watermark_position_y` / `subtitle_seam_gap` are
 snapshotted from settings at job creation; `job_layout(job)` → NULL =
 legacy 50 % / 4 %. Pass its values to make_ass/get_watermark_rect.

@@ -1,0 +1,200 @@
+{
+  "campaign": "ime-roleplay",
+  "name": "IME Roleplay X Motion Klip",
+  "category": "brand",
+  "status": "pilot fixture (second Campaigns test case); brief verbatim in ime-roleplay.md",
+  "platforms": [
+    "tiktok",
+    "youtube",
+    "instagram",
+    "facebook",
+    "x",
+    "threads"
+  ],
+  "payout": {
+    "currency": "IDR",
+    "per_video": 200000,
+    "min_views": 40000,
+    "above_threshold": "flat: views beyond 40,000 pay nothing extra",
+    "cpm_stated": 5000,
+    "cpm_note": "brief says 'CPM 5.000' but the payout is fixed; informational only",
+    "payment_methods": [
+      "GoPay",
+      "DANA"
+    ],
+    "claim_form": "https://forms.gle/VAe8gZGxUaBsxewx6",
+    "claim_requires": "Discord server tag 'MKLP' (manual)"
+  },
+  "limits": {
+    "max_eligible_videos_per_platform_account_per_month": 2,
+    "account_unit": "each platform account separately (answered by admin 2026-10-02)",
+    "max_payout_per_creator_per_month": 2400000,
+    "max_payout_note": "2 videos x 6 platform accounts x Rp 200.000, assuming 1 account per platform",
+    "multiple_accounts_same_platform": "unknown (not assumed)"
+  },
+  "budget": {
+    "currency": "IDR",
+    "total_per_month": 20000000,
+    "refills": 4,
+    "per_refill": 5000000,
+    "per_refill_note": "derived: 20,000,000 / 4 (= 25 paid videos per week)"
+  },
+  "weeks": {
+    "timezone": "Asia/Jakarta (WIB)",
+    "refill_time": "00:00",
+    "list": [
+      {
+        "id": "W1",
+        "start": "2026-10-01",
+        "end": "2026-10-07"
+      },
+      {
+        "id": "W2",
+        "start": "2026-10-08",
+        "end": "2026-10-14"
+      },
+      {
+        "id": "W3",
+        "start": "2026-10-15",
+        "end": "2026-10-21"
+      },
+      {
+        "id": "W4",
+        "start": "2026-10-22",
+        "end": "2026-10-28"
+      }
+    ],
+    "rule": "a video counts only in the week it was uploaded",
+    "outside_weeks": "Oct 29-31 uploads: not eligible (answered by admin 2026-10-02)"
+  },
+  "hashtags": {
+    "required_prefix": [
+      "#imeroleplay",
+      "#imestrong",
+      "#imeMKLIP2",
+      "#motionklip",
+      "#ezklip"
+    ],
+    "rule": "exactly these, in this order, first in the caption; nothing before them"
+  },
+  "content": {
+    "source": "any IC (in-character) moment from the IME Roleplay GTA server",
+    "moments": [
+      "funny",
+      "tense",
+      "unexpected"
+    ],
+    "focus": "the opening hook",
+    "title_must_name_ime": false,
+    "title_language": "id",
+    "title_examples": [
+      "Gak Nyangka Endingnya Begini...",
+      "Day 1 Main RP",
+      "Day 1 Dikejar...",
+      "(MK) Momen Ketika...",
+      "Anomali di RP..."
+    ],
+    "brand_socials": {
+      "instagram": "https://www.instagram.com/ime.roleplay/",
+      "tiktok": "https://www.tiktok.com/@imerp.id"
+    }
+  },
+  "forbidden": [
+    {
+      "id": "no_fake_views",
+      "text": "No botted, paid or boosted views"
+    },
+    {
+      "id": "no_reupload_without_editing",
+      "text": "No reupload without edits"
+    },
+    {
+      "id": "no_negative_narrative_about_others",
+      "text": "No negative narratives about other parties or other brands"
+    },
+    {
+      "id": "no_misleading_context",
+      "text": "No misleading context"
+    },
+    {
+      "id": "no_sara_or_insults",
+      "text": "No SARA (ethnicity, religion, race, inter-group) or insults"
+    },
+    {
+      "id": "no_copying_other_clippers",
+      "text": "No copying other clippers"
+    },
+    {
+      "id": "must_follow_brief",
+      "text": "Content must follow the brief and stay in the campaign's context"
+    },
+    {
+      "id": "no_sensitive_issues",
+      "text": "Don't show or steer the brand toward sensitive issues"
+    },
+    {
+      "id": "no_demeaning_third_party_media",
+      "text": "No third-party photos/videos used to demean or attack"
+    },
+    {
+      "id": "no_inappropriate_material",
+      "text": "No inappropriate material"
+    }
+  ],
+  "watermark": {
+    "required": true,
+    "asset_name": "Motion Klip",
+    "asset_match": "library asset 8f7158d7 (file watermark.png); shared with fandra-octo and motionklip-windah",
+    "asset_id": "8f7158d7-728c-4faf-bab9-2ed3adf3daf4",
+    "asset_note": "Drive template 1mwmWHKKgZPs3ZUTtVFqe3GMUvbY7kc9H is pixel-identical to watermark.png ('instgrm : @motion.klip'), checked 2026-10-02; no upload needed",
+    "placement_guide": {
+      "source": "https://youtube.com/shorts/fgQXQW0XgJM",
+      "rule": "never covered by any overlay so it stays clearly visible",
+      "safe_zone_pct": {
+        "x": [
+          18.3,
+          81.5
+        ],
+        "y": [
+          15.9,
+          83.9
+        ]
+      },
+      "avoid_pct": {
+        "right_icon_column_from_x": 83.9,
+        "bottom_caption_band_from_y": 87.4,
+        "top_ui_band_above_y": 15.9
+      },
+      "measured_on": "1080x1920 frames of the guide; % of the phone screen in its TikTok mockup",
+      "note": "same Short as MotionKlip (fgQXQW0XgJM); measurements reused"
+    },
+    "preset": {
+      "status": "approved 2026-10-01",
+      "x": "centred",
+      "center_y_pct": 25,
+      "width_px_at_1080": 320,
+      "opacity": 1.0,
+      "min_y_pct": 16,
+      "clamp_to_safe_zone": true
+    },
+    "template_source": "https://drive.google.com/file/d/1mwmWHKKgZPs3ZUTtVFqe3GMUvbY7kc9H/view?usp=sharing"
+  },
+  "manual_only": [
+    {
+      "id": "discord_tag",
+      "text": "Discord server tag \"MKLP\" required to claim",
+      "app_work": false
+    }
+  ],
+  "admin_answers_2026_10_02": {
+    "uploads_oct_29_31": "not eligible",
+    "view_target": "40,000 views per post on a single platform, not summed across platforms",
+    "multi_platform_clip": "the same clip posted on 6 platforms counts as 6 videos",
+    "account": "each platform account separately (2 eligible videos/month per platform account)",
+    "weekly_budget_exhausted": "first come, first served"
+  },
+  "open_questions": {
+    "weekly_carry_over": "does unused weekly budget carry over to the next week? (unanswered)",
+    "multiple_accounts_same_platform": "may a creator run several accounts on the same platform? (unknown)"
+  }
+}

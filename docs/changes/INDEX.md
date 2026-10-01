@@ -50,4 +50,5 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 075 · 2026-09-30 · Job list own section, calm card motion (only the running job moves), 390 px overflow fix · index.html
 076 · 2026-09-30 · Clickable campaign flow preview incl. Editor step (mock data, static page) · flow-preview.html
 077 · 2026-10-01 · Hook analysis uses the whole transcript (windows + ranking above 400k chars), per-call token logging · worker.py, shared/ai, shared/settings.py
+078 · 2026-10-01 · Watermark never above 16 % (global floor, caption push-up warns) + pilot campaign fixtures (MotionKlip, IME Roleplay, Fandra Octo) · worker.py, docs/campaigns
 079 · 2026-10-02 · Per-job language Auto/English/Indonesian (Whisper detect + fallback, prompts, Submagic), id/en stoplists · worker.py, main.py, index.html, shared/languages.py

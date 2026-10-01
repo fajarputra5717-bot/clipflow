@@ -162,6 +162,9 @@ def resolve_watermark_path():
 # ------------------------------------------------------------
 
 WATERMARK_EDGE_MARGIN_FRAC = 0.04   # keep the mark this far from edges
+# Never above 16 % of the frame height (078): the platforms' top UI band
+# (status bar, Following/For You) covers ~0-15.9 % (MotionKlip placement guide).
+WATERMARK_MIN_Y_FRAC = 0.16
 # Legacy layout for jobs created before R-17 (their position columns
 # are NULL): watermark centred, captions 4 % above the seam.
 LEGACY_WATERMARK_CENTER_Y_FRAC = 0.5
@@ -225,7 +228,8 @@ def get_watermark_rect(canvas_width, canvas_height, *, watermark_width,
     if center_y_frac is None:
         center_y_frac = WATERMARK_CENTER_Y_FRAC
     y = int(canvas_height * center_y_frac - h / 2)
-    y = max(edge, min(y, canvas_height - h - edge))
+    top = max(edge, int(round(canvas_height * WATERMARK_MIN_Y_FRAC)))
+    y = max(top, min(y, canvas_height - h - edge))
     return {
         "x": (canvas_width - w) // 2,
         "y": y,
@@ -3619,8 +3623,11 @@ def make_ass(
         wm_bottom = watermark_rect["y"] + watermark_rect["h"]
 
         if wm_bottom > caption_top - gap:
-            edge = int(canvas_height * WATERMARK_EDGE_MARGIN_FRAC)
-            new_y = max(edge, int(caption_top - gap - watermark_rect["h"]))
+            top = max(
+                int(canvas_height * WATERMARK_EDGE_MARGIN_FRAC),
+                int(round(canvas_height * WATERMARK_MIN_Y_FRAC)),
+            )
+            new_y = max(top, int(caption_top - gap - watermark_rect["h"]))
             log(
                 f"Watermark/caption collision at {canvas_width}x"
                 f"{canvas_height} split {split_ratio}: watermark bottom "
@@ -3630,8 +3637,9 @@ def make_ass(
             watermark_rect["y"] = new_y
             if new_y + watermark_rect["h"] > caption_top - gap:
                 log(
-                    "Watermark still overlaps the caption band after "
-                    "moving to the top margin (very tall captions)"
+                    "WARNING: watermark kept at the 16 % floor "
+                    f"(y={new_y}) and still overlaps the caption band "
+                    "(very tall captions)"
                 )
 
     # PrimaryColour is the "already spoken" fill color words sweep
