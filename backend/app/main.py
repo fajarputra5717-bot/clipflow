@@ -261,6 +261,9 @@ def ensure_schema():
         # campaign's watermark asset, snapshotted at creation like R-05/R-17.
         "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS campaign TEXT",
         "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS watermark_asset_id TEXT",
+        # P0: [{code, message, at}] non-fatal render problems shown as chips
+        # (loudness failed, campaign watermark missing).
+        "ALTER TABLE clip_candidates ADD COLUMN IF NOT EXISTS render_warnings JSONB",
     ]
 
     try:

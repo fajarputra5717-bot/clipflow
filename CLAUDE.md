@@ -211,8 +211,8 @@ watermark in the `applying` step (`apply_watermark_overlay()`).
 ## Loudness + retention engine (085/086)
 
 `shared/retention.py` (Lane B) = pure ffmpeg argv/filter builders: silence trim + `TimeMap` word re-timing,
-two-pass loudnorm, punch-in zoom. Wired so far: ONLY loudnorm, in `render_final_candidate()` via
-`normalize_loudness()` (−14 LUFS, limiter −1 dBTP minus codec headroom, video stream-copied, verified with
+two-pass loudnorm, punch-in zoom. Wired so far: ONLY loudnorm, via `normalize_loudness()` on native finals, Submagic finals and previews
+(091: never fatal; a failure keeps the file and sets a `render_warnings` "loudness" chip). Finals: (−14 LUFS, limiter −1 dBTP minus codec headroom, video stream-copied, verified with
 ebur128 and logged). It is the LAST audio step: any future SFX/music mix goes before it. Silence trim and
 zoom stay unwired (opt-in later via the Audio/Effects tabs). Cuts change the timeline: re-time
 words/markers with `retention.TimeMap` built from the same keep segments.

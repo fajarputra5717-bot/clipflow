@@ -1195,28 +1195,80 @@ def has_audio_stream(path):
     return bool(out.strip())
 
 
-def normalize_loudness(path, duration):
+def set_render_warning(candidate_id, code, message=None):
+    """P0: clip_candidates.render_warnings = [{code, message, at}] shown as
+    chips on the clip card. message=None clears that code."""
+    if not candidate_id:
+        return
+    entry = [] if message is None else [{"code": code, "message": str(message)[:300],
+                                         "at": time.strftime("%Y-%m-%dT%H:%M:%S%z")}]
+    try:
+        with db() as conn:
+            conn.execute(
+                """
+                UPDATE clip_candidates
+                SET render_warnings = NULLIF(
+                    COALESCE((SELECT jsonb_agg(x) FROM jsonb_array_elements(
+                        COALESCE(render_warnings, '[]'::jsonb)) x
+                        WHERE x->>'code' <> %s), '[]'::jsonb) || %s::jsonb,
+                    '[]'::jsonb)
+                WHERE id = %s
+                """,
+                (code, json.dumps(entry), candidate_id),
+            )
+            conn.commit()
+    except Exception as exc:
+        log(f"Could not record render warning {code} for {candidate_id}: {exc}")
+
+
+def normalize_loudness(path, duration, *, candidate_id=None, verify=True,
+                       audio_bitrate="128k"):
+    """
+    -14 LUFS / -1 dBTP, two-pass (085), video stream-copied; verify=True adds
+    the ebur128 check (finals). Previews use the same chain without the check:
+    single-pass dynamic loudnorm measured -15.5 LUFS / -0.8 dBTP on a 40 s clip,
+    so it wouldn't sound like the final. Never fails the render (QA P0): any
+    error keeps the un-normalised file and records a "loudness" render warning.
+    """
     path = Path(path)
-    if not has_audio_stream(path):
-        log(f"Loudness: {path.name} has no audio, skipped")
-        return None
-    ensure_disk_space("loudness")
-    timeout = render_timeout_seconds(duration)
-    _, out = run_command(retention.loudnorm_measure_cmd(str(path)).argv, timeout=timeout)
-    measured = retention.parse_loudnorm(out)
     tmp = path.with_name(path.stem + ".loudnorm.tmp.mp4")
     try:
+        if not has_audio_stream(path):
+            log(f"Loudness: {path.name} has no audio, skipped")
+            set_render_warning(candidate_id, "loudness")
+            return None
+        size_mb = path.stat().st_size / (1024 * 1024)
+        ensure_disk_space("loudness", need_mb=int(2 * size_mb) + 1)
+        timeout = render_timeout_seconds(duration)
+        after = None
+        _, out = run_command(retention.loudnorm_measure_cmd(str(path)).argv, timeout=timeout)
+        measured = retention.parse_loudnorm(out)
+        af = retention.loudnorm_filter(measured)
         run_command(
-            retention.loudnorm_apply_cmd(str(path), str(tmp), measured, audio_bitrate="128k").argv,
+            ["ffmpeg", "-hide_banner", "-nostats", "-y", "-i", str(path),
+             "-map", "0:v?", "-map", "0:a", "-c:v", "copy", "-af", af,
+             "-c:a", "aac", "-b:a", audio_bitrate, "-ar", "48000",
+             "-movflags", "+faststart", str(tmp)],
             timeout=timeout,
         )
-        _, vout = run_command(retention.ebur128_measure_cmd(str(tmp)).argv, timeout=timeout)
-        after = retention.parse_ebur128(vout)
+        if verify:
+            _, vout = run_command(retention.ebur128_measure_cmd(str(tmp)).argv, timeout=timeout)
+            after = retention.parse_ebur128(vout)
         os.replace(tmp, path)
+    except JobCancelled:
+        raise
+    except Exception as exc:
+        log(f"Loudness FAILED for {path.name}, keeping it un-normalised: {exc}")
+        set_render_warning(candidate_id, "loudness",
+                           "Loudness normalisation failed; this clip is not normalised. "
+                           "Re-render to retry.")
+        return None
     finally:
         tmp.unlink(missing_ok=True)
-    before = f"{measured['input_i']:.1f} LUFS / {measured['input_tp']:.1f} dBTP" if measured else "silent (limiter only)"
-    now = f"{after['i']:.1f} LUFS / {after['tp']:.1f} dBTP" if after else "unmeasured"
+    set_render_warning(candidate_id, "loudness")
+    before = (f"{measured['input_i']:.1f} LUFS / {measured['input_tp']:.1f} dBTP"
+              if measured else "silent (limiter only)")
+    now = f"{after['i']:.1f} LUFS / {after['tp']:.1f} dBTP" if after else "not re-measured (preview)"
     log(f"Loudness: {path.name} {before} -> {now}")
     return after
 
@@ -4775,6 +4827,10 @@ def create_preview(
         watermark_center_y=wm_center_y,
     )
 
+    # QA P0: previews sound like the final (same chain, no re-measure, never fatal).
+    normalize_loudness(preview_path, duration, candidate_id=candidate_id,
+                       verify=False, audio_bitrate="96k")
+
     # A locked thumbnail (an AI option or a manual upload the user
     # explicitly picked via Apply changes) must survive preview
     # regeneration — only grab a fresh frame when nothing's been
@@ -5041,7 +5097,7 @@ def render_final_candidate(
 
     # QA #2: loudness last (after every audio step of the render).
     update_candidate(candidate_id, progress=90, message="Normalising loudness")
-    normalize_loudness(output_path, duration)
+    normalize_loudness(output_path, duration, candidate_id=candidate_id)
 
     # Same rule as the preview: don't clobber a thumbnail the user
     # explicitly locked in (AI pick or manual upload) with a fresh
@@ -6715,6 +6771,14 @@ def process_submagic_task(candidate):
             )
 
             raw_path.unlink(missing_ok=True)
+
+            # QA P0: the Submagic final gets the same loudness pass as ours.
+            update_candidate(candidate_id, message="Normalising loudness")
+            normalize_loudness(
+                output_path,
+                float(candidate.get("end_time") or 0) - float(candidate.get("start_time") or 0),
+                candidate_id=candidate_id,
+            )
 
             thumbnail_locked = bool(candidate.get("thumbnail_locked"))
             update_fields = {
