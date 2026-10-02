@@ -5884,6 +5884,7 @@ def _process_analysis_job(
                         start_time,
                         end_time,
                         reason,
+                        score,
                         ai_title,
                         subtitle_segments,
                         subtitle_text,
@@ -5895,6 +5896,7 @@ def _process_analysis_job(
                         message
                     )
                     VALUES (
+                        %s,
                         %s,
                         %s,
                         %s,
@@ -5922,6 +5924,9 @@ def _process_analysis_job(
                         highlight.get(
                             "reason"
                         ),
+                        # 110: the hook score (0-100) the model already returns and
+                        # selection uses; it was never stored. UI: "AI estimate".
+                        highlight.get("score"),
                         highlight.get(
                             "title"
                         ),

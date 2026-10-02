@@ -394,6 +394,11 @@ button.primary:hover:not(:disabled){background:#0077ed!important}
 .cap-preset-name{font-size:12px}
 .cap-preset-anim{font-size:10.5px;font-weight:500;color:var(--muted)}
 @media (max-width:600px){.cap-preset-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+/* 110: AI estimate chip + reason (mockup .vchip). */
+.clip-reason{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin:-2px 0 10px;font-size:13px;color:var(--muted);line-height:1.45}
+.ai-est{display:inline-flex;align-items:center;gap:4px;flex:none;font-size:12px;font-weight:600;padding:2px 9px;border-radius:999px;background:var(--badge-run-bg);color:var(--badge-run-fg);border:1px solid var(--badge-run-line)}
+.ai-est svg{width:13px;height:13px}
+.ai-est b{font-weight:700}
 /* 109: campaign rule chips (mockup .checks), badge tokens. */
 .rule-chips{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 4px}
 .rule-row{display:inline-flex;align-items:center;gap:4px;flex-wrap:wrap;min-width:0}
@@ -1924,6 +1929,7 @@ function renderCandidate(c,jid,platform,job={}){
         <button class="secondary preview-edit" data-edit="${esc(c.id)}" type="button" aria-expanded="${document.getElementById("candidate-"+c.id)?.classList.contains("editing")?"true":"false"}">${document.getElementById("candidate-"+c.id)?.classList.contains("editing")?"Close edit":"Edit"}</button>
       </div>
     </div>
+    ${clipReasonHtml(c)}
     ${renderWarningsHtml(c)}
     ${ruleChipsHtml(c,jid)}
     ${c.status==="failed"?`<div class="retry-banner ${c.error_class==="transient"?"transient":"permanent"}" role="status">
@@ -2089,6 +2095,13 @@ function switchEditTab(cid,id,focus){
 
 // 109 (P1): campaign rule chips (server-computed rule_checks, same function as the approve gate).
 // Blocking failures gate Approve; the content check is a warning only (the user decides).
+// 110 (P1): the hook score the model returns (0-100, also what analysis ranks by) as "AI estimate", next to
+// the model's reason. Clips from before 110, or after "Get another hook", have no score: no chip.
+function clipReasonHtml(c){
+  const has=c.score!=null&&c.score!=="";if(!has&&!c.reason)return "";
+  const chip=has?`<span class="ai-est" title="The AI's own 0–100 estimate of how strong this hook is"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/></svg>AI estimate <b>${Math.round(Number(c.score))}</b></span>`:"";
+  return `<p class="clip-reason">${chip}${c.reason?`<span>${esc(c.reason)}</span>`:""}</p>`;
+}
 function ruleFailures(c){return (c.rule_checks||[]).filter(x=>x.blocking&&!x.ok)}
 function ruleChipsHtml(c,jid){
   const rc=c.rule_checks||[];if(!rc.length)return "";

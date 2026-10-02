@@ -2043,6 +2043,9 @@ def new_hook(
                         hook_provider = %s,
                         manual_title = NULL,
                         subtitle_override = NULL,
+                        -- 110: the new-hook prompt has no score (no prompt change);
+                        -- clear the old hook's so the UI shows no stale estimate.
+                        score = NULL,
                         status = 'preview_queued',
                         progress = 0,
                         message = 'Queued: rendering new hook',
