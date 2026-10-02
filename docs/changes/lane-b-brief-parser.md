@@ -34,3 +34,25 @@ platforms, CPM $1.50 per 1,000 with a $300/clip cap, $6,000 budget, @mention, 20
 source channels and 3 content rules filled and all marked AI-derived; hashtags, deadline and the
 watermark ban came from patterns. Missed by the model: "at least 10,000 views" (min views) and
 the burned-in-captions requirement (no field for it yet). Tests: 5 new (fake AI).
+
+## Schema: min_views_to_qualify + requirements; English patterns (2026-10-02)
+
+- `min_views_to_qualify` (int): "at least 10,000 views", "views must reach 10k", "Minimal Views …",
+  "target 40.000 Views". Feeds payout `min_views` when the payout has none.
+- `requirements: [{id, text}]` (rule chips): obligations (must / required / wajib / harus). Known ids:
+  burned_in_captions, vertical_9_16, language_english, language_indonesian, credit_creator; other
+  obligation lines are kept verbatim as `custom_…`. Prohibitions stay content rules (a line can
+  now carry several, e.g. insults + politics); unknown prohibitions → unsure + AI.
+- English patterns: `$`/`€`/`£` "X per 1,000 views" / "X CPM" → `model: cpm` (native, see payouts),
+  per-clip cap, counted-views cap, budget; multi-platform lines; "Tag @x"; "Only clip from
+  youtube.com/@…" sources; length "20 to 60 seconds" / "max 60 seconds"; currency words
+  (dollars/euros/rupiah).
+- AI fallback: `min_views_to_qualify` and `requirements` (each AI chip `ai: true` + unsure). The
+  prompt now spells out the exact output keys: the Gemini provider does not send the schema, so it
+  invented keys and dropped `requirements`/`currency`.
+
+Live (`scripts/brief_ai_check.py`): the English CPM sample is now fully covered by patterns (no AI
+call). The new prose sample (`tests/fixtures/briefs/english-prose-sample.txt`, numbers in words, no
+bullets) via the AI, 2 runs: both cpm $2.50 USD, min 5,000, $250 cap, requirements
+[burned_in_captions, credit_creator], 3 content rules, deadline 2026-11-30, all marked unsure.
+Platforms differed between runs ("Meta's apps or the ByteDance one" is ambiguous): confirm in UI.

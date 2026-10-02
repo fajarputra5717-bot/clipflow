@@ -115,6 +115,59 @@ class PerBlock(unittest.TestCase):
         self.assertEqual(adv(views=60_000, budget_exhausted=True).reason, "budget_exhausted")
 
 
+class Currency(unittest.TestCase):
+    def test_format_and_convert(self):
+        from decimal import Decimal as D
+        self.assertEqual(p.format_with_idr(D("12.40"), "USD"), "$12.40 (~Rp 204.600)")
+        self.assertEqual(p.format_with_idr(200_000, "IDR"), "Rp 200.000")
+        self.assertEqual(p.format_with_idr(D("12.40"), "USD", usd_idr=16_000), "$12.40 (~Rp 198.400)")
+        self.assertEqual(p.format_money(D("1234.5"), "EUR"), "€1,234.50")
+        self.assertEqual(p.format_with_idr(D("3"), "CHF"), "3.00 CHF (~Rp ?)")
+        self.assertEqual(p.to_idr(D("3"), "EUR", rates={"EUR": 18_000}), 54_000)
+        self.assertEqual(p.total_idr([(200_000, "IDR"), (D("12.40"), "USD"), (D("1"), "CHF")]),
+                         (404_600, ["CHF"]))
+
+    def test_foreign_amounts_are_never_integers(self):
+        from decimal import Decimal as D
+        self.assertEqual(p.as_money(12.4, "USD"), D("12.4"))
+        self.assertIsInstance(p.as_money(12.4, "USD"), D)
+        self.assertEqual(p.as_money("12000", "IDR"), 12_000)
+        m = p.FixedThreshold(amount=p.as_money("7.5", "USD"), min_views=1000, currency="USD")
+        self.assertEqual(str(p.payout_for(m, 1000)), "7.5")
+
+    def test_cpm(self):
+        from decimal import Decimal as D
+        m = p.Cpm(rate_per_1000=D("1.5"), currency="USD", min_views=10_000, max_payout=D("300"))
+        self.assertEqual(p.payout_for(m, 9_999), 0)
+        self.assertEqual(str(p.payout_for(m, 10_001)), "15.00")   # cents kept, rounded down
+        self.assertEqual(str(p.payout_for(m, 123_456)), "185.18")
+        self.assertEqual(p.payout_for(m, 900_000), D("300"))
+        self.assertEqual(p.max_payout(m), D("300"))
+        idr = p.Cpm(rate_per_1000=5_000, currency="IDR")
+        self.assertEqual(p.payout_for(idr, 1_499), 7_495)
+
+    def test_cpm_advice_shows_both_currencies(self):
+        from decimal import Decimal as D
+        m = p.Cpm(rate_per_1000=D("1.5"), currency="USD", min_views=10_000, max_payout=D("300"))
+        up, now = wib(2026, 10, 1), wib(2026, 10, 3)
+        a = p.claim_advice(m, views=50_000, views_24h_ago=49_800, uploaded_at=up, now=now)
+        self.assertEqual((a.action, a.reason, a.currency), ("claim_now", "growth_stalled", "USD"))
+        self.assertEqual(a.payout_now, D("75.00"))
+        self.assertEqual(a.payout_now_idr, 1_237_500)
+        self.assertIn("$75.00 (~Rp 1.237.500)", a.message)
+        self.assertEqual(p.claim_advice(m, views=250_000, uploaded_at=up, now=now).reason, "at_cap")
+        self.assertEqual(p.claim_advice(m, views=4_000, uploaded_at=up, now=now).views_needed, 6_000)
+        b = p.claim_advice(m, views=50_000, views_24h_ago=20_000, uploaded_at=up, now=now, usd_idr=16_000)
+        self.assertEqual((b.action, b.payout_now_idr), ("wait", 1_200_000))
+
+    def test_model_from_rules_currencies(self):
+        r = {"payout": {"model": "cpm", "currency": "USD", "rate_per_1000": 1.5, "max_payout_per_video": 300},
+             "min_views_to_qualify": 10_000}
+        m = p.model_from_rules(r)
+        self.assertEqual((type(m).__name__, m.min_views, str(m.rate_per_1000)), ("Cpm", 10_000, "1.5"))
+        self.assertIsInstance(p.model_from_rules({"payout": {"model": "cpm", "currency": "UNSTATED", "rate": 2}}), p.Unknown)
+
+
 class Unknown(unittest.TestCase):
     def test_unknown(self):
         m = p.Unknown("TBD")

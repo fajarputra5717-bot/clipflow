@@ -37,32 +37,65 @@ MONTHS_ID = {"januari": 1, "februari": 2, "maret": 3, "april": 4, "mei": 5, "jun
 
 # Content rules: first matching pattern wins (order matters: SARA before generic "tidak pantas").
 CONTENT_RULES = [
-    ("no_fake_views", r"view\s*botting|paid views|ads boosting|manipulasi views",
+    ("no_fake_views", r"view\s*botting|paid views|ads boosting|manipulasi views|bot(?:ted|ting)? views|fake views|buy(?:ing)? views",
      "No botted, paid or boosted views"),
-    ("no_reupload_without_editing", r"reupload", "No reupload without edits"),
-    ("no_negative_narrative_about_others", r"narasi negatif",
+    ("no_reupload_without_editing", r"re-?upload", "No reupload without edits"),
+    ("no_negative_narrative_about_others", r"narasi negatif|negative (?:narrative|comments?|things) about|trash[- ]talk",
      "No negative narratives about other parties or other brands"),
-    ("no_misleading_context", r"memutar konteks|menyesatkan", "No misleading context"),
-    ("no_sara_or_insults", r"\bSARA\b|menghina",
+    ("no_misleading_context", r"memutar konteks|menyesatkan|mislead|out of context", "No misleading context"),
+    ("no_sara_or_insults", r"\bSARA\b|menghina|insult|make fun of|mock(?:ing)? (?:the )?guests?|racis|slur",
      "No SARA (ethnicity, religion, race, inter-group) or insults"),
-    ("no_copying_other_clippers", r"konten milik clipper lain|duplikasi", "No copying other clippers"),
+    ("no_copying_other_clippers", r"konten milik clipper lain|duplikasi|copy(?:ing)? (?:other|another) clippers?|steal",
+     "No copying other clippers"),
     ("must_follow_brief", r"sesuai dengan brief",
      "Content must follow the brief and stay in the campaign's context"),
-    ("no_sensitive_issues", r"isu sensitif", "Don't show or steer the brand toward sensitive issues"),
+    ("no_sensitive_issues", r"isu sensitif|politic|sensitive (?:issues|topics)",
+     "Don't show or steer the brand toward sensitive issues"),
     ("no_demeaning_third_party_media", r"foto atau video pihak lain",
      "No third-party photos/videos used to demean or attack"),
-    ("no_inappropriate_material", r"materi .*tidak pantas", "No inappropriate material"),
-    ("stay_public", r"tetap tayang|menghapus|meng-?hide",
+    ("no_inappropriate_material", r"materi .*tidak pantas|nsfw|explicit|inappropriate", "No inappropriate material"),
+    ("stay_public", r"tetap tayang|menghapus|meng-?hide|keep (?:the )?posts? (?:up|public)|(?:don't|do not) delete",
      "Submitted content must stay public (no delete, hide or restrict)"),
 ]
-# Rule lines that are captured by other fields (watermark, hashtags, period), not content rules.
-COVERED_ELSEWHERE = (r"watermark|hashtag|eligible untuk payout|diupload mulai|periode|Minggu"
-                     r"|target\s+[\d.,]+\s*Views|sesuai minggu")  # payout/period/week rules
+# Known requirements (obligations that become rule chips); other obligation lines are kept verbatim.
+REQUIREMENTS = [
+    ("burned_in_captions", r"burned?[- ]in (?:captions?|subtitles?)|(?:captions?|subtitles?) (?:burned|baked) in(?:to)?|captions? (?:are |is )?required|(?:wajib|harus) (?:pakai |menggunakan )?(?:subtitle|caption)",
+     "Burned-in captions required"),
+    ("vertical_9_16", r"\b9:16\b|vertical (?:video|format)", "Vertical 9:16 video"),
+    ("language_english", r"\bEnglish only\b|in English\b", "Clips in English"),
+    ("language_indonesian", r"Bahasa Indonesia", "Clips in Indonesian"),
+    ("credit_creator", r"credit (?:the )?(?:creator|channel|streamer)|(?:creator|streamer|channel) credit|cantumkan sumber",
+     "Credit the source creator"),
+]
+# Rule lines that are captured by other fields (watermark, hashtags, period, payout, length,
+# sources, mentions), not content rules or requirements.
+COVERED_ELSEWHERE = (r"watermark|hashtag|#\w|eligible untuk payout|diupload mulai|periode|Minggu"
+                     r"|target\s+[\d.,]+\s*Views|sesuai minggu|\bviews\b|\d+\s*(?:to|-|–|sampai|s/d)\s*\d+\s*(?:seconds|secs?|detik)"
+                     r"|\b(?:seconds|detik)\b|only clip|clip(?:s|ping)? from|youtube\.com/@|^tag\s+@|\bmention\b"
+                     r"|deadline|submit")
+PROHIBITION = r"Dilarang|Tidak diperbolehkan|tidak boleh|\bdon'?t\b|\bdo not\b|\bnever\b|^no\b|not allowed|prohibited"
+OBLIGATION = r"Wajib|harus|\bmust\b|required|\bneed(?:s)? to\b"
 
 
 def _num(s: str) -> int:
     """'12.000' / '12,000' / '500.000' → int (Indonesian thousands separators)."""
     return int(re.sub(r"[.,\s]", "", s))
+
+
+def _views_num(s: str) -> int:
+    """'10,000' / '40.000' / '10k' / '1.5k' → int views (views are whole numbers in any locale)."""
+    s = s.strip().lower().replace(" ", "")
+    if s.endswith("k"):
+        return int(float(s[:-1].replace(",", ".")) * 1000)
+    return int(re.sub(r"[.,]", "", s))
+
+
+def _fx_num(s: str) -> float:
+    """English money '1,500.50' → 1500.5 (kept exact by payouts.as_money via str)."""
+    return float(s.replace(",", ""))
+
+
+SYMBOL_CURRENCY = {"$": "USD", "€": "EUR", "£": "GBP"}
 
 
 def _line(text: str, label: str) -> Optional[str]:
@@ -125,10 +158,12 @@ def _currency_in(text: str) -> Optional[str]:
     """Currency from symbols in the brief text (a fact in the text, not an AI guess)."""
     if re.search(r"\bRp\.?\s?\d", text):
         return "IDR"
-    if re.search(r"(?:US)?\$\s?\d", text):
+    if re.search(r"(?:US)?\$\s?\d|\bdollars?\b|\bUSD\b", text, re.I):
         return "USD"
-    if re.search(r"€\s?\d", text):
+    if re.search(r"€\s?\d|\beuros?\b|\bEUR\b", text, re.I):
         return "EUR"
+    if re.search(r"\brupiah\b|\bIDR\b", text, re.I):
+        return "IDR"
     return None
 
 
@@ -152,6 +187,16 @@ def _parse_patterns(text: Optional[str], *, today: date, slug: Optional[str]) ->
         m = re.search(r"upload di platform\s+(.+?)\.?\s*$", text, re.I | re.M)
         plat = m.group(1) if m else None
     rules["platforms"] = _platforms(plat) if plat else []
+    if not rules["platforms"]:  # English: a line naming 2+ platforms ("YouTube Shorts, TikTok, Instagram Reels")
+        for l in text.splitlines():
+            found = []
+            for m in re.finditer(r"youtube|tiktok|tik tok|instagram|facebook|threads|twitter|\bX\b", l, re.I):
+                q = PLATFORM_ALIASES.get(m.group(0).lower())
+                if q and q not in found:
+                    found.append(q)
+            if len(found) >= 2 and "http" not in l:
+                rules["platforms"] = found
+                break
     if not rules["platforms"]:
         ask("platforms", "no 'Platform:' line found")
 
@@ -165,7 +210,32 @@ def _parse_patterns(text: Optional[str], *, today: date, slug: Optional[str]) ->
         re.search(r"target\s+([\d.,]+)\s*Views", text, re.I)
     max_v = re.search(r"Maksimal Claim\s*:\s*([\d.,]+)\s*views", text, re.I)
     fixed = re.search(r"fixed payout|tidak akan menambah", text, re.I)
-    if tarif:
+    fx = None if tarif else (
+        re.search(r"([$€£])\s?([\d.,]+)\s*(?:per|/|for every)\s*([\d.,]+\s*[kK]?)\s*views", text, re.I)
+        or re.search(r"([$€£])\s?([\d.,]+)\s*(CPM)\b", text, re.I))
+    q = (re.search(r"(?:at least|minimum(?: of)?|min\.?)\s*([\d.,]+\s*[kK]?)\s*views", text, re.I)
+         or re.search(r"views?\s+(?:must\s+|need to\s+)?(?:reach|hit|be)\s+(?:at least\s+)?([\d.,]+\s*[kK]?)\b", text, re.I)
+         or min_v)
+    if q:
+        rules["min_views_to_qualify"] = _views_num(q.group(1))
+    if fx:
+        cur, rate = SYMBOL_CURRENCY[fx.group(1)], _fx_num(fx.group(2))
+        per = 1000 if fx.group(3).upper() == "CPM" else _views_num(fx.group(3))
+        payout.update(currency=cur, stated_as=fx.group(0).strip())
+        if per == 1000:
+            payout.update(model="cpm", rate_per_1000=rate)
+        else:
+            payout.update(model="per_block", per_block=rate, block_views=per)
+            ask("payout.rounding", "brief doesn't say partial blocks pay nothing; assumed FULL blocks (floor)")
+        if rules.get("min_views_to_qualify"):
+            payout["min_views"] = rules["min_views_to_qualify"]
+        if mx := re.search(r"max(?:imum)?\.?\s*(?:of\s*)?([$€£])\s?([\d.,]+)\s*(?:per|/|a)\s*(?:clip|video|post)", text, re.I):
+            payout["max_payout_per_video"] = _fx_num(mx.group(2))
+        if mv := re.search(r"(?:views? (?:are )?counted up to|max(?:imum)?\.?\s*(?:of\s*)?)([\d.,]+\s*[kK]?)\s*views", text, re.I):
+            payout["max_paid_views_per_video"] = _views_num(mv.group(1))
+        if bg := re.search(r"(?:total\s+)?budget(?:\s+(?:of|is))?\s*:?\s*([$€£])\s?([\d.,]+)", text, re.I):
+            rules["budget"] = {"currency": SYMBOL_CURRENCY[bg.group(1)], "total": _fx_num(bg.group(2))}
+    elif tarif:
         amount, views = _num(tarif.group(1)), _num(tarif.group(2))
         payout["stated_as"] = f"Rp {tarif.group(1)} per {tarif.group(2)} views"
         if fixed:
@@ -184,7 +254,7 @@ def _parse_patterns(text: Optional[str], *, today: date, slug: Optional[str]) ->
             ask("payout.rounding", "brief doesn't say partial blocks pay nothing; assumed FULL blocks (floor)")
     else:
         payout["model"] = "unknown"
-        ask("payout", "no 'Rp X per Y views' rate found")
+        ask("payout", "no payout rate found ('Rp X per Y views', '$X per 1,000 views', '$X CPM')")
     if re.search(r"tidak dapat di ?claim ulang|claim sekali", text, re.I):
         payout["claims_per_video"] = 1
     if re.search(r"Payout mengikuti jumlah views yang disubmit", text, re.I):
@@ -265,6 +335,12 @@ def _parse_patterns(text: Optional[str], *, today: date, slug: Optional[str]) ->
     bahan = _section(text, r"\*?\s*Bahan Clip", r"Highlight|Rules|Content|Hashtag")
     for m in re.finditer(r"youtube\.com/(@[\w.\-]+)", bahan, re.I):
         sources.append({"platform": "youtube", "channel": m.group(1), "job_source": True})
+    if not sources:  # English: "Only clip from youtube.com/@A and youtube.com/@B"
+        for l in text.splitlines():
+            if re.search(r"only clip|clip(?:s|ping)? (?:only )?from|source", l, re.I):
+                for m in re.finditer(r"youtube\.com/(@[\w.\-]+)", l, re.I):
+                    if all(x["channel"] != m.group(1) for x in sources):
+                        sources.append({"platform": "youtube", "channel": m.group(1), "job_source": True})
     rules["sources"] = sources
     if not sources:
         ask("sources", "no 'Bahan Clip' channel: where do clips come from?")
@@ -278,7 +354,8 @@ def _parse_patterns(text: Optional[str], *, today: date, slug: Optional[str]) ->
             ask("hashtags.order", "brief doesn't say the order matters")
     else:
         ask("hashtags", "no hashtag line found")
-    mentions = sorted(set(re.findall(r"(?<![\w/])@[A-Za-z0-9_.]+", tags_line)))
+    mentions = sorted(set(re.findall(r"(?<![\w/])@[A-Za-z0-9_.]+", tags_line))
+                      | set(m.group(1).rstrip(".") for m in re.finditer(r"\b(?:tag|mention)\s+(@[A-Za-z0-9_.]+)", text, re.I)))
     if mentions:
         rules["mentions"] = mentions
 
@@ -305,6 +382,16 @@ def _parse_patterns(text: Optional[str], *, today: date, slug: Optional[str]) ->
     elif re.search(r"tanpa watermark|dilarang .*watermark|\bno (?:personal |own |extra )?watermarks?\b", text, re.I):
         rules["watermark"] = {"required": False, "forbidden": True}
 
+    # ---- video length ("20 to 60 seconds", "15-90 detik", "max 60 seconds", "minimal 15 detik")
+    if m := re.search(r"(\d{1,3})\s*(?:to|-|–|sampai|s/d)\s*(\d{1,3})\s*(?:seconds|secs?|detik|s)\b", text, re.I):
+        rules["video"] = {"min_seconds": int(m.group(1)), "max_seconds": int(m.group(2))}
+    else:
+        lo = re.search(r"(?:at least|minimum|minimal|min\.?)\s*(\d{1,3})\s*(?:seconds|secs?|detik)", text, re.I)
+        hi = re.search(r"(?:at most|maximum|maksimal|max\.?|up to)\s*(\d{1,3})\s*(?:seconds|secs?|detik)", text, re.I)
+        if lo or hi:
+            rules["video"] = {"min_seconds": int(lo.group(1)) if lo else None,
+                              "max_seconds": int(hi.group(1)) if hi else None}
+
     # ---- content brief + rules
     content = rules.get("content", {})
     if m := re.search(r"Contoh Judul[^\n]*\n(.*?)(?:\n\s*\n|\Z)", text, re.I | re.S):
@@ -316,18 +403,30 @@ def _parse_patterns(text: Optional[str], *, today: date, slug: Optional[str]) ->
     if content:
         rules["content"] = content
 
-    lines = [l for l in _bullets(text) if re.search(r"Dilarang|Tidak diperbolehkan|tidak boleh|Wajib|harus", l, re.I)]
-    found, ids = [], set()
-    for l in lines:
-        hit = next((r for r in CONTENT_RULES if re.search(r[1], l, re.I)), None)
-        if hit and hit[0] not in ids:
-            ids.add(hit[0])
-            found.append({"id": hit[0], "text": hit[2]})
-        elif not hit and not re.search(COVERED_ELSEWHERE, l, re.I) and not re.search(r"Clipper boleh|Seluruh Content", l, re.I) \
-                and not re.search(r"Wajib mematuhi|Wajib tonton", l, re.I):
+    found, ids, reqs, rids = [], set(), [], set()
+    for l in _bullets(text):
+        hits = [r for r in CONTENT_RULES if re.search(r[1], l, re.I)]
+        for h in hits:  # one line can carry several rules ("no insults or politics")
+            if h[0] not in ids:
+                ids.add(h[0])
+                found.append({"id": h[0], "text": h[2]})
+        req = next((r for r in REQUIREMENTS if re.search(r[1], l, re.I)), None)
+        if req and req[0] not in rids:
+            rids.add(req[0])
+            reqs.append({"id": req[0], "text": req[2]})
+        if hits or req or re.search(COVERED_ELSEWHERE, l, re.I) \
+                or re.search(r"Clipper boleh|Seluruh Content|Wajib mematuhi|Wajib tonton", l, re.I):
+            continue
+        if re.search(PROHIBITION, l, re.I):
             ask("content_rules", f"unrecognised rule line: {l[:120]}")
             rules.setdefault("unrecognised_lines", []).append(l)
+        elif re.search(OBLIGATION, l, re.I):  # an obligation we have no id for: keep it verbatim as a chip
+            rid = "custom_" + re.sub(r"[^a-z0-9]+", "_", l.lower()).strip("_")[:40]
+            if rid not in rids:
+                rids.add(rid)
+                reqs.append({"id": rid, "text": l.strip().rstrip(".")})
     rules["content_rules"] = found
+    rules["requirements"] = reqs
     rules["unsure"] = unsure
     return rules
 
@@ -348,11 +447,11 @@ AI_SCHEMA = {
         "name": {"type": "string"},
         "category": {"type": "string", "description": "brand | creator | other"},
         "platforms": {"type": "array", "items": {"type": "string"}},
-        "currency": {"type": "string", "description": "ISO code, e.g. IDR, USD"},
+        "currency": {"type": "string", "description": "ISO code (IDR, USD, EUR); infer from words like 'dollars' or 'rupiah'"},
         "payout_model": {"type": "string", "description": "cpm | fixed_threshold | per_block | unknown"},
         "rate": {"type": "number", "description": "cpm: amount per 1000 views; per_block: amount per block; fixed_threshold: amount per qualifying post"},
         "block_views": {"type": "integer", "description": "per_block only"},
-        "min_views": {"type": "integer"},
+        "min_views": {"type": "integer", "description": "views a post must reach to qualify for any payout"},
         "max_paid_views_per_post": {"type": "integer"},
         "max_payout_per_post": {"type": "number"},
         "total_budget": {"type": "number"},
@@ -364,6 +463,8 @@ AI_SCHEMA = {
         "start_date": {"type": "string", "description": "YYYY-MM-DD"},
         "end_date": {"type": "string", "description": "YYYY-MM-DD (deadline)"},
         "source_channels": {"type": "array", "items": {"type": "string"}, "description": "YouTube handles like @Name"},
+        "requirements": {"type": "array", "items": {"type": "string"},
+                         "description": "things every clip MUST have, e.g. 'Burned-in captions required'"},
         "content_rules": {"type": "array", "items": {"type": "object", "properties": {
             "id": {"type": "string", "description": "one of the known ids, or 'other'"},
             "text": {"type": "string", "description": "short English rule"}}, "required": ["id", "text"]}},
@@ -397,15 +498,32 @@ def build_ai_prompt(text: str, rules: dict, reasons: list[str]) -> str:
         "Only report what the brief states explicitly. Never guess: use an empty string, 0 or [] "
         "for anything not stated. Keep numbers as plain numbers (1.5, not '$1.50').\n"
         f"Known content-rule ids: {', '.join(KNOWN_RULE_IDS)}. Map each rule to one of them, or 'other'.\n"
-        "content_rules are only about what a clip may show or say, or how it is promoted. Do NOT list "
-        "platforms, hashtags, mentions, source channels, length, watermark, captions or deadlines there: "
-        "they have their own fields.\n"
-        "payout_model: 'cpm' = paid per 1,000 views (linear); 'fixed_threshold' = one fixed amount "
-        "once a post reaches a view count; 'per_block' = amount per N views; 'unknown' otherwise.\n"
+        "content_rules are only about what a clip may NOT show or say, or how it may not be promoted. "
+        "requirements are things every clip MUST have (e.g. burned-in captions, a language, credit). "
+        "Do NOT put platforms, hashtags, mentions, source channels, length, watermark, payout or deadlines in "
+        "either list: they have their own fields.\n"
+        "payout_model: 'cpm' = paid per 1,000 views, linear (e.g. '$2 per 1,000 views', 'two dollars for "
+        "every thousand views' → cpm, rate 2); 'fixed_threshold' = ONE fixed amount once a post reaches a view "
+        "count, nothing more after (e.g. 'Rp 200.000 when a post hits 40.000 views'); 'per_block' = amount per "
+        "N views with N not 1,000 (e.g. 'Rp 12.000 per 3.000 views' → rate 12000, block_views 3000); "
+        "'unknown' otherwise. A 'stop paying after X' cap is max_payout_per_post, not a fixed amount.\n"
+        "requirements: list EACH obligation separately as a short phrase (e.g. 'Burned-in captions required', "
+        "'Credit the streamer in the caption').\n"
+        "Return ONE JSON object with exactly these keys (providers may not see the schema, so the "
+        f"keys are listed here):\n{_schema_keys()}\n"
         f"The pattern parser could not handle: {'; '.join(reasons)}.\n"
         f"Lines it did not recognise:\n{lines}\n\n"
         f"BRIEF:\n{text.strip()}\n"
     )
+
+
+def _schema_keys() -> str:
+    lines = []
+    for k, v in AI_SCHEMA["properties"].items():
+        t = v["type"] + (" of strings" if v.get("items", {}).get("type") == "string" else
+                         " of {id, text}" if v.get("items", {}).get("type") == "object" else "")
+        lines.append(f'- "{k}" ({t})' + (f": {v['description']}" if v.get("description") else ""))
+    return "\n".join(lines)
 
 
 def _mark(rules: dict, field: str) -> None:
@@ -425,8 +543,10 @@ def merge_ai(rules: dict, data: dict) -> dict:
             _mark(rules, key)
     if not rules.get("platforms") and data.get("platforms"):
         plats = []
-        for p in data["platforms"]:
-            q = PLATFORM_ALIASES.get(str(p).lower().replace("instagram reels", "instagram").strip())
+        for p in data["platforms"]:  # "Facebook Reels", "YouTube Shorts", "IG" → canonical names
+            name = str(p).lower().strip()
+            m = re.search(r"youtube|tiktok|tik tok|instagram|facebook|threads|twitter", name)
+            q = PLATFORM_ALIASES.get(m.group(0) if m else name)
             if q and q not in plats:
                 plats.append(q)
         if plats:
@@ -439,8 +559,7 @@ def merge_ai(rules: dict, data: dict) -> dict:
         cur = (data.get("currency") or "").upper() or _currency_in(rules.get("_text", "")) or "UNSTATED"
         payout.update(currency=cur, ai=True)
         if model == "cpm":
-            payout.update(model="per_block", per_block=rate, block_views=1000, stated_as=f"CPM {rate} {cur}",
-                          rounding_note="CPM is usually prorated; per-1,000 blocks are an approximation")
+            payout.update(model="cpm", rate_per_1000=rate, stated_as=f"CPM {rate} {cur}")
         elif model == "fixed_threshold":
             payout.update(model="fixed_threshold", per_video=rate, min_views=data.get("min_views") or 0)
         elif model == "per_block" and data.get("block_views"):
@@ -452,6 +571,24 @@ def merge_ai(rules: dict, data: dict) -> dict:
         if data.get("max_payout_per_post"):
             payout["max_payout_per_video"] = data["max_payout_per_post"]
         _mark(rules, "payout")
+    if not rules.get("min_views_to_qualify") and data.get("min_views"):
+        rules["min_views_to_qualify"] = int(data["min_views"])
+        if payout.get("model") in ("cpm", "per_block") and not payout.get("min_views"):
+            payout["min_views"] = int(data["min_views"])
+        _mark(rules, "min_views_to_qualify")
+    have_req = {r["id"] for r in rules.get("requirements", [])}
+    have_txt = {r["text"].lower() for r in rules.get("requirements", [])}
+    for t in data.get("requirements") or []:
+        t = str(t).strip().rstrip(".")
+        if not t or t.lower() in have_txt:
+            continue
+        known = next((r for r in REQUIREMENTS if re.search(r[1], t, re.I)), None)
+        rid = known[0] if known else "custom_" + re.sub(r"[^a-z0-9]+", "_", t.lower()).strip("_")[:40]
+        if rid in have_req:
+            continue
+        have_req.add(rid)
+        rules.setdefault("requirements", []).append({"id": rid, "text": known[2] if known else t, "ai": True})
+        _mark(rules, f"requirements.{rid}")
     if not rules.get("budget") and data.get("total_budget"):
         rules["budget"] = {"currency": (data.get("currency") or "").upper() or _currency_in(rules.get("_text", "")),
                            "total": data["total_budget"]}
