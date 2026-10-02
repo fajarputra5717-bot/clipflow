@@ -1933,7 +1933,7 @@ function renderCandidate(c,jid,platform,job={}){
   const ss=c.subtitle_style??job.subtitle_style,cap=c.edit_spec?.caption||{};
   const jobStyle=typeof job.subtitle_style==="object"&&job.subtitle_style?(job.subtitle_style.style||"outline"):(job.subtitle_style||"outline");
   const jobAnim=(typeof job.subtitle_style==="object"&&job.subtitle_style?job.subtitle_style.animation:null)||job.subtitle_animation||"karaoke";
-  if(!kwState[c.id]||!kwState[c.id].dirty)kwState[c.id]={set:new Set(c.edit_spec?.keywords||[]),color:c.edit_spec?.keyword_color||KW_COLORS[0][0],dirty:false,initialColor:c.edit_spec?.keyword_color||null};
+  if(!kwState[c.id]||!kwState[c.id].dirty)kwState[c.id]={set:new Set(c.edit_spec?.keywords||[]),color:c.edit_spec?.keyword_color||null,dirty:false,initialColor:c.edit_spec?.keyword_color||null};
   const styleName=cap.style||(typeof ss==="object"&&ss?(ss.style||"outline"):(ss||"outline"));
   const fontName=c.subtitle_font||job.subtitle_font||ss?.font||"Liberation Sans Bold";
   const size=Number(c.subtitle_size||job.subtitle_size||ss?.size||42);
@@ -2200,7 +2200,13 @@ async function applyPresetToAll(jid,cid,btn){
 const KW_COLORS=[["#FFD60A","Yellow"],["#30D158","Green"],["#FF453A","Red"],["#64D2FF","Cyan"],["#BF5AF2","Purple"]];
 const kwState={}; // cid -> {set, color, dirty, initialColor}
 const kwToken=w=>String(w||"").toLowerCase().replace(/[^\p{L}\p{N}_]+/gu,"");
-function kwHtml(cid,word){const st=kwState[cid],t=kwToken(word);return st&&t&&st.set.has(t)?`<span class="kw" style="--kw:${st.color}">${esc(word)}</span>`:esc(word)}
+// 116: no saved colour = auto: the first swatch that contrasts with the clip's style highlight (mirrors
+// shared/edit_spec.contrasting_keyword_color, RGB distance ≥ 120).
+function kwRgb(h){h=String(h).replace("#","");if(h.length===3)h=h.split("").map(c=>c+c).join("");return [0,2,4].map(i=>parseInt(h.slice(i,i+2),16))}
+function kwAutoColor(cid){const hi=(SUBTITLE_STYLE_PREVIEW[$(`style-${cid}`)?.value]||SUBTITLE_STYLE_PREVIEW.bold).highlight,h=kwRgb(hi);
+  return (KW_COLORS.find(([c])=>{const r=kwRgb(c);return Math.hypot(r[0]-h[0],r[1]-h[1],r[2]-h[2])>=120})||KW_COLORS[0])[0]}
+function kwColor(cid){const st=kwState[cid];return st?.color||kwAutoColor(cid)}
+function kwHtml(cid,word){const st=kwState[cid],t=kwToken(word);return st&&t&&st.set.has(t)?`<span class="kw" style="--kw:${kwColor(cid)}">${esc(word)}</span>`:esc(word)}
 // 112 (P1): per-clip caption position (edit_spec.caption_y, % from top). Auto = today's placement
 // (seam with a camera panel, FULLFRAME_CAPTION_Y full-frame); custom moves captions off in-game HUD.
 // With a camera panel the worker never moves them below the seam.
@@ -2225,14 +2231,16 @@ function keywordBoxHtml(cid){
   const st=kwState[cid];
   return `<div class="kw-box" data-cid="${esc(cid)}">
     <div class="kw-head"><label>Keyword highlight</label><span class="muted small" id="kwNote-${esc(cid)}"></span>
-      <div class="kw-swatches" role="group" aria-label="Keyword colour">${KW_COLORS.map(([c,n])=>`<button type="button" class="kw-sw" style="--sw:${c}" aria-label="${n}" title="${n}" data-kw-color="${c}" data-cid="${esc(cid)}" aria-pressed="${st&&st.color===c}"></button>`).join("")}</div></div>
+      <div class="kw-swatches" role="group" aria-label="Keyword colour">${KW_COLORS.map(([c,n])=>`<button type="button" class="kw-sw" style="--sw:${c}" aria-label="${n}" title="${n}" data-kw-color="${c}" data-cid="${esc(cid)}" aria-pressed="false"></button>`).join("")}</div></div>
     <div class="kw-strip" id="kwStrip-${esc(cid)}" role="group" aria-label="Caption words: tap to highlight"></div></div>`;
 }
 function renderKwStrip(cid){
   const strip=$(`kwStrip-${cid}`),st=kwState[cid];if(!strip||!st)return;
   const seen=new Set(),words=[];
   for(const w of ($(`sub-${cid}`)?.value||"").toUpperCase().split(/\s+/)){const t=kwToken(w);if(t&&!seen.has(t)){seen.add(t);words.push([t,w.replace(/[^\p{L}\p{N}'-]+/gu,"")])}}
-  strip.innerHTML=words.slice(0,80).map(([t,w])=>`<button type="button" class="kw-word" data-kw-toggle="${esc(t)}" data-cid="${esc(cid)}" aria-pressed="${st.set.has(t)}" style="--kw:${st.color}">${esc(w)}</button>`).join("");
+  const col=kwColor(cid);
+  strip.innerHTML=words.slice(0,80).map(([t,w])=>`<button type="button" class="kw-word" data-kw-toggle="${esc(t)}" data-cid="${esc(cid)}" aria-pressed="${st.set.has(t)}" style="--kw:${col}">${esc(w)}</button>`).join("");
+  document.querySelectorAll(`[data-kw-color][data-cid="${css(cid)}"]`).forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.kwColor===col)));
   const n=st.set.size,note=$(`kwNote-${cid}`);if(note)note.textContent=n?`${n} highlighted · tap a word to toggle`:"Tap a word to highlight it";
 }
 function toggleKeyword(cid,token){const st=kwState[cid];if(!st)return;st.set.has(token)?st.set.delete(token):st.set.add(token);st.dirty=true;renderKwStrip(cid);updateCaptionPreview(cid)}
@@ -2568,7 +2576,7 @@ async function applyEdits(jid,cid){
     // 108: style+animation are this clip's own (edit_spec.caption; cleared when equal to the job's); font/size stay job-level.
     const pw=document.querySelector(`.cap-presets[data-cid="${css(cid)}"]`),jobStyle=pw?.dataset.jobStyle||style,jobAnim=pw?.dataset.jobAnim||animation;
     const spec={caption:style===jobStyle&&animation===jobAnim?null:{style,animation}};
-    const kst=kwState[cid];if(kst?.dirty){spec.keywords=[...kst.set];spec.keyword_color=kst.color}  // 111
+    const kst=kwState[cid];if(kst?.dirty){spec.keywords=[...kst.set];if(kst.color)spec.keyword_color=kst.color}  // 111 (116: auto colour stays unset)
     const cy=captionPosPatch(cid);if(cy!==undefined)spec.caption_y=cy;  // 112
     await api(`/api/jobs/${jid}/candidates/${cid}`,{method:"PATCH",body:JSON.stringify({edit_spec:spec})});
     if(kst)kst.dirty=false;

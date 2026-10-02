@@ -4259,7 +4259,9 @@ def make_ass(
     # every mode: \1c and \2c both set (so a karaoke \kf sweep can't recolour
     # it), then reset to the style's own highlight/resting colours.
     kw_set = {edit_specs.keyword_token(k) for k in (keywords or [])} - {""}
-    kw_tag = to_ass_color(keyword_color or edit_specs.KEYWORD_DEFAULT_COLOR)
+    # 116: no colour chosen → the first palette colour that contrasts with this
+    # style's highlight (yellow keywords on a yellow karaoke style were invisible).
+    kw_tag = to_ass_color(keyword_color or edit_specs.contrasting_keyword_color(setting["highlight"]))
     reset_tag = f"{{\\1c{to_ass_color(setting['highlight'])}\\2c{to_ass_color(setting['resting'])}}}"
 
     def kw(raw_word):

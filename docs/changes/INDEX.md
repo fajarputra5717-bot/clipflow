@@ -87,3 +87,4 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 113 · 2026-10-02 · Submagic "use as final" passes the same campaign rule gate as Approve (409 + disabled button) (QA Medium) · main.py, index.html
 114 · 2026-10-02 · "Final outdated · re-render" chip after render-affecting changes (apply-to-all, job style/render options, per-clip apply, restore); cleared by a new final (QA Low) · main.py, worker.py
 115 · 2026-10-02 · Campaign clips get their description at analysis (utility model, clip language) ending with the campaign hashtags; prompt + hashtag helper moved to shared · worker.py, main.py, shared
+116 · 2026-10-03 · Keyword colour defaults to the first swatch that contrasts with the style highlight (yellow styles → green); user choice kept · worker.py, shared/edit_spec.py, index.html

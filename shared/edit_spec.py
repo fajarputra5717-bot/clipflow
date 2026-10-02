@@ -36,6 +36,28 @@ def normalize_caption(value, styles, animations):
 import re
 
 KEYWORD_DEFAULT_COLOR = "#FFD60A"
+# 116: palette order (= the UI swatches); an unset colour defaults to the first
+# one that clearly differs from the caption style's highlight colour.
+KEYWORD_PALETTE = ["#FFD60A", "#30D158", "#FF453A", "#64D2FF", "#BF5AF2"]
+
+
+def _rgb(h):
+    h = str(h).lstrip("#")
+    if len(h) == 3:
+        h = "".join(c * 2 for c in h)
+    return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
+
+
+def contrasting_keyword_color(highlight, min_distance=120):
+    """First palette colour at least min_distance (RGB) away from the style highlight."""
+    try:
+        hi = _rgb(highlight)
+    except (ValueError, TypeError):
+        return KEYWORD_DEFAULT_COLOR
+    for c in KEYWORD_PALETTE:
+        if sum((a - b) ** 2 for a, b in zip(_rgb(c), hi)) ** 0.5 >= min_distance:
+            return c
+    return KEYWORD_DEFAULT_COLOR
 KEYWORD_MAX = 20
 _HEX = re.compile(r"^#[0-9A-Fa-f]{6}$")
 
@@ -83,9 +105,10 @@ def normalize_caption_y(value):
 
 
 def keywords_of(spec):
-    """(set of tokens, '#RRGGBB') from a stored spec; empty set when none."""
+    """(set of tokens, '#RRGGBB' or None) from a stored spec; None colour = auto
+    (116: make_ass picks a colour that contrasts with the style highlight)."""
     spec = spec if isinstance(spec, dict) else {}
-    return set(spec.get("keywords") or []), spec.get("keyword_color") or KEYWORD_DEFAULT_COLOR
+    return set(spec.get("keywords") or []), spec.get("keyword_color") or None
 
 
 def normalize_patch(patch, styles, animations):
