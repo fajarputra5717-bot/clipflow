@@ -1,17 +1,18 @@
 # UI audit · progress states outside the job status island · 2026-10-02 (main @ 6fd43cf)
 
-Rule (owner, 2026-10-02): any progress state that doesn't use the job status island (`#island`,
-`updateJobIsland()`) = **Medium**. Note: main's CLAUDE.md doesn't state this rule explicitly yet (it says
-only that the island is "driven only by `updateJobIsland()`"); Lane A should add it.
+Rule (owner, 2026-10-02; CLAUDE.md since 090): the island is the ONLY global progress indicator. List rows
+(job cards, Publish queue) may show per-item progress, but only as a small capsule in island style (same
+shape, colours, motion). Any separate bar/spinner/toast design for progress = **Medium**.
 
 Static audit of `frontend/html/index.html` (no browser run).
 
 ## Findings
 1. **Medium · Import job cards carry their own progress bar.** `createJobCard()` / `patchJobCard()`
-   (`index.html:1650`/`:1662`) render `.mini-bar` (track/fill/pct) per running job in `#currentJobs`, parallel to
-   the island. (074 design; owner to confirm whether the card bar is exempt or must go.)
+   (`index.html:1650`/`:1662`) render `.mini-bar` (track/fill/pct) per running job in `#currentJobs`, a separate bar design
+   (track + fill + %), not an island-style capsule. Placement is fine; the style isn't.
 2. **Medium · Publish queue rows show progress.** `renderQueueJob()` (`:1712`) adds `.progress-msg` (`:1720`) and
-   `miniProgressBar()` (`:1729`) for busy jobs.
+   `miniProgressBar()` (`:1729`) for busy jobs: separate bar
+   design again; should be the island-style capsule.
 
 ## Uses the island (OK)
 - Candidate preview/final/thumbnail tasks: `watchCandidate()` → `setCandidateActiveTask()` (`:2347`) →
