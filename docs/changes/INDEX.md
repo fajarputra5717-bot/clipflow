@@ -66,3 +66,4 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 092 · 2026-10-02 · Campaign watermark missing → no watermark + failing chip + WARNING log, never a silent fallback (P0) · worker.py
 093 · 2026-10-02 · Campaign hashtags: exact order at the END; rules wording "required_in_order" (not "prefix") (P0) · docs/campaigns, shared/campaigns.py
 094 · 2026-10-02 · Hook analysis window minimum 10 min (settings 400 + worker clamp) (P0) · main.py, worker.py
+095 · 2026-10-02 · Facecam layout per job: majority (or position-agreeing tie) → panel for all, else full-frame for all; overrides logged; 9 jobs backfilled (P0) · worker.py, main.py

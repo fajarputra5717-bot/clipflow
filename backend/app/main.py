@@ -264,6 +264,9 @@ def ensure_schema():
         # P0: [{code, message, at}] non-fatal render problems shown as chips
         # (loudness failed, campaign watermark missing).
         "ALTER TABLE clip_candidates ADD COLUMN IF NOT EXISTS render_warnings JSONB",
+        # P0: one facecam layout per job: {mode: panel|full, detected, total, fallback}
+        # (worker decide_face_layout); NULL = each clip decides.
+        "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS face_layout JSONB",
     ]
 
     try:

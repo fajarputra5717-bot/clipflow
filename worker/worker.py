@@ -3145,7 +3145,80 @@ def detect_faces_in_corners(
     return found
 
 
+_FACE_CACHE = {}
+
+
 def detect_face_for_clip(
+    video_path,
+    start,
+    end,
+    layout="auto",
+    face_layout=None,
+):
+    """
+    Face box for one clip (raw detection cached per process), then the job's
+    layout decision (P0, QA 087 Medium): face_layout = jobs.face_layout from
+    decide_face_layout(). mode "panel": a clip that missed gets the median box
+    of the job's detected clips (camera panel for every clip); mode "full": a
+    stray detection is dropped (full-frame for every clip). Overrides log.
+    """
+    key = (str(video_path), round(float(start), 2), round(float(end), 2), layout)
+    if key not in _FACE_CACHE:
+        if len(_FACE_CACHE) > 64:
+            _FACE_CACHE.clear()
+        _FACE_CACHE[key] = _detect_face_raw(video_path, start, end, layout=layout)
+    face = dict(_FACE_CACHE[key])
+    mode = (face_layout or {}).get("mode")
+    if mode == "panel" and not face.get("detected"):
+        fb = face_layout.get("fallback") or {}
+        if all(k in fb for k in ("cx", "cy", "w", "h")):
+            log(f"Face layout: clip {float(start):.1f}-{float(end):.1f}s missed the face; using the job's "
+                f"camera panel ({face_layout.get('detected')}/{face_layout.get('total')} clips detected)")
+            face = {"detected": True, "override": "job_panel",
+                    **{k: float(fb[k]) for k in ("cx", "cy", "w", "h")}}
+    elif mode == "full" and face.get("detected"):
+        log(f"Face layout: clip {float(start):.1f}-{float(end):.1f}s detected a face but the job is "
+            f"full-frame ({face_layout.get('detected')}/{face_layout.get('total')} clips detected); no panel")
+        face["detected"] = False
+        face["override"] = "job_full"
+    return face
+
+
+def decide_face_layout(video_path, highlights, layout="auto"):
+    """
+    One layout per job (P0): detect every clip once; a strict majority with a
+    face → "panel" (fallback = median detected box), a strict majority without
+    → "full"; a tie → "panel" only if >= 2 hits agree in position, else "full".
+    < 2 clips → None (the clip decides, as before).
+    Stored as jobs.face_layout.
+    """
+    if layout == "none" or len(highlights) < 2:
+        return None
+    faces = [detect_face_for_clip(video_path, float(h["start"]), float(h["end"]), layout=layout)
+             for h in highlights]
+    hits = [f for f in faces if f.get("detected")]
+    total, n = len(faces), len(hits)
+    info = metadata(video_path)
+    fallback = ({k: statistics.median([f[k] for f in hits]) for k in ("cx", "cy", "w", "h")}
+                if hits else None)
+    # A facecam sits in the same place in every clip: >= 2 hits within 10 % of
+    # the frame of their median position. A lone or wandering hit is usually a
+    # face inside the video (game character, on-screen person), not a camera.
+    agree = n >= 2 and all(
+        abs(f["cx"] - fallback["cx"]) <= 0.1 * info["width"]
+        and abs(f["cy"] - fallback["cy"]) <= 0.1 * info["height"]
+        for f in hits
+    )
+    if n * 2 > total or (n * 2 == total and agree):
+        decision = {"mode": "panel", "detected": n, "total": total, "fallback": fallback}
+    else:
+        decision = {"mode": "full", "detected": n, "total": total}
+    why = "majority" if n * 2 != total else ("tie, hits agree" if agree else "tie, no consistent facecam")
+    log(f"Face layout for the job: {decision['mode']} ({n}/{total} clips detected a face; {why})")
+    return decision
+
+
+def _detect_face_raw(
     video_path,
     start,
     end,
@@ -4633,6 +4706,7 @@ def render_clean_plate(
         start,
         end,
         layout=job.get("layout", "auto"),
+        face_layout=job.get("face_layout"),
     )
 
     info = metadata(video_path)
@@ -4736,6 +4810,7 @@ def create_preview(
             start,
             end,
             layout=job.get("layout", "auto"),
+            face_layout=job.get("face_layout"),
         )
     )
 
@@ -5032,6 +5107,7 @@ def render_final_candidate(
             start,
             end,
             layout=job.get("layout", "auto"),
+            face_layout=job.get("face_layout"),
         )
     )
 
@@ -5573,6 +5649,18 @@ def _process_analysis_job(
         # ----------------------------------------------------
         # CREATE CANDIDATES
         # ----------------------------------------------------
+
+        # P0: one facecam layout per job (majority of clips), stored so every
+        # later render (re-render, final, thumbnails) agrees.
+        job["face_layout"] = decide_face_layout(
+            source_path, highlights, layout=job.get("layout") or "auto",
+        )
+        with db() as conn:
+            conn.execute(
+                "UPDATE jobs SET face_layout = %s::jsonb WHERE id = %s",
+                (json.dumps(job["face_layout"]) if job["face_layout"] else None, job_id),
+            )
+            conn.commit()
 
         successful_candidates = 0
         failed_candidates = 0
@@ -6183,7 +6271,8 @@ def generate_ai_thumbnails(candidate, job, video_path):
     # burned in, which is why thumbnails used to come out as a plain
     # frame grab with someone else's caption still stuck on it.
     face = detect_face_for_clip(
-        video_path, start, end, layout=job.get("layout", "auto")
+        video_path, start, end, layout=job.get("layout", "auto"),
+        face_layout=job.get("face_layout"),
     )
 
     source_info = metadata(video_path)
@@ -6314,6 +6403,7 @@ def claim_candidate_task():
                 j.transcript_segments,
                 j.watermark_asset_id,
                 j.campaign,
+                j.face_layout,
                 sv.source_path
             FROM clip_candidates c
             JOIN jobs j
@@ -6454,6 +6544,10 @@ def _process_candidate_task(
 
             "campaign":
                 task.get("campaign"),
+
+            # P0: per-job facecam layout decision (decide_face_layout).
+            "face_layout":
+                task.get("face_layout"),
         }
 
         if (
