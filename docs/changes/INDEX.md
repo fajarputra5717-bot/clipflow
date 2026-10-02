@@ -73,3 +73,4 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 099 · 2026-10-02 · Campaign watermark resolved at job creation; a miss is stored (jobs.watermark_failure) → no watermark + chip + toast, never a fallback · main.py, worker.py, index.html
 100 · 2026-10-02 · Loudness verify acts: every output re-measured; >1 LU off or TP > −1 dBTP → one corrective pass (headroom + overshoot), still off → chip (pre-P1) · worker.py
 101 · 2026-10-02 · Facecam tie rule: panel if the hit is in a corner/edge AND persistent (≥ 3 hits, spread ≤ 0.03), else full; reason logged (pre-P1) · worker.py
+102 · 2026-10-02 · Island feed: activity errors keep last state + backoff, running-state allow-list, Submagic indeterminate (pre-P1) · main.py, index.html

@@ -356,7 +356,9 @@ or preflights get 401.
   spinners, progress bars or toasts for progress** (`setBusy()` on the clicked control stays). Backend side:
   `GET /api/activity` → `{items:[{kind, id, job_id, candidate_id, stage, percent, label, title}]}` is the
   one feed; a new background task kind adds its rows there (and keeps `status/progress/message` on its row),
-  never a new progress UI. The island merges it in `allActiveTasks()` (polled by `refreshRunningJobs()`).
+  never a new progress UI. The island merges it in `allActiveTasks()` (polled by `refreshRunningJobs()`). Jobs appear only for statuses in
+  `JOB_RUNNING` (allow-list); `percent: null` = indeterminate (spinning ring, no %); feed errors keep the last
+  state and back off (102).
 - **Card-level progress (P0):** Import job-card bars and Publish queue row progress become small island-style
   capsules (same shape/colours/motion); the island stays the only global progress indicator.
   Implementation: `miniIslandHtml()` / `patchMiniIsland(el, p, status, label)` (`.mini-island`: black capsule,

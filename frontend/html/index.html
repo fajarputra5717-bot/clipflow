@@ -1017,6 +1017,9 @@ img.topbar-logo-icon{background:none;padding:0;object-fit:cover}
 .isl-ring-track{stroke:rgba(255,255,255,.18)}
 .isl-ring-fill{stroke:#0a84ff;stroke-linecap:round;transition:stroke-dashoffset 2200ms linear,stroke var(--dur-2) var(--ease)} /* spans one poll: glides, never jumps */
 .island.is-ready .isl-ring-fill{stroke:#30d158}
+.island.is-indeterminate .isl-ring{animation:islIndet 1.1s linear infinite}
+@keyframes islIndet{from{transform:rotate(-90deg)}to{transform:rotate(270deg)}}
+@media (prefers-reduced-motion:reduce){.island.is-indeterminate .isl-ring{animation:none}}
 .isl-expanded{width:min(380px,calc(100vw - 16px));padding:16px 18px 14px}
 .isl-expanded > *{opacity:0;transform:translateY(-4px);transition:opacity var(--dur-1) var(--ease),transform var(--dur-1) var(--ease)}
 .isl-expanded.on > *{opacity:1;transform:none;transition:opacity var(--dur-2) var(--ease),transform var(--dur-3) var(--ease-out)}
@@ -1401,6 +1404,7 @@ function toggleTheme(){
 applyTheme(document.documentElement.getAttribute("data-theme")||"light");
 let thumbSelection={}; // candidateId -> chosen AI thumbnail index, applied on "Apply changes"
 let activityTasks=[];       // 090: candidate/Submagic work from GET /api/activity (started anywhere) for the island
+let activityFails=0,activityRetryAt=0; // pre-P1 #4: on errors keep the last state and back off (2^n polls, max 60 s)
 let candidateActiveTasks={}; // candidateId -> {jobId,kind,actionLabel,status,progress,message,title} — every in-flight
                               // candidate-level action (preview regen, final render, AI desc/typos/hook/thumbs) merged into the Dynamic Island
 
@@ -2476,7 +2480,7 @@ function allActiveTasks(){
   const jobItems=runningJobs.map(j=>({id:j.id,jobId:j.id,kind:"job",platform:j.platform,status:j.status,progress:j.progress,message:j.message,custom_title:j.custom_title,source_title:j.source_title}));
   // Click-registered tasks win (their label names the AI action); backend activity fills the rest.
   const extra=activityTasks.filter(t=>!(t.candidate_id in candidateActiveTasks&&t.kind==="candidate"))
-    .map(t=>({id:t.kind==="submagic"?t.id+":submagic":t.id,jobId:t.job_id,kind:"candidate",actionLabel:t.label,status:t.stage,progress:t.percent,title:t.title}));
+    .map(t=>({id:t.kind==="submagic"?t.id+":submagic":t.id,jobId:t.job_id,kind:"candidate",actionLabel:t.label,status:t.stage,progress:t.percent,indeterminate:t.percent==null,title:t.title}));
   return [...jobItems,...Object.values(candidateActiveTasks),...extra];
 }
 // ---- Dynamic Island (073) ----------------------------------------------------------------
@@ -2559,14 +2563,16 @@ function paintIsland(){
     return;
   }
   const lead=items[0];if(!lead)return;ISL.lead=lead;isl.classList.toggle("is-idle",lead.kind==="job"&&badgeClass(lead.status)==="idle");
-  const p=pct(lead.progress),stage=lead.actionLabel||stageLabel(lead.status),title=islandTitle(lead);
-  setText($("islTitleC"),title);setText($("islTitleX"),title);setText($("islStage"),stage);setText($("islPct"),p+"%");
+  // Indeterminate (no % reported, e.g. Submagic): quarter ring spins, no number (pre-P1 #4).
+  const indet=!!lead.indeterminate;isl.classList.toggle("is-indeterminate",indet);
+  const p=indet?25:pct(lead.progress),stage=lead.actionLabel||stageLabel(lead.status),title=islandTitle(lead);
+  setText($("islTitleC"),title);setText($("islTitleX"),title);setText($("islStage"),stage);setText($("islPct"),indet?"":p+"%");
   const bt=`scaleX(${p/100})`;if($("islBar").style.transform!==bt)$("islBar").style.transform=bt;setRing(p);
   const icon=$("islIcon");setAttr(icon,"class","isl-x-icon");if(icon.dataset.key!==String(lead.id)){icon.dataset.key=String(lead.id);icon.innerHTML=islandThumb(lead)} // keyed: the thumbnail <img> isn't re-mounted per poll
   if($("islLead").dataset.key!==String(lead.id)){$("islLead").dataset.key=String(lead.id);$("islLead").innerHTML=islandThumb(lead)}
   $("islCancel").hidden=!(lead.kind==="job"&&typeof window.cancelJob==="function");
-  $("islandMain").setAttribute("aria-label",`${title}: ${stage}, ${p}%${items.length>1?` (and ${items.length-1} more)`:""}`);
-  const said=`${title}: ${stage}, ${Math.floor(p/25)*25}%`;if(said!==ISL.announced){ISL.announced=said;$("islandLive").textContent=said}
+  $("islandMain").setAttribute("aria-label",`${title}: ${stage}${indet?"":`, ${p}%`}${items.length>1?` (and ${items.length-1} more)`:""}`);
+  const said=indet?`${title}: ${stage}`:`${title}: ${stage}, ${Math.floor(p/25)*25}%`;if(said!==ISL.announced){ISL.announced=said;$("islandLive").textContent=said}
 }
 function setRing(p){const c=$("islRing"),L=2*Math.PI*9.5,o=String(L*(1-Math.max(0,Math.min(100,p))/100));if(!c.style.strokeDasharray)c.style.strokeDasharray=L;if(c.style.strokeDashoffset!==o)c.style.strokeDashoffset=o}
 function updateJobIsland(){
@@ -2640,8 +2646,11 @@ function openJobOverlay(){if(!allActiveTasks().length)return;overlayOpen=true;re
 function closeJobOverlay(){overlayOpen=false;renderJobOverlay();updateJobIsland()}
 async function refreshRunningJobs(){
   try{
-    const [d,act]=await Promise.all([api("/api/jobs?scope=current"),api("/api/activity").catch(()=>null)]);
-    if(act)activityTasks=(act.items||[]).filter(t=>t.kind!=="job"); // jobs come from the list above
+    const wantActivity=Date.now()>=activityRetryAt;
+    const [d,act]=await Promise.all([api("/api/jobs?scope=current"),wantActivity?api("/api/activity").catch(e=>{
+      activityFails++;const wait=Math.min(60000,POLL_INTERVAL*2**activityFails);activityRetryAt=Date.now()+wait;
+      console.warn(`/api/activity failed (${activityFails}x), keeping the last island state; retry in ${Math.round(wait/1000)} s:`,e);return null}):null]);
+    if(act){activityFails=0;activityRetryAt=0;activityTasks=(act.items||[]).filter(t=>t.kind!=="job")} // jobs come from the list above
     const next=Array.isArray(d)?d:(d?.jobs||d?.items||[]);
     const previousIds=new Set(runningJobs.map(j=>String(j.id)));
     runningJobs=next;

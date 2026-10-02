@@ -895,8 +895,11 @@ SUBMAGIC_BUSY = (
     "queued_upload", "uploading", "transcribing", "queued_export",
     "exporting", "queued_apply", "applying",
 )
-JOB_RESTING = (
-    "completed", "failed", "cancelled", "paused", "review", "partial_failure",
+# Pre-P1 #4: an ALLOW-list of running job states (an unknown/new status shows
+# nothing rather than a phantom task). Mirrors index.html BUSY + "processing".
+JOB_RUNNING = (
+    "queued", "processing", "downloading", "download", "transcribing",
+    "transcription", "transcribed", "analyzing", "analysis",
 )
 
 
@@ -910,10 +913,10 @@ def list_activity():
                 SELECT j.id, j.status, j.progress, j.message,
                        COALESCE(NULLIF(j.custom_title, ''), sv.title), j.updated_at
                 FROM jobs j LEFT JOIN source_videos sv ON sv.id = j.source_video_id
-                WHERE j.status <> ALL(%s)
+                WHERE j.status = ANY(%s)
                 ORDER BY j.created_at
                 """,
-                (list(JOB_RESTING),),
+                (list(JOB_RUNNING),),
             )
             for jid, status, progress, message, title, upd in cur.fetchall():
                 items.append({
@@ -941,10 +944,10 @@ def list_activity():
                     items.append({**base, "kind": "candidate", "stage": status,
                                   "percent": int(progress or 0), "label": message or status})
                 if sm in SUBMAGIC_BUSY:
-                    # Submagic has no percentage of its own: queued 0, running 50.
-                    items.append({**base, "kind": "submagic", "stage": sm,
-                                  "percent": 0 if sm.startswith("queued") else 50,
-                                  "label": "Submagic: " + sm.replace("queued_", "queued ").replace("_", " ")})
+                    # Submagic reports no percentage: indeterminate (percent None),
+                    # "processing" once it runs (pre-P1 #4: no fake 50 %).
+                    items.append({**base, "kind": "submagic", "stage": sm, "percent": None,
+                                  "label": "Submagic: queued" if sm.startswith("queued") else "Submagic: processing"})
     return {"items": items}
 
 
