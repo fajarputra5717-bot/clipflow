@@ -537,6 +537,7 @@ SUPPORTED_LAYOUTS = {
     "auto",
     "left",
     "right",
+    "none",  # QA #6: no facecam → full-frame crop, no bottom panel
 }
 
 # yt-dlp fetches whatever it is given (SSRF) and parses a leading "-"
@@ -676,7 +677,7 @@ def create_job(req: ClipRequest):
     if req.layout not in SUPPORTED_LAYOUTS:
         raise HTTPException(
             status_code=400,
-            detail="layout must be auto, left, or right",
+            detail="layout must be auto, left, right, or none",
         )
     if req.language is None:
         configured = (runtime_setting("WHISPER_LANGUAGE") or "").strip().lower()

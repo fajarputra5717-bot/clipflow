@@ -58,3 +58,4 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 084 · 2026-10-02 · Guards: hook window overlap < window (PUT 400 + worker clamp), API job language = WHISPER_LANGUAGE, rank negative id / non-numeric score skipped (QA #4 #5 #9) · main.py, worker.py
 085 · 2026-10-02 · Retention engine merged from lane-b (silence trim + TimeMap re-timing, two-pass loudnorm, punch-in zoom builders; tests) · shared/retention.py
 086 · 2026-10-02 · Final render loudness: two-pass loudnorm −14 LUFS, limiter −1 dBTP, video copied, ebur128-verified (QA #2) · worker.py
+087 · 2026-10-02 · No-facecam layout: layout "none" + no-face fallback render full-frame gameplay, one shared layout graph (QA #6) · worker.py, main.py, index.html

@@ -290,6 +290,7 @@ button.primary:hover:not(:disabled){background:#0077ed!important}
 
 .choice-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 .layout-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+.facecam-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
 .platform-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
 .choice{
   min-height:65px;padding:12px;border:1px solid #d2d2d7;border-radius:16px;background:#fff;
@@ -1178,10 +1179,11 @@ img.topbar-logo-icon{background:none;padding:0;object-fit:cover}
 
             <div class="field">
               <label>Facecam position <span class="muted">· helps face detection before analysis runs</span></label>
-              <div class="choice-grid layout-grid">
+              <div class="choice-grid facecam-grid">
                 <div class="choice active" data-layout="auto" role="button" tabindex="0"><strong>Auto</strong><small>Detect automatically</small></div>
                 <div class="choice" data-layout="left" role="button" tabindex="0"><strong>Left</strong><small>Facecam is on the left</small></div>
                 <div class="choice" data-layout="right" role="button" tabindex="0"><strong>Right</strong><small>Facecam is on the right</small></div>
+                <div class="choice" data-layout="none" role="button" tabindex="0"><strong>No facecam</strong><small>Full-frame gameplay</small></div>
               </div>
             </div>
 
@@ -1557,7 +1559,7 @@ function jobLanguageLine(j){
 }
 function updateImportOptionsSummary(){
   const el=$("importOptionsSummary");if(!el)return;
-  const lay={auto:"Auto facecam",left:"Facecam left",right:"Facecam right"}[selectedLayout]||"Auto facecam";
+  const lay={auto:"Auto facecam",left:"Facecam left",right:"Facecam right",none:"No facecam"}[selectedLayout]||"Auto facecam";
   const lang=selectedLanguage==="auto"?"Auto language":LANG_NAMES[selectedLanguage];
   el.textContent=`${selectedSplit} : ${100-selectedSplit} · ${lay} · ${lang} · ${platformLabel(selectedPlatform)}`;
 }

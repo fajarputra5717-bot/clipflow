@@ -3067,12 +3067,24 @@ def detect_face_for_clip(
     """
 
     layout = (layout or "auto").strip().lower()
-    if layout not in ("auto", "left", "right"):
+    if layout not in ("auto", "left", "right", "none"):
         layout = "auto"
 
     info = metadata(
         video_path
     )
+
+    # QA #6: "none" = the source has no facecam: skip detection, the
+    # render uses the full-frame gameplay crop (no bottom panel).
+    if layout == "none":
+        log("Layout 'none': no facecam panel, full-frame crop")
+        return {
+            "detected": False,
+            "cx": info["width"] / 2,
+            "cy": info["height"] / 2,
+            "w": info["width"] * 0.15,
+            "h": info["height"] * 0.22,
+        }
 
     width = info["width"]
     height = info["height"]
@@ -3253,11 +3265,7 @@ def detect_face_for_clip(
             "auto": width * 0.82,
         }[layout]
 
-        log(
-            "No face detected; using "
-            + ("left" if layout == "left" else "bottom-right")
-            + " fallback"
-        )
+        log("No face detected: full-frame crop, no facecam panel")
 
         return {
             "detected": False,
@@ -3511,7 +3519,35 @@ def calculate_face_crop(
         "y": int(crop_y),
         "w": int(crop_width),
         "h": int(crop_height),
+        # QA #6: no face (or layout "none") → no bottom panel at all;
+        # see vertical_layout_filter().
+        "panel": face.get("detected", True) is not False,
     }
+
+
+def vertical_layout_filter(width, height, split_ratio, face_crop):
+    """The one layout graph (render + thumbnail frames) ending in
+    [stacked]: gameplay top + facecam bottom, or, when face_crop says
+    there's no panel (QA #6), the gameplay filling the whole 9:16 frame.
+    Captions/watermark keep the split-ratio positions either way."""
+    if not (face_crop or {}).get("panel", True):
+        return (
+            "[0:v]"
+            f"scale={width}:{height}:force_original_aspect_ratio=increase,"
+            f"crop={width}:{height},setsar=1,format=yuv420p[stacked];"
+        )
+    top_height = int(height * split_ratio / 100)
+    bottom_height = height - top_height
+    return (
+        "[0:v]"
+        f"scale={width}:{top_height}:force_original_aspect_ratio=increase,"
+        f"crop={width}:{top_height},setsar=1[content];"
+        "[0:v]"
+        f"crop={face_crop['w']}:{face_crop['h']}:{face_crop['x']}:{face_crop['y']},"
+        f"scale={width}:{bottom_height}:force_original_aspect_ratio=increase,"
+        f"crop={width}:{bottom_height},setsar=1[face];"
+        "[content][face]vstack=inputs=2,format=yuv420p[stacked];"
+    )
 
 
 # ============================================================
@@ -4293,69 +4329,14 @@ def render_vertical(
 
         crf = setting("FFMPEG_CRF")
 
-    top_height = int(
-        height
-        * split_ratio
-        / 100
-    )
-
-    bottom_height = (
-        height
-        - top_height
-    )
-
     filters = []
 
-    # --------------------------------------------------------
-    # CONTENT TOP 70%
-    # --------------------------------------------------------
-
+    # Gameplay top + facecam bottom, or full-frame when there's no
+    # facecam (QA #6) — one graph shared with the thumbnail frames.
+    if not face_crop.get("panel", True):
+        log("Render: no facecam panel, full-frame gameplay crop")
     filters.append(
-        (
-            "[0:v]"
-            f"scale={width}:"
-            f"{top_height}:"
-            "force_original_aspect_ratio=increase,"
-            f"crop={width}:"
-            f"{top_height},"
-            "setsar=1"
-            "[content];"
-        )
-    )
-
-    # --------------------------------------------------------
-    # FACECAM BOTTOM 30%
-    # --------------------------------------------------------
-
-    filters.append(
-        (
-            "[0:v]"
-            f"crop="
-            f"{face_crop['w']}:"
-            f"{face_crop['h']}:"
-            f"{face_crop['x']}:"
-            f"{face_crop['y']},"
-            f"scale={width}:"
-            f"{bottom_height}:"
-            "force_original_aspect_ratio=increase,"
-            f"crop={width}:"
-            f"{bottom_height},"
-            "setsar=1"
-            "[face];"
-        )
-    )
-
-    # --------------------------------------------------------
-    # STACK
-    # --------------------------------------------------------
-
-    filters.append(
-        (
-            "[content][face]"
-            "vstack=inputs=2,"
-            "format=yuv420p"
-            "[stacked];"
-        )
+        vertical_layout_filter(width, height, split_ratio, face_crop)
     )
 
     last = "stacked"
@@ -5828,22 +5809,9 @@ def extract_thumbnail_base_frame(
     whatever captions were already burned into that render.)
     """
 
-    top_height = int(height * split_ratio / 100)
-    bottom_height = height - top_height
-
-    filter_complex = (
-        "[0:v]"
-        f"scale={width}:{top_height}:"
-        "force_original_aspect_ratio=increase,"
-        f"crop={width}:{top_height},setsar=1[content];"
-        "[0:v]"
-        f"crop={face_crop['w']}:{face_crop['h']}:"
-        f"{face_crop['x']}:{face_crop['y']},"
-        f"scale={width}:{bottom_height}:"
-        "force_original_aspect_ratio=increase,"
-        f"crop={width}:{bottom_height},setsar=1[face];"
-        "[content][face]vstack=inputs=2,format=yuv420p[stacked]"
-    )
+    filter_complex = vertical_layout_filter(
+        width, height, split_ratio, face_crop
+    ).rstrip(";")
 
     run_command(
         [

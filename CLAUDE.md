@@ -159,8 +159,9 @@ content rules → `rule_flags` → `drop_rule_breakers()`; posting rules (`POSTI
 
 ## Facecam layout hint
 
-`jobs.layout` ∈ `auto|left|right`, set once at job creation (Import
-form choice-grid), read by `detect_face_for_clip(..., layout=...)` in
+`jobs.layout` ∈ `auto|left|right|none`, set once at job creation (Import
+form choice-grid; `none` / no face detected → `face_crop.panel=false` → full-frame 9:16 gameplay,
+no bottom panel, via `vertical_layout_filter()`, the ONLY layout graph — 087), read by `detect_face_for_clip(..., layout=...)` in
 worker.py to bias corner-scoring and the no-face fallback position.
 Threaded through 3 call sites: `create_preview`, `render_final_
 candidate`, `generate_ai_thumbnails` — plus `claim_candidate_task`'s
