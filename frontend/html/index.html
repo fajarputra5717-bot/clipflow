@@ -1614,6 +1614,8 @@ async function createJob(){
       campaign:$("jobCampaign").value||null
     })});
     const id=j.job_id||j.id;if(!id)throw new Error("Backend did not return a job ID.");
+    // Pre-P1 #1: e.g. the campaign watermark isn't in the library (clips render without one + chip).
+    if(j.warnings?.length)showToast("⚠ "+j.warnings.join(" · "),null,null,8000);
     saveActive(id);
     $("createStatus").innerHTML=`<div class="status-title">Job started</div><div class="status-message">Your video is processing automatically and will appear in Publish when ready.</div>`;
     $("jobCustomTitle").value="";

@@ -267,6 +267,9 @@ def ensure_schema():
         # P0: one facecam layout per job: {mode: panel|full, detected, total, fallback}
         # (worker decide_face_layout); NULL = each clip decides.
         "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS face_layout JSONB",
+        # Pre-P1 #1: why the campaign watermark couldn't be resolved at job
+        # creation (NULL = fine). The worker renders WITHOUT a watermark + chip.
+        "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS watermark_failure TEXT",
     ]
 
     try:
@@ -792,7 +795,8 @@ def create_job(req: ClipRequest):
                         campaign,
                         watermark_asset_id,
                         watermark_width,
-                        watermark_opacity
+                        watermark_opacity,
+                        watermark_failure
                     )
                     VALUES (
                         %s,
@@ -805,6 +809,7 @@ def create_job(req: ClipRequest):
                         %s,
                         %s,
                         %s::jsonb,
+                        %s,
                         %s,
                         %s,
                         %s,
@@ -840,6 +845,7 @@ def create_job(req: ClipRequest):
                         wm.get("asset_id"),
                         wm.get("width"),
                         wm.get("opacity"),
+                        wm.get("failure"),
                     ),
                 )
 
@@ -852,6 +858,8 @@ def create_job(req: ClipRequest):
             "job_id": str(job_id),
             "status": "queued",
             "subtitle_style": style,
+            # Pre-P1 #1: e.g. the campaign watermark isn't in the library.
+            "warnings": [wm["failure"]] if wm.get("failure") else [],
         }
 
     except Exception as exc:
@@ -1958,7 +1966,7 @@ def campaign_watermark_snapshot(rules) -> dict:
     preset = campaigns.watermark(rules) if rules else None
     if not preset:
         return {}
-    asset_id = None
+    asset_id, failure = None, None
     try:
         with get_db() as conn:
             with conn.cursor() as cur:
@@ -1980,13 +1988,17 @@ def campaign_watermark_snapshot(rules) -> dict:
                     asset_id = str(row[0]) if row else None
     except Exception as exc:
         print(f"Campaign watermark lookup failed: {exc}")
+        failure = f"Campaign watermark lookup failed: {exc}"[:300]
     if not asset_id:
-        print(
-            f"Campaign {rules['slug']}: watermark asset "
-            f"{preset['asset_id'] or preset['asset_name']!r} not in the library; "
-            "the job uses the active watermark"
+        # Pre-P1 #1: never fall back to the active watermark. The failure is
+        # stored on the job; every render goes without a watermark + chip.
+        failure = failure or (
+            f"Campaign watermark {preset['asset_name'] or preset['asset_id']!r} "
+            "isn't in the watermark library"
         )
+        print(f"Campaign {rules['slug']}: {failure}; clips render WITHOUT a watermark")
     return {
+        "failure": failure,
         "asset_id": asset_id,
         "width": preset["width"],
         "opacity": preset["opacity"],

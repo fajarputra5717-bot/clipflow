@@ -212,6 +212,13 @@ def job_watermark_path(job, candidate_id=None):
     the worker logs it and the clip gets a failing "campaign_watermark" render
     warning (chip). Jobs without an asset use the active one as before.
     """
+    failure = job.get("watermark_failure")
+    if failure:
+        # Pre-P1 #1: resolution already failed at job creation.
+        log(f"WARNING: {failure} (campaign {job.get('campaign') or '-'}); rendering WITHOUT a watermark")
+        set_render_warning(candidate_id, "campaign_watermark",
+                           f"{failure}. Upload it to the watermark library, then re-create the job.")
+        return False
     asset_id = job.get("watermark_asset_id")
     if not asset_id:
         return resolve_watermark_path()
@@ -6416,6 +6423,7 @@ def claim_candidate_task():
                 j.subtitle_seam_gap,
                 j.transcript_segments,
                 j.watermark_asset_id,
+                j.watermark_failure,
                 j.campaign,
                 j.face_layout,
                 sv.source_path
@@ -6556,6 +6564,9 @@ def _process_candidate_task(
             "watermark_asset_id":
                 task.get("watermark_asset_id"),
 
+            "watermark_failure":
+                task.get("watermark_failure"),
+
             "campaign":
                 task.get("campaign"),
 
@@ -6679,7 +6690,7 @@ def claim_submagic_task():
             SELECT c.*, sv.source_path,
                    j.watermark_width, j.watermark_opacity,
                    j.split_ratio, j.layout, j.watermark_position_y,
-                   j.language, j.effective_language, j.watermark_asset_id
+                   j.language, j.effective_language, j.watermark_asset_id, j.watermark_failure
             FROM clip_candidates c
             JOIN jobs j ON j.id = c.job_id
             JOIN source_videos sv ON sv.id = j.source_video_id
