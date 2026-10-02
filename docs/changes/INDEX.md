@@ -72,3 +72,4 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 098 · 2026-10-02 · P0 cleanup: watermark height setting 16–85 %, WHISPER_LANGUAGE labelled "Fallback language", badge v2.1117 · main.py, index.html
 099 · 2026-10-02 · Campaign watermark resolved at job creation; a miss is stored (jobs.watermark_failure) → no watermark + chip + toast, never a fallback · main.py, worker.py, index.html
 100 · 2026-10-02 · Loudness verify acts: every output re-measured; >1 LU off or TP > −1 dBTP → one corrective pass (headroom + overshoot), still off → chip (pre-P1) · worker.py
+101 · 2026-10-02 · Facecam tie rule: panel if the hit is in a corner/edge AND persistent (≥ 3 hits, spread ≤ 0.03), else full; reason logged (pre-P1) · worker.py

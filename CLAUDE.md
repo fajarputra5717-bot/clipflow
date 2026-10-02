@@ -163,8 +163,8 @@ content rules → `rule_flags` → `drop_rule_breakers()`; posting rules (`POSTI
 `jobs.layout` ∈ `auto|left|right|none`, set once at job creation (Import
 form choice-grid; `none` / no face detected → `face_crop.panel=false` → full-frame 9:16 gameplay,
 no bottom panel, via `vertical_layout_filter()`, the ONLY layout graph — 087),
-layout is decided PER JOB (095: `decide_face_layout()` → `jobs.face_layout`, majority / position-agreeing tie →
-panel for all, else full for all; pass `face_layout=job.get("face_layout")` to every `detect_face_for_clip`), read by `detect_face_for_clip(..., layout=...)` in
+layout is decided PER JOB (095: `decide_face_layout()` → `jobs.face_layout`, majority, or a tie whose hit is
+`facecam_like()` (corner/edge + ≥ 3 hits, spread ≤ 0.03; 101) → panel for all, else full for all; pass `face_layout=job.get("face_layout")` to every `detect_face_for_clip`), read by `detect_face_for_clip(..., layout=...)` in
 worker.py to bias corner-scoring and the no-face fallback position.
 Threaded through 3 call sites: `create_preview`, `render_final_
 candidate`, `generate_ai_thumbnails` — plus `claim_candidate_task`'s

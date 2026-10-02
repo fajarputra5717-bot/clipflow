@@ -3218,11 +3218,42 @@ def detect_face_for_clip(
     return face
 
 
+# A facecam overlay (measured on this box: 4 facecam jobs vs. every lone tie
+# hit): centre in a corner (outer third both ways) or the bottom band, seen in
+# >= 3 detections with spread <= 0.03. Real cams: 15-37 hits, spread <= 0.012,
+# cy 0.84-0.90; lone hits inside the video: 1-2 hits, mid-frame or top.
+FACECAM_MIN_HITS = 3
+FACECAM_MAX_SPREAD = 0.03
+
+
+def facecam_region(face):
+    x = face["cx"] / face.get("frame_w", 1)
+    y = face["cy"] / face.get("frame_h", 1)
+    corner = (x <= 1 / 3 or x >= 2 / 3) and (y <= 1 / 3 or y >= 2 / 3)
+    return corner or y >= 0.75
+
+
+def facecam_like(face):
+    return (bool(face.get("detected")) and "frame_w" in face and facecam_region(face)
+            and face.get("hits", 0) >= FACECAM_MIN_HITS
+            and face.get("spread", 1) <= FACECAM_MAX_SPREAD)
+
+
+def facecam_reason(face):
+    if "frame_w" not in face:
+        return "no geometry"
+    x, y = face["cx"] / face["frame_w"], face["cy"] / face["frame_h"]
+    where = "corner/edge" if facecam_region(face) else "mid-frame"
+    verdict = "facecam" if facecam_like(face) else "not a facecam"
+    return f"face at ({x:.2f}, {y:.2f}) {where}, {face.get('hits', 0)} hits, spread {face.get('spread', 0):.3f} → {verdict}"
+
+
 def decide_face_layout(video_path, highlights, layout="auto"):
     """
     One layout per job (P0): detect every clip once; a strict majority with a
     face → "panel" (fallback = median detected box), a strict majority without
-    → "full"; a tie → "panel" only if >= 2 hits agree in position, else "full".
+    → "full"; a tie → "panel" if a hit is facecam_like() (corner/edge region +
+    persistent), else "full"; the log names the reason.
     < 2 clips → None (the clip decides, as before).
     Stored as jobs.face_layout.
     """
@@ -3232,22 +3263,24 @@ def decide_face_layout(video_path, highlights, layout="auto"):
              for h in highlights]
     hits = [f for f in faces if f.get("detected")]
     total, n = len(faces), len(hits)
-    info = metadata(video_path)
     fallback = ({k: statistics.median([f[k] for f in hits]) for k in ("cx", "cy", "w", "h")}
                 if hits else None)
-    # A facecam sits in the same place in every clip: >= 2 hits within 10 % of
-    # the frame of their median position. A lone or wandering hit is usually a
-    # face inside the video (game character, on-screen person), not a camera.
-    agree = n >= 2 and all(
-        abs(f["cx"] - fallback["cx"]) <= 0.1 * info["width"]
-        and abs(f["cy"] - fallback["cy"]) <= 0.1 * info["height"]
-        for f in hits
-    )
-    if n * 2 > total or (n * 2 == total and agree):
+    if n * 2 > total:
         decision = {"mode": "panel", "detected": n, "total": total, "fallback": fallback}
-    else:
+        why = "majority"
+    elif n * 2 < total:
         decision = {"mode": "full", "detected": n, "total": total}
-    why = "majority" if n * 2 != total else ("tie, hits agree" if agree else "tie, no consistent facecam")
+        why = "majority without a face"
+    else:
+        # Tie (pre-P1 #3, replaces 095's position-agreement rule): panel if a
+        # hit looks like a facecam: corner/edge region AND persistent; else full.
+        cams = [f for f in hits if facecam_like(f)]
+        if cams:
+            fb = {k: statistics.median([f[k] for f in cams]) for k in ("cx", "cy", "w", "h")}
+            decision = {"mode": "panel", "detected": n, "total": total, "fallback": fb}
+        else:
+            decision = {"mode": "full", "detected": n, "total": total}
+        why = "tie: " + "; ".join(facecam_reason(f) for f in hits)
     log(f"Face layout for the job: {decision['mode']} ({n}/{total} clips detected a face; {why})")
     return decision
 
@@ -3489,8 +3522,23 @@ def _detect_face_raw(
         )
     ]
 
+    # Stability (pre-P1 #3): a facecam overlay sits still across the sampled
+    # frames; a face inside the video (game character, on-screen person) moves.
+    # spread = largest median absolute deviation of the top detections' centre,
+    # as a fraction of the frame.
+    mcx = statistics.median([x["cx"] for x in best])
+    mcy = statistics.median([x["cy"] for x in best])
+    spread = max(
+        statistics.median([abs(x["cx"] - mcx) for x in best]) / width,
+        statistics.median([abs(x["cy"] - mcy) for x in best]) / height,
+    )
+
     return {
         "detected": True,
+        "spread": round(spread, 4),
+        "hits": len(detections),
+        "frame_w": width,
+        "frame_h": height,
 
         "cx":
             statistics.median(
