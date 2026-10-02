@@ -129,7 +129,9 @@ job style) overrides the job's style + animation for THAT clip only (font/size s
 worker builds the candidate job dict. Preset cards (`CAPTION_PRESETS`) are fixed style+animation pairs; Apply
 stores the pair or clears it when it equals the job's; `POST /api/jobs/{id}/caption-preset` = "Apply to all
 clips" (job style + clears every clip override + re-renders clips in review). New edit_spec keys: extend
-`normalize_patch()`.
+`normalize_patch()`. Keywords (111): `edit_spec.keywords` / `keyword_color`; worker `pick_keywords()` (utility AI +
+stoplists, never overwrites an existing key) runs before the first ASS; `make_ass(keywords=, keyword_color=)`
+colours them in every mode (\1c+\2c, then reset to the style colours).
 
 ## Transcription (R-07)
 

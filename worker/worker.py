@@ -3970,6 +3970,8 @@ def make_ass(
     watermark_path=None,
     watermark_center_y=None,
     seam_gap_frac=None,
+    keywords=None,
+    keyword_color=None,
 ):
     """Writes the ASS file. Returns the watermark rect the render must
     use (see get_watermark_rect): possibly moved up so it clears the
@@ -4248,6 +4250,23 @@ def make_ass(
             .replace("}", r"\}")
         )
 
+    # 111 (P1): keyword highlight. A keyword word is drawn in keyword_color in
+    # every mode: \1c and \2c both set (so a karaoke \kf sweep can't recolour
+    # it), then reset to the style's own highlight/resting colours.
+    kw_set = {edit_specs.keyword_token(k) for k in (keywords or [])} - {""}
+    kw_tag = to_ass_color(keyword_color or edit_specs.KEYWORD_DEFAULT_COLOR)
+    reset_tag = f"{{\\1c{to_ass_color(setting['highlight'])}\\2c{to_ass_color(setting['resting'])}}}"
+
+    def kw(raw_word):
+        """One caption word, upper-cased + escaped, coloured when it's a keyword."""
+        text = esc(str(raw_word).strip().upper())
+        if text and edit_specs.keyword_token(raw_word) in kw_set:
+            return f"{{\\1c{kw_tag}\\2c{kw_tag}}}{text}{reset_tag}"
+        return text
+
+    def kw_line(raw):
+        return " ".join(t for t in (kw(w) for w in str(raw).split()) if t)
+
     mode = anim["mode"]
     chunk_size = anim.get("chunk_size", 1)
     entrance_tag = ANIMATION_ENTRANCE_TAGS.get(anim["entrance"], "")
@@ -4297,9 +4316,7 @@ def make_ass(
                 if g_end <= g_start:
                     continue
 
-                chunk_text = esc(
-                    " ".join(w["word"].strip() for w in group).upper()
-                )
+                chunk_text = " ".join(t for t in (kw(w["word"]) for w in group) if t)
 
                 if not chunk_text.strip():
                     continue
@@ -4336,11 +4353,7 @@ def make_ass(
                 if w_end <= w_start:
                     w_end = w_start + 0.05
 
-                prefix_text = esc(
-                    " ".join(
-                        x["word"].strip() for x in words[:i + 1]
-                    ).upper()
-                )
+                prefix_text = " ".join(t for t in (kw(x["word"]) for x in words[:i + 1]) if t)
 
                 if not prefix_text.strip():
                     continue
@@ -4385,7 +4398,7 @@ def make_ass(
                     pieces.append(f"{{\\kf{gap_cs}}}")
 
                 dur_cs = max(1, round((w_end - w_start) * 100))
-                word_text = esc(w["word"].strip().upper())
+                word_text = kw(w["word"])
 
                 # 083: every word after the first gets its space, gap or not
                 # (contiguous Whisper words used to run together).
@@ -4412,7 +4425,7 @@ def make_ass(
             # subtitle text, or Whisper couldn't align this
             # segment), or the "none" animation — render as a
             # plain static ALL CAPS line.
-            text = esc(raw_text.upper())
+            text = kw_line(raw_text)
 
         lines.append(
             "Dialogue: 0,"
@@ -4990,6 +5003,9 @@ def create_preview(
         )
     )
 
+    # 111 (P1): AI-picked keywords for this clip, before the first ASS is written.
+    pick_keywords(candidate_id, job, candidate, clip_segments)
+
     # R-16: one asset + one geometry for this render; make_ass()
     # returns the watermark rect cleared of the captions.
     wm_path = job_watermark_path(job, candidate_id)
@@ -5009,6 +5025,8 @@ def create_preview(
             preview_height,
             split_ratio=caption_split_ratio(split_ratio, face_crop),
             animation=normalize_subtitle_animation(job),
+            keywords=sorted(edit_specs.keywords_of(candidate.get("edit_spec"))[0]),
+            keyword_color=edit_specs.keywords_of(candidate.get("edit_spec"))[1],
             watermark_width=wm_width,
             watermark_path=wm_path,
             watermark_center_y=wm_center_y,
@@ -5190,6 +5208,66 @@ def content_safety_check(candidate_id, job, candidate, clip_text):
         + ", ".join(f["rule"] for f in flags))
 
 
+KEYWORDS_SCHEMA = {
+    "type": "object",
+    "properties": {"keywords": {"type": "array", "items": {"type": "string"}}},
+    "required": ["keywords"],
+}
+
+
+def pick_keywords(candidate_id, job, candidate, clip_segments):
+    """
+    111 (P1): one small utility-model call per clip at preview build: the 3-6
+    words that carry the hook, kept only if they're really in the clip, >= 3
+    letters and not on the language's stoplist (shared/languages.py). Stored in
+    edit_spec.keywords; skipped when the clip already has the key (the user's
+    toggles, or an explicit [] = none, are never overwritten). Never fatal.
+    Mutates candidate["edit_spec"] so THIS render already uses them.
+    """
+    spec = candidate.get("edit_spec") if isinstance(candidate.get("edit_spec"), dict) else {}
+    if "keywords" in spec:
+        return
+    words = [w for seg in clip_segments for w in (seg.get("words") or [])]
+    text = " ".join(str(seg.get("text") or "") for seg in clip_segments).strip()
+    if not text:
+        return
+    lang = languages.job_language(job.get("effective_language"), job.get("language"))
+    stop = set(languages.stopwords_for(lang))
+    present = {edit_specs.keyword_token(w["word"]) for w in words} or \
+              {edit_specs.keyword_token(t) for t in text.split()}
+    prompt = (
+        f"Short-video captions ({languages.name(lang)}). Pick the 3 to 6 words that carry this "
+        "clip's hook: names, numbers, strong verbs or emotion words a viewer should notice. "
+        "Use words exactly as they appear in the text, one word each, no phrases.\n\n"
+        f"Text:\n{text[:4000]}\n\nReturn {{\"keywords\": [\"...\"]}}."
+    )
+    try:
+        data, meta = ai_router.ai_generate_json(
+            prompt, KEYWORDS_SCHEMA, task="keywords", max_tokens=300, with_meta=True,
+        )
+    except JobCancelled:
+        raise
+    except Exception as exc:
+        log(f"Keyword pick failed for {candidate_id} (no highlight): {exc}")
+        return
+    picked = []
+    for w in (data or {}).get("keywords", []):
+        t = edit_specs.keyword_token(w)
+        if len(t) >= 3 and t in present and t not in stop and t not in picked:
+            picked.append(t)
+    picked = picked[:6]
+    with db() as conn:
+        conn.execute(
+            "UPDATE clip_candidates SET edit_spec = COALESCE(edit_spec, '{}'::jsonb) || %s::jsonb "
+            "WHERE id = %s AND NOT (COALESCE(edit_spec, '{}'::jsonb) ? 'keywords')",
+            (json.dumps({"keywords": picked}), candidate_id),
+        )
+        conn.commit()
+    candidate["edit_spec"] = {**spec, "keywords": picked}
+    log(f"Keywords {candidate_id}: {picked} via {meta.get('provider')} "
+        f"(from {len((data or {}).get('keywords', []))} suggested)")
+
+
 # ============================================================
 # THUMBNAIL
 # ============================================================
@@ -5365,6 +5443,8 @@ def render_final_candidate(
             FINAL_HEIGHT,
             split_ratio=caption_split_ratio(split_ratio, face_crop),
             animation=normalize_subtitle_animation(job),
+            keywords=sorted(edit_specs.keywords_of(candidate.get("edit_spec"))[0]),
+            keyword_color=edit_specs.keywords_of(candidate.get("edit_spec"))[1],
             watermark_width=wm_width,
             watermark_path=wm_path,
             watermark_center_y=wm_center_y,

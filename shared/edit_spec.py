@@ -5,6 +5,10 @@ NULL / missing key = today's behaviour (the job-level setting applies).
 Keys so far:
   caption: {style, animation}  per-clip caption preset; overrides the job's
            subtitle_style style/animation (font/size stay job-level).
+  keywords: [word, ...]        111: words highlighted in the captions (AI-picked
+           at preview build, stoplist-filtered; the user toggles them). An
+           explicit [] = "none" (the AI never refills it).
+  keyword_color: "#RRGGBB"     111: highlight colour (default KEYWORD_DEFAULT_COLOR).
 
 PATCH semantics (main.py update_candidate): top-level keys are merged into
 the stored spec; a key sent as null is removed.
@@ -26,6 +30,45 @@ def normalize_caption(value, styles, animations):
     return {"style": style, "animation": animation}
 
 
+import re
+
+KEYWORD_DEFAULT_COLOR = "#FFD60A"
+KEYWORD_MAX = 20
+_HEX = re.compile(r"^#[0-9A-Fa-f]{6}$")
+
+
+def keyword_token(word):
+    """The comparable form of a caption word (case/punctuation-insensitive)."""
+    return re.sub(r"[^\w]+", "", str(word or "").lower())
+
+
+def normalize_keywords(value):
+    if value is None:
+        return None
+    if not isinstance(value, list):
+        raise ValueError("keywords must be a list")
+    out = []
+    for w in value:
+        t = keyword_token(w)
+        if t and t not in out:
+            out.append(t)
+    return out[:KEYWORD_MAX]
+
+
+def normalize_color(value):
+    if value is None:
+        return None
+    if not isinstance(value, str) or not _HEX.match(value.strip()):
+        raise ValueError("keyword_color must be #RRGGBB")
+    return value.strip().upper()
+
+
+def keywords_of(spec):
+    """(set of tokens, '#RRGGBB') from a stored spec; empty set when none."""
+    spec = spec if isinstance(spec, dict) else {}
+    return set(spec.get("keywords") or []), spec.get("keyword_color") or KEYWORD_DEFAULT_COLOR
+
+
 def normalize_patch(patch, styles, animations):
     """-> (merge dict, keys to remove). Unknown keys raise ValueError."""
     if not isinstance(patch, dict):
@@ -34,6 +77,10 @@ def normalize_patch(patch, styles, animations):
     for key, value in patch.items():
         if key == "caption":
             value = normalize_caption(value, styles, animations)
+        elif key == "keywords":
+            value = normalize_keywords(value)
+        elif key == "keyword_color":
+            value = normalize_color(value)
         else:
             raise ValueError(f"unknown edit_spec key: {key!r}")
         if value is None:

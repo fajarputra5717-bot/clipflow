@@ -394,6 +394,19 @@ button.primary:hover:not(:disabled){background:#0077ed!important}
 .cap-preset-name{font-size:12px}
 .cap-preset-anim{font-size:10.5px;font-weight:500;color:var(--muted)}
 @media (max-width:600px){.cap-preset-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+/* 111: keyword highlight (preview colour + word strip + swatches). */
+.cpw .kw,.caption-preview .kw{color:var(--kw)!important}
+.kw-box{margin:8px 0 10px}
+.kw-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px}
+.kw-head label{margin:0}
+.kw-head .muted{flex:1;min-width:0}
+.kw-swatches{display:flex;gap:6px}
+.kw-sw,.kw-sw:hover:not(:disabled),[data-theme="dark"] .kw-sw,[data-theme="dark"] .kw-sw:hover:not(:disabled){width:28px;height:28px;min-height:28px;padding:0;border-radius:50%;background:var(--sw);border:2px solid transparent!important;box-shadow:none;position:relative}
+.kw-sw::after{content:"";position:absolute;inset:-8px}
+.kw-sw[aria-pressed="true"]{outline:2px solid var(--text);outline-offset:2px}
+.kw-strip{display:flex;flex-wrap:wrap;gap:4px;max-height:132px;overflow:auto;padding:6px;border-radius:12px;background:#1c1c1e}
+.kw-word,.kw-word:hover:not(:disabled),[data-theme="dark"] .kw-word,[data-theme="dark"] .kw-word:hover:not(:disabled){min-height:28px;padding:0 8px;border-radius:8px;background:transparent;color:#fff;border:1px solid rgba(255,255,255,.14)!important;box-shadow:none;font-size:12px;font-weight:800;letter-spacing:.01em}
+.kw-word[aria-pressed="true"]{color:var(--kw);border-color:var(--kw)!important;background:rgba(255,255,255,.06)}
 /* 110: AI estimate chip + reason (mockup .vchip). */
 .clip-reason{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin:-2px 0 10px;font-size:13px;color:var(--muted);line-height:1.45}
 .ai-est{display:inline-flex;align-items:center;gap:4px;flex:none;font-size:12px;font-weight:600;padding:2px 9px;border-radius:999px;background:var(--badge-run-bg);color:var(--badge-run-fg);border:1px solid var(--badge-run-line)}
@@ -1911,6 +1924,7 @@ function renderCandidate(c,jid,platform,job={}){
   const ss=c.subtitle_style??job.subtitle_style,cap=c.edit_spec?.caption||{};
   const jobStyle=typeof job.subtitle_style==="object"&&job.subtitle_style?(job.subtitle_style.style||"outline"):(job.subtitle_style||"outline");
   const jobAnim=(typeof job.subtitle_style==="object"&&job.subtitle_style?job.subtitle_style.animation:null)||job.subtitle_animation||"karaoke";
+  if(!kwState[c.id]||!kwState[c.id].dirty)kwState[c.id]={set:new Set(c.edit_spec?.keywords||[]),color:c.edit_spec?.keyword_color||KW_COLORS[0][0],dirty:false,initialColor:c.edit_spec?.keyword_color||null};
   const styleName=cap.style||(typeof ss==="object"&&ss?(ss.style||"outline"):(ss||"outline"));
   const fontName=c.subtitle_font||job.subtitle_font||ss?.font||"Liberation Sans Bold";
   const size=Number(c.subtitle_size||job.subtitle_size||ss?.size||42);
@@ -1976,6 +1990,7 @@ function renderCandidate(c,jid,platform,job={}){
           <div class="caption-preview" id="capPreview-${esc(c.id)}">
             <div class="caption-preview-text" id="capPreviewText-${esc(c.id)}"></div>
           </div>
+          ${keywordBoxHtml(c.id)}
           <div class="hint">Live preview reflects your actual subtitle text, style, font, size and animation. "Fix typos (AI)" only updates this box — nothing is saved or re-rendered until you hit Apply changes.</div>
         </div>
         </div>
@@ -2169,6 +2184,31 @@ async function applyPresetToAll(jid,cid,btn){
   }catch(e){setBusy(btn,false);alert("Could not apply to all clips: "+e.message)}
 }
 
+// 111 (P1): keyword highlight. AI-picked at preview build (edit_spec.keywords); the strip below the
+// preview lists every caption word, tap to toggle; swatches set edit_spec.keyword_color. Apply sends
+// keywords only when the user changed them (otherwise the AI pick stands).
+const KW_COLORS=[["#FFD60A","Yellow"],["#30D158","Green"],["#FF453A","Red"],["#64D2FF","Cyan"],["#BF5AF2","Purple"]];
+const kwState={}; // cid -> {set, color, dirty, initialColor}
+const kwToken=w=>String(w||"").toLowerCase().replace(/[^\p{L}\p{N}_]+/gu,"");
+function kwHtml(cid,word){const st=kwState[cid],t=kwToken(word);return st&&t&&st.set.has(t)?`<span class="kw" style="--kw:${st.color}">${esc(word)}</span>`:esc(word)}
+function keywordBoxHtml(cid){
+  const st=kwState[cid];
+  return `<div class="kw-box" data-cid="${esc(cid)}">
+    <div class="kw-head"><label>Keyword highlight</label><span class="muted small" id="kwNote-${esc(cid)}"></span>
+      <div class="kw-swatches" role="group" aria-label="Keyword colour">${KW_COLORS.map(([c,n])=>`<button type="button" class="kw-sw" style="--sw:${c}" aria-label="${n}" title="${n}" data-kw-color="${c}" data-cid="${esc(cid)}" aria-pressed="${st&&st.color===c}"></button>`).join("")}</div></div>
+    <div class="kw-strip" id="kwStrip-${esc(cid)}" role="group" aria-label="Caption words: tap to highlight"></div></div>`;
+}
+function renderKwStrip(cid){
+  const strip=$(`kwStrip-${cid}`),st=kwState[cid];if(!strip||!st)return;
+  const seen=new Set(),words=[];
+  for(const w of ($(`sub-${cid}`)?.value||"").toUpperCase().split(/\s+/)){const t=kwToken(w);if(t&&!seen.has(t)){seen.add(t);words.push([t,w.replace(/[^\p{L}\p{N}'-]+/gu,"")])}}
+  strip.innerHTML=words.slice(0,80).map(([t,w])=>`<button type="button" class="kw-word" data-kw-toggle="${esc(t)}" data-cid="${esc(cid)}" aria-pressed="${st.set.has(t)}" style="--kw:${st.color}">${esc(w)}</button>`).join("");
+  const n=st.set.size,note=$(`kwNote-${cid}`);if(note)note.textContent=n?`${n} highlighted · tap a word to toggle`:"Tap a word to highlight it";
+}
+function toggleKeyword(cid,token){const st=kwState[cid];if(!st)return;st.set.has(token)?st.set.delete(token):st.set.add(token);st.dirty=true;renderKwStrip(cid);updateCaptionPreview(cid)}
+function setKeywordColor(cid,color){const st=kwState[cid];if(!st)return;st.color=color;st.dirty=true;
+  document.querySelectorAll(`[data-kw-color][data-cid="${css(cid)}"]`).forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.kwColor===color)));renderKwStrip(cid);updateCaptionPreview(cid)}
+
 function updateCaptionPreview(cid){
   const styleSel=$(`style-${cid}`),fontSel=$(`font-${cid}`),sizeInput=$(`size-${cid}`),animSel=$(`anim-${cid}`);
   const textEl=$(`capPreviewText-${cid}`),wrapEl=$(`capPreview-${cid}`),subTa=$(`sub-${cid}`);
@@ -2201,14 +2241,14 @@ function updateCaptionPreview(cid){
   // prefers-reduced-motion rule can't stop it; render the static line.
   if(animValue==="none"||REDUCED_MOTION.matches){
     // Fully static: no karaoke sweep, no entrance pop.
-    textEl.innerHTML=`<span class="cpw active">${words.map(esc).join(" ")}</span>`;
-    return;
+    textEl.innerHTML=`<span class="cpw active">${words.map(w=>kwHtml(cid,w)).join(" ")}</span>`;
+    renderKwStrip(cid);return;
   }
 
   if(animMode==="flow"){
     // Karaoke sweep: render the whole line, cycle which word is
     // "spoken" (highlighted) to approximate the real \kf fill sweep.
-    textEl.innerHTML=words.map(w=>`<span class="cpw">${esc(w)}</span>`).join(" ");
+    textEl.innerHTML=words.map(w=>`<span class="cpw">${kwHtml(cid,w)}</span>`).join(" ");renderKwStrip(cid);
     const spans=[...textEl.children];
     let i=0;
     const step=()=>{spans.forEach((s,idx)=>s.classList.toggle("active",idx===i));i=(i+1)%spans.length};
@@ -2220,12 +2260,12 @@ function updateCaptionPreview(cid){
   if(animMode==="chunk"){
     const chunkSize=animValue==="fade_settle"?2:1;
     const animClass=animValue==="bounce"?"cpw-bounce":animValue==="fade_settle"?"cpw-fade":"cpw-pop";
-    const chunks=[];
+    const chunks=[];renderKwStrip(cid);
     for(let i=0;i<words.length;i+=chunkSize)chunks.push(words.slice(i,i+chunkSize).join(" "));
     if(!chunks.length)chunks.push("");
     let i=0;
     const step=()=>{
-      textEl.innerHTML=`<span class="cpw active ${animClass}">${esc(chunks[i])}</span>`;
+      textEl.innerHTML=`<span class="cpw active ${animClass}">${chunks[i].split(" ").map(w=>kwHtml(cid,w)).join(" ")}</span>`;
       i=(i+1)%chunks.length;
     };
     step();
@@ -2234,10 +2274,10 @@ function updateCaptionPreview(cid){
   }
 
   if(animMode==="typewriter"){
-    let i=0;
+    let i=0;renderKwStrip(cid);
     const step=()=>{
       const shown=words.slice(0,i+1);
-      textEl.innerHTML=shown.map((w,idx)=>`<span class="cpw active${idx===i?" cpw-type":""}">${esc(w)}</span>`).join(" ");
+      textEl.innerHTML=shown.map((w,idx)=>`<span class="cpw active${idx===i?" cpw-type":""}">${kwHtml(cid,w)}</span>`).join(" ");
       i=(i+1)%words.length;
     };
     step();
@@ -2495,7 +2535,10 @@ async function applyEdits(jid,cid){
     await api(`/api/jobs/${jid}/candidates/${cid}`,{method:"PATCH",body:JSON.stringify(patch)});
     // 108: style+animation are this clip's own (edit_spec.caption; cleared when equal to the job's); font/size stay job-level.
     const pw=document.querySelector(`.cap-presets[data-cid="${css(cid)}"]`),jobStyle=pw?.dataset.jobStyle||style,jobAnim=pw?.dataset.jobAnim||animation;
-    await api(`/api/jobs/${jid}/candidates/${cid}`,{method:"PATCH",body:JSON.stringify({edit_spec:{caption:style===jobStyle&&animation===jobAnim?null:{style,animation}}})});
+    const spec={caption:style===jobStyle&&animation===jobAnim?null:{style,animation}};
+    const kst=kwState[cid];if(kst?.dirty){spec.keywords=[...kst.set];spec.keyword_color=kst.color}  // 111
+    await api(`/api/jobs/${jid}/candidates/${cid}`,{method:"PATCH",body:JSON.stringify({edit_spec:spec})});
+    if(kst)kst.dirty=false;
     await api(`/api/jobs/${jid}/subtitle-style`,{method:"PATCH",body:JSON.stringify({subtitle_style:jobStyle,subtitle_font:font,subtitle_size:size,subtitle_animation:jobAnim})});
     const renderOpts=changedRenderOptions(cid);
     if(Object.keys(renderOpts).length)await api(`/api/jobs/${jid}/render-options`,{method:"PATCH",body:JSON.stringify(renderOpts)});
@@ -3065,6 +3108,8 @@ document.addEventListener("click",e=>{
   const et=e.target.closest("[data-edit-tab]");if(et)return switchEditTab(et.dataset.cid,et.dataset.editTab);
   if(e.target.closest("[data-flow-editor]"))return openFlowEditor();
   const rf=e.target.closest("[data-rule-fix]");if(rf)return fixRule(rf.dataset.jid,rf.dataset.cid,rf.dataset.ruleFix,rf);
+  const kt=e.target.closest("[data-kw-toggle]");if(kt)return toggleKeyword(kt.dataset.cid,kt.dataset.kwToggle);
+  const kc=e.target.closest("[data-kw-color]");if(kc)return setKeywordColor(kc.dataset.cid,kc.dataset.kwColor);
   const pr=e.target.closest("[data-preset]");if(pr)return pickCaptionPreset(pr.dataset.cid,pr.dataset.preset);
   const pa=e.target.closest("[data-preset-all]");if(pa)return applyPresetToAll(pa.dataset.presetAll,pa.dataset.cid,pa);
   const rn=e.target.closest("[data-rename]");if(rn)return renameJob(rn.dataset.rename);

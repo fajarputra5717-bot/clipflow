@@ -82,3 +82,4 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 108 · 2026-10-02 · Per-clip caption presets (edit_spec.caption) + "Apply to all clips", style mirror fixed + check script (P1) · main.py, worker.py, index.html, shared/edit_spec.py
 109 · 2026-10-02 · Campaign rule chips (length per platform, hashtags, watermark) + Approve gate (UI + 409) + content-safety warning (utility AI) (P1) · shared/rule_checks.py, main.py, worker.py, index.html
 110 · 2026-10-02 · Hook score stored (was never saved) and shown as "AI estimate" next to the reason; new hook clears it (P1) · worker.py, main.py, index.html
+111 · 2026-10-02 · Keyword highlight: AI-picked (utility model, stoplists), tap to toggle, colour swatches, baked into the ASS in every mode (P1) · worker.py, shared/edit_spec.py, index.html
