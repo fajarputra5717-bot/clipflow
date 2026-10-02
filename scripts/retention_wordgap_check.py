@@ -2,8 +2,10 @@
 
 Renders the same keep plan twice (crossfade 40 ms vs hard join with 8 ms micro-fades) and reports:
 cuts, durations, audio-vs-video length, word timing at the words right after cuts (audio
-cross-correlation), and a seam discontinuity score (max |dx| within +-3 ms of each seam divided
-by the clip's 99th-percentile |dx|; ~1 or below = no jump).
+cross-correlation), and two seam metrics:
+  click score  max |dx| within +-3 ms of the seam / clip's 99th-percentile |dx| (<= ~1: no click)
+  level dip    quietest 5 ms RMS within +-25 ms of the seam vs the median 5 ms RMS over +-250 ms,
+               in dB (near 0 = the music/game bed carries through; very negative = it drops out)
 
   docker run --rm --cpus=2 -e PYTHONPATH=/work -v "$PWD":/work -w /work \
     -v /data/final:/in:ro -v /tmp/retention-wordgap:/out \
@@ -39,7 +41,21 @@ def seam_scores(path, seams):
     dx = np.abs(np.diff(x))
     ref = float(np.percentile(dx, 99)) or 1e-9
     w = int(0.003 * 48000)
-    return [round(float(dx[max(0, int(t * 48000) - w):int(t * 48000) + w].max()) / ref, 2) for t in seams]
+    clicks = [round(float(dx[max(0, int(t * 48000) - w):int(t * 48000) + w].max()) / ref, 2) for t in seams]
+    win = int(0.005 * 48000)
+
+    def rms_series(a, b):
+        seg = x[max(0, a):b]
+        n = len(seg) // win
+        return np.sqrt((seg[:n * win].reshape(n, win) ** 2).mean(axis=1) + 1e-12)
+
+    dips = []
+    for t in seams:
+        c = int(t * 48000)
+        near = rms_series(c - int(0.025 * 48000), c + int(0.025 * 48000))
+        around = rms_series(c - int(0.25 * 48000), c + int(0.25 * 48000))
+        dips.append(round(20 * float(np.log10(near.min() / np.median(around))), 1))
+    return clicks, dips
 
 
 def main():
@@ -52,7 +68,7 @@ def main():
     keep = r.plan_word_gap_keep(d0, words, fps=FPS)
     tm = r.TimeMap(keep)
     seams = [tm.to_output_clamped(s) for s, _ in keep[1:]]
-    res = {"clip": clip.name, "lang": lang, "words": len(words), "trim_default": r.SILENCE_TRIM_DEFAULT,
+    res = {"seams_out_s": [round(t, 3) for t in seams], "clip": clip.name, "lang": lang, "words": len(words), "trim_default": r.SILENCE_TRIM_DEFAULT,
            "gaps_>=0.6s": len(r.word_gap_silences(words)), "cuts": len(keep) - 1,
            "dur_before": round(d0, 2), "planned_after": round(tm.duration, 3)}
     a_src = pcm(src)
@@ -73,7 +89,8 @@ def main():
                            "offset_ms": None if off is None else round(off * 1000), "corr": round(corr, 2)})
         res[name] = {"video_s": round(ds["video"], 3), "audio_s": round(ds["audio"], 3),
                      "av_diff_ms": round((ds["audio"] - ds["video"]) * 1000),
-                     "seam_score": seam_scores(dst, seams), "word_checks": checks}
+                     "word_checks": checks}
+        res[name]["click_score"], res[name]["level_dip_db"] = seam_scores(dst, seams)
         print(name, json.dumps(res[name], ensure_ascii=False), flush=True)
     (out / "wordgap.json").write_text(json.dumps(res, indent=2, ensure_ascii=False))
     xf = res["crossfade_40ms"]

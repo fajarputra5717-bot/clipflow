@@ -54,8 +54,13 @@ Default OFF (`SILENCE_TRIM_DEFAULT`). Per-clip opt-in detects pauses from Whispe
 side), not audio level. Every cut gets a 40 ms equal-power audio crossfade centred on the cut
 (`silence_trim_graph(crossfade=CUT_CROSSFADE)`); each audio side is extended by 20 ms into the removed
 part so audio length == video length. Unit tests pass (23). Real-clip check on 8b974b8e
-(`scripts/retention_wordgap_check.py`, crossfade vs hard join + seam score) is written but its
-first run was interrupted: NOT yet verified on the real clip.
+(`scripts/retention_wordgap_check.py`, crossfade vs hard join), verified 2026-10-02:
+6 gaps >= 0.6 s → 6 cuts, 36.80 → 28.93 s; audio = video = 28.933 s (0 ms); first word after
+3 cuts found in the audio at 0 ms offset (corr ≥ 0.99). Level dip at the seams (quietest 5 ms vs
+±250 ms median): crossfade −22.9/−13.2/−6.6/+0.2/−1.1/−2.8 dB vs hard join −31.3/−12.7/−10.9/
+−7.0/−10.7/−9.4 dB; the bed carries through at 4 of 6 seams. The 2 remaining dips are probably
+genuinely quiet audio inside the pause (pad keeps 0.12 s of it); not compared against the source yet.
+No clicks either way (click score < 1).
 
 **Lane A — production break found:** worker image rebuilt 2026-10-02 10:13 pulls PyAV 19.0.0;
 faster-whisper 1.2.1 `decode_audio` calls `av.open(..., metadata_errors=...)` → TypeError, so
