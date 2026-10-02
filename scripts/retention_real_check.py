@@ -86,7 +86,9 @@ def words_of(path):
     from faster_whisper import WhisperModel
     if _model is None:
         _model = WhisperModel(MODEL, device="cpu", compute_type="int8", cpu_threads=int(THREADS))
-    segs, info = _model.transcribe(str(path), word_timestamps=True)
+    # ffmpeg-decoded samples, not a path: faster-whisper 1.2.1's own decoder (PyAV) breaks on
+    # av 19 ("open() got an unexpected keyword argument 'metadata_errors'").
+    segs, info = _model.transcribe(pcm(path), word_timestamps=True)
     return [{"word": w.word.strip(), "start": w.start, "end": w.end} for s in segs for w in (s.words or [])], info.language
 
 

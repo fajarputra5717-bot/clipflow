@@ -57,12 +57,38 @@ class SilenceTrim(unittest.TestCase):
         self.assertGreaterEqual(keep[0][0], 0.5)
         self.assertLessEqual(keep[-1][1], 9.0)
 
+    def test_default_off(self):
+        self.assertFalse(r.SILENCE_TRIM_DEFAULT)
+
+    def test_word_gaps(self):
+        words = [{"word": "a", "start": 0.0, "end": 0.5}, {"word": "b", "start": 0.9, "end": 1.2},
+                 {"word": "c", "start": 2.0, "end": 2.4}, {"word": "d", "start": 2.3, "end": 3.0},
+                 {"word": "e", "start": 3.7, "end": 4.0}]
+        # 0.4 gap ignored; 0.8 gap cut; overlapping c/d never gap; 0.7 gap after d's end
+        self.assertEqual(r.word_gap_silences(words, min_gap=0.6), [(1.2, 2.0), (3.0, 3.7)])
+        keep = r.plan_word_gap_keep(5.0, words, min_gap=0.6, pad=0.12)
+        self.assertEqual([(round(a, 2), round(b, 2)) for a, b in keep], [(0.0, 1.32), (1.88, 3.12), (3.58, 5.0)])
+        self.assertEqual(r.plan_word_gap_keep(5.0, words, min_gap=1.0), [(0.0, 5.0)])
+
+    def test_crossfade_graph_keeps_length(self):
+        keep = [(0.0, 2.0), (3.0, 5.0), (6.0, 8.0)]
+        g = r.silence_trim_graph(keep, crossfade=0.04, duration=9.0)
+        self.assertIn("[sa0]atrim=start=0:end=2.02", g)
+        self.assertIn("[sa1]atrim=start=2.98:end=5.02", g)
+        self.assertIn("[sa2]atrim=start=5.98:end=8,", g)
+        self.assertIn("[a0][a1]acrossfade=d=0.04:c1=qsin:c2=qsin[x1]", g)
+        self.assertIn("[x1][a2]acrossfade=d=0.04:c1=qsin:c2=qsin[atrim]", g)
+        self.assertIn("concat=n=3:v=1:a=0[vtrim]", g)
+        audio = (2.02 - 0) + (5.02 - 2.98) + (8 - 5.98) - 2 * 0.04
+        self.assertAlmostEqual(audio, sum(e - s for s, e in keep))
+
     def test_graph_shape(self):
-        g = r.silence_trim_graph([(0.0, 2.0), (3.0, 5.0)])
+        g = r.silence_trim_graph([(0.0, 2.0), (3.0, 5.0)], crossfade=0)
         self.assertIn("[0:v]split=2[sv0][sv1]", g)
         self.assertIn("[0:a]asplit=2[sa0][sa1]", g)
         self.assertIn("atrim=start=3:end=5", g)
-        self.assertTrue(g.endswith("[v0][a0][v1][a1]concat=n=2:v=1:a=1[vtrim][atrim]"))
+        self.assertIn("[v0][v1]concat=n=2:v=1:a=0[vtrim]", g)
+        self.assertTrue(g.endswith("[a0][a1]concat=n=2:v=0:a=1[atrim]"))
         with self.assertRaises(ValueError):
             r.silence_trim_graph([])
 

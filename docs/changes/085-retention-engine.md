@@ -46,3 +46,19 @@ Fixed on the way (engine):
   (LUFS − 14, clamped −50..−25) as an option; clips 1–2 still have no pause ≥ 0.5 s.
 Spot checks cross-correlate the word's source audio with the output at the TimeMap-predicted time
 (the constant 1 ms is AAC priming); Whisper-vs-Whisper deltas are only a coarse cross-check.
+
+## Silence-trim decision (2026-10-02)
+
+Default OFF (`SILENCE_TRIM_DEFAULT`). Per-clip opt-in detects pauses from Whisper word gaps
+(`word_gap_silences` / `plan_word_gap_keep`, >= `WORD_GAP_MIN` 0.6 s, `pad` of the pause kept each
+side), not audio level. Every cut gets a 40 ms equal-power audio crossfade centred on the cut
+(`silence_trim_graph(crossfade=CUT_CROSSFADE)`); each audio side is extended by 20 ms into the removed
+part so audio length == video length. Unit tests pass (23). Real-clip check on 8b974b8e
+(`scripts/retention_wordgap_check.py`, crossfade vs hard join + seam score) is written but its
+first run was interrupted: NOT yet verified on the real clip.
+
+**Lane A — production break found:** worker image rebuilt 2026-10-02 10:13 pulls PyAV 19.0.0;
+faster-whisper 1.2.1 `decode_audio` calls `av.open(..., metadata_errors=...)` → TypeError, so
+`transcribe()` (passes a path) fails on the next analysis job. Verified in the running worker.
+Fix verified in a throwaway container: pin `av<19` in worker/requirements.txt (18.1.0 decodes OK)
+and rebuild. The lane-b scripts pass ffmpeg-decoded samples to Whisper and are unaffected.
