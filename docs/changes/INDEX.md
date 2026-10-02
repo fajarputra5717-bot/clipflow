@@ -80,3 +80,4 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 106 · 2026-10-02 · UI shell (a): flow-preview stepper as top-level nav (Analyze/Review/Editor live; P2/P3 steps disabled), "Publish" view → Review, gear for Settings · index.html, tests/ui
 107 · 2026-10-02 · Visual system (b): flow-preview type scale, pill + fill buttons, panels (24 px, --shadow), inputs app-wide · index.html
 108 · 2026-10-02 · Per-clip caption presets (edit_spec.caption) + "Apply to all clips", style mirror fixed + check script (P1) · main.py, worker.py, index.html, shared/edit_spec.py
+109 · 2026-10-02 · Campaign rule chips (length per platform, hashtags, watermark) + Approve gate (UI + 409) + content-safety warning (utility AI) (P1) · shared/rule_checks.py, main.py, worker.py, index.html

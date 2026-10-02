@@ -1,4 +1,5 @@
 import difflib
+import hashlib
 import json
 import os
 import shutil
@@ -5105,6 +5106,88 @@ def create_preview(
         message=
             "Preview ready",
     )
+
+    # 109 (P1): campaign clips get one utility-AI content-safety pass (warning only).
+    content_safety_check(
+        candidate_id, job, candidate,
+        candidate.get("subtitle_override") or transcript_text,
+    )
+
+
+SAFETY_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "flags": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "rule": {"type": "string"},
+                    "quote": {"type": "string"},
+                    "reason": {"type": "string"},
+                },
+                "required": ["rule", "quote", "reason"],
+            },
+        },
+    },
+    "required": ["flags"],
+}
+
+
+def content_safety_check(candidate_id, job, candidate, clip_text):
+    """
+    109 (P1): one utility-model pass over the clip's words + title against the
+    campaign's content rules (SARA, insults, sensitive issues, ...). Stores
+    clip_candidates.safety_check {flags, checked_at, provider, model, text_hash};
+    the UI shows it as a WARNING chip only, the user decides. Re-runs only when
+    the text or title changed; never fails the render.
+    """
+    rules = campaigns.get(job.get("campaign")) if job.get("campaign") else None
+    if not rules:
+        return
+    content = campaigns.content_rules(rules, clip_checkable=True)
+    if not content:
+        return
+    title = candidate.get("manual_title") or candidate.get("title") or candidate.get("ai_title") or ""
+    text = (clip_text or "").strip()
+    text_hash = hashlib.sha1(f"{title}\n{text}".encode("utf-8")).hexdigest()[:16]
+    prev = candidate.get("safety_check") if isinstance(candidate.get("safety_check"), dict) else None
+    if prev and prev.get("text_hash") == text_hash:
+        return
+    rules_txt = "\n".join(f"- [{r['id']}] {r['text']}" for r in content)
+    prompt = (
+        "You review a short video clip for a brand campaign before it is posted.\n"
+        "Campaign content rules (a clip must not break any of them):\n"
+        f"{rules_txt}\n\n"
+        f"Clip title: {title}\n"
+        f"Clip words (transcript, may contain recognition errors):\n{text[:6000]}\n\n"
+        "List every place where the clip MIGHT break one of these rules: the rule id, the exact "
+        "short quote from the title or words, and a one-sentence reason in English. Flag only real "
+        "risks (SARA = ethnicity, religion, race, inter-group; insults; sensitive issues), not "
+        "harmless jokes or exclamations used normally. Return {\"flags\": []} if nothing applies."
+    )
+    try:
+        data, meta = ai_router.ai_generate_json(
+            prompt, SAFETY_SCHEMA, task="content_safety", max_tokens=800, with_meta=True,
+        )
+    except JobCancelled:
+        raise
+    except Exception as exc:
+        log(f"Content check failed for {candidate_id} (no chip): {exc}")
+        return
+    valid = {r["id"] for r in content}
+    flags = [
+        {"rule": str(f.get("rule", ""))[:80], "quote": str(f.get("quote", ""))[:200],
+         "reason": str(f.get("reason", ""))[:300]}
+        for f in (data or {}).get("flags", []) if isinstance(f, dict)
+    ]
+    flags = [f for f in flags if f["rule"] in valid]  # only rules this campaign has
+    update_candidate(candidate_id, safety_check=json.dumps({
+        "flags": flags, "checked_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+        "provider": meta.get("provider"), "model": meta.get("model"), "text_hash": text_hash,
+    }))
+    log(f"Content check {candidate_id}: {len(flags)} flag(s) via {meta.get('provider')} "
+        + ", ".join(f["rule"] for f in flags))
 
 
 # ============================================================

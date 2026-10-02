@@ -20,7 +20,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 
 from shared.ai import router as ai_router
-from shared import campaigns, edit_spec as edit_specs, languages
+from shared import campaigns, edit_spec as edit_specs, languages, rule_checks
 from shared.errors import AINotConfiguredError
 from shared.fonts import normalize_caption_font
 from shared.settings import (
@@ -272,6 +272,9 @@ def ensure_schema():
         "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS watermark_failure TEXT",
         # 108 (P1): per-clip edits (shared/edit_spec.py); NULL = job-level behaviour.
         "ALTER TABLE clip_candidates ADD COLUMN IF NOT EXISTS edit_spec JSONB",
+        # 109 (P1): content-safety pass {flags:[{rule, quote, reason}], checked_at,
+        # provider, model, text_hash, dismissed}; warning only (worker writes it).
+        "ALTER TABLE clip_candidates ADD COLUMN IF NOT EXISTS safety_check JSONB",
     ]
 
     try:
@@ -1195,6 +1198,11 @@ def get_job(job_id: str):
                     for candidate_row in candidate_rows
                 ]
 
+        # 109 (P1): campaign rule chips per clip (same function as the approve gate).
+        rules = campaigns.get(job.get("campaign")) if job.get("campaign") else None
+        for cand in job["candidates"]:
+            cand["rule_checks"] = rule_checks.check(rules, cand)
+
         return job
 
     except HTTPException:
@@ -1744,6 +1752,64 @@ def apply_caption_preset_to_all(job_id: str, req: CaptionPresetAll):
     return {"status": "updated", "subtitle_style": style, "queued": queued}
 
 
+def candidate_rule_failures(job_id: str, candidate_id: str) -> list:
+    """109: blocking rule chips that fail for this clip ([] = no campaign / all pass)."""
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT c.*, j.campaign AS _campaign FROM clip_candidates c JOIN jobs j ON j.id = c.job_id "
+                "WHERE c.id = %s AND c.job_id = %s",
+                (candidate_id, job_id),
+            )
+            row = cur.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Candidate not found")
+            cand = dict(zip([d.name for d in cur.description], row))
+    rules = campaigns.get(cand["_campaign"]) if cand.get("_campaign") else None
+    return rule_checks.blocking_failures(rule_checks.check(rules, cand))
+
+
+class RuleFix(BaseModel):
+    rule: str  # "hashtags" | "dismiss"
+
+
+@app.post("/api/jobs/{job_id}/candidates/{candidate_id}/fix-rule")
+def fix_candidate_rule(job_id: str, candidate_id: str, req: RuleFix):
+    """109: one-click fixes for rule chips. hashtags → the description ends with the
+    campaign hashtags in order (081 helper); dismiss → the content-safety warning is
+    acknowledged (the user decides; the flags stay recorded)."""
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT c.description, c.safety_check, j.campaign FROM clip_candidates c "
+                "JOIN jobs j ON j.id = c.job_id WHERE c.id = %s AND c.job_id = %s",
+                (candidate_id, job_id),
+            )
+            row = cur.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Candidate not found")
+            description, safety, slug = row
+            rules = campaigns.get(slug) if slug else None
+            if req.rule == "hashtags":
+                if not rules:
+                    raise HTTPException(status_code=400, detail="Not a campaign clip")
+                cur.execute(
+                    "UPDATE clip_candidates SET description = %s, updated_at = NOW() WHERE id = %s",
+                    (with_campaign_hashtags(description or "", rules), candidate_id),
+                )
+            elif req.rule == "dismiss":
+                if not isinstance(safety, dict):
+                    raise HTTPException(status_code=400, detail="No content check to dismiss")
+                cur.execute(
+                    "UPDATE clip_candidates SET safety_check = safety_check || %s::jsonb, updated_at = NOW() WHERE id = %s",
+                    (json_param({"dismissed": True}), candidate_id),
+                )
+            else:
+                raise HTTPException(status_code=400, detail="Unknown rule fix")
+        conn.commit()
+    return {"status": "fixed", "rule": req.rule}
+
+
 # ============================================================
 # APPROVE CANDIDATE (trigger final, full-resolution render)
 # ============================================================
@@ -1757,6 +1823,15 @@ def approve_candidate(
 ):
 
     try:
+
+        # 109 (P1): campaign clips approve only when every blocking rule passes.
+        failing = candidate_rule_failures(job_id, candidate_id)
+        if failing:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Fix {len(failing)} rule{'s' if len(failing) != 1 else ''} to approve: "
+                       + "; ".join(ch["label"] for ch in failing),
+            )
 
         with get_db() as conn:
 

@@ -394,6 +394,18 @@ button.primary:hover:not(:disabled){background:#0077ed!important}
 .cap-preset-name{font-size:12px}
 .cap-preset-anim{font-size:10.5px;font-weight:500;color:var(--muted)}
 @media (max-width:600px){.cap-preset-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+/* 109: campaign rule chips (mockup .checks), badge tokens. */
+.rule-chips{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 4px}
+.rule-row{display:inline-flex;align-items:center;gap:4px;flex-wrap:wrap;min-width:0}
+.rule-chip{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:600;padding:3px 9px;border-radius:999px;border:1px solid;white-space:nowrap}
+.rule-chip.ok{background:var(--badge-good-bg);color:var(--badge-good-fg);border-color:var(--badge-good-line)}
+.rule-chip.bad{background:var(--badge-bad-bg);color:var(--badge-bad-fg);border-color:var(--badge-bad-line)}
+.rule-chip.warn{background:var(--badge-warn-bg);color:var(--badge-warn-fg);border-color:var(--badge-warn-line)}
+.plain-btn,.plain-btn:hover:not(:disabled),[data-theme="dark"] .plain-btn,[data-theme="dark"] .plain-btn:hover:not(:disabled){background:transparent;color:var(--accent);border:0!important;box-shadow:none;min-height:32px;padding:0 8px;font-size:13px}
+.rule-why{font-size:12px;color:var(--muted)}
+.rule-why summary{cursor:pointer;color:var(--accent);list-style:none}
+.rule-why p{margin:4px 0 0;max-width:60ch}
+.approve-hint{font-size:12px;color:var(--muted);margin:0 0 10px}
 /* P0: non-fatal render problems (render_warnings): warn-token chips under the clip title. */
 .render-warnings{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}
 .render-warn{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:980px;font-size:11.5px;font-weight:600;line-height:1.3;
@@ -1913,6 +1925,7 @@ function renderCandidate(c,jid,platform,job={}){
       </div>
     </div>
     ${renderWarningsHtml(c)}
+    ${ruleChipsHtml(c,jid)}
     ${c.status==="failed"?`<div class="retry-banner ${c.error_class==="transient"?"transient":"permanent"}" role="status">
       <span>${esc(c.message||"This clip failed.")}</span>
       <button class="secondary" data-retry-candidate="${esc(jid)}" data-cid="${esc(c.id)}" type="button">Retry</button>
@@ -2040,7 +2053,7 @@ function renderCandidate(c,jid,platform,job={}){
 
         <div class="actions edit-actions">
           <button class="${busy?"is-busy":""}" data-apply="${esc(jid)}" data-cid="${esc(c.id)}" type="button" ${busy?'disabled aria-busy="true"':""}>${busy?"Updating…":"Apply changes"}</button>
-          <button class="secondary" data-approve="${esc(jid)}" data-cid="${esc(c.id)}" type="button" ${busy?"disabled":""}>Final render</button>
+          ${(()=>{const bad=ruleFailures(c);return `<button class="secondary" data-approve="${esc(jid)}" data-cid="${esc(c.id)}" type="button" title="Approve renders the final video" ${busy||bad.length?"disabled":""}>${bad.length?`Fix ${bad.length} rule${bad.length===1?"":"s"} to approve`:"Approve"}</button>`})()}
         </div>
 
         ${final?`<div class="final-box"><strong>Final render ready</strong><div class="muted">Download the finished clip or send it to YouTube Shorts when OAuth is configured.</div><div class="actions"><a href="${esc(final)}" download="clipflow_${esc(c.id)}.mp4"><button type="button">Download</button></a><button class="secondary" data-upload="${esc(jid)}" data-cid="${esc(c.id)}" type="button">Upload to YouTube</button></div></div>`:""}
@@ -2072,6 +2085,28 @@ function switchEditTab(cid,id,focus){
   card.querySelectorAll(".edit-tabpanel").forEach(p=>{p.hidden=p.id!==`etp-${cid}-${id}`;p.classList.remove("in-l","in-r")});
   const p=$(`etp-${cid}-${id}`);if(p&&!REDUCED_MOTION.matches){void p.offsetWidth;p.classList.add(to>from?"in-r":"in-l")}
   if(focus)$(`et-${cid}-${id}`)?.focus();
+}
+
+// 109 (P1): campaign rule chips (server-computed rule_checks, same function as the approve gate).
+// Blocking failures gate Approve; the content check is a warning only (the user decides).
+function ruleFailures(c){return (c.rule_checks||[]).filter(x=>x.blocking&&!x.ok)}
+function ruleChipsHtml(c,jid){
+  const rc=c.rule_checks||[];if(!rc.length)return "";
+  const fixLabel={hashtags:"Add hashtags",dismiss:"Dismiss"};
+  const chip=x=>{
+    const kind=x.ok?"ok":x.blocking?"bad":"warn",mark=x.ok?"✓":x.blocking?"✗":"⚠";
+    const fix=!x.ok&&x.fix?`<button class="plain-btn" type="button" data-rule-fix="${esc(x.fix)}" data-jid="${esc(jid)}" data-cid="${esc(c.id)}">${esc(fixLabel[x.fix]||"Fix")}</button>`:"";
+    const why=x.id==="safety"&&!x.ok?`<details class="rule-why"><summary>Why?</summary><p>${esc(x.detail)}</p></details>`:"";
+    return `<span class="rule-row"><span class="rule-chip ${kind}" title="${esc(x.detail||"")}">${mark} ${esc(x.label)}</span>${fix}${why}</span>`;
+  };
+  const bad=ruleFailures(c);
+  return `<div class="rule-chips" role="group" aria-label="Campaign rules">${rc.map(chip).join("")}</div>
+    <p class="approve-hint">${bad.length?`Fix ${bad.length} rule${bad.length===1?"":"s"} to approve.`:"All campaign rules pass."}</p>`;
+}
+async function fixRule(jid,cid,rule,btn){
+  setBusy(btn,true,"…");
+  try{await api(`/api/jobs/${jid}/candidates/${cid}/fix-rule`,{method:"POST",body:JSON.stringify({rule})});await openQueueJob(jid)}
+  catch(e){setBusy(btn,false);alert("Could not fix: "+e.message)}
 }
 
 function renderWarningsHtml(c){
@@ -2573,7 +2608,7 @@ async function approve(jid,cid){
   setBusy(b,true,"Starting render…");
   setCandidateActiveTask(jid,cid,{actionLabel:"Rendering final",status:"render_queued",progress:0});
   try{await api(`/api/jobs/${jid}/candidates/${cid}/approve`,{method:"POST"});watchCandidate(jid,cid)}
-  catch(e){setBusy(b,false);clearCandidateActiveTask(cid);alert("Final render failed: "+e.message)}
+  catch(e){setBusy(b,false);clearCandidateActiveTask(cid);alert("Approve failed: "+e.message)}
 }
 async function rate(jid,cid,n){
   try{await api(`/api/jobs/${jid}/candidates/${cid}`,{method:"PATCH",body:JSON.stringify({rating:n})});await openQueueJob(jid)}catch(e){alert("Rating failed: "+e.message)}
@@ -3016,6 +3051,7 @@ document.addEventListener("click",e=>{
   const ce=e.target.closest("[data-edit]");if(ce)return toggleCandidateEdit(ce.dataset.edit);
   const et=e.target.closest("[data-edit-tab]");if(et)return switchEditTab(et.dataset.cid,et.dataset.editTab);
   if(e.target.closest("[data-flow-editor]"))return openFlowEditor();
+  const rf=e.target.closest("[data-rule-fix]");if(rf)return fixRule(rf.dataset.jid,rf.dataset.cid,rf.dataset.ruleFix,rf);
   const pr=e.target.closest("[data-preset]");if(pr)return pickCaptionPreset(pr.dataset.cid,pr.dataset.preset);
   const pa=e.target.closest("[data-preset-all]");if(pa)return applyPresetToAll(pa.dataset.presetAll,pa.dataset.cid,pa);
   const rn=e.target.closest("[data-rename]");if(rn)return renameJob(rn.dataset.rename);

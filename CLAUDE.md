@@ -165,6 +165,10 @@ also served to the browser at `/fonts/` (nginx alias).
 Hashtags (093): `hashtags.required_in_order`, exact ORDER, appended at the END of the caption (position is
 not a rule). Campaign-only prompt additions; the non-campaign hook prompt must stay byte-identical. Clip-checkable
 content rules → `rule_flags` → `drop_rule_breakers()`; posting rules (`POSTING_RULES`) are not clip checks.
+Rule chips (109): `shared/rule_checks.check(rules, candidate)` is the ONE source for the UI chips (`rule_checks`
+in `GET /api/jobs/{id}`) and the approve gate (409). Blocking: length per platform (`PLATFORM_LIMITS`, from Lane B's
+research doc), hashtags, watermark. Warning only: content safety (`clip_candidates.safety_check`, worker
+`content_safety_check()`, utility model). New rule → add it there, not in the frontend.
 
 ## Facecam layout hint
 
