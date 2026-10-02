@@ -86,3 +86,4 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 112 · 2026-10-02 · Per-clip caption position (edit_spec.caption_y, 30–85 %, never below the facecam seam) (P1) · worker.py, shared/edit_spec.py, index.html
 113 · 2026-10-02 · Submagic "use as final" passes the same campaign rule gate as Approve (409 + disabled button) (QA Medium) · main.py, index.html
 114 · 2026-10-02 · "Final outdated · re-render" chip after render-affecting changes (apply-to-all, job style/render options, per-clip apply, restore); cleared by a new final (QA Low) · main.py, worker.py
+115 · 2026-10-02 · Campaign clips get their description at analysis (utility model, clip language) ending with the campaign hashtags; prompt + hashtag helper moved to shared · worker.py, main.py, shared

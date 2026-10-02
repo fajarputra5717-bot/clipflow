@@ -20,7 +20,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 
 from shared.ai import router as ai_router
-from shared import campaigns, edit_spec as edit_specs, languages, rule_checks
+from shared import campaigns, descriptions, edit_spec as edit_specs, languages, rule_checks
 from shared.errors import AINotConfiguredError
 from shared.fonts import normalize_caption_font
 from shared.settings import (
@@ -2170,11 +2170,7 @@ SUBTITLE_FIX_SCHEMA = {
     "required": ["fixed"],
 }
 
-DESCRIPTION_SCHEMA = {
-    "type": "object",
-    "properties": {"description": {"type": "string"}},
-    "required": ["description"],
-}
+DESCRIPTION_SCHEMA = descriptions.DESCRIPTION_SCHEMA
 
 
 def campaign_watermark_snapshot(rules) -> dict:
@@ -2240,13 +2236,8 @@ HASHTAG_RE = re.compile(r"(?<![\w&])#[\w]+", re.UNICODE)
 
 
 def with_campaign_hashtags(text: str, rules) -> str:
-    """081: campaign captions END with the campaign hashtags, in their exact
-    order, nothing between them: any hashtag the AI wrote is removed first."""
-    body = HASHTAG_RE.sub("", text)
-    body = re.sub(r"[ \t]+", " ", body)
-    body = re.sub(r" +([,.!?;:])", r"\1", body)
-    body = re.sub(r" *\n *", "\n", body).strip()
-    return f"{body}\n\n{' '.join(campaigns.hashtags(rules))}".strip()
+    """081: campaign hashtags at the END, exact order (shared since 115)."""
+    return campaigns.with_campaign_hashtags(text, rules)
 
 
 @app.get("/api/campaigns")
@@ -2438,53 +2429,10 @@ def generate_description(job_id: str, candidate_id: str):
             # The campaign's own tags are appended after generation (exact order).
             hashtags, campaign = "", ""
 
-        platform_label = {
-            "youtube_shorts": "YouTube Shorts",
-            "instagram_reels": "Instagram Reels",
-            "tiktok": "TikTok",
-        }.get(platform, "Shorts")
-
-        prompt = (
-            f"Write a short, scroll-stopping {platform_label} "
-            f"caption/description for a vertical short-form clip.\n"
-            f"Genre/mood: {content_type}\n"
-            f"Clip title: {title}\n"
-            f"Spoken subtitle in the clip ({lang_name}): {subtitle}\n\n"
-            "Requirements: 1-3 short sentences or a punchy hook "
-            f"line, native-sounding {lang_name}"
-            + (" (bilingual is fine if it reads naturally)" if lang == "id" else "")
-            + ", no markdown.\n\n"
-            "Important: the title and subtitle above are all you "
-            "know about this clip's content — you do not know the "
-            "specific game, show, or brand name unless it is "
-            "explicitly written in them. Do NOT invent, guess, or "
-            "reuse a made-up product/game name (e.g. never write "
-            "something like \"Riftstorm\" unless that exact word "
-            "appears in the title or subtitle above). Talk about "
-            "the moment itself instead ("
-            + ('e.g. "this gameplay", "this video", "this match"' if lang == "en"
-               else 'e.g. "gameplay ini", "video ini", "match ini"')
-            + ").\n\n"
-            + (
-                "Do not write any hashtags; they are added separately."
-                if rules else
-                "End with 3-6 relevant hashtags"
-                + (f" including {hashtags}" if hashtags else "")
-                + (
-                    f", and mention the campaign tag {campaign}"
-                    if campaign
-                    else ""
-                )
-                + ". For any hashtags, only use generic ones tied to "
-                "the genre/platform (e.g. #Shorts, #ContentIndonesia, "
-                "#Highlights) — never a specific product/game hashtag "
-                "unless that name literally appears in the title or "
-                "subtitle above."
-            )
-            + "\n\nRespond ONLY with JSON: "
-            '{"description": "<the caption>"}'
+        prompt = descriptions.build_description_prompt(
+            platform=platform, content_type=content_type, title=title, subtitle=subtitle,
+            lang=lang, lang_name=lang_name, rules=rules, hashtags=hashtags, campaign=campaign,
         )
-
         data = ai_generate_json(
             prompt, DESCRIPTION_SCHEMA, task="description",
             max_tokens=1024,

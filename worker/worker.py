@@ -23,7 +23,7 @@ from faster_whisper import WhisperModel
 from psycopg.rows import dict_row
 
 from shared.ai import router as ai_router
-from shared import campaigns, edit_spec as edit_specs, languages, retention
+from shared import campaigns, descriptions, edit_spec as edit_specs, languages, retention
 from shared.errors import FAILURE_TRANSIENT, failure_class
 from shared.fonts import caption_font_bold, normalize_caption_font
 from shared.settings import RuntimeSettings
@@ -5136,6 +5136,13 @@ def create_preview(
         candidate.get("subtitle_override") or transcript_text,
     )
 
+    # 115: campaign clips get their description at analysis, ending with the
+    # campaign hashtags (so the hashtag rule chip starts green).
+    campaign_description(
+        candidate_id, job, candidate,
+        candidate.get("subtitle_override") or transcript_text,
+    )
+
 
 SAFETY_SCHEMA = {
     "type": "object",
@@ -5211,6 +5218,50 @@ def content_safety_check(candidate_id, job, candidate, clip_text):
     }))
     log(f"Content check {candidate_id}: {len(flags)} flag(s) via {meta.get('provider')} "
         + ", ".join(f["rule"] for f in flags))
+
+
+def campaign_description(candidate_id, job, candidate, clip_text):
+    """
+    115: a campaign clip with an EMPTY description gets one written here (utility
+    model, the clip's language, the same prompt as "Generate description" via
+    shared/descriptions.py), ending with the campaign hashtags in exact order.
+    Never overwrites an existing description; never fails the render.
+    """
+    rules = campaigns.get(job.get("campaign")) if job.get("campaign") else None
+    if not rules or str(candidate.get("description") or "").strip():
+        return
+    lang = languages.job_language(job.get("effective_language"), job.get("language"))
+    title = (candidate.get("manual_title") or candidate.get("title")
+             or candidate.get("ai_title") or "Untitled highlight")
+    prompt = descriptions.build_description_prompt(
+        platform=job.get("platform") or candidate.get("platform") or "youtube_shorts",
+        content_type=candidate.get("content_type") or "Reality",
+        title=title, subtitle=(clip_text or "")[:1500],
+        lang=lang, lang_name=languages.name(lang), rules=rules,
+    )
+    try:
+        data, meta = ai_router.ai_generate_json(
+            prompt, descriptions.DESCRIPTION_SCHEMA, task="description",
+            max_tokens=1024, with_meta=True,
+        )
+    except JobCancelled:
+        raise
+    except Exception as exc:
+        log(f"Campaign description failed for {candidate_id} (left empty): {exc}")
+        return
+    text = str((data or {}).get("description", "")).strip()
+    if not text:
+        return
+    final = campaigns.with_campaign_hashtags(text, rules)
+    with db() as conn:
+        conn.execute(
+            "UPDATE clip_candidates SET description = %s WHERE id = %s "
+            "AND COALESCE(btrim(description), '') = ''",
+            (final, candidate_id),
+        )
+        conn.commit()
+    candidate["description"] = final
+    log(f"Campaign description {candidate_id}: {len(final)} chars via {meta.get('provider')}")
 
 
 KEYWORDS_SCHEMA = {
