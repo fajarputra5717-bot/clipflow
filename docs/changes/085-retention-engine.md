@@ -1,4 +1,4 @@
-# Retention engine (lane B, task 1) — number assigned by Lane A at merge
+# 085 · Retention engine (lane B): silence trim + word re-timing, loudnorm, punch-in zoom — builders only · shared/retention.py, tests, scripts
 
 New `shared/retention.py`: pure builders (argv lists / filter strings) for three effects; no
 subprocess, DB or settings reads. Worker integration is a later task.

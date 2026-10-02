@@ -207,6 +207,15 @@ Resolve with `job_watermark(job)` once per render and pass the same
 values to `make_ass()` and `render_vertical()`. Submagic output gets the
 watermark in the `applying` step (`apply_watermark_overlay()`).
 
+## Loudness + retention engine (085/086)
+
+`shared/retention.py` (Lane B) = pure ffmpeg argv/filter builders: silence trim + `TimeMap` word re-timing,
+two-pass loudnorm, punch-in zoom. Wired so far: ONLY loudnorm, in `render_final_candidate()` via
+`normalize_loudness()` (−14 LUFS, limiter −1 dBTP minus codec headroom, video stream-copied, verified with
+ebur128 and logged). It is the LAST audio step: any future SFX/music mix goes before it. Silence trim and
+zoom stay unwired (opt-in later via the Audio/Effects tabs). Cuts change the timeline: re-time
+words/markers with `retention.TimeMap` built from the same keep segments.
+
 ## Version history
 
 `candidate_versions` table logs a snapshot every time an edit is

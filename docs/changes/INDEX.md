@@ -56,3 +56,5 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 082 · 2026-10-02 · Edit drawer tabs: Captions / Effects (soon) / Audio (soon) / Watermark / Export · index.html
 083 · 2026-10-02 · Captions keep karaoke: override only for real edits, word-aligned re-timing, 16 redundant overrides cleared (QA #1, #3) + karaoke word spacing · worker.py, index.html
 084 · 2026-10-02 · Guards: hook window overlap < window (PUT 400 + worker clamp), API job language = WHISPER_LANGUAGE, rank negative id / non-numeric score skipped (QA #4 #5 #9) · main.py, worker.py
+085 · 2026-10-02 · Retention engine merged from lane-b (silence trim + TimeMap re-timing, two-pass loudnorm, punch-in zoom builders; tests) · shared/retention.py
+086 · 2026-10-02 · Final render loudness: two-pass loudnorm −14 LUFS, limiter −1 dBTP, video copied, ebur128-verified (QA #2) · worker.py

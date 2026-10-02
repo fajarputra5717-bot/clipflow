@@ -22,7 +22,7 @@ from faster_whisper import WhisperModel
 from psycopg.rows import dict_row
 
 from shared.ai import router as ai_router
-from shared import campaigns, languages
+from shared import campaigns, languages, retention
 from shared.errors import FAILURE_TRANSIENT, failure_class
 from shared.fonts import caption_font_bold, normalize_caption_font
 from shared.settings import RuntimeSettings
@@ -1178,6 +1178,47 @@ def run_command(
         result.returncode,
         output,
     )
+
+
+# ============================================================
+# LOUDNESS (QA #2): two-pass loudnorm to -14 LUFS, true-peak
+# limiter at -1 dBTP (shared/retention.py, Lane B). Final render
+# only, video stream copied. Must stay the LAST audio step.
+# ============================================================
+
+def has_audio_stream(path):
+    _, out = run_command(
+        ["ffprobe", "-v", "error", "-select_streams", "a",
+         "-show_entries", "stream=index", "-of", "csv=p=0", str(path)],
+        check=False,
+    )
+    return bool(out.strip())
+
+
+def normalize_loudness(path, duration):
+    path = Path(path)
+    if not has_audio_stream(path):
+        log(f"Loudness: {path.name} has no audio, skipped")
+        return None
+    ensure_disk_space("loudness")
+    timeout = render_timeout_seconds(duration)
+    _, out = run_command(retention.loudnorm_measure_cmd(str(path)).argv, timeout=timeout)
+    measured = retention.parse_loudnorm(out)
+    tmp = path.with_name(path.stem + ".loudnorm.tmp.mp4")
+    try:
+        run_command(
+            retention.loudnorm_apply_cmd(str(path), str(tmp), measured, audio_bitrate="128k").argv,
+            timeout=timeout,
+        )
+        _, vout = run_command(retention.ebur128_measure_cmd(str(tmp)).argv, timeout=timeout)
+        after = retention.parse_ebur128(vout)
+        os.replace(tmp, path)
+    finally:
+        tmp.unlink(missing_ok=True)
+    before = f"{measured['input_i']:.1f} LUFS / {measured['input_tp']:.1f} dBTP" if measured else "silent (limiter only)"
+    now = f"{after['i']:.1f} LUFS / {after['tp']:.1f} dBTP" if after else "unmeasured"
+    log(f"Loudness: {path.name} {before} -> {now}")
+    return after
 
 
 # ============================================================
@@ -5016,6 +5057,10 @@ def render_final_candidate(
         watermark_path=wm_path,
         watermark_center_y=wm_center_y,
     )
+
+    # QA #2: loudness last (after every audio step of the render).
+    update_candidate(candidate_id, progress=90, message="Normalising loudness")
+    normalize_loudness(output_path, duration)
 
     # Same rule as the preview: don't clobber a thumbnail the user
     # explicitly locked in (AI pick or manual upload) with a fresh
