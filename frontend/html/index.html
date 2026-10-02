@@ -1414,6 +1414,7 @@ function toggleTheme(){
 }
 applyTheme(document.documentElement.getAttribute("data-theme")||"light");
 let thumbSelection={}; // candidateId -> chosen AI thumbnail index, applied on "Apply changes"
+let activityTasks=[];       // 090: candidate/Submagic work from GET /api/activity (started anywhere) for the island
 let candidateActiveTasks={}; // candidateId -> {jobId,kind,actionLabel,status,progress,message,title} — every in-flight
                               // candidate-level action (preview regen, final render, AI desc/typos/hook/thumbs) merged into the Dynamic Island
 
@@ -2472,7 +2473,10 @@ async function uploadCandidate(jid,cid){
 // render identically regardless of which kind of work it actually is.
 function allActiveTasks(){
   const jobItems=runningJobs.map(j=>({id:j.id,jobId:j.id,kind:"job",platform:j.platform,status:j.status,progress:j.progress,message:j.message,custom_title:j.custom_title,source_title:j.source_title}));
-  return [...jobItems,...Object.values(candidateActiveTasks)];
+  // Click-registered tasks win (their label names the AI action); backend activity fills the rest.
+  const extra=activityTasks.filter(t=>!(t.candidate_id in candidateActiveTasks&&t.kind==="candidate"))
+    .map(t=>({id:t.kind==="submagic"?t.id+":submagic":t.id,jobId:t.job_id,kind:"candidate",actionLabel:t.label,status:t.stage,progress:t.percent,title:t.title}));
+  return [...jobItems,...Object.values(candidateActiveTasks),...extra];
 }
 // ---- Dynamic Island (073) ----------------------------------------------------------------
 // Springs: a damped harmonic oscillator integrated once per preset and emitted as a CSS
@@ -2635,7 +2639,8 @@ function openJobOverlay(){if(!allActiveTasks().length)return;overlayOpen=true;re
 function closeJobOverlay(){overlayOpen=false;renderJobOverlay();updateJobIsland()}
 async function refreshRunningJobs(){
   try{
-    const d=await api("/api/jobs?scope=current");
+    const [d,act]=await Promise.all([api("/api/jobs?scope=current"),api("/api/activity").catch(()=>null)]);
+    if(act)activityTasks=(act.items||[]).filter(t=>t.kind!=="job"); // jobs come from the list above
     const next=Array.isArray(d)?d:(d?.jobs||d?.items||[]);
     const previousIds=new Set(runningJobs.map(j=>String(j.id)));
     runningJobs=next;

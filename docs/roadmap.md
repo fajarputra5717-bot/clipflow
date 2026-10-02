@@ -7,6 +7,12 @@ Campaign → Auto-import → Analyze → Review → Editor → Schedule → Publ
 bug blocks the next phase. Each phase ships as one commit per item, with a `docs/changes/` entry, verified on
 the running stack.
 
+**Progress UI (all phases).** Every progress state uses the existing Dynamic Island (R-13 style: own capsule,
+stage + %, animates independently, only while something runs; several at once → count, expand to list): import
+and analysis, renders, loudnorm, Submagic, keyword AI, brief parsing, auto-import checks, publish kit /
+Telegram, view pulling, auto-posting. No new spinners, progress bars or toasts for progress. Backend tasks
+expose `stage`, `percent`, `label` through `GET /api/activity` (090).
+
 **Money.** Amounts are IDR first (Rp, `.` thousands). Every payout or claim amount comes from Lane B's
 `shared/payouts.py`; nothing hand-rolls payout math in main.py, worker.py or index.html.
 Rules files are the input (e.g. Fandra Octo: Rp 12.000 per FULL 3.000-view block, floor, up to 500.000

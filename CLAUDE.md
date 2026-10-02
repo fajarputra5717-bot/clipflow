@@ -344,6 +344,14 @@ or preflights get 401.
   only if a global `cancelJob(jobId)` exists: it does (R-08's `window.cancelJob(id, btn)`,
   confirm + `POST /api/jobs/{id}/cancel`; the island passes its button for `setBusy`). Reduced motion: opacity
   cross-fade only. Sheets make `#appShell`, `#tabbar`, `#island` inert.
+- **Progress = the island, only (090, all phases).** Every progress state on the platform (import/analysis,
+  preview/final render, loudnorm, Submagic, keyword AI call, brief parsing, auto-import checks, publish kit /
+  Send to Telegram, view pulling, auto-posting) shows in the Dynamic Island: its own capsule, stage + %,
+  animates independently, only while something runs; several at once → count + expand/list. **No new
+  spinners, progress bars or toasts for progress** (`setBusy()` on the clicked control stays). Backend side:
+  `GET /api/activity` → `{items:[{kind, id, job_id, candidate_id, stage, percent, label, title}]}` is the
+  one feed; a new background task kind adds its rows there (and keeps `status/progress/message` on its row),
+  never a new progress UI. The island merges it in `allActiveTasks()` (polled by `refreshRunningJobs()`).
 - **Job cards (074):** `#currentJobs` is keyed by job id: `syncCurrentJobs()` patches via
   `patchJobCard()` (`setText`/`setAttr`, bar `transform`), new → `createJobCard()`, gone →
   `leaveJobCard()`. Never re-render polled lists with innerHTML (flicker); same for the island

@@ -865,6 +865,75 @@ def create_job(req: ClipRequest):
 # LIST JOBS
 # ============================================================
 
+# ============================================================
+# ACTIVITY (090): everything running right now, in the one shape the
+# frontend's job island reads: {kind, id, job_id, candidate_id,
+# stage, percent, label, title, updated_at}. Every new background
+# task kind (brief parsing, auto-import, publish kit, view pulling,
+# auto-posting) adds its rows HERE instead of a new progress UI.
+# ============================================================
+
+CANDIDATE_BUSY = (
+    "queued", "preview_queued", "preview_rendering", "render_queued",
+    "rendering", "thumbnail_queued", "thumbnail_rendering",
+)
+SUBMAGIC_BUSY = (
+    "queued_upload", "uploading", "transcribing", "queued_export",
+    "exporting", "queued_apply", "applying",
+)
+JOB_RESTING = (
+    "completed", "failed", "cancelled", "paused", "review", "partial_failure",
+)
+
+
+@app.get("/api/activity")
+def list_activity():
+    items = []
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT j.id, j.status, j.progress, j.message,
+                       COALESCE(NULLIF(j.custom_title, ''), sv.title), j.updated_at
+                FROM jobs j LEFT JOIN source_videos sv ON sv.id = j.source_video_id
+                WHERE j.status <> ALL(%s)
+                ORDER BY j.created_at
+                """,
+                (list(JOB_RESTING),),
+            )
+            for jid, status, progress, message, title, upd in cur.fetchall():
+                items.append({
+                    "kind": "job", "id": str(jid), "job_id": str(jid), "candidate_id": None,
+                    "stage": status, "percent": int(progress or 0), "label": message or status,
+                    "title": title, "updated_at": upd.isoformat() if upd else None,
+                })
+            cur.execute(
+                """
+                SELECT c.id, c.job_id, c.status, c.progress, c.message,
+                       c.submagic_status,
+                       COALESCE(NULLIF(c.manual_title, ''), NULLIF(c.title, ''), c.ai_title),
+                       c.updated_at
+                FROM clip_candidates c JOIN jobs j ON j.id = c.job_id
+                WHERE (c.status = ANY(%s) OR c.submagic_status = ANY(%s))
+                  AND j.status IS DISTINCT FROM 'cancelled'
+                ORDER BY c.updated_at
+                """,
+                (list(CANDIDATE_BUSY), list(SUBMAGIC_BUSY)),
+            )
+            for cid, jid, status, progress, message, sm, title, upd in cur.fetchall():
+                base = {"id": str(cid), "job_id": str(jid), "candidate_id": str(cid),
+                        "title": title, "updated_at": upd.isoformat() if upd else None}
+                if status in CANDIDATE_BUSY:
+                    items.append({**base, "kind": "candidate", "stage": status,
+                                  "percent": int(progress or 0), "label": message or status})
+                if sm in SUBMAGIC_BUSY:
+                    # Submagic has no percentage of its own: queued 0, running 50.
+                    items.append({**base, "kind": "submagic", "stage": sm,
+                                  "percent": 0 if sm.startswith("queued") else 50,
+                                  "label": "Submagic: " + sm.replace("queued_", "queued ").replace("_", " ")})
+    return {"items": items}
+
+
 @app.get("/api/jobs")
 def list_jobs(
     scope: str = "current",
