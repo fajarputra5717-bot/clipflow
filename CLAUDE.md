@@ -154,7 +154,8 @@ also served to the browser at `/fonts/` (nginx alias).
 `docs/campaigns/<slug>.rules.json` (+ `.md` brief) mounted at `/app/campaigns`, read via `shared/campaigns.py`
 (mtime cache). `jobs.campaign` = slug (NULL = none). Campaign watermark preset is snapshotted on the job
 (`watermark_asset_id` + R-05 width/opacity + position) — resolve with `resolve_watermark_path(job["watermark_asset_id"])`.
-Campaign-only prompt additions; the non-campaign hook prompt must stay byte-identical. Clip-checkable
+Hashtags (093): `hashtags.required_in_order`, exact ORDER, appended at the END of the caption (position is
+not a rule). Campaign-only prompt additions; the non-campaign hook prompt must stay byte-identical. Clip-checkable
 content rules → `rule_flags` → `drop_rule_breakers()`; posting rules (`POSTING_RULES`) are not clip checks.
 
 ## Facecam layout hint

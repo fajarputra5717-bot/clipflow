@@ -63,7 +63,11 @@ def display_name(rules):
 
 
 def hashtags(rules):
-    return list((rules.get("hashtags") or {}).get("required_prefix") or [])
+    """The campaign hashtags in their required ORDER (briefs fix the order,
+    not the position; ClipFlow appends them at the end of the caption).
+    `required_prefix` = the pre-2026-10-02 key name."""
+    h = rules.get("hashtags") or {}
+    return list(h.get("required_in_order") or h.get("required_prefix") or [])
 
 
 def sources(rules):

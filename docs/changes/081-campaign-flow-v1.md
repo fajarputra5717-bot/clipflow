@@ -22,5 +22,5 @@
 Motion Klip watermark at ~25 % (frames checked); descriptions end with the exact hashtag lists; IME logged
 two skipped clips (`no_negative_narrative_about_others`); `/api/campaigns` shows Windah as brief pending.
 
-**Open.** The rules files say hashtags go FIRST in the caption ("nothing before them"); v1 appends them at
+**Open (resolved in 093: order only, at the end).** The rules files say hashtags go FIRST in the caption ("nothing before them"); v1 appends them at
 the END of the AI description as specified. The v2a "copy caption" step must put them first.

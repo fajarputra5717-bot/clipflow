@@ -68,14 +68,15 @@
     "outside_weeks": "Oct 29-31 uploads: not eligible (answered by admin 2026-10-02)"
   },
   "hashtags": {
-    "required_prefix": [
+    "required_in_order": [
       "#imeroleplay",
       "#imestrong",
       "#imeMKLIP2",
       "#motionklip",
       "#ezklip"
     ],
-    "rule": "exactly these, in this order, first in the caption; nothing before them"
+    "rule": "exactly these hashtags, in exactly this order, together (nothing between them); the brief fixes the ORDER, not the position. ClipFlow appends them at the END of the caption.",
+    "position": "end (ClipFlow convention, decided 2026-10-02)"
   },
   "content": {
     "source": "any IC (in-character) moment from the IME Roleplay GTA server",

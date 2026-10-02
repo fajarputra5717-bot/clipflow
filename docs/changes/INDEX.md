@@ -64,3 +64,4 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 090 · 2026-10-02 · Progress rule: island is the only progress UI (CLAUDE.md + roadmap); GET /api/activity {kind, stage, percent, label} feeds it, background renders/Submagic now show · main.py, index.html
 091 · 2026-10-02 · Loudness on previews + Submagic finals, failure keeps the file + render_warnings chip, 2× disk reserve (P0) · worker.py, main.py, index.html
 092 · 2026-10-02 · Campaign watermark missing → no watermark + failing chip + WARNING log, never a silent fallback (P0) · worker.py
+093 · 2026-10-02 · Campaign hashtags: exact order at the END; rules wording "required_in_order" (not "prefix") (P0) · docs/campaigns, shared/campaigns.py
