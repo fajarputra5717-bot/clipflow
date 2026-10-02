@@ -1,0 +1,12 @@
+{
+  "name": "clipflow-ui-tests",
+  "private": true,
+  "description": "Playwright smoke tests for the ClipFlow frontend (see README.md)",
+  "scripts": {
+    "test": "playwright test",
+    "report": "playwright show-report .report"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0"
+  }
+}
