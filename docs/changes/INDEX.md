@@ -76,3 +76,4 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 102 · 2026-10-02 · Island feed: activity errors keep last state + backoff, running-state allow-list, Submagic indeterminate (pre-P1) · main.py, index.html
 103 · 2026-10-02 · Job creation clamps watermark height (setting and campaign preset) to 16–85 % (pre-P1) · main.py
 104 · 2026-10-02 · Lane B Playwright UI harness on main (tests/ui, cherry-picked 556cca7); 22/22 pass · tests/ui
+105 · 2026-10-02 · Island allow-list includes reanalyze_queued (102 Low); P1 backlog: compression before loudnorm · main.py, index.html

@@ -901,7 +901,7 @@ SUBMAGIC_BUSY = (
 # Pre-P1 #4: an ALLOW-list of running job states (an unknown/new status shows
 # nothing rather than a phantom task). Mirrors index.html BUSY + "processing".
 JOB_RUNNING = (
-    "queued", "processing", "downloading", "download", "transcribing",
+    "queued", "reanalyze_queued", "processing", "downloading", "download", "transcribing",
     "transcription", "transcribed", "analyzing", "analysis",
 )
 
