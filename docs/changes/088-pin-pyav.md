@@ -9,4 +9,4 @@ Reproduced in the running worker before the fix.
 
 **Verified** on the stack: `decode_audio()` on a final → OK with av 18.1.0; one short import end to end:
 npDdITTUgl8 (4.7 min) → auto-detect id 0.81, 112 segments with word timings (247.7 s), AI hooks, 2 previews
-in review with `subtitle_override` NULL and per-word segments (083 path intact).
+in review. (Correction: those first previews had NO captions: a 083 regression, fixed in 089.)

@@ -5341,6 +5341,11 @@ def _process_analysis_job(
                 )
             )
             job["effective_language"] = lang_info["used"]
+            # 089: create_preview() below reads the transcript from this
+            # dict; the claimed row predates transcription (NULL), which
+            # left every first preview without captions once 083 stopped
+            # seeding subtitle_override from the transcript.
+            job["transcript_segments"] = segments
 
             with db() as conn:
 
