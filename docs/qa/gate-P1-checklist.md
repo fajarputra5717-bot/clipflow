@@ -25,6 +25,12 @@ Source: docs/roadmap.md P1 row. Run when Lane A reports P1 complete. Any open Hi
 - [ ] Settings still reachable (and Watermarks)
 - [ ] Money in IDR (Rp, "." thousands) everywhere it appears; no USD
 - [ ] Shell itself compared to the mock at 1280 + 390 px (stepper, header, nav, sheet entry points)
+- [ ] Per roadmap mapping (fa27f18): Campaign, Auto-import, Track disabled "Coming in P3"; Schedule, Publish disabled
+      "Coming in P2"; Analyze = today's Import view; Review = today's "Publish" view renamed; Editor disabled until a
+      clip is picked, then opens that clip's editor; Settings via sidebar AND toolbar gear; no money on any screen
+      before P2; disabled steps show no mock content
+- Screenshot pairs to take (app step ↔ mock `[data-step]`): analyze ↔ analyze, review ↔ review, editor ↔ editor,
+  each disabled step ↔ its mock step (to confirm only the placeholder is shown), shell at rest ↔ mock at rest
 
 ## P1 scope items (roadmap)
 - [ ] Per-clip caption presets (`edit_spec`) + "Apply to all clips in this job"
