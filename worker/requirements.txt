@@ -1,5 +1,7 @@
 # Transcription (R-07): CTranslate2 int8 on CPU, word-level timestamps.
 faster-whisper>=1.2,<2
+# <19: PyAV 19 dropped av.open(metadata_errors=...), which faster-whisper 1.2 decode_audio passes (088).
+av<19
 # <5: OpenCV 5 removed cv2.dnn.readNetFromCaffe (our res10 face detector).
 opencv-python-headless>=4.10,<5
 numpy>=1.26
