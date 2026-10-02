@@ -391,7 +391,9 @@ or preflights get 401.
   `--ease-spring` (overshoot), `--ease-in-out`; durations `--dur-1..4` = 120/200/320/450 ms;
   press `scale(var(--press))` (.97); spacing `--sp-*` (8pt, 4pt half-step); `--hit` 44 px;
   `--font-text`/`--font-display`; materials `--material[-thin|-thick]` + `--material-blur`.
-  Use tokens, not literals. Caption-preview `cpw-*` keyframes keep their own timings (they mirror ASS).
+  Use tokens, not literals. Visual system (107) = flow-preview's: the last CSS block in index.html sets the base type scale
+  (15 px body, 24/17 headings), buttons (secondary = `--fill`), panels (24 px, `--shadow`) and inputs; new UI
+  follows the mockup's components. Caption-preview `cpw-*` keyframes keep their own timings (they mirror ASS).
 - **Reduced motion:** the CSS rule can't stop JS. Guard JS-driven motion
   with `REDUCED_MOTION.matches` / `motionMs(ms)` (animation waits → 0) (caption preview loop) and use
   `scrollMode()` for `scrollTo`/`scrollIntoView`.

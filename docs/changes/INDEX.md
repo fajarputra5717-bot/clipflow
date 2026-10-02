@@ -78,3 +78,4 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 104 · 2026-10-02 · Lane B Playwright UI harness on main (tests/ui, cherry-picked 556cca7); 22/22 pass · tests/ui
 105 · 2026-10-02 · Island allow-list includes reanalyze_queued (102 Low); P1 backlog: compression before loudnorm · main.py, index.html
 106 · 2026-10-02 · UI shell (a): flow-preview stepper as top-level nav (Analyze/Review/Editor live; P2/P3 steps disabled), "Publish" view → Review, gear for Settings · index.html, tests/ui
+107 · 2026-10-02 · Visual system (b): flow-preview type scale, pill + fill buttons, panels (24 px, --shadow), inputs app-wide · index.html
