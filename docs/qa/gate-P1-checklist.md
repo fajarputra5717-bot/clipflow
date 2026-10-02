@@ -2,6 +2,9 @@
 
 Source: docs/roadmap.md P1 row. Run when Lane A reports P1 complete. Any open High = BLOCKED.
 
+## Carry-in to fix before the P1 gate
+- [ ] 101 regression: static HUD passes as a facecam → junk panel on all clips of a no-cam source (1dfb5ad #0)
+
 ## Required (from P1 on)
 - [ ] Fresh-import e2e per active campaign (ime-roleplay, fandra-octo), sequential, idle queue: first preview + final
       frames, karaoke, layout, watermark, −14 LUFS / TP ≤ −1 dBTP, hashtags exact order at caption end, render chips
@@ -11,6 +14,17 @@ Source: docs/roadmap.md P1 row. Run when Lane A reports P1 complete. Any open Hi
       P1 → **review** (rule chips, "Fix N rules to approve", score as "AI estimate") and **editor** (tabs, per-clip
       caption presets + "Apply to all clips in this job", keyword highlight). List differences: layout,
       components, wording. Mock data / USD vs real data / IDR = expected.
+
+## P1 task 0 · UI shell (owner 2026-10-02)
+- [ ] 8-step stepper is the top-level navigation (Campaign · Auto-import · Analyze · Review · Editor · Schedule ·
+      Publish · Track), same order/labels as the mock
+- [ ] Unbuilt steps disabled with "Coming in P2" / "Coming in P3" (per roadmap phase), not clickable, accessible
+      (aria-disabled + tooltip/label)
+- [ ] Mockup visual system app-wide (tokens, type, cards, buttons, chips as in flow-preview.html)
+- [ ] Job status island unchanged (behaviour + look; Playwright island spec + qa-capsule still pass)
+- [ ] Settings still reachable (and Watermarks)
+- [ ] Money in IDR (Rp, "." thousands) everywhere it appears; no USD
+- [ ] Shell itself compared to the mock at 1280 + 390 px (stepper, header, nav, sheet entry points)
 
 ## P1 scope items (roadmap)
 - [ ] Per-clip caption presets (`edit_spec`) + "Apply to all clips in this job"
