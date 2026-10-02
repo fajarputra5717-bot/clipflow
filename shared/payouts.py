@@ -257,6 +257,8 @@ def model_from_rules(rules: Optional[dict]) -> Model:
     p = (rules or {}).get("payout") or {}
     if not p:
         return Unknown("no payout section")
+    if (p.get("currency") or "IDR").upper() != "IDR":
+        return Unknown(f"currency {p.get('currency')}: payouts are modelled in IDR only")
     if p.get("model") == "fixed_threshold" or (p.get("per_video") and p.get("min_views")):
         weeks = ((rules or {}).get("weeks") or {}).get("list") or []
         lim = (rules or {}).get("limits") or {}

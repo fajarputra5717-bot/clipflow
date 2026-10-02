@@ -1,11 +1,17 @@
 """Campaign brief text → rules dict (the docs/campaigns/<slug>.rules.json schema) + `unsure` list.
 
-Deterministic and pure (no AI, no I/O except parse_brief_file): the briefs are Indonesian
-MotionKlip/Whop-style templates with stable section labels, so patterns beat a model here and the
-result is repeatable. Anything the text doesn't settle goes into `unsure` as
-{"field", "why"} instead of being guessed; a human (or the admin) answers those.
+Patterns first (primary, deterministic): the Indonesian MotionKlip/Whop-style templates have stable
+section labels, so regex is exact and repeatable. Anything the text doesn't settle goes into
+`unsure` as {"field", "why"} instead of being guessed; a human (or the admin) answers those.
 
-  rules = parse_brief(text, today=date(2026, 10, 2))
+AI fallback (optional, `ai=`): only when the patterns leave a gap (no payout rate, no platforms,
+no hashtags, no content rules, or unrecognised rule lines) — e.g. an English CPM-style brief. The
+AI fills ONLY fields the patterns didn't; every AI-filled field is listed in `ai_derived` and in
+`unsure` (source "ai") so it is confirmed in the Campaign screen. `ai` is any callable
+(prompt, schema) -> dict; `router_ai()` wraps shared.ai.router (utility model, task "brief").
+
+  rules = parse_brief(text, today=date(2026, 10, 2))                  # patterns only
+  rules = parse_brief(text, today=date(2026, 10, 2), ai=router_ai())  # + fallback
   shared.payouts.model_from_rules(rules)   # FixedThreshold / PerBlock / Unknown
 """
 
@@ -14,7 +20,7 @@ from __future__ import annotations
 import re
 from datetime import date
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 BRIEF_START, BRIEF_END = "--- BRIEF START ---", "--- BRIEF END ---"
 
@@ -26,7 +32,8 @@ PLATFORM_ALIASES = {
 MONTHS_ID = {"januari": 1, "februari": 2, "maret": 3, "april": 4, "mei": 5, "juni": 6, "juli": 7,
              "agustus": 8, "september": 9, "oktober": 10, "november": 11, "desember": 12,
              "january": 1, "february": 2, "march": 3, "may": 5, "june": 6, "july": 7, "august": 8,
-             "october": 10, "december": 12}
+             "october": 10, "december": 12, "jan": 1, "feb": 2, "mar": 3, "apr": 4, "jun": 6, "jul": 7,
+             "aug": 8, "sep": 9, "sept": 9, "oct": 10, "nov": 11, "dec": 12, "okt": 10, "des": 12, "agu": 8}
 
 # Content rules: first matching pattern wins (order matters: SARA before generic "tidak pantas").
 CONTENT_RULES = [
@@ -93,12 +100,39 @@ def extract_brief(md_text: str) -> Optional[str]:
     return md_text.split(BRIEF_START, 1)[1].split(BRIEF_END, 1)[0].strip()
 
 
-def parse_brief(text: Optional[str], *, today: Optional[date] = None, slug: Optional[str] = None) -> dict:
+def parse_brief(text: Optional[str], *, today: Optional[date] = None, slug: Optional[str] = None,
+                ai: Optional[Callable[[str, dict], dict]] = None) -> dict:
     """Rules dict in the docs/campaigns schema, plus `unsure: [{field, why}]`.
 
     today  anchors years the brief leaves out (briefs say '30 September', '1 Oktober').
+    ai     optional fallback for gaps the patterns leave (see module docstring).
     """
-    today = today or date.today()
+    rules = _parse_patterns(text, today=today or date.today(), slug=slug)
+    if ai and text and text.strip():
+        reasons = ai_gaps(rules)
+        if reasons:
+            try:
+                rules["_text"] = text
+                merge_ai(rules, ai(build_ai_prompt(text, rules, reasons), AI_SCHEMA))
+            except Exception as e:  # AI is a helper: a failure must never lose the pattern result
+                rules["unsure"].append({"field": "ai", "why": f"AI fallback failed: {e}"[:200]})
+            rules["ai_reasons"] = reasons
+            rules.pop("_text", None)
+    return rules
+
+
+def _currency_in(text: str) -> Optional[str]:
+    """Currency from symbols in the brief text (a fact in the text, not an AI guess)."""
+    if re.search(r"\bRp\.?\s?\d", text):
+        return "IDR"
+    if re.search(r"(?:US)?\$\s?\d", text):
+        return "USD"
+    if re.search(r"€\s?\d", text):
+        return "EUR"
+    return None
+
+
+def _parse_patterns(text: Optional[str], *, today: date, slug: Optional[str]) -> dict:
     unsure: list[dict] = []
     ask = lambda field, why: None if {"field": field, "why": why} in unsure else unsure.append({"field": field, "why": why})
     rules: dict = {"campaign": slug, "source": "brief_parser"}
@@ -211,6 +245,16 @@ def parse_brief(text: Optional[str], *, today: Optional[date] = None, slug: Opti
                 ask("period.start", f"no year in the brief; read as {year}")
     if re.search(r"hingga budget habis", text, re.I):
         period.update(end=None, until="budget runs out")
+    # English deadline: "Deadline: Oct 31, 2026" / "Submit views by Oct 31, 2026" / "by 31 October 2026"
+    dl = re.search(r"(?:deadline|submit[^\n]{0,40}?\bby|ends?|until)\s*[:\-]?\s*"
+                   r"(?:([A-Za-z]{3,9})\.?\s+(\d{1,2})|(\d{1,2})\s+([A-Za-z]{3,9}))(?:,?\s+(\d{4}))?", text, re.I)
+    if dl and "end" not in period:
+        month, day = (dl.group(1), dl.group(2)) if dl.group(1) else (dl.group(4), dl.group(3))
+        year = int(dl.group(5)) if dl.group(5) else today.year
+        if d := _date(day, month, year):
+            period["end"] = d.isoformat()
+            if not dl.group(5):
+                ask("period.end", f"no year in the deadline; read as {year}")
     if m := re.search(r"periode yang tertera di\s+(\S+?)\.?(?:\s|$)", text, re.I):
         ask("period", f"period is announced elsewhere ({m.group(1)}), not in the brief")
     if period:
@@ -258,7 +302,7 @@ def parse_brief(text: Optional[str], *, today: Optional[date] = None, slug: Opti
         rules["watermark"] = wm
         ask("watermark.asset_id", "match the template file to a watermark library asset")
         ask("watermark.preset", "size/position not in the brief (measure the placement guide)")
-    elif re.search(r"tanpa watermark|no watermark|dilarang .*watermark", text, re.I):
+    elif re.search(r"tanpa watermark|dilarang .*watermark|\bno (?:personal |own |extra )?watermarks?\b", text, re.I):
         rules["watermark"] = {"required": False, "forbidden": True}
 
     # ---- content brief + rules
@@ -282,6 +326,7 @@ def parse_brief(text: Optional[str], *, today: Optional[date] = None, slug: Opti
         elif not hit and not re.search(COVERED_ELSEWHERE, l, re.I) and not re.search(r"Clipper boleh|Seluruh Content", l, re.I) \
                 and not re.search(r"Wajib mematuhi|Wajib tonton", l, re.I):
             ask("content_rules", f"unrecognised rule line: {l[:120]}")
+            rules.setdefault("unrecognised_lines", []).append(l)
     rules["content_rules"] = found
     rules["unsure"] = unsure
     return rules
@@ -292,3 +337,168 @@ def parse_brief_file(path: str | Path, **kw) -> dict:
     p = Path(path)
     slug = p.name[:-3] if p.name.endswith(".md") else p.stem
     return parse_brief(extract_brief(p.read_text(encoding="utf-8")), slug=slug, **kw)
+
+
+# --------------------------------------------------------------------------- AI fallback
+
+KNOWN_RULE_IDS = [r[0] for r in CONTENT_RULES]
+AI_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "name": {"type": "string"},
+        "category": {"type": "string", "description": "brand | creator | other"},
+        "platforms": {"type": "array", "items": {"type": "string"}},
+        "currency": {"type": "string", "description": "ISO code, e.g. IDR, USD"},
+        "payout_model": {"type": "string", "description": "cpm | fixed_threshold | per_block | unknown"},
+        "rate": {"type": "number", "description": "cpm: amount per 1000 views; per_block: amount per block; fixed_threshold: amount per qualifying post"},
+        "block_views": {"type": "integer", "description": "per_block only"},
+        "min_views": {"type": "integer"},
+        "max_paid_views_per_post": {"type": "integer"},
+        "max_payout_per_post": {"type": "number"},
+        "total_budget": {"type": "number"},
+        "hashtags": {"type": "array", "items": {"type": "string"}},
+        "mentions": {"type": "array", "items": {"type": "string"}},
+        "watermark": {"type": "string", "description": "required | forbidden | not_stated"},
+        "min_length_seconds": {"type": "integer"},
+        "max_length_seconds": {"type": "integer"},
+        "start_date": {"type": "string", "description": "YYYY-MM-DD"},
+        "end_date": {"type": "string", "description": "YYYY-MM-DD (deadline)"},
+        "source_channels": {"type": "array", "items": {"type": "string"}, "description": "YouTube handles like @Name"},
+        "content_rules": {"type": "array", "items": {"type": "object", "properties": {
+            "id": {"type": "string", "description": "one of the known ids, or 'other'"},
+            "text": {"type": "string", "description": "short English rule"}}, "required": ["id", "text"]}},
+    },
+    "required": ["platforms", "payout_model", "hashtags", "content_rules"],
+}
+
+
+def ai_gaps(rules: dict) -> list[str]:
+    """Why the AI fallback should run (empty = patterns covered the brief)."""
+    if rules.get("brief_pending"):
+        return []
+    out = []
+    if (rules.get("payout") or {}).get("model") in (None, "unknown"):
+        out.append("payout rate not recognised")
+    if not rules.get("platforms"):
+        out.append("platforms not recognised")
+    if not (rules.get("hashtags") or {}).get("required_in_order"):
+        out.append("hashtags not recognised")
+    if not rules.get("content_rules"):
+        out.append("no content rules recognised")
+    if rules.get("unrecognised_lines"):
+        out.append(f"{len(rules['unrecognised_lines'])} rule line(s) not recognised")
+    return out
+
+
+def build_ai_prompt(text: str, rules: dict, reasons: list[str]) -> str:
+    lines = "\n".join(f"- {l}" for l in rules.get("unrecognised_lines", [])) or "(none)"
+    return (
+        "You extract campaign rules from a short-video clipping campaign brief.\n"
+        "Only report what the brief states explicitly. Never guess: use an empty string, 0 or [] "
+        "for anything not stated. Keep numbers as plain numbers (1.5, not '$1.50').\n"
+        f"Known content-rule ids: {', '.join(KNOWN_RULE_IDS)}. Map each rule to one of them, or 'other'.\n"
+        "content_rules are only about what a clip may show or say, or how it is promoted. Do NOT list "
+        "platforms, hashtags, mentions, source channels, length, watermark, captions or deadlines there: "
+        "they have their own fields.\n"
+        "payout_model: 'cpm' = paid per 1,000 views (linear); 'fixed_threshold' = one fixed amount "
+        "once a post reaches a view count; 'per_block' = amount per N views; 'unknown' otherwise.\n"
+        f"The pattern parser could not handle: {'; '.join(reasons)}.\n"
+        f"Lines it did not recognise:\n{lines}\n\n"
+        f"BRIEF:\n{text.strip()}\n"
+    )
+
+
+def _mark(rules: dict, field: str) -> None:
+    rules.setdefault("ai_derived", []).append(field)
+    # the AI's answer replaces the pattern parser's "not found" note for the same field
+    rules["unsure"] = [u for u in rules["unsure"] if not (u["field"] == field and u.get("source") != "ai")]
+    rules["unsure"].append({"field": field, "why": "AI-derived from the brief: confirm in the Campaign screen",
+                            "source": "ai"})
+
+
+def merge_ai(rules: dict, data: dict) -> dict:
+    """Fill gaps from the AI answer. Pattern values always win; every filled field is marked."""
+    data = data or {}
+    for key in ("name", "category"):
+        if not rules.get(key) and data.get(key):
+            rules[key] = str(data[key]).strip().lower() if key == "category" else str(data[key]).strip()
+            _mark(rules, key)
+    if not rules.get("platforms") and data.get("platforms"):
+        plats = []
+        for p in data["platforms"]:
+            q = PLATFORM_ALIASES.get(str(p).lower().replace("instagram reels", "instagram").strip())
+            if q and q not in plats:
+                plats.append(q)
+        if plats:
+            rules["platforms"] = plats
+            _mark(rules, "platforms")
+
+    payout = rules.setdefault("payout", {})
+    model, rate = (data.get("payout_model") or "unknown").lower(), data.get("rate") or 0
+    if payout.get("model") in (None, "unknown") and model != "unknown" and rate:
+        cur = (data.get("currency") or "").upper() or _currency_in(rules.get("_text", "")) or "UNSTATED"
+        payout.update(currency=cur, ai=True)
+        if model == "cpm":
+            payout.update(model="per_block", per_block=rate, block_views=1000, stated_as=f"CPM {rate} {cur}",
+                          rounding_note="CPM is usually prorated; per-1,000 blocks are an approximation")
+        elif model == "fixed_threshold":
+            payout.update(model="fixed_threshold", per_video=rate, min_views=data.get("min_views") or 0)
+        elif model == "per_block" and data.get("block_views"):
+            payout.update(model="per_block", per_block=rate, block_views=int(data["block_views"]))
+        if model != "fixed_threshold" and data.get("min_views"):
+            payout["min_views"] = int(data["min_views"])
+        if data.get("max_paid_views_per_post"):
+            payout["max_paid_views_per_video"] = int(data["max_paid_views_per_post"])
+        if data.get("max_payout_per_post"):
+            payout["max_payout_per_video"] = data["max_payout_per_post"]
+        _mark(rules, "payout")
+    if not rules.get("budget") and data.get("total_budget"):
+        rules["budget"] = {"currency": (data.get("currency") or "").upper() or _currency_in(rules.get("_text", "")),
+                           "total": data["total_budget"]}
+        _mark(rules, "budget")
+
+    if not (rules.get("hashtags") or {}).get("required_in_order") and data.get("hashtags"):
+        tags = ["#" + str(t).lstrip("#").strip() for t in data["hashtags"] if str(t).strip("# ")]
+        rules["hashtags"] = {"required_in_order": tags}
+        _mark(rules, "hashtags")
+    if not rules.get("mentions") and data.get("mentions"):
+        rules["mentions"] = ["@" + str(m).lstrip("@").strip() for m in data["mentions"] if str(m).strip("@ ")]
+        _mark(rules, "mentions")
+    wm = (data.get("watermark") or "").lower()
+    if "watermark" not in rules and wm in ("required", "forbidden"):
+        rules["watermark"] = {"required": wm == "required", "forbidden": wm == "forbidden"}
+        _mark(rules, "watermark")
+    if not rules.get("video") and (data.get("min_length_seconds") or data.get("max_length_seconds")):
+        rules["video"] = {"min_seconds": data.get("min_length_seconds") or None,
+                          "max_seconds": data.get("max_length_seconds") or None}
+        _mark(rules, "video")
+    if not rules.get("period") and (data.get("start_date") or data.get("end_date")):
+        rules["period"] = {"start": data.get("start_date") or None, "end": data.get("end_date") or None}
+        _mark(rules, "period")
+    if not rules.get("sources") and data.get("source_channels"):
+        rules["sources"] = [{"platform": "youtube", "channel": "@" + str(c).split("@")[-1].strip("/ "),
+                             "job_source": True} for c in data["source_channels"] if str(c).strip()]
+        _mark(rules, "sources")
+
+    have = {r["id"] for r in rules.get("content_rules", [])}
+    for i, r in enumerate(data.get("content_rules") or []):
+        rid = r.get("id") if r.get("id") in KNOWN_RULE_IDS else None
+        if rid in have:
+            continue
+        rid = rid or "custom_" + re.sub(r"[^a-z0-9]+", "_", (r.get("text") or f"rule {i}").lower()).strip("_")[:40]
+        if rid in have:
+            continue
+        have.add(rid)
+        rules.setdefault("content_rules", []).append({"id": rid, "text": (r.get("text") or "").strip(), "ai": True})
+        _mark(rules, f"content_rules.{rid}")
+    return rules
+
+
+def router_ai(max_tokens: int = 2000) -> Callable[[str, dict], dict]:
+    """AI callable for parse_brief(ai=...) via shared.ai.router (utility provider, task 'brief').
+    The process must have called shared.ai.router.configure(setting, log) first."""
+    from shared.ai.router import ai_generate_json
+
+    def call(prompt: str, schema: dict) -> dict:
+        return ai_generate_json(prompt, schema, task="brief", max_tokens=max_tokens)
+    return call
