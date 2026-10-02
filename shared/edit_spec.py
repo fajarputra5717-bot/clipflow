@@ -9,6 +9,9 @@ Keys so far:
            at preview build, stoplist-filtered; the user toggles them). An
            explicit [] = "none" (the AI never refills it).
   keyword_color: "#RRGGBB"     111: highlight colour (default KEYWORD_DEFAULT_COLOR).
+  caption_y: number            112: caption anchor, % of height from the top (30-85).
+           Full-frame clips: replaces FULLFRAME_CAPTION_Y; camera-panel clips:
+           never below the seam. Missing = auto (today's placement).
 
 PATCH semantics (main.py update_candidate): top-level keys are merged into
 the stored spec; a key sent as null is removed.
@@ -63,6 +66,22 @@ def normalize_color(value):
     return value.strip().upper()
 
 
+CAPTION_Y_RANGE = (30.0, 85.0)
+
+
+def normalize_caption_y(value):
+    if value is None:
+        return None
+    try:
+        y = float(value)
+    except (TypeError, ValueError):
+        raise ValueError("caption_y must be a number (% from top)")
+    lo, hi = CAPTION_Y_RANGE
+    if not lo <= y <= hi:
+        raise ValueError(f"caption_y must be between {lo:g} and {hi:g} % from the top")
+    return round(y, 1)
+
+
 def keywords_of(spec):
     """(set of tokens, '#RRGGBB') from a stored spec; empty set when none."""
     spec = spec if isinstance(spec, dict) else {}
@@ -81,6 +100,8 @@ def normalize_patch(patch, styles, animations):
             value = normalize_keywords(value)
         elif key == "keyword_color":
             value = normalize_color(value)
+        elif key == "caption_y":
+            value = normalize_caption_y(value)
         else:
             raise ValueError(f"unknown edit_spec key: {key!r}")
         if value is None:

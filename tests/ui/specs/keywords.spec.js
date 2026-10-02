@@ -21,3 +21,21 @@ test.describe("Keyword highlight", () => {
     expect(p.body.edit_spec.keyword_color).toBe("#30D158");
   });
 });
+
+// 112 (P1): per-clip caption position.
+test.describe("Caption position", () => {
+  test("custom position sends edit_spec.caption_y; back to Auto sends null", async ({ app, api }) => {
+    await nav(app, "queue");
+    await app.locator('[data-queue-open="job-done"]').click();
+    const cand = app.locator("#candidate-cand-a");
+    await cand.locator("[data-edit]").first().click();
+    const range = cand.locator("#capy-cand-a");
+    await expect(range).toBeDisabled();
+    await cand.locator("#capyon-cand-a").check();
+    await expect(range).toBeEnabled();
+    await range.fill("62");
+    await expect(cand.locator("#capyVal-cand-a")).toHaveText("62 %");
+    await cand.locator("[data-apply]").click();
+    await expect.poll(() => api.calls.some((c) => c.method === "PATCH" && c.body?.edit_spec?.caption_y === 62)).toBe(true);
+  });
+});

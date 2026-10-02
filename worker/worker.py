@@ -3775,11 +3775,16 @@ def calculate_face_crop(
     }
 
 
-def caption_split_ratio(split_ratio, face_crop):
+def caption_split_ratio(split_ratio, face_crop, override=None):
     """Where make_ass() anchors captions (% from the top; their bottom sits a
     seam gap above it). With the facecam panel: the seam. Full-frame (no
     panel, P0): FULLFRAME_CAPTION_Y (default 78), clamped to 60-85 so the
     block stays above the platforms' bottom UI band (~87 %)."""
+    if override is not None:
+        # 112 (P1): per-clip caption position (edit_spec.caption_y). With a
+        # camera panel it can only move UP from the seam, never into the cam.
+        y = max(30.0, min(85.0, float(override)))
+        return min(y, split_ratio) if (face_crop or {}).get("panel", True) else y
     if (face_crop or {}).get("panel", True):
         return split_ratio
     try:
@@ -5023,7 +5028,7 @@ def create_preview(
             subtitle_style,
             preview_width,
             preview_height,
-            split_ratio=caption_split_ratio(split_ratio, face_crop),
+            split_ratio=caption_split_ratio(split_ratio, face_crop, (candidate.get("edit_spec") or {}).get("caption_y") if isinstance(candidate.get("edit_spec"), dict) else None),
             animation=normalize_subtitle_animation(job),
             keywords=sorted(edit_specs.keywords_of(candidate.get("edit_spec"))[0]),
             keyword_color=edit_specs.keywords_of(candidate.get("edit_spec"))[1],
@@ -5441,7 +5446,7 @@ def render_final_candidate(
 
             FINAL_WIDTH,
             FINAL_HEIGHT,
-            split_ratio=caption_split_ratio(split_ratio, face_crop),
+            split_ratio=caption_split_ratio(split_ratio, face_crop, (candidate.get("edit_spec") or {}).get("caption_y") if isinstance(candidate.get("edit_spec"), dict) else None),
             animation=normalize_subtitle_animation(job),
             keywords=sorted(edit_specs.keywords_of(candidate.get("edit_spec"))[0]),
             keyword_color=edit_specs.keywords_of(candidate.get("edit_spec"))[1],
