@@ -341,6 +341,11 @@ button.primary:hover:not(:disabled){background:#0077ed!important}
   background:var(--mini-bar-color,#0071e3);
   width:100%;transform-origin:left center;transition:transform 600ms var(--ease-out); /* node persists across polls: glides from the last value */
 }
+.campaign-select{width:100%}
+.campaign-hint{margin-top:6px;font-size:11.5px;color:var(--muted)}
+.campaign-tag{font-size:10.5px;font-weight:600;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.queue-filter{display:flex;align-items:center;gap:var(--sp-1);margin:0 0 var(--sp-2);font-size:12px;color:var(--muted)}
+.queue-filter select{width:auto;min-width:180px}
 .job-foot{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-2);margin-top:8px}
 .job-foot .stage{margin:0}
 .job-details{min-width:0;text-align:right}
@@ -1135,8 +1140,14 @@ img.topbar-logo-icon{background:none;padding:0;object-fit:cover}
           </div>
 
           <div class="field">
-            <label for="jobCustomTitle">Job / campaign name <span class="muted">· optional, shown instead of the auto-generated title</span></label>
+            <label for="jobCustomTitle">Job name <span class="muted">· optional, shown instead of the auto-generated title</span></label>
             <input id="jobCustomTitle" autocomplete="off" maxlength="120" placeholder="e.g. Q4 Launch — Creator Bootcamp">
+          </div>
+
+          <div class="field">
+            <label for="jobCampaign">Campaign <span class="muted">· rules, watermark and hashtags for the clips</span></label>
+            <select id="jobCampaign" class="campaign-select"><option value="">None</option></select>
+            <div class="hint campaign-hint" id="campaignHint" hidden></div>
           </div>
 
           <details class="import-options" id="importOptions">
@@ -1496,6 +1507,22 @@ function jobDisplayTitle(j){
 function selectSplit(v){selectedSplit=Number(v);document.querySelectorAll("[data-split]").forEach(x=>x.classList.toggle("active",Number(x.dataset.split)===selectedSplit));updateImportOptionsSummary()}
 function selectPlatform(v){selectedPlatform=v;document.querySelectorAll("[data-platform]").forEach(x=>x.classList.toggle("active",x.dataset.platform===selectedPlatform));updateImportOptionsSummary()}
 function selectLayout(v){selectedLayout=v;document.querySelectorAll("[data-layout]").forEach(x=>x.classList.toggle("active",x.dataset.layout===selectedLayout));updateImportOptionsSummary()}
+// 081: campaigns come from docs/campaigns/*.rules.json via GET /api/campaigns.
+let campaignsCache=[],queueCampaignFilter="";
+function campaignName(slug){const c=campaignsCache.find(x=>x.slug===slug);return c?c.name:slug}
+async function loadCampaigns(){
+  try{campaignsCache=await api("/api/campaigns")||[]}catch(e){campaignsCache=[];console.error(e)}
+  const sel=$("jobCampaign");if(!sel)return;const keep=sel.value;
+  sel.innerHTML=`<option value="">None</option>`+campaignsCache.map(c=>`<option value="${esc(c.slug)}">${esc(c.name)}${c.brief_pending?" (brief pending)":""}</option>`).join("");
+  sel.value=campaignsCache.some(c=>c.slug===keep)?keep:"";updateCampaignHint();
+}
+function updateCampaignHint(){
+  const c=campaignsCache.find(x=>x.slug===$("jobCampaign")?.value),h=$("campaignHint");if(!h)return;
+  if(!c){h.hidden=true;h.textContent="";return}
+  const src=c.sources.length?`Source: ${c.sources.join(", ")}`:(c.source_note?`Source: ${c.source_note}`:"Source: any");
+  h.textContent=`${src} · ${c.platforms.length} platforms${c.brief_pending?" · brief pending":""}`;h.hidden=false;
+}
+
 // 079: Auto (default) lets Whisper detect the language; the last EXPLICIT choice is remembered and sent as
 // language_fallback, which the worker uses when Auto-detect confidence is below 0.6.
 const LANG_NAMES={en:"English",id:"Indonesian"},LAST_LANG_KEY="clipflow_last_language";
@@ -1565,7 +1592,8 @@ async function createJob(){
       // subtitle style/font/size omitted: the backend fills them from the DEFAULT_SUBTITLE_* settings
       youtube_url:url,custom_title:customTitle||null,layout:selectedLayout,platform:selectedPlatform,split_ratio:selectedSplit,
       subtitle_animation:"karaoke",
-      language:selectedLanguage,language_fallback:lastExplicitLanguage()
+      language:selectedLanguage,language_fallback:lastExplicitLanguage(),
+      campaign:$("jobCampaign").value||null
     })});
     const id=j.job_id||j.id;if(!id)throw new Error("Backend did not return a job ID.");
     saveActive(id);
@@ -1604,7 +1632,7 @@ function createJobCard(j){
   el.className="panel job-card";el.dataset.jobId=String(j.id);
   el.innerHTML=`<div class="job-header">
       <div class="job-main"><div class="job-title-row"><h3></h3><button class="rename-btn" data-rename="${esc(j.id)}" type="button" aria-label="Rename job" title="Rename job">${PENCIL_ICON}</button></div></div>
-      <div class="job-header-side">${platformIcon(j.platform,"sm")}<span class="badge"></span><span class="job-actions"></span></div>
+      <div class="job-header-side"><span class="tag campaign-tag" hidden></span>${platformIcon(j.platform,"sm")}<span class="badge"></span><span class="job-actions"></span></div>
     </div>
     <div class="mini-bar"><div class="mini-bar-track"><div class="mini-bar-fill"></div></div><span class="mini-bar-pct"></span></div>
     <div class="job-auto-queue"><span class="auto-queue-dot"></span><span class="job-status-line"></span></div>
@@ -1615,6 +1643,7 @@ function patchJobCard(el,j){
   const p=pct(j.progress),s=j.status||"processing",q=c=>el.querySelector(c),split=Number(j.split_ratio||70);
   const bc=badgeClass(s);el.classList.toggle("is-running",bc==="running");el.classList.toggle("is-idle",bc==="idle");
   setText(q("h3"),jobDisplayTitle(j));
+  const ct=q(".campaign-tag");setText(ct,j.campaign?campaignName(j.campaign):"");setAttr(ct,"hidden",!j.campaign);
   const badge=q(".badge");setAttr(badge,"class","badge "+badgeClass(s));setText(badge,stageLabel(s));
   const bar=q(".mini-bar");setAttr(bar,"hidden",isDone(p,s));
   if(bar.style.getPropertyValue("--mini-bar-color")!==stageColor(s))bar.style.setProperty("--mini-bar-color",stageColor(s));
@@ -1659,6 +1688,7 @@ function syncCurrentJobs(jobs){
   setText($("jobsCount"),jobs.length);setAttr($("jobsLabel"),"hidden",!jobs.length);
 }
 
+function campaignTag(j){return j.campaign?`<span class="tag campaign-tag" title="Campaign">${esc(campaignName(j.campaign))}</span>`:""}
 function renderQueueJob(j,i=0){
   const p=pct(j.progress),s=j.status||"completed",busy=isBusy(s),done=isDone(p,s);
   const c=j.candidates?.[0],thumb=c?mediaUrl(`${API}/api/jobs/${j.id}/candidates/${c.id}/thumbnail`):null;
@@ -1670,7 +1700,7 @@ function renderQueueJob(j,i=0){
         ${done?"":`<div class="progress-msg">${esc(j.message||stageLabel(s))}</div>`}
       </div>
       <div class="job-header-side">
-        ${platformIcon(j.platform,"sm")}
+        ${campaignTag(j)}${platformIcon(j.platform,"sm")}
         <span class="badge ${badgeClass(s)}">${esc(stageLabel(s))}</span>
         ${isCancellable(s)?`<button class="secondary cancel-job-btn" data-cancel-job="${esc(j.id)}" type="button">Cancel</button>`:""}
         ${s==="failed"?`<button class="secondary cancel-job-btn" data-retry-job="${esc(j.id)}" type="button">Retry</button>`:""}
@@ -2100,8 +2130,13 @@ async function loadCurrentJobs(){
 }
 async function loadQueue(){
   try{
-    const d=await api("/api/jobs?scope=queue"),jobs=Array.isArray(d)?d:(d?.jobs||d?.items||[]);
-    $("queueJobs").innerHTML=jobs.length?`<div class="queue-list">${jobs.map((j,i)=>renderQueueJob(j,i)).join("")}</div>`:`<div class="panel empty"><div class="empty-title">No jobs in Publish yet</div><div class="empty-tip">Finished imports land here. Open one and use <b>Edit</b> on a clip to adjust its subtitle, font, style, title and rating, then render, download or publish.</div></div>`;
+    const d=await api("/api/jobs?scope=queue"),all=Array.isArray(d)?d:(d?.jobs||d?.items||[]);
+    // 081: filter by campaign ("" = all, "none" = jobs without one); only offered once a job has a campaign.
+    const used=[...new Set(all.map(j=>j.campaign).filter(Boolean))];
+    if(queueCampaignFilter&&queueCampaignFilter!=="none"&&!used.includes(queueCampaignFilter))queueCampaignFilter="";
+    const jobs=all.filter(j=>!queueCampaignFilter||(queueCampaignFilter==="none"?!j.campaign:j.campaign===queueCampaignFilter));
+    const filter=used.length?`<label class="queue-filter">Campaign <select id="queueCampaignFilter"><option value="">All</option>${used.map(c=>`<option value="${esc(c)}" ${c===queueCampaignFilter?"selected":""}>${esc(campaignName(c))}</option>`).join("")}<option value="none" ${queueCampaignFilter==="none"?"selected":""}>No campaign</option></select></label>`:"";
+    $("queueJobs").innerHTML=filter+(jobs.length?`<div class="queue-list">${jobs.map((j,i)=>renderQueueJob(j,i)).join("")}</div>`:queueCampaignFilter?`<div class="panel empty"><div class="empty-title">No jobs for this campaign</div></div>`:`<div class="panel empty"><div class="empty-title">No jobs in Publish yet</div><div class="empty-tip">Finished imports land here. Open one and use <b>Edit</b> on a clip to adjust its subtitle, font, style, title and rating, then render, download or publish.</div></div>`);
   }catch(e){$("queueJobs").innerHTML=`<div class="panel error-box">Cannot load history: ${esc(e.message)}</div>`}
 }
 async function switchQueueView(showDetail){
@@ -2686,6 +2721,8 @@ function hideToast(){const t=$("toast");t.classList.remove("show");t.setAttribut
 document.addEventListener("click",e=>{if(e.target.closest("#toastAction")){const fn=toastFn;hideToast();fn&&fn()}});
 document.addEventListener("change",e=>{
   if(e.target.id==="watermarkUploadInput"&&e.target.files&&e.target.files[0])uploadWatermarkAsset(e.target.files[0]);
+  if(e.target.id==="jobCampaign")updateCampaignHint();
+  if(e.target.id==="queueCampaignFilter"){queueCampaignFilter=e.target.value;loadQueue()}
 });
 const SETTINGS_GROUPS=[
   ["AI & transcription",["GEMINI_API_KEY","GEMINI_ANALYSIS_MODEL","GEMINI_MAX_ATTEMPTS","WHISPER_MODEL","WHISPER_LANGUAGE","RUNWAY_API_KEY","RUNWAY_MODEL"]],
@@ -2882,7 +2919,7 @@ window.addEventListener("load",async()=>{
   // Key + media token first, so the first render already has working <img>/<video> URLs.
   // Token is stable for 12 h and valid 12-24 h; refresh hourly.
   await refreshMediaToken();setInterval(refreshMediaToken,60*60*1000);
-  await loadSettings();await loadWatermarkAssets();await loadCurrentJobs();await loadQueue();
+  await loadSettings();await loadWatermarkAssets();await loadCampaigns();await loadCurrentJobs();await loadQueue();
 
   // Always start the lightweight running-job monitor, including when an
   // active job was restored from localStorage. Previously the restored-job

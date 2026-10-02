@@ -21,7 +21,7 @@ from faster_whisper import WhisperModel
 from psycopg.rows import dict_row
 
 from shared.ai import router as ai_router
-from shared import languages
+from shared import campaigns, languages
 from shared.errors import FAILURE_TRANSIENT, failure_class
 from shared.fonts import caption_font_bold, normalize_caption_font
 from shared.settings import RuntimeSettings
@@ -109,13 +109,27 @@ WATERMARK_PATH = Path(
 )
 
 
-def resolve_watermark_path():
+def resolve_watermark_path(asset_id=None):
     """
     The watermark burned into every render is chosen from the asset
     library (main.py's /api/assets/watermarks endpoints) rather than
-    fixed at build time. Falls back to the baked-in default asset
-    until something has been uploaded and activated.
+    fixed at build time. asset_id = the job's own asset (081: a
+    campaign preset snapshotted as jobs.watermark_asset_id); otherwise
+    the active asset; the baked-in default until one exists.
     """
+
+    if asset_id:
+        try:
+            with db() as conn:
+                row = conn.execute(
+                    "SELECT path FROM watermark_assets WHERE id::text = %s",
+                    (str(asset_id),),
+                ).fetchone()
+            if row and row.get("path") and (DATA_ROOT / row["path"]).exists():
+                return DATA_ROOT / row["path"]
+            log(f"Job watermark asset {asset_id} not found; using the active one")
+        except Exception as exc:
+            log(f"Could not resolve job watermark asset {asset_id}: {exc}")
 
     active_id = setting("ACTIVE_WATERMARK_ID")
 
@@ -293,6 +307,20 @@ HOOKS_SCHEMA = {
     },
 }
 
+
+
+def hooks_schema_for(campaign):
+    """HOOKS_SCHEMA, plus a required rule_flags list for campaign jobs (081)."""
+    if not campaign:
+        return HOOKS_SCHEMA
+    ids = [r["id"] for r in campaigns.content_rules(campaign, clip_checkable=True)]
+    item = json.loads(json.dumps(HOOKS_SCHEMA["items"]))
+    item["properties"]["rule_flags"] = {
+        "type": "array",
+        "items": {"type": "string", "enum": ids} if ids else {"type": "string"},
+    }
+    item["required"] = item["required"] + ["rule_flags"]
+    return {"type": "array", "items": item}
 
 
 # ============================================================
@@ -1746,6 +1774,7 @@ def build_hooks_prompt(
     clip_min_duration,
     clip_max_duration,
     language=languages.DEFAULT,
+    campaign=None,
 ):
     """The hook-selection prompt for these segments (the whole video or
     one window of it: no truncation here, select_hooks() decides what
@@ -1760,6 +1789,33 @@ def build_hooks_prompt(
         if language == "en"
         else "- Create an Indonesian title when the content is Indonesian."
     )
+    campaign_block, flags_field = "", ""
+    if campaign:
+        # 081: campaign jobs only; prompts without a campaign are unchanged.
+        title_lang = languages.name(campaigns.title_language(campaign))
+        title_language_rule = (
+            f"- Write the title in {title_lang} (campaign requirement)."
+        )
+        rules = campaigns.content_rules(campaign, clip_checkable=True)
+        examples = campaigns.title_examples(campaign)
+        campaign_block = (
+            f"This clip is for the campaign "
+            f"\"{campaigns.display_name(campaign)}\".\n"
+            "Campaign content rules (a clip that breaks any of them is "
+            "not allowed):\n"
+            + "".join(f"- [{r['id']}] {r['text']}\n" for r in rules)
+            + (
+                "Title style examples (match their tone and the "
+                "hook-first structure; never copy them word for word):\n"
+                + "".join(f"- {e}\n" for e in examples)
+                if examples else ""
+            )
+            + f"Titles: {title_lang}, the hook first.\n"
+            "For each clip, list in \"rule_flags\" the ids of any "
+            "campaign rules it might break ([] if none). Be honest: "
+            "flagged clips are dropped.\n\n"
+        )
+        flags_field = ',\n    "rule_flags": []'
 
     prompt = f"""
 You are an expert short-form gaming video editor.
@@ -1799,7 +1855,7 @@ write the title generically (e.g. "Gila, Serangan Balik Dadakan!"
 instead of inventing "Riftstorm Comeback!") — describe the
 moment itself, not a made-up product name.
 
-Return ONLY JSON in this format:
+{campaign_block}Return ONLY JSON in this format:
 
 [
   {{
@@ -1809,7 +1865,7 @@ Return ONLY JSON in this format:
     "reason": "Why this hook is interesting",
     "score": 92,
     "content_type": "Funny",
-    "rating": 8
+    "rating": 8{flags_field}
   }}
 ]
 
@@ -1946,6 +2002,12 @@ def parse_hooks(raw, provider, clip_count):
                 "rating": rating,
 
                 "provider": provider,
+
+                # 081: campaign rule ids the model says this clip breaks.
+                "rule_flags": [
+                    str(x) for x in (item.get("rule_flags") or [])
+                    if isinstance(x, str)
+                ],
             }
         )
 
@@ -1972,6 +2034,7 @@ def analyze_hooks(
     platform="youtube_shorts",
     clip_count=None,
     language=languages.DEFAULT,
+    campaign=None,
 ):
 
     validate_ai()
@@ -1996,6 +2059,7 @@ def analyze_hooks(
         (clip_target_duration, clip_min_duration, clip_max_duration),
         router_hooks_call,
         language,
+        campaign,
     )
     return hooks
 
@@ -2094,8 +2158,28 @@ Return ONLY JSON: [{{"id": 3, "score": 92, "reason": "..."}}]
 """
 
 
+def drop_rule_breakers(hooks, campaign):
+    """081: drop clips the model flagged against a clip-checkable campaign
+    rule; one log line per dropped clip naming the rule(s)."""
+    if not campaign:
+        return hooks
+    valid = {r["id"] for r in campaigns.content_rules(campaign, clip_checkable=True)}
+    kept = []
+    for h in hooks:
+        broken = [f for f in h.get("rule_flags") or [] if f in valid]
+        if broken:
+            log(
+                f"Campaign {campaign['slug']}: skipped clip "
+                f"{h['start']:.1f}-{h['end']:.1f}s \"{h['title'][:60]}\": "
+                f"breaks {', '.join(broken)}"
+            )
+        else:
+            kept.append(h)
+    return kept
+
+
 def select_hooks(segments, platform, clip_count, durations, call,
-                 language=languages.DEFAULT):
+                 language=languages.DEFAULT, campaign=None):
     """Hook selection over the WHOLE transcript (076; it used to see only
     the first 24k characters). Fits → one call. Too long → one call per
     window, dedupe, then one ranking call over the candidates.
@@ -2106,6 +2190,9 @@ def select_hooks(segments, platform, clip_count, durations, call,
     target, lo, hi = durations
     full_max = setting_int("HOOKS_FULL_TRANSCRIPT_MAX_CHARS")
     calls = []
+    schema = hooks_schema_for(campaign)
+    # Campaign jobs ask for 2 spare clips so rule-flagged ones can be dropped.
+    ask = clip_count + 2 if campaign else clip_count
 
     def run(label, prompt, schema):
         check_cancelled()
@@ -2122,10 +2209,11 @@ def select_hooks(segments, platform, clip_count, durations, call,
 
     size = len(timed_transcript_text(segments))
     if size <= full_max:
-        prompt = build_hooks_prompt(segments, platform, clip_count, target, lo, hi,
-                                    language)
-        raw, meta = run("full", prompt, HOOKS_SCHEMA)
-        return parse_hooks(raw, meta["provider"], clip_count), calls
+        prompt = build_hooks_prompt(segments, platform, ask, target, lo, hi,
+                                    language, campaign)
+        raw, meta = run("full", prompt, schema)
+        hooks = drop_rule_breakers(parse_hooks(raw, meta["provider"], ask), campaign)
+        return hooks[:clip_count], calls
 
     windows = transcript_windows(
         segments,
@@ -2133,14 +2221,16 @@ def select_hooks(segments, platform, clip_count, durations, call,
         setting_int("HOOKS_WINDOW_OVERLAP_MINUTES") * 60,
     )
     log(f"Transcript {size} chars > {full_max}: {len(windows)} windows")
-    per_window = max(clip_count, 3)
+    per_window = max(ask, 3)
     candidates = []
     for i, part in enumerate(windows, 1):
         prompt = build_hooks_prompt(part, platform, per_window, target, lo, hi,
-                                    language)
+                                    language, campaign)
         try:
-            raw, meta = run(f"window {i}/{len(windows)}", prompt, HOOKS_SCHEMA)
-            candidates += parse_hooks(raw, meta["provider"], per_window)
+            raw, meta = run(f"window {i}/{len(windows)}", prompt, schema)
+            candidates += drop_rule_breakers(
+                parse_hooks(raw, meta["provider"], per_window), campaign,
+            )
         except JobCancelled:
             raise
         except RuntimeError as exc:  # a window with nothing usable isn't fatal
@@ -3937,6 +4027,7 @@ def apply_watermark_overlay(
     watermark_width,
     watermark_opacity,
     watermark_center_y=None,
+    watermark_asset_id=None,
 ):
     """One overlay pass on an already-rendered vertical video (used
     after the Submagic download, R-05): same centered geometry as
@@ -3944,7 +4035,7 @@ def apply_watermark_overlay(
 
     ensure_disk_space("watermark overlay")
 
-    watermark = resolve_watermark_path()
+    watermark = resolve_watermark_path(watermark_asset_id)
 
     if not watermark.exists():
         raise RuntimeError(
@@ -4501,7 +4592,7 @@ def create_preview(
 
     # R-16: one asset + one geometry for this render; make_ass()
     # returns the watermark rect cleared of the captions.
-    wm_path = resolve_watermark_path()
+    wm_path = resolve_watermark_path(job.get("watermark_asset_id"))
     watermark_rect = None
     wm_center_y, seam_gap_frac = job_layout(job)
 
@@ -4767,7 +4858,7 @@ def render_final_candidate(
 
     # R-16: one asset + one geometry for this render; make_ass()
     # returns the watermark rect cleared of the captions.
-    wm_path = resolve_watermark_path()
+    wm_path = resolve_watermark_path(job.get("watermark_asset_id"))
     watermark_rect = None
     wm_center_y, seam_gap_frac = job_layout(job)
 
@@ -5216,6 +5307,7 @@ def _process_analysis_job(
                 language=languages.job_language(
                     job.get("effective_language"), job.get("language"),
                 ),
+                campaign=campaigns.get(job.get("campaign")),
             )
         )
 
@@ -6000,6 +6092,8 @@ def claim_candidate_task():
                 j.watermark_position_y,
                 j.subtitle_seam_gap,
                 j.transcript_segments,
+                j.watermark_asset_id,
+                j.campaign,
                 sv.source_path
             FROM clip_candidates c
             JOIN jobs j
@@ -6133,6 +6227,13 @@ def _process_candidate_task(
 
             "transcript_segments":
                 task["transcript_segments"],
+
+            # 081: campaign watermark preset (asset) + slug.
+            "watermark_asset_id":
+                task.get("watermark_asset_id"),
+
+            "campaign":
+                task.get("campaign"),
         }
 
         if (
@@ -6250,7 +6351,7 @@ def claim_submagic_task():
             SELECT c.*, sv.source_path,
                    j.watermark_width, j.watermark_opacity,
                    j.split_ratio, j.layout, j.watermark_position_y,
-                   j.language, j.effective_language
+                   j.language, j.effective_language, j.watermark_asset_id
             FROM clip_candidates c
             JOIN jobs j ON j.id = c.job_id
             JOIN source_videos sv ON sv.id = j.source_video_id
@@ -6491,6 +6592,7 @@ def process_submagic_task(candidate):
                 watermark_width=wm_width,
                 watermark_opacity=wm_opacity,
                 watermark_center_y=job_layout(candidate)[0],
+                watermark_asset_id=candidate.get("watermark_asset_id"),
             )
 
             raw_path.unlink(missing_ok=True)

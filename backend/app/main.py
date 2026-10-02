@@ -20,7 +20,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 
 from shared.ai import router as ai_router
-from shared import languages
+from shared import campaigns, languages
 from shared.errors import AINotConfiguredError
 from shared.fonts import normalize_caption_font
 from shared.settings import (
@@ -257,6 +257,10 @@ def ensure_schema():
         "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS detected_language TEXT",
         "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS language_confidence REAL",
         "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS effective_language TEXT",
+        # 081: campaign slug (docs/campaigns/<slug>.rules.json; NULL = none) and the
+        # campaign's watermark asset, snapshotted at creation like R-05/R-17.
+        "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS campaign TEXT",
+        "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS watermark_asset_id TEXT",
     ]
 
     try:
@@ -437,6 +441,9 @@ class ClipRequest(BaseModel):
     language: str = "auto"
 
     language_fallback: Optional[str] = None
+
+    # 081: campaign slug (GET /api/campaigns); None = no campaign.
+    campaign: Optional[str] = None
 
     split_ratio: float = Field(
         default=70.0,
@@ -680,6 +687,12 @@ def create_job(req: ClipRequest):
             status_code=400,
             detail="language_fallback must be en or id",
         )
+    rules = None
+    if req.campaign:
+        rules = campaigns.get(req.campaign)
+        if not rules:
+            raise HTTPException(status_code=400, detail="Unknown campaign")
+    wm = campaign_watermark_snapshot(rules)
     req.youtube_url = validate_youtube_url(req.youtube_url)
 
     # R-14: refuse up front instead of failing deep in the pipeline.
@@ -764,7 +777,11 @@ def create_job(req: ClipRequest):
                         watermark_position_y,
                         subtitle_seam_gap,
                         language,
-                        language_fallback
+                        language_fallback,
+                        campaign,
+                        watermark_asset_id,
+                        watermark_width,
+                        watermark_opacity
                     )
                     VALUES (
                         %s,
@@ -777,6 +794,10 @@ def create_job(req: ClipRequest):
                         %s,
                         %s,
                         %s::jsonb,
+                        %s,
+                        %s,
+                        %s,
+                        %s,
                         %s,
                         %s,
                         %s,
@@ -799,10 +820,15 @@ def create_job(req: ClipRequest):
                         style["animation"],
                         # R-17: freeze today's defaults onto the job so a
                         # later settings change doesn't move its layout.
-                        percent_setting("WATERMARK_POSITION_Y", 25.0, 5, 95),
+                        wm["position_y"] if wm.get("position_y") is not None
+                        else percent_setting("WATERMARK_POSITION_Y", 25.0, 5, 95),
                         percent_setting("SUBTITLE_SEAM_GAP", 1.5, 0, 20),
                         req.language,
                         req.language_fallback,
+                        req.campaign,
+                        wm.get("asset_id"),
+                        wm.get("width"),
+                        wm.get("opacity"),
                     ),
                 )
 
@@ -920,7 +946,8 @@ def list_jobs(
                         j.language,
                         j.detected_language,
                         j.language_confidence,
-                        j.effective_language
+                        j.effective_language,
+                        j.campaign
                     FROM jobs j
                     LEFT JOIN source_videos sv
                         ON sv.id = j.source_video_id
@@ -1004,7 +1031,8 @@ def get_job(job_id: str):
                         j.language,
                         j.detected_language,
                         j.language_confidence,
-                        j.effective_language
+                        j.effective_language,
+                        j.campaign
                     FROM jobs j
                     LEFT JOIN source_videos sv
                         ON sv.id = j.source_video_id
@@ -1843,6 +1871,80 @@ DESCRIPTION_SCHEMA = {
 }
 
 
+def campaign_watermark_snapshot(rules) -> dict:
+    """081: the campaign's watermark preset as job columns: asset id (by id,
+    else by filename stem = asset name), width, opacity, centre y %. {} =
+    no campaign / no preset: the job keeps the global settings."""
+    preset = campaigns.watermark(rules) if rules else None
+    if not preset:
+        return {}
+    asset_id = None
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                if preset["asset_id"]:
+                    cur.execute(
+                        "SELECT id FROM watermark_assets WHERE id::text = %s",
+                        (str(preset["asset_id"]),),
+                    )
+                    row = cur.fetchone()
+                    asset_id = str(row[0]) if row else None
+                if not asset_id and preset["asset_name"]:
+                    cur.execute(
+                        "SELECT id FROM watermark_assets WHERE lower(regexp_replace("
+                        "filename, '\\.[^.]+$', '')) = lower(%s) "
+                        "ORDER BY created_at DESC LIMIT 1",
+                        (preset["asset_name"],),
+                    )
+                    row = cur.fetchone()
+                    asset_id = str(row[0]) if row else None
+    except Exception as exc:
+        print(f"Campaign watermark lookup failed: {exc}")
+    if not asset_id:
+        print(
+            f"Campaign {rules['slug']}: watermark asset "
+            f"{preset['asset_id'] or preset['asset_name']!r} not in the library; "
+            "the job uses the active watermark"
+        )
+    return {
+        "asset_id": asset_id,
+        "width": preset["width"],
+        "opacity": preset["opacity"],
+        "position_y": preset["center_y_pct"],
+    }
+
+
+def job_campaign_of(job_id: str):
+    """The job's campaign rules dict, or None."""
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT campaign FROM jobs WHERE id = %s", (job_id,))
+                row = cur.fetchone()
+    except Exception:
+        row = None
+    return campaigns.get(row[0]) if row and row[0] else None
+
+
+HASHTAG_RE = re.compile(r"(?<![\w&])#[\w]+", re.UNICODE)
+
+
+def with_campaign_hashtags(text: str, rules) -> str:
+    """081: campaign captions END with the campaign hashtags, in their exact
+    order, nothing between them: any hashtag the AI wrote is removed first."""
+    body = HASHTAG_RE.sub("", text)
+    body = re.sub(r"[ \t]+", " ", body)
+    body = re.sub(r" +([,.!?;:])", r"\1", body)
+    body = re.sub(r" *\n *", "\n", body).strip()
+    return f"{body}\n\n{' '.join(campaigns.hashtags(rules))}".strip()
+
+
+@app.get("/api/campaigns")
+def list_campaigns():
+    """Campaigns from docs/campaigns/*.rules.json (re-read on change)."""
+    return [campaigns.summary(r) for r in campaigns.load_all().values()]
+
+
 def job_language_of(job_id: str) -> str:
     """'en' or 'id' for this job (079): what its prompts are written for."""
     try:
@@ -2021,6 +2123,10 @@ def generate_description(job_id: str, candidate_id: str):
 
         lang = job_language_of(job_id)
         lang_name = languages.name(lang)
+        rules = job_campaign_of(job_id)
+        if rules:
+            # The campaign's own tags are appended after generation (exact order).
+            hashtags, campaign = "", ""
 
         platform_label = {
             "youtube_shorts": "YouTube Shorts",
@@ -2049,18 +2155,22 @@ def generate_description(job_id: str, candidate_id: str):
             + ('e.g. "this gameplay", "this video", "this match"' if lang == "en"
                else 'e.g. "gameplay ini", "video ini", "match ini"')
             + ").\n\n"
-            "End with 3-6 relevant hashtags"
-            + (f" including {hashtags}" if hashtags else "")
             + (
-                f", and mention the campaign tag {campaign}"
-                if campaign
-                else ""
+                "Do not write any hashtags; they are added separately."
+                if rules else
+                "End with 3-6 relevant hashtags"
+                + (f" including {hashtags}" if hashtags else "")
+                + (
+                    f", and mention the campaign tag {campaign}"
+                    if campaign
+                    else ""
+                )
+                + ". For any hashtags, only use generic ones tied to "
+                "the genre/platform (e.g. #Shorts, #ContentIndonesia, "
+                "#Highlights) — never a specific product/game hashtag "
+                "unless that name literally appears in the title or "
+                "subtitle above."
             )
-            + ". For any hashtags, only use generic ones tied to "
-            "the genre/platform (e.g. #Shorts, #ContentIndonesia, "
-            "#Highlights) — never a specific product/game hashtag "
-            "unless that name literally appears in the title or "
-            "subtitle above."
             + "\n\nRespond ONLY with JSON: "
             '{"description": "<the caption>"}'
         )
@@ -2070,6 +2180,8 @@ def generate_description(job_id: str, candidate_id: str):
             max_tokens=1024,
         )
         description = str(data.get("description", "")).strip()
+        if rules and description:
+            description = with_campaign_hashtags(description, rules)
 
         if not description:
             raise HTTPException(

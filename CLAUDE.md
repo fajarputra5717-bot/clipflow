@@ -145,6 +145,14 @@ select weight by name ("Montserrat Black") with ASS Bold=0 — never add
 Captions strip emoji (libass can't draw them). Files: `worker/fonts/`,
 also served to the browser at `/fonts/` (nginx alias).
 
+## Campaigns (081)
+
+`docs/campaigns/<slug>.rules.json` (+ `.md` brief) mounted at `/app/campaigns`, read via `shared/campaigns.py`
+(mtime cache). `jobs.campaign` = slug (NULL = none). Campaign watermark preset is snapshotted on the job
+(`watermark_asset_id` + R-05 width/opacity + position) — resolve with `resolve_watermark_path(job["watermark_asset_id"])`.
+Campaign-only prompt additions; the non-campaign hook prompt must stay byte-identical. Clip-checkable
+content rules → `rule_flags` → `drop_rule_breakers()`; posting rules (`POSTING_RULES`) are not clip checks.
+
 ## Facecam layout hint
 
 `jobs.layout` ∈ `auto|left|right`, set once at job creation (Import

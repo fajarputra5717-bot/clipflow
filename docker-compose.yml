@@ -44,6 +44,7 @@ services:
     environment: *app-env
     volumes:
       - /data:/data
+      - ./docs/campaigns:/app/campaigns:ro   # campaign rules (081), re-read on change
     ports:
       - "127.0.0.1:8000:8000"   # debugging from the VM only; the UI goes through nginx
     depends_on:
@@ -66,6 +67,7 @@ services:
     volumes:
       - /data:/data
       - hf_cache:/cache/huggingface
+      - ./docs/campaigns:/app/campaigns:ro   # campaign rules (081), re-read on change
     depends_on:
       postgres: { condition: service_healthy }
     logging: *logging
