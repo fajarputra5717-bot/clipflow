@@ -1,0 +1,68 @@
+# Gate P1 · UI shell + editor redesign · **BLOCKED** (1 High) · 2026-10-03
+
+Reviewer: Lane C. Gated commit: main @ 985cacb ("P1 built (106–114)"); 115 (descriptions at analysis) was
+deployed during the run and is included. Checklist: gate-P1-checklist.md. Playwright run against a git-served copy
+of 985cacb (not the live working tree).
+
+**Verdict: BLOCKED by one High** (#1). Everything P1 built works. If the owner accepts the workaround for #1
+(import IME's GTA source with Facecam → "No facecam") and rates it Medium, this gate is a **PASS** with the items
+below carried over.
+
+## Blockers
+1. **High · junk camera panel on every default IME import of the GTA source.** Third fresh GTA job in a row with
+   the junk bottom panel: job 7e84933b decided `panel` by **majority** ("2/2 clips detected a face") → both finals
+   show a zoomed slice of the source's chat overlay / shirt / floor in the bottom 30 %
+   (`frames/gate-P1/final-a63edbbb.jpg`, `final-e989b2d0.jpg`). Earlier: fbda481f via 101's tie path (HUD at
+   (0.94, 0.67)). So the detector itself returns stable false positives on this game (HUD/overlay/characters);
+   neither the majority nor the tie rule can fix that. Raised from Medium because it now hits 100 % of the
+   active campaign's default imports and regresses a P0-gated item. Fix ideas: require a face detector score floor
+   + more hits (real cams: 15–37, spread ≤ 0.012), reject boxes whose content doesn't change between samples (HUD),
+   or a per-campaign/per-channel layout default (IME source = no facecam).
+
+## Fresh-import e2e (sequential, idle queue)
+| clip | campaign | layout | preset / caption_y / keywords | final I / TP | hashtags (order, end) | warnings / chips |
+|---|---|---|---|---|---|---|
+| a63edbbb | IME | panel ✗ (#1) | **Hormozi** (hormozi+bounce) / **62 %** / green | −14.2 / −1.3 ✓ | ✓ (at analysis, 115) | none; safety [] |
+| e989b2d0 | IME | panel ✗ (#1) | job default / auto / AI (yellow) | −14.1 / −1.3 ✓ | ✓ | safety: "Anjik" (no_sara_or_insults) |
+| 71f7ff44 | Fandra | panel ✓ (cam) | **Hormozi** / **85 % → stays at the seam** ✓ / green | −14.0 / −1.1 ✓ | ✓ | none |
+| b85232f7 | Fandra | panel ✓ | default karaoke | −14.1 / −1.3 ✓ | ✓ | none |
+All 1080×1920. Keywords baked in green in the finals ("GILA", "INDAH", "ASTAGHFIRULLAHALADZIM":
+`frames/gate-P1/keywords-*.jpg`); Hormozi/bounce preset visible on both preset clips; caption_y 62 moved IME clip 1's
+captions up; Fandra 85 clamped to the seam (never into the cam).
+
+## Rule gate (Approve + Submagic)
+On QA clip e989b2d0 (completed): description without hashtags → `POST …/approve` **409** "Fix 1 rule to approve:
+Hashtags missing or out of order", status stayed `completed`; with `submagic_status=completed` → `POST
+…/submagic/use-as-final` **409** with the same rule message, nothing queued; `fix-rule hashtags` → description ends
+with the 5 tags in order. All restored. (Positive path: fresh campaign clips now have hashtags from analysis (115), so
+Approve 200 is correct.)
+
+## Playwright
+Lane B suite on git-served 985cacb + QA specs (capsule, steps-vs-mock): **38 passed, 4 skipped, 0 failed**,
+desktop 1280 + mobile 390.
+
+## UI vs flow-preview mock (screens in `frames/gate-P1/ui/`)
+Shell (as in ui-shell-vs-mock-2026-10-02 #1–#6): sidebar + page title vs mock's top header; no stepper card header;
+built-step subtitles worded differently; mobile has stepper + bottom tab bar; mobile disabled steps show no reason.
+Review step: mock = horizontal clip cards (thumbnail left, "Hook 94", title, reason, rule chips with inline fix links,
+"Approve & schedule" + "Open editor"), sorted by score, "4 to review"; app = tall cards dominated by a video player,
+"AI estimate N" + reason, full-width "Get another hook" / "Try Submagic edit" buttons, a "★ n/10" rating overlay
+(2 scores), Approve only inside the drawer. Editor step: mock = its own page (eyebrow, title, Virality chip, chips,
+player left, tabs right, 3×2 preset grid, keyword section, sticky "Fix 1 rule… · Render preview · Approve & schedule");
+app = the drawer inside a half-width Review card next to the other clip, sticky "Apply changes · Approve". Mobile
+editor opens scrolled to the player; bottom tab bar highlights "Review" while the title says "Editor". No money on any
+screen ✓ (no USD).
+
+## Carried over (none blocks except #1)
+2. **Medium · Editor/Review layout ≠ mock steps 4–5** (drawer in a card vs dedicated editor page; tall player cards vs
+   compact clip cards). Owner decides whether this is P1 scope or later.
+3. Low · two scores on a card (AI estimate + ★ rating).
+4. Low · mobile: disabled steps give no reason; tab bar says Review while in Editor; two navigations.
+5. Low · default keyword yellow = karaoke highlight on yellow styles (Lane A follow-up announced).
+6. Low · AI keyword picker emphasised "ASTAGHFIRULLAHALADZIM" on a SARA-flagged IME clip; consider excluding
+   religious exclamations from keyword picks.
+7. Low (P1 backlog) · peaky audio ~−15.2 LUFS + chip; light compression before loudnorm.
+8. Low · full-frame "No facecam" captions over in-game HUD → now fixable per clip (112) ✓.
+
+## Not verified
+Submagic final render end to end (billable); "Final outdated" chip live (code + Lane A); dark theme comparison.
