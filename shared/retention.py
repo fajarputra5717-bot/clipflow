@@ -35,6 +35,8 @@ LOUDNORM_I = -14.0           # integrated loudness target (LUFS)
 LOUDNORM_TP = -1.0           # true-peak ceiling (dBTP)
 LOUDNORM_LRA = 11.0          # loudness range target (LU)
 SILENT_INPUT_LUFS = -70.0    # below this the input counts as silent: skip loudnorm
+CODEC_HEADROOM_DB = 0.5      # limiter sits this far below TP: AAC encoding overshoots ~0.2-0.3 dB
+MIN_WORD_DUR = 0.02          # Whisper emits zero-length words; keep them with this length
 ZOOM_PEAK = 1.15
 ZOOM_RAMP = 0.25             # ease in / ease out (s)
 ZOOM_HOLD = 1.00             # time at full zoom (s)
@@ -125,6 +127,15 @@ def parse_silencedetect(stderr: str, duration: float) -> list[Segment]:
     return out
 
 
+def relative_noise_db(integrated_lufs: Optional[float], *, below: float = 14.0,
+                      lo: float = -50.0, hi: float = -25.0) -> float:
+    """silencedetect threshold relative to the clip's loudness, for clips with a music/game bed
+    that never reaches the absolute default (-35 dB). Clamped to [lo, hi]; default if unknown."""
+    if integrated_lufs is None or not math.isfinite(integrated_lufs):
+        return SILENCE_NOISE_DB
+    return max(lo, min(hi, integrated_lufs - below))
+
+
 def plan_keep_segments(duration: float, silences: Sequence[Segment] = (), *,
                        words: Sequence[dict] = (), forced_cuts: Sequence[Segment] = (),
                        min_gap: float = SILENCE_MIN_GAP, pad: float = SILENCE_PAD,
@@ -192,19 +203,23 @@ def remap_words(words: Sequence[dict], keep: Sequence[Segment] | TimeMap) -> lis
     """Re-time Whisper words ({word,start,end,...}) onto the cut timeline.
 
     Words entirely inside a cut are dropped; a word that straddles a cut keeps only its
-    kept part(s). Extra keys are preserved, order is kept, start < end is guaranteed.
+    kept part(s). Zero-length words (Whisper emits them) are kept with MIN_WORD_DUR.
+    Extra keys are preserved, order is kept, start < end is guaranteed.
     """
     tm = keep if isinstance(keep, TimeMap) else TimeMap(keep)
     out = []
     for w in words:
         s, e = float(w["start"]), float(w["end"])
-        parts = [(max(s, ks), min(e, ke)) for ks, ke in tm.keep if ks < e and ke > s]
+        parts = [(max(s, ks), min(e, ke)) for ks, ke in tm.keep
+                 if (ks < e and ke > s) or (s == e and ks <= s < ke)]
         if not parts:
             continue
         ns = tm.to_output_clamped(parts[0][0])
         ne = tm.to_output_clamped(parts[-1][0]) + (parts[-1][1] - parts[-1][0])
-        if ne - ns < 1e-3:
-            continue
+        if ne - ns < MIN_WORD_DUR:  # zero-length Whisper word that was kept: give it a sliver
+            ne = min(ns + MIN_WORD_DUR, tm.duration)
+            if ne <= ns:
+                continue
         out.append({**w, "start": round(ns, 3), "end": round(ne, 3)})
     return out
 
@@ -311,14 +326,16 @@ def parse_loudnorm(stderr: str) -> Optional[dict]:
 
 
 def loudnorm_filter(measured: Optional[dict], *, i: float = LOUDNORM_I, tp: float = LOUDNORM_TP,
-                    lra: float = LOUDNORM_LRA, out_rate: int = 48000) -> str:
+                    lra: float = LOUDNORM_LRA, out_rate: int = 48000,
+                    codec_headroom_db: float = CODEC_HEADROOM_DB) -> str:
     """Pass 2 audio chain: linear loudnorm with pass-1 values -> true-peak limiter -> out_rate.
 
     loudnorm outputs 192 kHz; limiting there (4x oversampled) approximates a true-peak limiter,
-    so the -1 dBTP ceiling holds after resampling. With no measurement (silent input) only the
+    and its ceiling sits codec_headroom_db below TP because AAC encoding overshoots: measured on
+    real clips, a -1.0 limiter came out at -0.7..-0.8 dBTP after encoding. With no measurement (silent input) only the
     limiter + resample run. Keep this chain LAST in the audio graph (after any SFX mix).
     """
-    limit = _f(round(10 ** (tp / 20), 4))
+    limit = _f(round(10 ** ((tp - codec_headroom_db) / 20), 4))
     # The trailing aformat is required: ffmpeg 5.1 loudnorm/alimiter leave the channel layout
     # unset and the encoder link then fails ("Cannot select channel layout"), mono and stereo.
     tail = (f"alimiter=limit={limit}:attack=1:release=50:level=0,aresample={out_rate},"
@@ -330,6 +347,24 @@ def loudnorm_filter(measured: Optional[dict], *, i: float = LOUDNORM_I, tp: floa
             f":measured_I={_f(m['input_i'])}:measured_TP={_f(m['input_tp'])}"
             f":measured_LRA={_f(m['input_lra'])}:measured_thresh={_f(m['input_thresh'])}"
             f":offset={_f(m['target_offset'])}:linear=true:print_format=summary,{tail}")
+
+
+def ebur128_measure_cmd(src: str) -> FFmpegStep:
+    """Verification meter (BS.1770 integrated + true peak) for a finished file -> parse_ebur128().
+    Use this, not loudnorm's own JSON, to check an output: loudnorm's pass-1 numbers read up to
+    ~0.8 LU off on high-range content after a dynamic-mode pass."""
+    return FFmpegStep("ebur128", ["ffmpeg", "-hide_banner", "-nostats", "-i", src, "-vn", "-sn", "-dn",
+                                  "-af", "ebur128=peak=true", "-f", "null", "-"])
+
+
+def parse_ebur128(stderr: str) -> Optional[dict]:
+    """{'i': LUFS, 'tp': dBTP} from the ebur128 summary; None if absent."""
+    tail = stderr[stderr.rfind("Summary:"):] if "Summary:" in stderr else ""
+    mi = re.search(r"I:\s+(-?[\d.]+|-inf) LUFS", tail)
+    mp = re.search(r"True peak:\s+Peak:\s+(-?[\d.]+|-inf) dBFS", tail)
+    if not (mi and mp):
+        return None
+    return {"i": float(mi.group(1)), "tp": float(mp.group(1))}
 
 
 def loudnorm_apply_cmd(src: str, dst: str, measured: Optional[dict], *, audio_bitrate: str = "128k",

@@ -91,6 +91,11 @@ class WordTiming(unittest.TestCase):
         for w in out:
             self.assertLess(w["start"], w["end"])
 
+    def test_zero_length_word_kept(self):
+        out = r.remap_words([{"word": "x", "start": 3.5, "end": 3.5}, {"word": "cut", "start": 2.5, "end": 2.5}],
+                            self.keep)
+        self.assertEqual([(w["word"], w["start"], w["end"]) for w in out], [("x", 2.5, 2.52)])
+
     def test_remap_times(self):
         self.assertEqual(r.remap_times([1.0, 2.5, 7.0], self.keep), [1.0, 2.0, 5.0])
 
@@ -130,6 +135,18 @@ class Zoom(unittest.TestCase):
 
 
 class Loudnorm(unittest.TestCase):
+    def test_relative_noise(self):
+        self.assertEqual(r.relative_noise_db(-14.0), -28.0)
+        self.assertEqual(r.relative_noise_db(-5.0), -25.0)
+        self.assertEqual(r.relative_noise_db(None), r.SILENCE_NOISE_DB)
+
+    def test_parse_ebur128(self):
+        e = ("[Parsed_ebur128_0 @ 0x1] t: 1.2 M: -20 S: -20 I: -30.0 LUFS\n"
+             "[Parsed_ebur128_0 @ 0x1] Summary:\n\n  Integrated loudness:\n    I:         -14.1 LUFS\n"
+             "    Threshold: -24.4 LUFS\n\n  True peak:\n    Peak:       -1.2 dBFS\n")
+        self.assertEqual(r.parse_ebur128(e), {"i": -14.1, "tp": -1.2})
+        self.assertIsNone(r.parse_ebur128("nothing"))
+
     def test_parse(self):
         m = r.parse_loudnorm(LOUDNORM)
         self.assertEqual(m["input_i"], -23.41)
@@ -144,7 +161,7 @@ class Loudnorm(unittest.TestCase):
         f = r.loudnorm_filter(r.parse_loudnorm(LOUDNORM))
         self.assertTrue(f.startswith("loudnorm=I=-14:TP=-1:LRA=11:measured_I=-23.41"))
         self.assertIn("linear=true", f)
-        self.assertTrue(f.endswith("alimiter=limit=0.8913:attack=1:release=50:level=0,aresample=48000,"
+        self.assertTrue(f.endswith("alimiter=limit=0.8414:attack=1:release=50:level=0,aresample=48000,"
                                    "aformat=channel_layouts=mono|stereo"))
         self.assertTrue(r.loudnorm_filter(None).startswith("aresample=192000,alimiter"))
 
