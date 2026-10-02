@@ -132,7 +132,6 @@ html[data-theme="dark"]{color-scheme:dark}
 [data-theme="dark"] .running-job-item:hover{background:#2c2c2e}
 [data-theme="dark"] .badge,[data-theme="dark"] .tag{background:rgba(255,255,255,.07);border-color:rgba(255,255,255,.1)}
 [data-theme="dark"] .progress-ring-track{stroke:rgba(255,255,255,.13)}
-[data-theme="dark"] .mini-bar-track{background:rgba(255,255,255,.12)}
 [data-theme="dark"] .rename-btn{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.1)!important}
 [data-theme="dark"] .rename-btn:hover:not(:disabled){background:rgba(255,255,255,.12)}
 [data-theme="dark"] .rail-section,[data-theme="dark"] .settings details{border-color:rgba(255,255,255,.08)}
@@ -321,9 +320,33 @@ button.primary:hover:not(:disabled){background:#0077ed!important}
 .job-card.is-running .auto-queue-dot{background:var(--accent);animation:dotBreathe 2s ease-in-out infinite}
 @keyframes dotBreathe{50%{opacity:.4}}
 .job-card .badge.running::after{display:none}
-.job-card.is-running .mini-bar-fill{background:linear-gradient(100deg,transparent 35%,rgba(255,255,255,.26) 50%,transparent 65%) no-repeat var(--mini-bar-color,#0071e3);background-size:250% 100%;animation:barSheen 2s linear infinite}
-@keyframes barSheen{0%{background-position:150% 0}100%{background-position:-50% 0}}
-@media (prefers-reduced-motion:reduce){.job-card .auto-queue-dot,.job-card .mini-bar-fill{animation:none!important;background-image:none!important}}
+.campaign-select{width:100%}
+.campaign-hint{margin-top:6px;font-size:11.5px;color:var(--muted)}
+.campaign-tag{font-size:10.5px;font-weight:600;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.queue-filter{display:flex;align-items:center;gap:var(--sp-1);margin:0 0 var(--sp-2);font-size:12px;color:var(--muted)}
+.queue-filter select{width:auto;min-width:180px}
+.job-foot{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-2);margin-top:8px}
+.job-foot .stage{margin:0}
+.job-details{min-width:0;text-align:right}
+.job-details>summary{list-style:none;cursor:pointer;font-size:10.5px;font-weight:600;color:var(--muted);display:inline-flex;align-items:center;gap:4px;padding:2px 0}
+.job-details>summary::-webkit-details-marker{display:none}
+.job-details>summary::after{content:"";width:5px;height:5px;border:solid currentColor;border-width:0 1.5px 1.5px 0;transform:rotate(45deg) translateY(-2px);transition:transform var(--dur-2) var(--ease-out)}
+.job-details[open]>summary::after{transform:rotate(-135deg) translateY(-1px)}
+.job-details[open]{text-align:left;flex-basis:100%}
+.job-foot:has(.job-details[open]){flex-wrap:wrap}
+.mini-island{display:inline-flex;align-items:center;gap:7px;max-width:100%;height:28px;margin-top:10px;padding:0 11px 0 7px;border-radius:14px;
+  background:#000;color:#fff;box-shadow:inset 0 0 0 1px rgba(255,255,255,.08),0 4px 12px rgba(0,0,0,.18);font-size:11.5px;font-weight:600;letter-spacing:-.01em}
+.mini-island[hidden]{display:none}
+.mini-island.is-failed{background:#2a0706;box-shadow:inset 0 0 0 1px rgba(255,69,58,.35),0 4px 12px rgba(0,0,0,.18)}
+.mi-ring{width:16px;height:16px;flex:none;transform:rotate(-90deg)}
+.mi-ring circle{fill:none;stroke-width:2.5}
+.mi-track{stroke:rgba(255,255,255,.18)}
+.mi-fill{stroke:#0a84ff;stroke-linecap:round;transition:stroke-dashoffset 2200ms linear,stroke var(--dur-2) var(--ease)} /* = island ring: glides across one poll */
+.mini-island.is-ready .mi-fill{stroke:#30d158}.mini-island.is-failed .mi-fill{stroke:#ff453a}
+.mini-island:not(.is-running) .mi-fill{transition:none}
+.mi-stage{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mi-pct{flex:none;font-variant-numeric:tabular-nums;color:rgba(255,255,255,.7)}
+@media (prefers-reduced-motion:reduce){.job-card .auto-queue-dot{animation:none!important}.mi-fill{transition:none!important}}
 .job-header{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
 .job-header-side{display:flex;align-items:center;gap:7px;flex:none}
 .cancel-job-btn{padding:5px 10px;font-size:11.5px;min-height:0}
@@ -341,28 +364,6 @@ button.primary:hover:not(:disabled){background:#0077ed!important}
 .job-id,.job-url{font-size:9.5px;color:var(--muted2);word-break:break-all;margin-top:3px}.job-url{max-width:75vw}
 .progress-msg{font-size:9.5px;color:var(--muted);margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:70vw}
 .job-header-side .progress-ring{margin:0 1px}
-.mini-bar{display:flex;align-items:center;gap:8px;margin-top:10px}
-.mini-bar-track{flex:1;height:5px;border-radius:99px;overflow:hidden;background:rgba(0,0,0,.08)}
-.mini-bar-fill{
-  height:100%;border-radius:99px;
-  background:var(--mini-bar-color,#0071e3);
-  width:100%;transform-origin:left center;transition:transform 600ms var(--ease-out); /* node persists across polls: glides from the last value */
-}
-.campaign-select{width:100%}
-.campaign-hint{margin-top:6px;font-size:11.5px;color:var(--muted)}
-.campaign-tag{font-size:10.5px;font-weight:600;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.queue-filter{display:flex;align-items:center;gap:var(--sp-1);margin:0 0 var(--sp-2);font-size:12px;color:var(--muted)}
-.queue-filter select{width:auto;min-width:180px}
-.job-foot{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-2);margin-top:8px}
-.job-foot .stage{margin:0}
-.job-details{min-width:0;text-align:right}
-.job-details>summary{list-style:none;cursor:pointer;font-size:10.5px;font-weight:600;color:var(--muted);display:inline-flex;align-items:center;gap:4px;padding:2px 0}
-.job-details>summary::-webkit-details-marker{display:none}
-.job-details>summary::after{content:"";width:5px;height:5px;border:solid currentColor;border-width:0 1.5px 1.5px 0;transform:rotate(45deg) translateY(-2px);transition:transform var(--dur-2) var(--ease-out)}
-.job-details[open]>summary::after{transform:rotate(-135deg) translateY(-1px)}
-.job-details[open]{text-align:left;flex-basis:100%}
-.job-foot:has(.job-details[open]){flex-wrap:wrap}
-.mini-bar-pct{flex:none;min-width:30px;text-align:right;font-size:9.5px;font-weight:700;color:var(--muted);font-variant-numeric:tabular-nums}
 .job-title-row{display:flex;align-items:center;gap:6px}
 .rename-btn{
   width:20px;height:20px;min-height:0;flex:0 0 auto;padding:0;border-radius:7px;
@@ -1461,12 +1462,23 @@ function stageLabel(s){return({queued:"Queued",processing:"Processing",downloadi
 function badgeClass(s){if(s==="completed")return"completed";if(s==="review"||s==="partial_failure")return"attention";if(s==="failed")return"failed";if(s==="cancelled")return"cancelled";if(s==="queued"||s==="candidate"||/_queued$/.test(s))return"idle";return"running"}
 function stageColor(s){return({idle:"#86868b",running:"#0071e3",attention:"#ff9500",completed:"#1eb85a",failed:"#ff3b30",cancelled:"#86868b"})[badgeClass(s)]}
 let ringIdSeq=0;
-function miniProgressBar(p,color){
-  const v=pct(p);
-  return `<div class="mini-bar" style="--mini-bar-color:${color}">
-    <div class="mini-bar-track"><div class="mini-bar-fill" style="transform:scaleX(${v/100})"></div></div>
-    <span class="mini-bar-pct">${v}%</span>
-  </div>`;
+// Mini island (P0): the job island's look at card scale: black capsule, ring + stage + %, same colours and
+// ring glide. Used on Import job cards and running Publish rows; the island stays the only GLOBAL indicator.
+const MI_R=6,MI_C=2*Math.PI*MI_R;
+function miniIslandHtml(){
+  return `<div class="mini-island" role="progressbar" aria-valuemin="0" aria-valuemax="100">
+    <svg class="mi-ring" viewBox="0 0 16 16" aria-hidden="true"><circle class="mi-track" cx="8" cy="8" r="${MI_R}"/><circle class="mi-fill" cx="8" cy="8" r="${MI_R}" stroke-dasharray="${MI_C.toFixed(2)}" stroke-dashoffset="${MI_C.toFixed(2)}"/></svg>
+    <span class="mi-stage"></span><span class="mi-pct"></span></div>`;
+}
+function patchMiniIsland(el,p,s,label){
+  if(!el)return;const v=pct(p),bc=badgeClass(s);
+  setAttr(el,"class","mini-island"+(bc==="running"?" is-running":"")+(bc==="failed"?" is-failed":"")+(bc==="completed"||bc==="attention"?" is-ready":""));
+  const off=(MI_C*(1-v/100)).toFixed(2),f=el.querySelector(".mi-fill");if(f.getAttribute("stroke-dashoffset")!==off)f.setAttribute("stroke-dashoffset",off);
+  setText(el.querySelector(".mi-stage"),label);setText(el.querySelector(".mi-pct"),v+"%");
+  setAttr(el,"aria-valuenow",String(v));setAttr(el,"aria-label",`${label}, ${v}%`);
+}
+function miniIslandStatic(p,s,label){
+  const t=document.createElement("div");t.innerHTML=miniIslandHtml();const el=t.firstElementChild;patchMiniIsland(el,p,s,label);return el.outerHTML;
 }
 function progressRing(p,color,size=34,stroke=4){
   const r=(size-stroke)/2,c=+(2*Math.PI*r).toFixed(3),off=+(c*(1-pct(p)/100)).toFixed(3);
@@ -1659,7 +1671,7 @@ function createJobCard(j){
       <div class="job-main"><div class="job-title-row"><h3></h3><button class="rename-btn" data-rename="${esc(j.id)}" type="button" aria-label="Rename job" title="Rename job">${PENCIL_ICON}</button></div></div>
       <div class="job-header-side"><span class="tag campaign-tag" hidden></span>${platformIcon(j.platform,"sm")}<span class="badge"></span><span class="job-actions"></span></div>
     </div>
-    <div class="mini-bar"><div class="mini-bar-track"><div class="mini-bar-fill"></div></div><span class="mini-bar-pct"></span></div>
+    ${miniIslandHtml()}
     <div class="job-auto-queue"><span class="auto-queue-dot"></span><span class="job-status-line"></span></div>
     <div class="job-foot"><span class="stage job-format"></span><details class="job-details"><summary>Details</summary><div class="job-id"></div><div class="job-url"></div><div class="job-id job-lang"></div></details></div>`;
   patchJobCard(el,j);return el;
@@ -1670,10 +1682,7 @@ function patchJobCard(el,j){
   setText(q("h3"),jobDisplayTitle(j));
   const ct=q(".campaign-tag");setText(ct,j.campaign?campaignName(j.campaign):"");setAttr(ct,"hidden",!j.campaign);
   const badge=q(".badge");setAttr(badge,"class","badge "+badgeClass(s));setText(badge,stageLabel(s));
-  const bar=q(".mini-bar");setAttr(bar,"hidden",isDone(p,s));
-  if(bar.style.getPropertyValue("--mini-bar-color")!==stageColor(s))bar.style.setProperty("--mini-bar-color",stageColor(s));
-  const fill=q(".mini-bar-fill"),t=`scaleX(${p/100})`;if(fill.style.transform!==t)fill.style.transform=t;
-  setText(q(".mini-bar-pct"),p+"%");
+  const mi=q(".mini-island");patchMiniIsland(mi,p,s,stageLabel(s));setAttr(mi,"hidden",isDone(p,s));
   const line=jobStatusLine(j);setText(q(".job-status-line"),line);setAttr(q(".job-auto-queue"),"hidden",line===stageLabel(s)); // never say the badge twice
   setText(q(".job-format"),`${split}:${100-split} · 9:16`);
   setText(q(".job-id"),j.id);setText(q(".job-url"),j.youtube_url||"");setText(q(".job-lang"),jobLanguageLine(j));
@@ -1722,7 +1731,6 @@ function renderQueueJob(j,i=0){
       <div>
         <div class="job-title-row"><h3>${esc(jobDisplayTitle(j))}</h3><button class="rename-btn" data-rename="${esc(j.id)}" type="button" aria-label="Rename job" title="Rename job">${PENCIL_ICON}</button></div>
         <div class="job-id">${esc(j.id)}</div>
-        ${done?"":`<div class="progress-msg">${esc(j.message||stageLabel(s))}</div>`}
       </div>
       <div class="job-header-side">
         ${campaignTag(j)}${platformIcon(j.platform,"sm")}
@@ -1731,7 +1739,7 @@ function renderQueueJob(j,i=0){
         ${s==="failed"?`<button class="secondary cancel-job-btn" data-retry-job="${esc(j.id)}" type="button">Retry</button>`:""}
       </div>
     </div>
-    ${done?"":miniProgressBar(p,stageColor(s))}
+    ${done?"":miniIslandStatic(p,s,j.message||stageLabel(s))}
     <div class="queue-preview">
       <div class="queue-thumb">${thumb?`<img src="${esc(thumb)}" alt="" loading="lazy" onload="this.classList.add('loaded')">`:""}</div>
       <div><div class="queue-open-label">Tap a job to review both candidates side by side.</div><div class="stage">${esc(String(j.split_ratio||70))}:${esc(String(100-Number(j.split_ratio||70)))}</div></div>

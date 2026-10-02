@@ -357,11 +357,15 @@ or preflights get 401.
   `GET /api/activity` → `{items:[{kind, id, job_id, candidate_id, stage, percent, label, title}]}` is the
   one feed; a new background task kind adds its rows there (and keeps `status/progress/message` on its row),
   never a new progress UI. The island merges it in `allActiveTasks()` (polled by `refreshRunningJobs()`).
+- **Card-level progress (P0):** Import job-card bars and Publish queue row progress become small island-style
+  capsules (same shape/colours/motion); the island stays the only global progress indicator.
+  Implementation: `miniIslandHtml()` / `patchMiniIsland(el, p, status, label)` (`.mini-island`: black capsule,
+  ring + stage + %, ring glides like the island's; only `.is-running` animates). Don't add bars back.
 - **Job cards (074):** `#currentJobs` is keyed by job id: `syncCurrentJobs()` patches via
   `patchJobCard()` (`setText`/`setAttr`, bar `transform`), new → `createJobCard()`, gone →
   `leaveJobCard()`. Never re-render polled lists with innerHTML (flicker); same for the island
   and `#jobOverlayList`. Card status line = `jobStatusLine(j)`, not `isBusy()` (BUSY lacks `processing`).
-  Motion (075): only `.job-card.is-running` animates (bar sheen + dot breathe); queued/idle cards and
+  Motion (075): only `.job-card.is-running` animates (mini-island ring glide + dot breathe); queued/idle cards and
   the island's idle lead are static. Don't add card-level shimmer/glow back.
 - **Busy state:** every async button/upload label goes through
   `setBusy(el, busy, label?)`. It disables the control, sets `aria-busy` and
