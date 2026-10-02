@@ -71,3 +71,4 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 097 · 2026-10-02 · Card-level progress = island-style capsules (Import job cards, Publish rows); rule in CLAUDE.md (P0) · index.html
 098 · 2026-10-02 · P0 cleanup: watermark height setting 16–85 %, WHISPER_LANGUAGE labelled "Fallback language", badge v2.1117 · main.py, index.html
 099 · 2026-10-02 · Campaign watermark resolved at job creation; a miss is stored (jobs.watermark_failure) → no watermark + chip + toast, never a fallback · main.py, worker.py, index.html
+100 · 2026-10-02 · Loudness verify acts: every output re-measured; >1 LU off or TP > −1 dBTP → one corrective pass (headroom + overshoot), still off → chip (pre-P1) · worker.py
