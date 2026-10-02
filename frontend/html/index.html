@@ -1104,37 +1104,18 @@ img.topbar-logo-icon{background:none;padding:0;object-fit:cover}
     </button>
       <h1 class="page-title" id="pageTitle">Import</h1>
       <div class="toolbar-trail">
-        <div class="version-wrap"><button class="version-badge" id="versionBadge" type="button" aria-expanded="false">Beta · v2.1116</button>
+        <div class="version-wrap"><button class="version-badge" id="versionBadge" type="button" aria-expanded="false">Beta · v2.1117</button>
         <div class="version-popover" id="versionPopover" role="dialog" aria-hidden="true">
-        <div class="version-popover-title">What's new in v2.1116</div>
+        <div class="version-popover-title">What's new in v2.1117</div>
         <ul>
-          <li>Import: active jobs get their own section; only the job that's actually working animates</li>
-          <li>Import: job cards and progress bars update smoothly in place (no more flicker); job ID and link tucked under Details</li>
-          <li>New jobs: watermark moves up into the gameplay, captions sit closer to the facecam (both adjustable in Settings)</li>
-          <li>Watermark sized by its visible mark and kept clear of captions (it moves up instead of overlapping); captions never drop into the facecam</li>
-          <li>Retry failed jobs and clips in one tap; temporary problems (network, rate limits, a worker restart) now retry on their own</li>
-          <li>Free disk space shown in Settings; new jobs are refused when the disk is nearly full, old downloads are cleaned up automatically</li>
-          <li>Cancel a running job straight from the Dynamic Island</li>
-          <li>Turn burned-in subtitles off per job for a clean video (your subtitle text and style are kept)</li>
-          <li>Cancel a running job (stops the download, transcription or render within seconds)</li>
-          <li>11 new caption fonts (Montserrat, Inter, Oswald, Poppins, Anton, Bebas Neue, Archivo Black), shown in their own typeface</li>
-          <li>Dynamic Island: live job status at the top, springs open on hover or tap, celebrates when clips are ready</li>
-          <li>Large page title that glides into a slim toolbar as you scroll; bottom tab bar on phones</li>
-          <li>Watermark library: preview tiles, drag-and-drop upload, delete with undo</li>
-          <li>Import: Analyze enables only for a valid YouTube link, with an instant thumbnail preview</li>
-          <li>Settings sheet: grouped lists, search, show/hide secrets, Save confirms inline</li>
-          <li>Sidebar is now navigation: Import, Publish, Watermarks, Settings (as sheets), appearance in the footer</li>
-          <li>One motion system: calmer curves, a consistent press, larger tap targets, sentence-case labels</li>
-          <li>Every expandable section uses the same chevron that turns when it opens</li>
-          <li>Status badges: clearer colours (grey waiting, blue working, amber needs you) that pass contrast in light and dark</li>
-          <li>Per-job watermark size and opacity in the edit panel</li>
-          <li>Edit panel now shows the job's real subtitle style (Apply no longer resets it)</li>
-          <li>Polish: calmer motion, one loading style for every button, tidier edit drawer with sticky Apply</li>
-          <li>Smoother tabs pill on scroll; running-job island is its own capsule with stage and progress</li>
-          <li>Left sidebar for quick actions and settings; Import options folded into one disclosure</li>
-          <li>API key required: asked once per browser session</li>
-          <li>Settings now take effect without a restart and only changed fields are saved</li>
-          <li>Rebuilt on the new server (v2.1100 baseline)</li>
+          <li>Campaigns: pick one on Import; its watermark, hashtags (exact order, at the end) and title rules apply to every clip</li>
+          <li>Language: Auto, English or Indonesian per job; Auto detects it from the audio</li>
+          <li>Karaoke captions now reach the final video; editing one line keeps the word timing on the others</li>
+          <li>Loudness: previews and finals play at a consistent −14 LUFS; a clip that couldn't be normalised shows a warning</li>
+          <li>No facecam: choose "No facecam" (or let Auto decide per job) for full-frame gameplay with captions placed lower</li>
+          <li>Edit panel in tabs: Captions, Effects, Audio, Watermark, Export</li>
+          <li>All progress lives in the Dynamic Island and small capsules on the cards, including renders started elsewhere</li>
+          <li>A missing campaign watermark is never replaced by another one: the clip shows a warning instead</li>
         </ul>
       </div></div>
         <button class="icon-btn refresh-btn" id="refreshView" type="button" aria-label="Refresh"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3"/><path d="M19.5 4.5v4h-4"/></svg></button>
@@ -2821,7 +2802,7 @@ const SETTINGS_GROUPS=[
   ["Publishing",["HASHTAGS","CAMPAIGN_NAME"]],
   ["Storage",["DISK_SPACE_MIN_MB","RETENTION_DAYS_INTERMEDIATE","ORPHAN_SWEEP_DRY_RUN"]]
 ];
-const SETTING_LABELS={WATERMARK_POSITION_Y:"Watermark height (% from top, new jobs)",SUBTITLE_SEAM_GAP:"Caption gap above facecam (%, new jobs)",FULLFRAME_CAPTION_Y:"Caption height, no-facecam clips (% from top)",DISK_SPACE_MIN_MB:"Disk reserve (MB)",RETENTION_DAYS_INTERMEDIATE:"Keep downloads (days)",ORPHAN_SWEEP_DRY_RUN:"Orphan sweep dry run",GEMINI_API_KEY:"Gemini API key",GEMINI_ANALYSIS_MODEL:"Gemini model",GEMINI_MAX_ATTEMPTS:"Gemini attempts",WHISPER_MODEL:"Whisper model",WHISPER_LANGUAGE:"Transcription language",RUNWAY_API_KEY:"Runway API key",RUNWAY_MODEL:"Runway model",
+const SETTING_LABELS={WATERMARK_POSITION_Y:"Watermark height (% from top, new jobs)",SUBTITLE_SEAM_GAP:"Caption gap above facecam (%, new jobs)",FULLFRAME_CAPTION_Y:"Caption height, no-facecam clips (% from top)",DISK_SPACE_MIN_MB:"Disk reserve (MB)",RETENTION_DAYS_INTERMEDIATE:"Keep downloads (days)",ORPHAN_SWEEP_DRY_RUN:"Orphan sweep dry run",GEMINI_API_KEY:"Gemini API key",GEMINI_ANALYSIS_MODEL:"Gemini model",GEMINI_MAX_ATTEMPTS:"Gemini attempts",WHISPER_MODEL:"Whisper model",WHISPER_LANGUAGE:"Fallback language",RUNWAY_API_KEY:"Runway API key",RUNWAY_MODEL:"Runway model",
   FACE_DETECTION_SAMPLE_COUNT:"Frames sampled",FACE_CONFIDENCE_THRESHOLD:"Confidence threshold",FACE_ZOOM_RATIO:"Facecam zoom",
   CLIP_COUNT:"Clips per video",CLIP_TARGET_DURATION:"Target length (s)",CLIP_MIN_DURATION:"Minimum length (s)",CLIP_MAX_DURATION:"Maximum length (s)",PREVIEW_WIDTH:"Preview width (px)",WATERMARK_WIDTH:"Watermark width (px)",WATERMARK_OPACITY:"Watermark opacity",
   YOUTUBE_CLIENT_ID:"Client ID",YOUTUBE_CLIENT_SECRET:"Client secret",YOUTUBE_REFRESH_TOKEN:"Refresh token",TIKTOK_CLIENT_KEY:"Client key",TIKTOK_CLIENT_SECRET:"Client secret",TIKTOK_ACCESS_TOKEN:"Access token",

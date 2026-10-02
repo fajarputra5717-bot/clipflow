@@ -69,3 +69,4 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 095 · 2026-10-02 · Facecam layout per job: majority (or position-agreeing tie) → panel for all, else full-frame for all; overrides logged; 9 jobs backfilled (P0) · worker.py, main.py
 096 · 2026-10-02 · Full-frame clips: captions at FULLFRAME_CAPTION_Y (default 78 %, clamped 60–85) instead of the seam (P0) · worker.py, shared/settings.py, index.html
 097 · 2026-10-02 · Card-level progress = island-style capsules (Import job cards, Publish rows); rule in CLAUDE.md (P0) · index.html
+098 · 2026-10-02 · P0 cleanup: watermark height setting 16–85 %, WHISPER_LANGUAGE labelled "Fallback language", badge v2.1117 · main.py, index.html

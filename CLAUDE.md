@@ -314,7 +314,7 @@ must be added to `MEDIA_PATH_RE`** and its frontend URL wrapped in
 CORS middleware must stay added *after* the auth middleware (outermost),
 or preflights get 401.
 
-## Frontend shell (R-11/R-12/R-13, lane B 067-073; badge v2.1116)
+## Frontend shell (R-11/R-12/R-13, lane B 067-073; badge v2.1117)
 
 - **Layout:** `.app-shell` grid = left `<aside id="sidebar">` (068: navigation
   only: `[data-nav]` Import/Publish switch views via `showTab()`,

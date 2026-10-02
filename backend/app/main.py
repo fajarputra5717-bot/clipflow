@@ -3665,6 +3665,21 @@ def get_settings():
 HOOKS_WINDOW_MIN_MINUTES = 10
 
 
+def validate_watermark_height(values: dict):
+    """P0 cleanup: the worker never places the watermark above 16 % (078), so
+    the setting can't ask for it (5-15 % used to be accepted, then clamped)."""
+    v = str(values.get("WATERMARK_POSITION_Y") or "").strip()
+    if not v:
+        return
+    try:
+        y = float(v)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Watermark height must be a number (% from top)")
+    if not 16 <= y <= 85:
+        raise HTTPException(status_code=400, detail="Watermark height must be between 16 and 85 % from the top "
+                                                    "(platform UI covers the top 16 %)")
+
+
 def validate_hooks_windows(values: dict):
     """QA #4: overlap must stay below the window (else the worker never
     advances); checked against the values this PUT would leave effective."""
@@ -3708,6 +3723,7 @@ def update_settings(req: SettingsUpdate):
         )
 
     validate_hooks_windows(req.values)
+    validate_watermark_height(req.values)
 
     try:
         with get_db() as conn:
