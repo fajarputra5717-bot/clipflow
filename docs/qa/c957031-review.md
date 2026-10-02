@@ -37,6 +37,7 @@ their segments with words.
 - Description/title paths that read `subtitle_override ?? subtitle_text` elsewhere (only 2 frontend
   sites were changed; backend `fix_subtitle_ai` reads both columns and was not re-checked).
 
-## Independent render (PENDING at session pause)
-ccc2a5b1 final re-render requested via `POST .../approve` at ~10:16 (queue idle). Frame check for the
-karaoke sweep still to do once it completes.
+## Independent render: PASS
+QA re-rendered the untouched ccc2a5b1 via `POST .../approve` (queue idle, 10:16). Mid-line frames at
+2.6 / 4.0 / 4.6 s show the sweep advancing word by word ("LOLOS" → "KOK JADI" → "KOK JADI LAMBAT"):
+`frames/recheck-083/ccc2a5b1-karaoke.jpg`. QA #1 confirmed fixed on 3/3 finals.
