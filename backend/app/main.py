@@ -836,8 +836,11 @@ def create_job(req: ClipRequest):
                         style["animation"],
                         # R-17: freeze today's defaults onto the job so a
                         # later settings change doesn't move its layout.
-                        wm["position_y"] if wm.get("position_y") is not None
-                        else percent_setting("WATERMARK_POSITION_Y", 25.0, 5, 95),
+                        # Pre-P1 #5: same 16-85 % range the Settings PUT allows (098); the
+                        # worker never places it above 16 % anyway (078).
+                        min(85.0, max(16.0, float(wm["position_y"])))
+                        if wm.get("position_y") is not None
+                        else percent_setting("WATERMARK_POSITION_Y", 25.0, 16, 85),
                         percent_setting("SUBTITLE_SEAM_GAP", 1.5, 0, 20),
                         req.language,
                         req.language_fallback,
