@@ -55,3 +55,4 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 081 · 2026-10-02 · Campaign flow v1: rules files → jobs.campaign, watermark preset, hashtags, prompt context, rule skips, badge + filter · main.py, worker.py, index.html, shared/campaigns.py
 082 · 2026-10-02 · Edit drawer tabs: Captions / Effects (soon) / Audio (soon) / Watermark / Export · index.html
 083 · 2026-10-02 · Captions keep karaoke: override only for real edits, word-aligned re-timing, 16 redundant overrides cleared (QA #1, #3) + karaoke word spacing · worker.py, index.html
+084 · 2026-10-02 · Guards: hook window overlap < window (PUT 400 + worker clamp), API job language = WHISPER_LANGUAGE, rank negative id / non-numeric score skipped (QA #4 #5 #9) · main.py, worker.py

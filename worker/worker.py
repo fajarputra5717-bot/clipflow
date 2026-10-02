@@ -2078,6 +2078,13 @@ def transcript_windows(segments, window_s, overlap_s):
     """Consecutive windows of `window_s` seconds, each starting
     `overlap_s` before the previous one ends, so a moment on a
     boundary is whole in at least one window."""
+    # QA #4: overlap >= window never advances (infinite loop). The settings
+    # PUT rejects it; clamp here too for env/DB values set some other way.
+    window_s = max(60.0, float(window_s))
+    if not 0 <= overlap_s < window_s:
+        clamped = 0.0 if overlap_s < 0 else window_s / 2
+        log(f"Hooks windows: overlap {overlap_s}s invalid for window {window_s}s; using {clamped}s")
+        overlap_s = clamped
     windows, start, last = [], 0.0, segments[-1]["end"]
     while True:
         stop = start + window_s
@@ -2250,12 +2257,20 @@ def select_hooks(segments, platform, clip_count, durations, call,
     chosen = []
     for item in raw if isinstance(raw, list) else []:
         try:
-            c = dict(candidates[int(item["id"])])
+            idx = int(item["id"])
+            if idx < 0:  # QA #9: candidates[-1] would silently pick the last one
+                raise IndexError(idx)
+            c = dict(candidates[idx])
         except (KeyError, IndexError, TypeError, ValueError):
+            log(f"Hooks rank: skipped item with bad id {item.get('id') if isinstance(item, dict) else item!r}")
             continue
         if any(c["start"] == x["start"] for x in chosen):
             continue
-        c["score"] = int(item.get("score", c["score"]))
+        try:
+            c["score"] = int(item.get("score", c["score"]))
+        except (TypeError, ValueError):
+            log(f"Hooks rank: skipped id {idx}, non-numeric score {item.get('score')!r}")
+            continue
         c["reason"] = str(item.get("reason") or c["reason"])[:1000]
         chosen.append(c)
     chosen = dedupe_hooks(chosen)

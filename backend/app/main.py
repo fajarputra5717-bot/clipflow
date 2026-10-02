@@ -438,7 +438,8 @@ class ClipRequest(BaseModel):
 
     # 079: auto | en | id. language_fallback = the user's last explicit choice
     # on the Import form, used when Auto-detect confidence is low.
-    language: str = "auto"
+    # QA #5: omitted (API callers) = the WHISPER_LANGUAGE setting, as before 079.
+    language: Optional[str] = None
 
     language_fallback: Optional[str] = None
 
@@ -677,6 +678,9 @@ def create_job(req: ClipRequest):
             status_code=400,
             detail="layout must be auto, left, or right",
         )
+    if req.language is None:
+        configured = (runtime_setting("WHISPER_LANGUAGE") or "").strip().lower()
+        req.language = configured if configured in languages.REQUESTABLE else languages.DEFAULT
     if req.language not in languages.REQUESTABLE:
         raise HTTPException(
             status_code=400,
@@ -3582,6 +3586,32 @@ def get_settings():
         raise HTTPException(status_code=500, detail=str(exc))
 
 
+def validate_hooks_windows(values: dict):
+    """QA #4: overlap must stay below the window (else the worker never
+    advances); checked against the values this PUT would leave effective."""
+    keys = ("HOOKS_WINDOW_MINUTES", "HOOKS_WINDOW_OVERLAP_MINUTES")
+    if not any(k in values for k in keys):
+        return
+    eff = {}
+    for k in keys:
+        if k in values:
+            v = str(values[k] or "").strip()
+            # empty = unset: falls through to env, then the default
+            eff[k] = v or os.getenv(k) or DEFAULT_SETTINGS[k]
+        else:
+            eff[k] = runtime_setting(k)
+    try:
+        window, overlap = (float(eff[k]) for k in keys)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="Hook window settings must be numbers (minutes)")
+    if window < 1 or overlap < 0 or overlap >= window:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Hook window overlap ({overlap:g} min) must be at least 0 and less than "
+                   f"the window ({window:g} min)",
+        )
+
+
 @app.put("/api/settings")
 def update_settings(req: SettingsUpdate):
     unknown = [k for k in req.values if k not in DEFAULT_SETTINGS]
@@ -3590,6 +3620,8 @@ def update_settings(req: SettingsUpdate):
             status_code=400,
             detail=f"Unknown setting key(s): {unknown}",
         )
+
+    validate_hooks_windows(req.values)
 
     try:
         with get_db() as conn:
