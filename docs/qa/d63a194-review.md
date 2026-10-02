@@ -14,11 +14,10 @@ argless fallbacks at `:3690`/`:4231` never fire for jobs (OK; clean plate render
 
 ## Findings (most severe first)
 
-1. **High · campaign hashtags go at the END; every rules file requires them FIRST.**
-   `with_campaign_hashtags()` (`backend/app/main.py`, 081) returns `f"{body}\n\n{tags}"`. All three
-   `docs/campaigns/*.rules.json` say `"exactly these, in this order, first in the caption; nothing
-   before them"`. Live: the 3 campaign finals' descriptions all end with the tags (order is correct).
-   Clips posted with these captions would fail the claim check.
+1. ~~High · hashtags at the end~~ **WITHDRAWN 2026-10-02 (owner):** the briefs require exact order only;
+   end of caption is intended. The rules files' `required_prefix` key and the "first in the caption;
+   nothing before them" text are a **wording bug in `docs/campaigns/*.rules.json`** (Lane A to reword).
+   QA checks order only. Live: order correct on all 3 finals.
 2. **Medium · a "required" campaign watermark silently falls back.** If the preset asset isn't in the
    library (deleted, or matched by name and missing), `campaign_watermark_snapshot()` stores NULL and
    the job renders with the *active* watermark; the worker resolver does the same for a vanished
