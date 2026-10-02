@@ -89,5 +89,82 @@ class Edges(unittest.TestCase):
         self.assertEqual(r["watermark"], {"required": False, "forbidden": True})
 
 
+ENGLISH = (Path(__file__).resolve().parent / "fixtures" / "briefs" / "english-cpm-sample.txt").read_text(encoding="utf-8")
+FAKE_AI = {  # what a utility model returns for the English sample (shape of AI_SCHEMA)
+    "name": "The Build Room Podcast: Clipping Campaign", "category": "creator",
+    "platforms": ["YouTube Shorts", "TikTok", "Instagram Reels"], "currency": "USD",
+    "payout_model": "cpm", "rate": 1.5, "block_views": 0, "min_views": 10000, "max_paid_views_per_post": 0,
+    "max_payout_per_post": 300, "total_budget": 6000, "hashtags": ["#buildroom", "founderclips"],
+    "mentions": ["buildroompod"], "watermark": "forbidden", "min_length_seconds": 20, "max_length_seconds": 60,
+    "start_date": "", "end_date": "2026-10-31", "source_channels": ["@BuildRoomPod", "youtube.com/@BuildRoomLive"],
+    "content_rules": [{"id": "no_sara_or_insults", "text": "Don't make fun of guests"},
+                      {"id": "other", "text": "No politics"},
+                      {"id": "other", "text": "Burned-in captions required"}],
+}
+
+
+class AIFallback(unittest.TestCase):
+    def test_not_called_when_patterns_cover_the_brief(self):
+        calls = []
+        for slug in ("ime-roleplay", "fandra-octo", "motionklip-windah"):
+            r = parse_brief_file(CAMPAIGNS / f"{slug}.md", today=TODAY, ai=lambda p, s: calls.append(p) or {})
+            self.assertNotIn("ai_derived", r, slug)
+        self.assertEqual(calls, [])
+
+    def test_english_cpm_brief_fills_gaps_and_marks_everything(self):
+        seen = {}
+        r = parse_brief(ENGLISH, today=TODAY, ai=lambda prompt, schema: seen.update(p=prompt, s=schema) or FAKE_AI)
+        self.assertIn("payout rate not recognised", r["ai_reasons"])
+        self.assertIn("BRIEF:", seen["p"])
+        self.assertEqual(r["platforms"], ["youtube", "tiktok", "instagram"])
+        self.assertEqual(r["payout"]["model"], "per_block")
+        self.assertEqual((r["payout"]["per_block"], r["payout"]["block_views"], r["payout"]["currency"]), (1.5, 1000, "USD"))
+        self.assertEqual(r["payout"]["max_payout_per_video"], 300)
+        self.assertEqual(r["mentions"], ["@buildroompod"])
+        self.assertEqual(r["watermark"], {"required": False, "forbidden": True})
+        self.assertEqual(r["video"], {"min_seconds": 20, "max_seconds": 60})
+        self.assertEqual(r["period"]["end"], "2026-10-31")
+        # watermark + deadline come from the English patterns, not the AI
+        self.assertNotIn("watermark", r["ai_derived"])
+        self.assertNotIn("period", r["ai_derived"])
+        # one unsure entry per field: the AI's replaces the pattern's "not found"
+        fields = [u["field"] for u in r["unsure"]]
+        self.assertEqual(fields.count("platforms"), 1)
+        self.assertEqual(fields.count("payout"), 1)
+        self.assertEqual([s["channel"] for s in r["sources"]], ["@BuildRoomPod", "@BuildRoomLive"])
+        # patterns win: the hashtag line was matched by regex, so the AI's list is ignored
+        self.assertEqual(r["hashtags"]["required_in_order"], ["#buildroom", "#founderclips"])
+        self.assertNotIn("hashtags", r["ai_derived"])
+        # every AI-filled field is in ai_derived AND unsure (source ai)
+        ai_unsure = {u["field"] for u in r["unsure"] if u.get("source") == "ai"}
+        self.assertEqual(set(r["ai_derived"]), ai_unsure)
+        for f in ("platforms", "payout", "mentions", "video", "sources",
+                  "content_rules.no_sara_or_insults", "content_rules.custom_no_politics"):
+            self.assertIn(f, ai_unsure)
+        self.assertTrue(all(c.get("ai") for c in r["content_rules"]))
+        # USD isn't modelled by payouts.py (IDR only) -> Unknown, not silently wrong
+        self.assertIsInstance(payouts.model_from_rules(r), payouts.Unknown)
+
+    def test_currency_from_text_when_ai_omits_it(self):
+        r = parse_brief(ENGLISH, today=TODAY, ai=lambda p, s: {**FAKE_AI, "currency": ""})
+        self.assertEqual(r["payout"]["currency"], "USD")
+        self.assertEqual(r["budget"], {"currency": "USD", "total": 6000})
+
+    def test_ai_failure_keeps_pattern_result(self):
+        def boom(prompt, schema):
+            raise RuntimeError("provider down")
+        r = parse_brief(ENGLISH, today=TODAY, ai=boom)
+        self.assertEqual(r["hashtags"]["required_in_order"], ["#buildroom", "#founderclips"])
+        self.assertTrue(any(u["field"] == "ai" and "provider down" in u["why"] for u in r["unsure"]))
+
+    def test_idr_ai_payout_feeds_payouts(self):
+        ai = lambda p, s: {"platforms": ["tiktok"], "payout_model": "fixed_threshold", "currency": "IDR",
+                           "rate": 150000, "min_views": 30000, "hashtags": [], "content_rules": []}
+        r = parse_brief("Promo X\nPay 150rb kalau tembus 30rb views\n", today=TODAY, ai=ai)
+        m = payouts.model_from_rules(r)
+        self.assertEqual((type(m).__name__, m.amount, m.min_views), ("FixedThreshold", 150000, 30000))
+        self.assertIn("payout", r["ai_derived"])
+
+
 if __name__ == "__main__":
     unittest.main()

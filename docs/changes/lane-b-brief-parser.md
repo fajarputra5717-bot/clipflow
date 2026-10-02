@@ -16,3 +16,21 @@ hashtag order, content-rule ids, weeks, sources, period). The unsure list matche
 that needed the admin (IME: account unit, carry-over, Oct 29–31, period elsewhere, sources;
 Fandra: rounding, total budget, year). MotionKlip's brief is still pending → all unsure.
 Tests: `tests/test_brief_parser.py` (6).
+
+## AI fallback (2026-10-02)
+
+Regex stays primary. `parse_brief(..., ai=router_ai())` calls the utility model (router task
+"brief") only when the patterns leave a gap: no payout rate, no platforms, no hashtags, no content
+rules, or unrecognised rule lines (`ai_reasons`). The answer fills ONLY missing fields; each filled
+field is listed in `ai_derived` and in `unsure` with `source: "ai"` (it replaces the pattern's
+"not found" note for that field) so the Campaign screen asks for confirmation. AI content rules
+carry `ai: true`. An AI failure adds an `unsure` note and keeps the pattern result. IME/Fandra/
+MotionKlip never trigger it. Also: English patterns for "no watermark" and deadlines ("Submit
+views by Oct 31, 2026"), currency from `$`/`Rp`/`€` in the text, and `payouts.model_from_rules`
+returns Unknown for non-IDR payouts (they used to be truncated to ints).
+
+Live run on `tests/fixtures/briefs/english-cpm-sample.txt` (`scripts/brief_ai_check.py`, one call):
+platforms, CPM $1.50 per 1,000 with a $300/clip cap, $6,000 budget, @mention, 20–60 s, both
+source channels and 3 content rules filled and all marked AI-derived; hashtags, deadline and the
+watermark ban came from patterns. Missed by the model: "at least 10,000 views" (min views) and
+the burned-in-captions requirement (no field for it yet). Tests: 5 new (fake AI).
