@@ -190,6 +190,8 @@ fallback only. The real source of truth is `watermark_assets` table +
 `ACTIVE_WATERMARK_ID` app_setting, resolved fresh per render by
 `resolve_watermark_path()` in worker.py — never read `WATERMARK_PATH`
 directly in new code, call the resolver.
+Per render use `job_watermark_path(job, candidate_id)` (092): a job's own (campaign) asset that can't be
+resolved → `False` = NO watermark + failing `campaign_watermark` chip + WARNING log; never a silent fallback.
 
 Geometry (R-16): `get_watermark_rect()` is the only placement logic
 (alpha-bbox crop; `WATERMARK_WIDTH` = visible mark width at 1080).

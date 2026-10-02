@@ -63,3 +63,4 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 089 · 2026-10-02 · Fix: first previews of new imports had no captions (083 regression: analysis passed the pre-transcription job row to create_preview) · worker.py
 090 · 2026-10-02 · Progress rule: island is the only progress UI (CLAUDE.md + roadmap); GET /api/activity {kind, stage, percent, label} feeds it, background renders/Submagic now show · main.py, index.html
 091 · 2026-10-02 · Loudness on previews + Submagic finals, failure keeps the file + render_warnings chip, 2× disk reserve (P0) · worker.py, main.py, index.html
+092 · 2026-10-02 · Campaign watermark missing → no watermark + failing chip + WARNING log, never a silent fallback (P0) · worker.py

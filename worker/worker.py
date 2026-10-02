@@ -187,6 +187,45 @@ LEGACY_SUBTITLE_SEAM_GAP_FRAC = 0.04
 WATERMARK_CENTER_Y_FRAC = LEGACY_WATERMARK_CENTER_Y_FRAC
 
 
+
+def watermark_asset_path(asset_id):
+    """A library asset's file, or None if the row or file is missing."""
+    try:
+        with db() as conn:
+            row = conn.execute(
+                "SELECT path FROM watermark_assets WHERE id::text = %s",
+                (str(asset_id),),
+            ).fetchone()
+    except Exception as exc:
+        log(f"Could not look up watermark asset {asset_id}: {exc}")
+        return None
+    if row and row.get("path") and (DATA_ROOT / row["path"]).exists():
+        return DATA_ROOT / row["path"]
+    return None
+
+
+def job_watermark_path(job, candidate_id=None):
+    """
+    The watermark for this render (P0, QA 081 #2). A job with its own asset
+    (campaign preset, jobs.watermark_asset_id) never falls back silently: if
+    the asset can't be resolved the clip renders WITHOUT a watermark (False),
+    the worker logs it and the clip gets a failing "campaign_watermark" render
+    warning (chip). Jobs without an asset use the active one as before.
+    """
+    asset_id = job.get("watermark_asset_id")
+    if not asset_id:
+        return resolve_watermark_path()
+    path = watermark_asset_path(asset_id)
+    if path is None:
+        log(f"WARNING: campaign watermark asset {asset_id} not found "
+            f"(campaign {job.get('campaign') or '-'}); rendering WITHOUT a watermark")
+        set_render_warning(candidate_id, "campaign_watermark",
+                           "Campaign watermark missing: its asset isn't in the library. "
+                           "Upload it, then re-render.")
+        return False
+    set_render_warning(candidate_id, "campaign_watermark")
+    return path
+
 def job_layout(job):
     """(watermark centre y, caption seam gap) as fractions of the video
     height for this job (R-17): the values stored on the job at
@@ -3916,6 +3955,8 @@ def make_ass(
         watermark_path = resolve_watermark_path()
 
     try:
+        if watermark_path is False:  # P0: deliberately no watermark
+            raise ValueError("no watermark for this render")
         watermark_rect = get_watermark_rect(
             canvas_width,
             canvas_height,
@@ -4259,6 +4300,7 @@ def apply_watermark_overlay(
     watermark_opacity,
     watermark_center_y=None,
     watermark_asset_id=None,
+    watermark_path=None,
 ):
     """One overlay pass on an already-rendered vertical video (used
     after the Submagic download, R-05): same centered geometry as
@@ -4266,7 +4308,7 @@ def apply_watermark_overlay(
 
     ensure_disk_space("watermark overlay")
 
-    watermark = resolve_watermark_path(watermark_asset_id)
+    watermark = watermark_path or resolve_watermark_path(watermark_asset_id)
 
     if not watermark.exists():
         raise RuntimeError(
@@ -4397,7 +4439,7 @@ def render_vertical(
     # WATERMARK (optional)
     # --------------------------------------------------------
 
-    if not watermark:
+    if not watermark or watermark_path is False:  # False: no watermark (P0)
 
         watermark_path = None
 
@@ -4775,7 +4817,7 @@ def create_preview(
 
     # R-16: one asset + one geometry for this render; make_ass()
     # returns the watermark rect cleared of the captions.
-    wm_path = resolve_watermark_path(job.get("watermark_asset_id"))
+    wm_path = job_watermark_path(job, candidate_id)
     watermark_rect = None
     wm_center_y, seam_gap_frac = job_layout(job)
 
@@ -5037,7 +5079,7 @@ def render_final_candidate(
 
     # R-16: one asset + one geometry for this render; make_ass()
     # returns the watermark rect cleared of the captions.
-    wm_path = resolve_watermark_path(job.get("watermark_asset_id"))
+    wm_path = job_watermark_path(job, candidate_id)
     watermark_rect = None
     wm_center_y, seam_gap_frac = job_layout(job)
 
@@ -6760,15 +6802,19 @@ def process_submagic_task(candidate):
                             fh.write(chunk)
 
             wm_width, wm_opacity = job_watermark(candidate)
-
-            apply_watermark_overlay(
-                raw_path,
-                output_path,
-                watermark_width=wm_width,
-                watermark_opacity=wm_opacity,
-                watermark_center_y=job_layout(candidate)[0],
-                watermark_asset_id=candidate.get("watermark_asset_id"),
-            )
+            wm_path = job_watermark_path(candidate, candidate_id)
+            if wm_path is False:
+                # P0: campaign asset missing → no wrong watermark; chip set.
+                shutil.move(str(raw_path), str(output_path))
+            else:
+                apply_watermark_overlay(
+                    raw_path,
+                    output_path,
+                    watermark_width=wm_width,
+                    watermark_opacity=wm_opacity,
+                    watermark_center_y=job_layout(candidate)[0],
+                    watermark_path=wm_path,
+                )
 
             raw_path.unlink(missing_ok=True)
 
