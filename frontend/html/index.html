@@ -1876,7 +1876,7 @@ function renderSubmagicRow(c,jid){
     return `<div class="candidate-submagic-row">
       <div class="actions">
         ${c.submagic_preview_url?`<a href="${esc(c.submagic_preview_url)}" target="_blank" rel="noopener"><button class="secondary" type="button">Review on Submagic ↗</button></a>`:""}
-        <button data-submagic-use="${esc(jid)}" data-cid="${esc(cid)}" type="button">Use as final render</button>
+        ${(()=>{const bad=ruleFailures(c);return `<button data-submagic-use="${esc(jid)}" data-cid="${esc(cid)}" type="button" ${bad.length?"disabled":""}>${bad.length?`Fix ${bad.length} rule${bad.length===1?"":"s"} to use as final`:"Use as final render"}</button>`})()}
       </div>
       <div class="hint">Watch the Submagic render first — only "Use as final render" replaces this candidate's output.</div>
     </div>`;

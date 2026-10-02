@@ -84,3 +84,4 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 110 · 2026-10-02 · Hook score stored (was never saved) and shown as "AI estimate" next to the reason; new hook clears it (P1) · worker.py, main.py, index.html
 111 · 2026-10-02 · Keyword highlight: AI-picked (utility model, stoplists), tap to toggle, colour swatches, baked into the ASS in every mode (P1) · worker.py, shared/edit_spec.py, index.html
 112 · 2026-10-02 · Per-clip caption position (edit_spec.caption_y, 30–85 %, never below the facecam seam) (P1) · worker.py, shared/edit_spec.py, index.html
+113 · 2026-10-02 · Submagic "use as final" passes the same campaign rule gate as Approve (409 + disabled button) (QA Medium) · main.py, index.html

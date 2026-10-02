@@ -3423,6 +3423,16 @@ def submagic_use_as_final(job_id: str, candidate_id: str):
 
     try:
 
+        # 113 (QA Medium on 109): adopting the Submagic render is a final too —
+        # same campaign rule gate as Approve.
+        failing = candidate_rule_failures(job_id, candidate_id)
+        if failing:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Fix {len(failing)} rule{'s' if len(failing) != 1 else ''} to approve: "
+                       + "; ".join(ch["label"] for ch in failing),
+            )
+
         with get_db() as conn:
 
             with conn.cursor() as cur:
