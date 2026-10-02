@@ -14,9 +14,9 @@ test.describe("Job list", () => {
     expect(await card.evaluate((n, b) => n === b, before)).toBe(true);
   });
 
-  test("Publish list renders history and opens a job", async ({ app }) => {
+  test("Review list renders history and opens a job", async ({ app }) => {
     await nav(app, "queue");
-    await expect(app.locator("#pageTitle")).toHaveText("Publish");
+    await expect(app.locator("#pageTitle")).toHaveText("Review");
     const row = app.locator('[data-queue-open="job-done"]');
     await expect(row).toBeVisible();
     await row.click();

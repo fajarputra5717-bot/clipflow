@@ -316,8 +316,13 @@ or preflights get 401.
 
 ## Frontend shell (R-11/R-12/R-13, lane B 067-073; badge v2.1117)
 
-- **Layout:** `.app-shell` grid = left `<aside id="sidebar">` (068: navigation
-  only: `[data-nav]` Import/Publish switch views via `showTab()`,
+- **Navigation (106, P1 task 0):** the flow-preview **stepper** (`#flowNav`, `renderFlow()`, `FLOW_STEPS`) is the
+  top-level navigation: Analyze (`data-nav="current"`, the Import view), Review (`data-nav="queue"`, the job
+  list/detail, formerly "Publish"), Editor (`data-flow-editor`: opens the visible job's clip drawer; disabled
+  until a job detail is open); Campaign/Auto-import/Track (P3) and Schedule/Publish (P2) are disabled with
+  "Coming in Px" — never mock content (mapping: docs/roadmap.md). `#pageTitle` = the active step. Gear in the
+  toolbar (`data-nav="settings"`). `syncNav()` repaints the stepper.
+- **Layout:** `.app-shell` grid = left `<aside id="sidebar">` (tools only since 106:
   Watermarks/Settings open **sheets** `#watermarkSheet`/`#settingsSheet` via
   `openSheet()`/`closeSheet()`; `syncNav()` owns `aria-current` + the
   spring `#navIndicator`; theme toggle in `.sidebar-foot`) + `.container`.
@@ -330,13 +335,13 @@ or preflights get 401.
   (split/facecam/platform) live in `<details id="importOptions">`;
   `updateImportOptionsSummary()` runs from the `select*()` fns.
 - **Toolbar (072, replaces the tabs pill):** sticky `#toolbar` with ONE title
-  element `#pageTitle` ("Import"/"Publish", `syncPageTitle()`). `initToolbar()`
+  element `#pageTitle` ("Analyze"/"Review"/"Editor", `syncPageTitle()`). `initToolbar()`
   is the **only** scroll driver: rAF, passive, maps `scrollY/TITLE_RANGE(48)` →
   `--p` 0..1 continuously (no threshold/hysteresis); CSS derives title
   translate/scale and `.toolbar-bg` (material + hairline + scroll-edge fade)
   opacity from `--p` — transform/opacity only. Don't add another scroll
-  driver. ≤600 px: `#tabbar` bottom tab bar (same `[data-nav]`). Sidebar nav
-  is the navigation; there are no `role=tab` elements any more.
+  driver. ≤600 px: `#tabbar` bottom tab bar (Analyze / Review / Watermarks / Settings, same `[data-nav]`); the
+  stepper scrolls horizontally.
 - **Dynamic Island (073):** `#island` (fixed, top 8 px, centred, z 1000,
   black in both themes) is driven only by `updateJobIsland()` (same name
   as before; every caller still works). `hidden` when nothing runs. Modes

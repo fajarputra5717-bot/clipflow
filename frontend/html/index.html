@@ -30,7 +30,7 @@
 [hidden]{display:none!important} /* author display rules must never un-hide [hidden] (070) */
  :root{
   --bg:#f5f5f7;--panel:#ffffff;--panel2:#fbfbfd;--input:#ffffff;
-  --fill:rgba(120,120,128,.12);--seg-thumb:#ffffff; /* segmented controls (edit tabs) */
+  --fill:rgba(120,120,128,.12);--fill2:rgba(120,120,128,.2);--seg-thumb:#ffffff; /* segmented controls (edit tabs) */
   --line:rgba(0,0,0,.08);--line2:rgba(0,0,0,.13);--text:#1d1d1f;--muted:#6e6e73;
   --muted2:#86868b;--accent:#0071e3;--accent2:#2997ff;--lux:#0071e3;--lux2:#2997ff;
   --good:#1eb85a;--bad:#ff3b30;--warn:#ff9500;--radius:20px;
@@ -73,7 +73,7 @@ html{color-scheme:light}
 html[data-theme="dark"]{color-scheme:dark}
 :root[data-theme="dark"]{
   --bg:#000000;--panel:#1c1c1e;--panel2:#232325;--input:#1c1c1e;
-  --fill:rgba(142,142,147,.16);--seg-thumb:#636366;
+  --fill:rgba(142,142,147,.16);--fill2:rgba(142,142,147,.28);--seg-thumb:#636366;
   --line:rgba(255,255,255,.11);--line2:rgba(255,255,255,.17);--text:#f5f5f7;--muted:#98989d;
   --muted2:#8e8e93;--accent:#0a84ff;--accent2:#409cff;--lux:#0a84ff;--lux2:#409cff;
   --good:#30d158;--bad:#ff453a;--warn:#ff9f0a;
@@ -350,6 +350,33 @@ button.primary:hover:not(:disabled){background:#0077ed!important}
 .job-header{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
 .job-header-side{display:flex;align-items:center;gap:7px;flex:none}
 .cancel-job-btn{padding:5px 10px;font-size:11.5px;min-height:0}
+/* UI shell (P1 task 0): the flow-preview stepper as top-level navigation. */
+.flow-card{padding:var(--sp-2) var(--sp-2) var(--sp-1);margin-bottom:var(--sp-2)}
+.flow{list-style:none;margin:0;padding:4px 4px 10px;display:grid;grid-template-columns:repeat(8,1fr);gap:0}
+.flow li{position:relative;display:flex;justify-content:center}
+.flow li+li::before{content:"";position:absolute;top:22px;right:calc(50% + 26px);left:calc(-50% + 26px);height:2px;border-radius:2px;background:var(--line2,var(--line));transition:background var(--dur-3) var(--ease)}
+.flow li.done::before,.flow li.active::before{background:var(--accent)}
+.flow-node,.flow-node:hover:not(:disabled),[data-theme="dark"] .flow-node,[data-theme="dark"] .flow-node:hover:not(:disabled){display:flex;flex-direction:column;align-items:center;background:transparent;color:var(--text);min-height:0;padding:0 2px;gap:6px;border:0!important;border-radius:14px;font-weight:500;width:100%;box-shadow:none;filter:none}
+.flow-node:active:not(:disabled){transform:none}
+.flow-node:disabled{opacity:1;cursor:default}
+.flow-dot{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:var(--fill);color:var(--muted);transition:background var(--dur-2) var(--ease),color var(--dur-2) var(--ease),transform var(--dur-3) var(--ease-spring)}
+.flow-dot svg{width:20px;height:20px}
+.flow li.done .flow-dot{background:var(--badge-run-bg);color:var(--accent)}
+.flow li.active .flow-dot{background:var(--accent);color:#fff;transform:scale(1.08)}
+.flow li.off .flow-dot,.flow li.off .flow-label{opacity:.45}
+.flow-label{font-size:13px;font-weight:600}
+.flow-sub{font-size:11px;color:var(--muted);line-height:1.3;text-align:center}
+.flow li.active .flow-label{color:var(--accent)}
+.flow-node:not(:disabled):hover .flow-dot{background:var(--fill2,var(--fill))}
+.flow li.active .flow-node:hover .flow-dot{background:var(--accent)}
+@media (max-width:600px){
+  .flow{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+  .flow::-webkit-scrollbar{display:none}
+  .flow li{flex:0 0 84px;scroll-snap-align:center}
+  .flow li+li::before{right:calc(50% + 24px);left:calc(-50% + 24px)}
+  .flow-sub{display:none}
+}
+@media (prefers-reduced-motion:reduce){.flow-dot{transition:none}}
 /* P0: non-fatal render problems (render_warnings): warn-token chips under the clip title. */
 .render-warnings{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}
 .render-warn{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:980px;font-size:11.5px;font-weight:600;line-height:1.3;
@@ -1086,8 +1113,6 @@ img.topbar-logo-icon{background:none;padding:0;object-fit:cover}
   </div>
   <nav class="side-nav" id="sideNav" aria-label="Main">
     <span class="nav-indicator" id="navIndicator" aria-hidden="true"></span>
-    <button class="nav-item" type="button" data-nav="current" aria-current="page"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v10.5M8 10.5l4 4 4-4"/><path d="M4.5 15v2.5A2.5 2.5 0 0 0 7 20h10a2.5 2.5 0 0 0 2.5-2.5V15"/></svg><span>Import</span></button>
-    <button class="nav-item" type="button" data-nav="queue"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.5 3.5 10 14"/><path d="M20.5 3.5 14 20.5l-4-6.5-6.5-4z"/></svg><span>Publish</span></button>
     <button class="nav-item" type="button" data-nav="watermarks" aria-haspopup="dialog" aria-controls="watermarkSheet"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="3"/><path d="m3.5 15.5 4.5-4.5 4 4"/><path d="M14.5 16h3"/></svg><span>Watermarks</span></button>
     <button class="nav-item" type="button" data-nav="settings" aria-haspopup="dialog" aria-controls="settingsSheet"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg><span>Settings</span></button>
   </nav>
@@ -1121,6 +1146,7 @@ img.topbar-logo-icon{background:none;padding:0;object-fit:cover}
           <li>A missing campaign watermark is never replaced by another one: the clip shows a warning instead</li>
         </ul>
       </div></div>
+        <button class="icon-btn" type="button" data-nav="settings" aria-haspopup="dialog" aria-controls="settingsSheet" aria-label="Settings" title="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
         <button class="icon-btn refresh-btn" id="refreshView" type="button" aria-label="Refresh"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3"/><path d="M19.5 4.5v4h-4"/></svg></button>
       </div>
     </div>
@@ -1129,6 +1155,7 @@ img.topbar-logo-icon{background:none;padding:0;object-fit:cover}
 
   <div class="layout">
     <main>
+      <nav class="panel flow-card" id="flowNav" aria-label="Workflow"><ol class="flow" id="flow"></ol></nav>
       <section id="currentSection" class="view-section">
         <div class="panel">
           <div class="job-header">
@@ -1240,7 +1267,7 @@ img.topbar-logo-icon{background:none;padding:0;object-fit:cover}
   <button class="island-more" id="islandMore" type="button" hidden aria-label="Show all running jobs"></button>
   <span class="sr-only" id="islandLive" role="status" aria-live="polite"></span>
 </div>
-<nav class="tabbar" id="tabbar" aria-label="Main"><button class="tabbar-item" type="button" data-nav="current"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v10.5M8 10.5l4 4 4-4"/><path d="M4.5 15v2.5A2.5 2.5 0 0 0 7 20h10a2.5 2.5 0 0 0 2.5-2.5V15"/></svg><span>Import</span></button><button class="tabbar-item" type="button" data-nav="queue"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.5 3.5 10 14"/><path d="M20.5 3.5 14 20.5l-4-6.5-6.5-4z"/></svg><span>Publish</span></button><button class="tabbar-item" type="button" data-nav="watermarks" aria-haspopup="dialog"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="3"/><path d="m3.5 15.5 4.5-4.5 4 4"/><path d="M14.5 16h3"/></svg><span>Watermarks</span></button><button class="tabbar-item" type="button" data-nav="settings" aria-haspopup="dialog"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg><span>Settings</span></button></nav>
+<nav class="tabbar" id="tabbar" aria-label="Main"><button class="tabbar-item" type="button" data-nav="current"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v10.5M8 10.5l4 4 4-4"/><path d="M4.5 15v2.5A2.5 2.5 0 0 0 7 20h10a2.5 2.5 0 0 0 2.5-2.5V15"/></svg><span>Analyze</span></button><button class="tabbar-item" type="button" data-nav="queue"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg><span>Review</span></button><button class="tabbar-item" type="button" data-nav="watermarks" aria-haspopup="dialog"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="3"/><path d="m3.5 15.5 4.5-4.5 4 4"/><path d="M14.5 16h3"/></svg><span>Watermarks</span></button><button class="tabbar-item" type="button" data-nav="settings" aria-haspopup="dialog"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg><span>Settings</span></button></nav>
 <!-- Sheets (068): Settings and Watermarks open as centred dialogs from the sidebar. Closed = visibility:hidden + pointer-events:none. -->
 <div class="sheet-layer" id="settingsSheet" aria-hidden="true">
   <div class="sheet-backdrop" data-sheet-close></div>
@@ -1621,7 +1648,7 @@ async function createJob(){
     // Pre-P1 #1: e.g. the campaign watermark isn't in the library (clips render without one + chip).
     if(j.warnings?.length)showToast("⚠ "+j.warnings.join(" · "),null,null,8000);
     saveActive(id);
-    $("createStatus").innerHTML=`<div class="status-title">Job started</div><div class="status-message">Your video is processing automatically and will appear in Publish when ready.</div>`;
+    $("createStatus").innerHTML=`<div class="status-title">Job started</div><div class="status-message">Your video is processing automatically and will appear in Review when ready.</div>`;
     $("jobCustomTitle").value="";
     showTab("current");await loadCurrentJobs();startPolling(id);
     // The job card below now carries its own live stage message and
@@ -1648,7 +1675,7 @@ function setText(el,v){v=v==null?"":String(v);const n=el.firstChild;if(n&&n.node
 function setAttr(el,k,v){if(v==null||v===false){if(el.hasAttribute(k))el.removeAttribute(k)}else if(el.getAttribute(k)!==String(v))el.setAttribute(k,v===true?"":v)}
 function jobStatusLine(j){
   const s=j.status||"processing";
-  if(s==="review"||s==="completed")return "Finished — moved to Publish";
+  if(s==="review"||s==="completed")return "Finished — moved to Review";
   return j.message||stageLabel(s);
 }
 function createJobCard(j){
@@ -1677,7 +1704,7 @@ function patchJobCard(el,j){
   if(acts.dataset.key!==key){acts.dataset.key=key;
     acts.innerHTML=(key.includes("c")?`<button class="secondary cancel-job-btn" data-cancel-job="${esc(j.id)}" type="button">Cancel</button>`:"")+(key.includes("r")?`<button class="secondary cancel-job-btn" data-retry-job="${esc(j.id)}" type="button">Retry</button>`:"")}
 }
-const JOBS_EMPTY_HTML=`<svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="3"/><path d="m10 9.5 4.5 2.5-4.5 2.5z"/></svg><div class="empty-title">Nothing importing</div><div class="empty-tip">Paste a YouTube link above and press Analyze. Jobs show their progress here, then move to Publish when the clips are ready.</div>`;
+const JOBS_EMPTY_HTML=`<svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="3"/><path d="m10 9.5 4.5 2.5-4.5 2.5z"/></svg><div class="empty-title">Nothing importing</div><div class="empty-tip">Paste a YouTube link above and press Analyze. Jobs show their progress here, then move to Review when the clips are ready.</div>`;
 function syncJobsEmpty(){
   const box=$("currentJobs"),empty=box.querySelector(":scope>.import-empty");
   if(box.querySelector(":scope>.job-card")){empty?.remove();return}
@@ -2201,7 +2228,7 @@ async function loadQueue(){
     if(queueCampaignFilter&&queueCampaignFilter!=="none"&&!used.includes(queueCampaignFilter))queueCampaignFilter="";
     const jobs=all.filter(j=>!queueCampaignFilter||(queueCampaignFilter==="none"?!j.campaign:j.campaign===queueCampaignFilter));
     const filter=used.length?`<label class="queue-filter">Campaign <select id="queueCampaignFilter"><option value="">All</option>${used.map(c=>`<option value="${esc(c)}" ${c===queueCampaignFilter?"selected":""}>${esc(campaignName(c))}</option>`).join("")}<option value="none" ${queueCampaignFilter==="none"?"selected":""}>No campaign</option></select></label>`:"";
-    $("queueJobs").innerHTML=filter+(jobs.length?`<div class="queue-list">${jobs.map((j,i)=>renderQueueJob(j,i)).join("")}</div>`:queueCampaignFilter?`<div class="panel empty"><div class="empty-title">No jobs for this campaign</div></div>`:`<div class="panel empty"><div class="empty-title">No jobs in Publish yet</div><div class="empty-tip">Finished imports land here. Open one and use <b>Edit</b> on a clip to adjust its subtitle, font, style, title and rating, then render, download or publish.</div></div>`);
+    $("queueJobs").innerHTML=filter+(jobs.length?`<div class="queue-list">${jobs.map((j,i)=>renderQueueJob(j,i)).join("")}</div>`:queueCampaignFilter?`<div class="panel empty"><div class="empty-title">No jobs for this campaign</div></div>`:`<div class="panel empty"><div class="empty-title">No jobs to review yet</div><div class="empty-tip">Finished imports land here. Open one and use <b>Edit</b> on a clip to adjust its subtitle, font, style, title and rating, then render, download or publish.</div></div>`);
   }catch(e){$("queueJobs").innerHTML=`<div class="panel error-box">Cannot load history: ${esc(e.message)}</div>`}
 }
 async function switchQueueView(showDetail){
@@ -2227,6 +2254,7 @@ async function switchQueueView(showDetail){
   next.classList.add("switching-in");
 
   setTimeout(()=>next.classList.remove("switching-in"),400);
+  renderFlow();syncPageTitle();
 }
 async function openQueueJob(id){
   try{
@@ -2237,7 +2265,7 @@ async function openQueueJob(id){
     initThumbCarousels(j.candidates||[]);
     initVersionHistory(j.candidates||[]);
     if(alreadyOpen){
-      $("queueDetail").classList.remove("hidden");
+      $("queueDetail").classList.remove("hidden");renderFlow();
     }else{
       await switchQueueView(true);
       $("queueDetail").scrollIntoView({behavior:scrollMode(),block:"start"});
@@ -2311,6 +2339,7 @@ function toggleCandidateEdit(cid){
   el.classList.remove("no-enter");el.classList.toggle("editing");
   const open=el.classList.contains("editing");
   const b=el.querySelector("[data-edit]");if(b){b.textContent=open?"Close edit":"Edit";b.setAttribute("aria-expanded",String(open))}
+  renderFlow();syncPageTitle();
 }
 async function applyEdits(jid,cid){
   const subEl=$("sub-"+cid),sub=(subEl?.value||"").trim().toUpperCase();
@@ -2663,7 +2692,7 @@ async function refreshRunningJobs(){
 function startJobMonitor(){if(jobMonitorTimer)clearInterval(jobMonitorTimer);refreshRunningJobs();jobMonitorTimer=setInterval(refreshRunningJobs,POLL_INTERVAL)}
 function stopJobMonitor(){if(jobMonitorTimer){clearInterval(jobMonitorTimer);jobMonitorTimer=null}}
 
-function syncPageTitle(){const t=$("pageTitle");if(t)t.textContent=currentTab==="queue"?"Publish":"Import"}
+function syncPageTitle(){const t=$("pageTitle");if(t)t.textContent=editorOpen()?"Editor":currentTab==="queue"?"Review":"Analyze"}
 
 // Switching views while scrolled keeps the large title collapsed and puts the new section's top right
 // under the toolbar (instead of leaving it wherever the old view was scrolled to).
@@ -2898,6 +2927,7 @@ document.addEventListener("click",e=>{
   if(e.target.closest("#analyzeButton"))return createJob();
   const ce=e.target.closest("[data-edit]");if(ce)return toggleCandidateEdit(ce.dataset.edit);
   const et=e.target.closest("[data-edit-tab]");if(et)return switchEditTab(et.dataset.cid,et.dataset.editTab);
+  if(e.target.closest("[data-flow-editor]"))return openFlowEditor();
   const rn=e.target.closest("[data-rename]");if(rn)return renameJob(rn.dataset.rename);
   const cj=e.target.closest("[data-cancel-job]");if(cj)return cancelJob(cj.dataset.cancelJob,cj);
   const rj=e.target.closest("[data-retry-job]");if(rj)return retryJob(rj.dataset.retryJob,rj);
@@ -3057,6 +3087,47 @@ function syncNav(){
   document.querySelectorAll("[data-nav]").forEach(b=>{if(b.dataset.nav===sel)b.setAttribute("aria-current",b.dataset.nav==="current"||b.dataset.nav==="queue"?"page":"true");else b.removeAttribute("aria-current")});
   const item=document.querySelector(`.side-nav [data-nav="${sel}"]`);
   if(ind&&item){ind.style.setProperty("--nav-y",item.offsetTop+"px");ind.style.height=item.offsetHeight+"px";ind.classList.add("ready")}
+  else if(ind)ind.classList.remove("ready");
+  renderFlow();syncPageTitle();
+}
+// UI shell (P1 task 0): the flow-preview stepper IS the top-level navigation. Analyze = the Import view,
+// Review = the job list/detail, Editor = the open clip's edit drawer; steps not built yet are disabled
+// with their phase (docs/roadmap.md mapping), never mock content.
+const FLOW_ICON={flag:'<path d="M5 21V4m0 0h11l-2 4 2 4H5"/>',import:'<path d="M12 3v12m0 0-4-4m4 4 4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>',
+  spark:'<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/>',eye:'<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+  edit:'<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>',
+  cal:'<rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4m8-4v4"/>',send:'<path d="M22 2 11 13M22 2l-7 20-4-9-9-4z"/>',
+  chart:'<path d="M4 20V10m6 10V4m6 16v-7m4 7H2"/>'};
+const FLOW_STEPS=[
+  {id:"campaign",label:"Campaign",sub:"Paste brief → rules",icon:"flag",phase:"P3"},
+  {id:"import",label:"Auto-import",sub:"Watch source channels",icon:"import",phase:"P3"},
+  {id:"analyze",label:"Analyze",sub:"Import a video",icon:"spark",nav:"current"},
+  {id:"review",label:"Review",sub:"Clips + checks",icon:"eye",nav:"queue"},
+  {id:"editor",label:"Editor",sub:"Captions, export",icon:"edit"},
+  {id:"schedule",label:"Schedule",sub:"Prime time, your TZ",icon:"cal",phase:"P2"},
+  {id:"publish",label:"Publish",sub:"Per-platform queue",icon:"send",phase:"P2"},
+  {id:"track",label:"Track",sub:"Views → earnings",icon:"chart",phase:"P3"},
+];
+function editorOpen(){return currentTab==="queue"&&!!document.querySelector("#queueDetail:not(.hidden) .candidate-card.editing")}
+function editorTarget(){return currentTab==="queue"?document.querySelector("#queueDetail:not(.hidden) .candidate-card"):null}
+function renderFlow(){
+  const ol=$("flow");if(!ol)return;
+  const active=editorOpen()?"editor":currentTab==="queue"?"review":"analyze",idx=FLOW_STEPS.findIndex(s=>s.id===active);
+  const canEdit=!!editorTarget();
+  const html=FLOW_STEPS.map((s,i)=>{
+    const off=!!s.phase||(s.id==="editor"&&!canEdit),sub=s.phase?`Coming in ${s.phase}`:s.id==="editor"&&!canEdit?"Open a clip in Review":s.sub;
+    const attrs=s.nav?`data-nav="${s.nav}"`:s.id==="editor"?"data-flow-editor":"";
+    return `<li class="${i<idx&&!s.phase?"done":i===idx?"active":""}${off?" off":""}"><button class="flow-node" type="button" ${attrs} ${off?"disabled":""} ${i===idx?'aria-current="step"':""}>
+      <span class="flow-dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${FLOW_ICON[s.icon]}</svg></span>
+      <span class="flow-label">${s.label}</span><span class="flow-sub">${sub}</span></button></li>`;
+  }).join("");
+  if(ol.dataset.html!==html){ol.dataset.html=html;ol.innerHTML=html;
+    const a=ol.querySelector("li.active");if(a&&window.matchMedia("(max-width:600px)").matches)a.scrollIntoView({behavior:scrollMode(),block:"nearest",inline:"center"})}
+}
+function openFlowEditor(){
+  const open=document.querySelector("#queueDetail:not(.hidden) .candidate-card.editing"),card=open||editorTarget();if(!card)return;
+  if(!open)toggleCandidateEdit(card.id.replace(/^candidate-/,""));
+  card.scrollIntoView({behavior:scrollMode(),block:"start"});
 }
 function openSheet(id,opener){
   const layer=$(id);if(!layer||openSheetId===id)return;
