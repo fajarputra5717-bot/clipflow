@@ -26,5 +26,16 @@ def load_app_settings():
 settings = RuntimeSettings(load_app_settings, log=lambda m: None)
 router.configure(lambda k, d=None: settings.get(k, d), lambda m: print("[ai]", m, file=sys.stderr))
 text = open(sys.argv[1], encoding="utf-8").read()
-rules = parse_brief(text, today=date.today(), ai=router_ai())
+raw = {}
+_call = router_ai()
+
+
+def ai(prompt, schema):
+    raw["answer"] = _call(prompt, schema)
+    return raw["answer"]
+
+
+rules = parse_brief(text, today=date.today(), ai=ai)
+if "--raw" in sys.argv:
+    print(json.dumps(raw.get("answer"), indent=1, ensure_ascii=False), file=sys.stderr)
 print(json.dumps({k: rules[k] for k in rules if k != "unrecognised_lines"}, indent=1, ensure_ascii=False))
