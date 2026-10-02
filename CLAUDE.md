@@ -416,6 +416,12 @@ or preflights get 401.
 - Frontend button wiring → `grep -n "data-yourthing" index.html`
   (markup + handler both show up)
 
+## UI tests (104)
+
+`tests/ui/run.sh` (Playwright, mocked `/api` from `tests/ui/fixtures.js`, never creates jobs; desktop 1280 +
+mobile 390). Run it before committing frontend changes; add a spec for new UI. Live read-only mode:
+`CLIPFLOW_UI_LIVE=1 CLIPFLOW_API_KEY=… tests/ui/run.sh specs/live.spec.js`.
+
 ## Token discipline (always)
 - Never read main.py / worker.py / index.html whole. `grep -n` the function, then read only ~60 lines around it.
 - Logs: `docker compose logs --tail=50 <service>`, never unbounded. Build output: pipe through `tail -30`.
