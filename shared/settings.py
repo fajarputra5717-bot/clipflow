@@ -65,6 +65,10 @@ DEFAULT_SETTINGS = {
     # Gap between the caption's bottom and the facecam seam, % of height
     # (floored at 2x the caption outline so it never crosses the seam).
     "SUBTITLE_SEAM_GAP": "1.5",
+    # Full-frame clips (no facecam panel): caption anchor, % of height from the
+    # top (bottom of the caption block sits the seam gap above it); clamped
+    # 60-85 by the worker to stay above the platforms' bottom UI.
+    "FULLFRAME_CAPTION_Y": "78",
     "DEFAULT_SUBTITLE_STYLE": "outline",
     "DEFAULT_SUBTITLE_FONT": "Liberation Sans Bold",
     "DEFAULT_SUBTITLE_SIZE": "42",

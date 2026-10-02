@@ -67,3 +67,4 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 093 · 2026-10-02 · Campaign hashtags: exact order at the END; rules wording "required_in_order" (not "prefix") (P0) · docs/campaigns, shared/campaigns.py
 094 · 2026-10-02 · Hook analysis window minimum 10 min (settings 400 + worker clamp) (P0) · main.py, worker.py
 095 · 2026-10-02 · Facecam layout per job: majority (or position-agreeing tie) → panel for all, else full-frame for all; overrides logged; 9 jobs backfilled (P0) · worker.py, main.py
+096 · 2026-10-02 · Full-frame clips: captions at FULLFRAME_CAPTION_Y (default 78 %, clamped 60–85) instead of the seam (P0) · worker.py, shared/settings.py, index.html

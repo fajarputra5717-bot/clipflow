@@ -3692,6 +3692,20 @@ def calculate_face_crop(
     }
 
 
+def caption_split_ratio(split_ratio, face_crop):
+    """Where make_ass() anchors captions (% from the top; their bottom sits a
+    seam gap above it). With the facecam panel: the seam. Full-frame (no
+    panel, P0): FULLFRAME_CAPTION_Y (default 78), clamped to 60-85 so the
+    block stays above the platforms' bottom UI band (~87 %)."""
+    if (face_crop or {}).get("panel", True):
+        return split_ratio
+    try:
+        y = float(setting("FULLFRAME_CAPTION_Y") or 78)
+    except (TypeError, ValueError):
+        y = 78.0
+    return max(60.0, min(85.0, y))
+
+
 def vertical_layout_filter(width, height, split_ratio, face_crop):
     """The one layout graph (render + thumbnail frames) ending in
     [stacked]: gameplay top + facecam bottom, or, when face_crop says
@@ -4910,7 +4924,7 @@ def create_preview(
             subtitle_style,
             preview_width,
             preview_height,
-            split_ratio=split_ratio,
+            split_ratio=caption_split_ratio(split_ratio, face_crop),
             animation=normalize_subtitle_animation(job),
             watermark_width=wm_width,
             watermark_path=wm_path,
@@ -5184,7 +5198,7 @@ def render_final_candidate(
 
             FINAL_WIDTH,
             FINAL_HEIGHT,
-            split_ratio=split_ratio,
+            split_ratio=caption_split_ratio(split_ratio, face_crop),
             animation=normalize_subtitle_animation(job),
             watermark_width=wm_width,
             watermark_path=wm_path,
