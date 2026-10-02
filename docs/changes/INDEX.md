@@ -53,3 +53,4 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 078 · 2026-10-01 · Watermark never above 16 % (global floor, caption push-up warns) + pilot campaign fixtures (MotionKlip, IME Roleplay, Fandra Octo) · worker.py, docs/campaigns
 079 · 2026-10-02 · Per-job language Auto/English/Indonesian (Whisper detect + fallback, prompts, Submagic), id/en stoplists · worker.py, main.py, index.html, shared/languages.py
 081 · 2026-10-02 · Campaign flow v1: rules files → jobs.campaign, watermark preset, hashtags, prompt context, rule skips, badge + filter · main.py, worker.py, index.html, shared/campaigns.py
+082 · 2026-10-02 · Edit drawer tabs: Captions / Effects (soon) / Audio (soon) / Watermark / Export · index.html

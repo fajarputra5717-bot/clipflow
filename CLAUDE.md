@@ -339,7 +339,8 @@ or preflights get 401.
 - **Busy state:** every async button/upload label goes through
   `setBusy(el, busy, label?)`. It disables the control, sets `aria-busy` and
   `.is-busy` (spinner), and restores the label. Don't hand-swap `textContent`.
-- **Edit drawer:** shown via `display` + `drawerIn` keyframe. Re-renders
+- **Edit drawer:** tabs (082) Captions/Effects/Audio/Watermark/Export, active tab in `editTab[cid]`;
+  inactive panels stay in the DOM (`hidden`) because `applyEdits()` reads their inputs. Shown via `display` + `drawerIn` keyframe. Re-renders
   while editing must add `.no-enter` (see `watchCandidate`). Description/
   Thumbnail are `<details data-edit-more>`. Their open state lives in
   `editMoreOpen["<cid>:desc|thumb"]` (capture `toggle` listener) so

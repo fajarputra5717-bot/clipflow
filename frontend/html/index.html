@@ -30,6 +30,7 @@
 [hidden]{display:none!important} /* author display rules must never un-hide [hidden] (070) */
  :root{
   --bg:#f5f5f7;--panel:#ffffff;--panel2:#fbfbfd;--input:#ffffff;
+  --fill:rgba(120,120,128,.12);--seg-thumb:#ffffff; /* segmented controls (edit tabs) */
   --line:rgba(0,0,0,.08);--line2:rgba(0,0,0,.13);--text:#1d1d1f;--muted:#6e6e73;
   --muted2:#86868b;--accent:#0071e3;--accent2:#2997ff;--lux:#0071e3;--lux2:#2997ff;
   --good:#1eb85a;--bad:#ff3b30;--warn:#ff9500;--radius:20px;
@@ -72,6 +73,7 @@ html{color-scheme:light}
 html[data-theme="dark"]{color-scheme:dark}
 :root[data-theme="dark"]{
   --bg:#000000;--panel:#1c1c1e;--panel2:#232325;--input:#1c1c1e;
+  --fill:rgba(142,142,147,.16);--seg-thumb:#636366;
   --line:rgba(255,255,255,.11);--line2:rgba(255,255,255,.17);--text:#f5f5f7;--muted:#98989d;
   --muted2:#8e8e93;--accent:#0a84ff;--accent2:#409cff;--lux:#0a84ff;--lux2:#409cff;
   --good:#30d158;--bad:#ff453a;--warn:#ff9f0a;
@@ -550,6 +552,20 @@ summary > .chev{margin-left:auto}
   box-shadow:0 8px 24px rgba(0,0,0,.08);
 }
 .edit-actions button{flex:1 1 auto}
+/* Edit drawer tabs: equal columns, so the thumb is positioned by index (--i), no measuring while hidden. */
+.edit-tabs{position:relative;display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);padding:3px;margin:4px 0 var(--sp-1);border-radius:12px;background:var(--fill)}
+.edit-tabs button{position:relative;z-index:1;background:transparent;color:var(--text);min-height:36px;padding:0 4px;font-size:13px;font-weight:500;border-radius:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-shadow:none}
+.edit-tabs button,.edit-tabs button:hover:not(:disabled),[data-theme="dark"] .edit-tabs button,[data-theme="dark"] .edit-tabs button:hover:not(:disabled){background:transparent;border:0!important;box-shadow:none;filter:none}
+.edit-tabs button[aria-selected="true"]{font-weight:600}
+.edit-tabs button:active:not(:disabled){transform:none}
+.edit-tabs-ind{position:absolute;top:3px;bottom:3px;left:3px;width:calc((100% - 6px)/5);border-radius:9px;background:var(--seg-thumb);box-shadow:0 3px 8px rgba(0,0,0,.12),0 0 0 .5px rgba(0,0,0,.04);
+  transform:translateX(calc(var(--i,0)*100%));transition:transform var(--dur-4) var(--ease-spring)}
+.edit-tabpanel.in-r{animation:tabInR var(--dur-3) var(--ease-spring)}
+.edit-tabpanel.in-l{animation:tabInL var(--dur-3) var(--ease-spring)}
+@keyframes tabInR{from{opacity:0;transform:translateX(18px)}to{opacity:1;transform:none}}
+@keyframes tabInL{from{opacity:0;transform:translateX(-18px)}to{opacity:1;transform:none}}
+.coming-soon .edit-section-head .tag{margin-left:auto}
+@media (max-width:600px){.edit-tabs button{font-size:12px;padding:0 2px}}
 .edit-more{padding:0;border-bottom:1px solid rgba(0,0,0,.06)}
 .edit-more > summary{display:flex;align-items:center;gap:8px;cursor:pointer;list-style:none}
 .edit-more > summary::-webkit-details-marker{display:none}
@@ -1353,7 +1369,9 @@ const SUBTITLE_ANIMATIONS=[
   ["none","Static (none)","flow"]
 ];
 let activeJobId=null,pollTimer=null,jobMonitorTimer=null,currentTab="current";
-const editMoreOpen={};  // "<cid>:desc|thumb|wm" -> open, survives re-renders
+const editMoreOpen={};  // "<cid>:desc|thumb" -> open, survives re-renders
+const editTab={};       // "<cid>" -> active edit tab, survives re-renders
+const EDIT_TABS=[["captions","Captions"],["effects","Effects"],["audio","Audio"],["watermark","Watermark"],["export","Export"]];
 const REDUCED_MOTION=window.matchMedia("(prefers-reduced-motion: reduce)");
 function scrollMode(){return REDUCED_MOTION.matches?"auto":"smooth"}
 // JS waits that exist only to let a CSS animation play collapse to 0 under reduced motion (067).
@@ -1846,16 +1864,16 @@ function renderCandidate(c,jid,platform,job={}){
     <div class="edit-drawer">
       <div class="edit-drawer-inner">
         <div class="edit-title"><strong>Candidate editing</strong><span>changes regenerate this preview</span></div>
+        ${editTabsHtml(c.id)}
 
+        ${editPanelOpen(c.id,"captions")}
         <div class="edit-section">
           <div class="edit-section-head">
-            <span class="edit-section-num">1</span>
             <h4>Subtitle</h4>
             <button class="mini-ai-btn ai-highlight" data-fix-subtitle="${esc(jid)}" data-cid="${esc(c.id)}" type="button" ${busy?"disabled":""}>${busy?"Working…":"Fix typos (AI)"}</button>
           </div>
           <label class="edit-subtle-label">Indonesian · ALL CAPS · karaoke word-highlight</label>
           <textarea id="sub-${esc(c.id)}">${esc(sub)}</textarea>
-          <label class="burn-toggle"><input type="checkbox" id="burn-${esc(c.id)}" ${burnSubs?"checked":""} data-initial="${burnSubs?"1":"0"}"> Burn subtitles into video</label>
           <div class="edit-style-row">
             <div><label>Font style</label><select id="style-${esc(c.id)}">${SUBTITLE_STYLES.map(([v,l])=>`<option value="${v}" ${v===styleName?"selected":""}>${l}</option>`).join("")}</select></div>
             <div><label>Font</label><select id="font-${esc(c.id)}">${SUBTITLE_FONTS.map(x=>`<option ${x===fontName?"selected":""} style="font-family:${esc(SUBTITLE_FONT_PREVIEW_STACK[x]||"inherit")};font-weight:${SUBTITLE_FONT_WEIGHT[x]||700}">${esc(x)}</option>`).join("")}</select></div>
@@ -1867,9 +1885,19 @@ function renderCandidate(c,jid,platform,job={}){
           </div>
           <div class="hint">Live preview reflects your actual subtitle text, style, font, size and animation. "Fix typos (AI)" only updates this box — nothing is saved or re-rendered until you hit Apply changes.</div>
         </div>
+        </div>
+
+        ${editPanelOpen(c.id,"effects")}${comingSoonHtml("Effects","Hook title card, auto zoom punch-ins, transitions on cuts, progress bar and loudness normalise.")}</div>
+        ${editPanelOpen(c.id,"audio")}${comingSoonHtml("Audio","Remove silences and filler words, background music.")}</div>
+
+        ${editPanelOpen(c.id,"export")}
+        <div class="edit-section">
+          <label class="burn-toggle"><input type="checkbox" id="burn-${esc(c.id)}" ${burnSubs?"checked":""} data-initial="${burnSubs?"1":"0"}"> Burn subtitles into video</label>
+          <div class="hint">Off exports a clean video without captions. Shared by every clip of this job.</div>
+        </div>
 
         <details class="edit-more" data-edit-more="desc" data-cid="${esc(c.id)}" ${editMoreOpen[c.id+":desc"]?"open":""}>
-          <summary aria-expanded="${editMoreOpen[c.id+":desc"]?"true":"false"}"><span class="edit-section-num">2</span><h4>Description</h4><span class="muted">${esc(c.description?String(c.description).slice(0,60):"Not written yet")}</span><span class="chev" aria-hidden="true"></span></summary>
+          <summary aria-expanded="${editMoreOpen[c.id+":desc"]?"true":"false"}"><h4>Description</h4><span class="muted">${esc(c.description?String(c.description).slice(0,60):"Not written yet")}</span><span class="chev" aria-hidden="true"></span></summary>
           <div class="edit-more-body">
             <div class="edit-section-tools">
               <button class="mini-ai-btn ai-highlight" data-gen-desc="${esc(jid)}" data-cid="${esc(c.id)}" type="button" ${busy?"disabled":""}>Generate description (AI)</button>
@@ -1880,7 +1908,7 @@ function renderCandidate(c,jid,platform,job={}){
         </details>
 
         <details class="edit-more" data-edit-more="thumb" data-cid="${esc(c.id)}" ${editMoreOpen[c.id+":thumb"]?"open":""}>
-          <summary aria-expanded="${editMoreOpen[c.id+":thumb"]?"true":"false"}"><span class="edit-section-num">3</span><h4>Thumbnail</h4><span class="muted">${thumbOptions.length?`${thumbOptions.length} option${thumbOptions.length===1?"":"s"}${c.thumbnail_locked?" · picked":""}`:"No options yet"}</span><span class="chev" aria-hidden="true"></span></summary>
+          <summary aria-expanded="${editMoreOpen[c.id+":thumb"]?"true":"false"}"><h4>Thumbnail</h4><span class="muted">${thumbOptions.length?`${thumbOptions.length} option${thumbOptions.length===1?"":"s"}${c.thumbnail_locked?" · picked":""}`:"No options yet"}</span><span class="chev" aria-hidden="true"></span></summary>
           <div class="edit-more-body">
             <div class="thumb-head-actions edit-section-tools">
               <button class="mini-ai-btn ai-highlight" data-gen-thumbs="${esc(jid)}" data-cid="${esc(c.id)}" type="button" ${busy?"disabled":""}>${busy&&c.status==="thumbnail_rendering"?"Generating…":"Generate thumbnails (AI)"}</button>
@@ -1914,9 +1942,11 @@ function renderCandidate(c,jid,platform,job={}){
           </div>
         </details>
 
-        <details class="edit-more" data-edit-more="wm" data-cid="${esc(c.id)}" ${editMoreOpen[c.id+":wm"]?"open":""}>
-          <summary aria-expanded="${editMoreOpen[c.id+":wm"]?"true":"false"}"><span class="edit-section-num">4</span><h4>Watermark</h4><span class="muted">${wmW}px · ${wmPct}%${job.watermark_width==null&&job.watermark_opacity==null?" · default":""}</span><span class="chev" aria-hidden="true"></span></summary>
-          <div class="edit-more-body">
+        </div>
+
+        ${editPanelOpen(c.id,"watermark")}
+        <div class="edit-section">
+          <div class="edit-section-head"><h4>Watermark</h4><span class="muted small">${wmW}px · ${wmPct}%</span></div>
             <label class="edit-subtle-label">Shared by every clip of this job · ${job.watermark_width==null&&job.watermark_opacity==null?"global default":"custom for this job"}</label>
             <div class="edit-style-row">
               <div><label for="wmw-${esc(c.id)}">Size <span id="wmwVal-${esc(c.id)}">${wmW}px</span></label><input id="wmw-${esc(c.id)}" type="range" min="200" max="900" step="10" value="${wmW}" data-initial="${wmW}"></div>
@@ -1924,8 +1954,8 @@ function renderCandidate(c,jid,platform,job={}){
             </div>
             <div class="wm-size-bar" aria-hidden="true"><span id="wmBar-${esc(c.id)}" style="width:${(wmW/1080*100).toFixed(1)}%;opacity:${wmPct/100}"></span></div>
             <div class="hint">Width in pixels on the 1080-wide video; the bar shows its share of the frame. Applied on the next preview and final render.</div>
-          </div>
-        </details>
+        </div>
+        </div>
 
         <div class="edit-section">
           <details class="version-history" data-versions-toggle="${esc(jid)}" data-cid="${esc(c.id)}">
@@ -1943,6 +1973,31 @@ function renderCandidate(c,jid,platform,job={}){
       </div>
     </div>
   </article>`;
+}
+
+// Edit drawer tabs: buttons + panels are re-rendered with the card, the active tab lives in editTab[cid].
+// Inactive panels stay in the DOM (hidden), so Apply still reads every input.
+function editTabsHtml(cid){
+  const cur=editTab[cid]||"captions",i=Math.max(0,EDIT_TABS.findIndex(t=>t[0]===cur));
+  return `<div class="edit-tabs" role="tablist" aria-label="Edit clip" style="--i:${i}"><span class="edit-tabs-ind" aria-hidden="true"></span>${EDIT_TABS.map(([id,n])=>
+    `<button type="button" role="tab" id="et-${esc(cid)}-${id}" aria-controls="etp-${esc(cid)}-${id}" aria-selected="${id===cur}" tabindex="${id===cur?0:-1}" data-edit-tab="${id}" data-cid="${esc(cid)}">${n}</button>`).join("")}</div>`;
+}
+function editPanelOpen(cid,id){
+  return `<div class="edit-tabpanel" role="tabpanel" id="etp-${esc(cid)}-${id}" aria-labelledby="et-${esc(cid)}-${id}" ${(editTab[cid]||"captions")===id?"":"hidden"}>`;
+}
+function comingSoonHtml(title,what){
+  return `<div class="edit-section coming-soon"><div class="edit-section-head"><h4>${esc(title)}</h4><span class="tag">Coming soon</span></div><div class="hint">${esc(what)} Arrives with retention editing.</div></div>`;
+}
+function switchEditTab(cid,id,focus){
+  const from=EDIT_TABS.findIndex(t=>t[0]===(editTab[cid]||"captions")),to=EDIT_TABS.findIndex(t=>t[0]===id);
+  if(to<0||from===to)return;
+  editTab[cid]=id;
+  const card=$(`candidate-${cid}`);if(!card)return;
+  card.querySelector(".edit-tabs")?.style.setProperty("--i",to);
+  card.querySelectorAll("[data-edit-tab]").forEach(b=>{const on=b.dataset.editTab===id;b.setAttribute("aria-selected",String(on));b.tabIndex=on?0:-1});
+  card.querySelectorAll(".edit-tabpanel").forEach(p=>{p.hidden=p.id!==`etp-${cid}-${id}`;p.classList.remove("in-l","in-r")});
+  const p=$(`etp-${cid}-${id}`);if(p&&!REDUCED_MOTION.matches){void p.offsetWidth;p.classList.add(to>from?"in-r":"in-l")}
+  if(focus)$(`et-${cid}-${id}`)?.focus();
 }
 
 function updateCaptionPreview(cid){
@@ -2819,6 +2874,7 @@ document.addEventListener("click",e=>{
   const lg=e.target.closest("[data-language]");if(lg)return selectLanguage(lg.dataset.language);
   if(e.target.closest("#analyzeButton"))return createJob();
   const ce=e.target.closest("[data-edit]");if(ce)return toggleCandidateEdit(ce.dataset.edit);
+  const et=e.target.closest("[data-edit-tab]");if(et)return switchEditTab(et.dataset.cid,et.dataset.editTab);
   const rn=e.target.closest("[data-rename]");if(rn)return renameJob(rn.dataset.rename);
   const cj=e.target.closest("[data-cancel-job]");if(cj)return cancelJob(cj.dataset.cancelJob,cj);
   const rj=e.target.closest("[data-retry-job]");if(rj)return retryJob(rj.dataset.retryJob,rj);
@@ -2867,6 +2923,12 @@ document.addEventListener("keydown",e=>{
   const el=e.target.closest("[data-split],[data-platform],[data-layout],[data-language]");
   if(el&&(e.key==="Enter"||e.key===" ")){e.preventDefault();if(el.dataset.split)selectSplit(el.dataset.split);if(el.dataset.platform)selectPlatform(el.dataset.platform);if(el.dataset.layout)selectLayout(el.dataset.layout);if(el.dataset.language)selectLanguage(el.dataset.language)}
   if(e.key==="Escape"){closeJobOverlay();closeVersionPopover();closeSidebarDrawer(true)}
+  const et=e.target.closest("[data-edit-tab]");
+  if(et&&["ArrowRight","ArrowLeft","Home","End"].includes(e.key)){
+    const cid=et.dataset.cid,i=EDIT_TABS.findIndex(t=>t[0]===et.dataset.editTab),n=EDIT_TABS.length;
+    const j=e.key==="Home"?0:e.key==="End"?n-1:(i+(e.key==="ArrowRight"?1:-1)+n)%n;
+    e.preventDefault();switchEditTab(cid,EDIT_TABS[j][0],true);
+  }
 });
 document.addEventListener("toggle",e=>{const d=e.target;if(d.tagName!=="DETAILS")return;d.querySelector(":scope > summary")?.setAttribute("aria-expanded",String(d.open));if(d.matches("[data-edit-more]"))editMoreOpen[d.dataset.cid+":"+d.dataset.editMore]=d.open},true);
 // Sidebar: desktop = collapsible column (remembered), narrow = drawer.
