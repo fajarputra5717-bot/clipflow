@@ -122,6 +122,14 @@ exported video by `make_ass()` in worker.py, not CSS-only preview
 fluff. The frontend's `SUBTITLE_STYLE_PREVIEW` / `SUBTITLE_ANIMATIONS`
 in index.html are a *hand-maintained mirror* for the live CSS
 preview — keep them in sync manually if you change the ASS side.
+`python3 scripts/check_caption_mirror.py` checks that mirror (and `CAPTION_PRESETS`) against make_ass().
+
+Per-clip presets (108): `clip_candidates.edit_spec.caption = {style, animation}` (shared/edit_spec.py; NULL =
+job style) overrides the job's style + animation for THAT clip only (font/size stay job-level), applied when the
+worker builds the candidate job dict. Preset cards (`CAPTION_PRESETS`) are fixed style+animation pairs; Apply
+stores the pair or clears it when it equals the job's; `POST /api/jobs/{id}/caption-preset` = "Apply to all
+clips" (job style + clears every clip override + re-renders clips in review). New edit_spec keys: extend
+`normalize_patch()`.
 
 ## Transcription (R-07)
 
@@ -237,7 +245,8 @@ connection can race. It's a changelog, not full undo: restore
 candidate's own fields (subtitle text, description, thumbnail) —
 it deliberately does NOT restore the snapshotted job-level
 subtitle_style/font/size/animation, because those are shared across
-every candidate in the job. If you add a new commit point (e.g. a
+every candidate in the job. It DOES restore the clip's own `edit_spec` (108; pre-108
+snapshots without the key keep the current spec). If you add a new commit point (e.g. a
 new AI-assist action that should be versioned), call
 `record_candidate_version` the same way, inside its transaction.
 

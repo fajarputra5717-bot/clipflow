@@ -65,6 +65,7 @@ async function mockApi(page, api) {
       if (path === "/api/media-token") return json({ token: "mock-token", expires_at: iso(-720) });
       if (path === "/api/settings") return json({});
       if (path === "/api/campaigns") return json(api.campaigns);
+      if (path === "/api/activity") return json({ items: api.activity || [] }); // 090 island feed
       if (path === "/api/assets/watermarks") return json({ assets: [] });
       if (path === "/api/jobs") return json(url.searchParams.get("scope") === "queue" ? api.queue : api.current);
       const m = path.match(/^\/api\/jobs\/([^/]+)$/);

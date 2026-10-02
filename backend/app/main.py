@@ -20,7 +20,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 
 from shared.ai import router as ai_router
-from shared import campaigns, languages
+from shared import campaigns, edit_spec as edit_specs, languages
 from shared.errors import AINotConfiguredError
 from shared.fonts import normalize_caption_font
 from shared.settings import (
@@ -270,6 +270,8 @@ def ensure_schema():
         # Pre-P1 #1: why the campaign watermark couldn't be resolved at job
         # creation (NULL = fine). The worker renders WITHOUT a watermark + chip.
         "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS watermark_failure TEXT",
+        # 108 (P1): per-clip edits (shared/edit_spec.py); NULL = job-level behaviour.
+        "ALTER TABLE clip_candidates ADD COLUMN IF NOT EXISTS edit_spec JSONB",
     ]
 
     try:
@@ -498,6 +500,14 @@ class CandidateUpdate(BaseModel):
     description: Optional[str] = None
 
     selected_thumbnail_index: Optional[int] = None
+
+    # 108: merged into clip_candidates.edit_spec; a key sent as null is removed.
+    edit_spec: Optional[dict] = None
+
+
+class CaptionPresetAll(BaseModel):
+    style: str
+    animation: str
 
 
 class JobUpdate(BaseModel):
@@ -1420,6 +1430,19 @@ def update_candidate(
             fields.append("thumbnail_locked = %s")
             values.append(True)
 
+        if req.edit_spec is not None:
+            try:
+                merge, remove = edit_specs.normalize_patch(
+                    req.edit_spec, SUBTITLE_STYLE_PRESETS, SUBTITLE_ANIMATIONS
+                )
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc))
+            fields.append(
+                "edit_spec = NULLIF((COALESCE(edit_spec, '{}'::jsonb) || %s::jsonb)"
+                " - %s::text[], '{}'::jsonb)"
+            )
+            values.extend([json_param(merge), remove])
+
         if not fields:
 
             raise HTTPException(
@@ -1653,6 +1676,72 @@ def regenerate_preview(
             status_code=500,
             detail=str(exc),
         )
+
+
+# ============================================================
+# CAPTION PRESET → ALL CLIPS (083): the preset becomes the job's
+# style/animation, every clip's own caption override is cleared, and
+# clips sitting in review get their preview re-rendered.
+# ============================================================
+
+@app.post("/api/jobs/{job_id}/caption-preset")
+def apply_caption_preset_to_all(job_id: str, req: CaptionPresetAll):
+
+    try:
+        cap = edit_specs.normalize_caption(
+            req.model_dump(), SUBTITLE_STYLE_PRESETS, SUBTITLE_ANIMATIONS
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT subtitle_style, subtitle_font, subtitle_size FROM jobs WHERE id = %s FOR UPDATE",
+                (job_id,),
+            )
+            row = cur.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Job not found")
+
+            current = row[0] if isinstance(row[0], dict) else {}
+            style = normalize_subtitle_style(
+                {**current, "style": cap["style"], "animation": cap["animation"]},
+                row[1], row[2], cap["animation"],
+            )
+            cur.execute(
+                """
+                UPDATE jobs
+                SET subtitle_style = %s::jsonb, subtitle_animation = %s, updated_at = NOW()
+                WHERE id = %s
+                """,
+                (json_param(style), style["animation"], job_id),
+            )
+            cur.execute(
+                """
+                UPDATE clip_candidates
+                SET edit_spec = NULLIF(edit_spec - 'caption', '{}'::jsonb), updated_at = NOW()
+                WHERE job_id = %s AND edit_spec ? 'caption'
+                """,
+                (job_id,),
+            )
+            cur.execute(
+                """
+                UPDATE clip_candidates
+                SET status = 'preview_queued', progress = 0,
+                    message = 'Queued: caption preset applied to all clips',
+                    error_stage = NULL, error_message = NULL, updated_at = NOW()
+                WHERE job_id = %s AND status = 'review'
+                RETURNING id
+                """,
+                (job_id,),
+            )
+            queued = [r[0] for r in cur.fetchall()]
+            for cid in queued:
+                record_candidate_version(cur, cid, "Caption preset applied to all clips")
+        conn.commit()
+
+    return {"status": "updated", "subtitle_style": style, "queued": queued}
 
 
 # ============================================================
@@ -2931,6 +3020,7 @@ def record_candidate_version(cur, candidate_id: str, label: str):
                 c.thumbnail_path,
                 c.manual_title,
                 c.rating,
+                c.edit_spec,
                 j.subtitle_style,
                 j.subtitle_font,
                 j.subtitle_size,
@@ -2953,11 +3043,12 @@ def record_candidate_version(cur, candidate_id: str, label: str):
             "thumbnail_path": row[2],
             "manual_title": row[3],
             "rating": row[4],
-            "subtitle_style": row[5],
-            "subtitle_font": row[6],
-            "subtitle_size": row[7],
-            "subtitle_animation": row[8],
-            "layout": row[9],
+            "edit_spec": row[5],
+            "subtitle_style": row[6],
+            "subtitle_font": row[7],
+            "subtitle_size": row[8],
+            "subtitle_animation": row[9],
+            "layout": row[10],
         }
 
         cur.execute(
@@ -3068,6 +3159,9 @@ def restore_candidate_version(job_id: str, candidate_id: str, version: int):
                         thumbnail_path = %s,
                         thumbnail_locked = TRUE,
                         manual_title = %s,
+                        -- 083: per-clip edits are the candidate's own; pre-083
+                        -- snapshots have no key and keep the current spec.
+                        edit_spec = CASE WHEN %s THEN %s::jsonb ELSE edit_spec END,
                         status = 'preview_queued',
                         progress = 0,
                         message = 'Queued: restoring version ' || %s,
@@ -3080,6 +3174,8 @@ def restore_candidate_version(job_id: str, candidate_id: str, version: int):
                         snapshot.get("description"),
                         snapshot.get("thumbnail_path"),
                         snapshot.get("manual_title"),
+                        "edit_spec" in snapshot,
+                        json_param(snapshot.get("edit_spec")) if snapshot.get("edit_spec") else None,
                         str(version),
                         candidate_id,
                         job_id,

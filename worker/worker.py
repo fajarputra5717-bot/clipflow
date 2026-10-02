@@ -22,7 +22,7 @@ from faster_whisper import WhisperModel
 from psycopg.rows import dict_row
 
 from shared.ai import router as ai_router
-from shared import campaigns, languages, retention
+from shared import campaigns, edit_spec as edit_specs, languages, retention
 from shared.errors import FAILURE_TRANSIENT, failure_class
 from shared.fonts import caption_font_bold, normalize_caption_font
 from shared.settings import RuntimeSettings
@@ -6649,6 +6649,18 @@ def _process_candidate_task(
             "face_layout":
                 task.get("face_layout"),
         }
+
+        # 108 (P1): the clip's own caption preset (edit_spec.caption) overrides
+        # the job's style + animation for every render of THIS clip; font/size
+        # stay job-level. Empty spec = the job style, as before.
+        cap_style, cap_anim = edit_specs.caption_override(task.get("edit_spec"))
+        if cap_style or cap_anim:
+            base = job["subtitle_style"] if isinstance(job["subtitle_style"], dict) else {}
+            job["subtitle_style"] = {**base, **({"style": cap_style} if cap_style else {}),
+                                     **({"animation": cap_anim} if cap_anim else {})}
+            if cap_anim:
+                job["subtitle_animation"] = cap_anim
+            log(f"Caption preset for this clip: {cap_style or '-'} + {cap_anim or '-'} (edit_spec)")
 
         if (
             task["status"]

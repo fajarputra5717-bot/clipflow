@@ -379,6 +379,21 @@ button.primary:hover:not(:disabled){background:#0077ed!important}
   .flow-sub{display:none}
 }
 @media (prefers-reduced-motion:reduce){.flow-dot{transition:none}}
+/* 108: caption preset cards (tiles mirror SUBTITLE_STYLE_PREVIEW = make_ass() colours). */
+.cap-presets{margin:4px 0 12px}
+.cap-presets-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.cap-presets-head label{margin:0}
+.cap-presets-head [data-preset-note]{flex:1;min-width:0}
+.cap-preset-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.cap-preset{display:flex;flex-direction:column;align-items:stretch;gap:4px;min-height:var(--hit);padding:6px;border-radius:12px;background:var(--panel);color:var(--text);border:1px solid var(--line)!important;box-shadow:none;font-weight:600;text-align:left}
+/* selected: outline + tint (global button hover rules reset border/box-shadow, not outline) */
+.cap-preset[aria-pressed="true"],.cap-preset[aria-pressed="true"]:hover:not(:disabled),[data-theme="dark"] .cap-preset[aria-pressed="true"],[data-theme="dark"] .cap-preset[aria-pressed="true"]:hover:not(:disabled){outline:2px solid var(--accent);outline-offset:-1px;background:var(--badge-run-bg)}
+.cap-preset-tile{display:flex;align-items:center;justify-content:center;gap:4px;height:44px;border-radius:8px;background:#1c1c1e;color:var(--pt-rest);font-size:11px;text-transform:uppercase;overflow:hidden;white-space:nowrap}
+.cap-preset-tile .hi{color:var(--pt-hi)}
+.cap-preset-tile.boxed span{background:rgba(0,0,0,.92);padding:1px 3px;border-radius:3px}
+.cap-preset-name{font-size:12px}
+.cap-preset-anim{font-size:10.5px;font-weight:500;color:var(--muted)}
+@media (max-width:600px){.cap-preset-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 /* P0: non-fatal render problems (render_warnings): warn-token chips under the clip title. */
 .render-warnings{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}
 .render-warn{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:980px;font-size:11.5px;font-weight:600;line-height:1.3;
@@ -1356,11 +1371,11 @@ const SUBTITLE_STYLE_PREVIEW={
   outline:{resting:"#fff",highlight:"#FFD60A",weight:800,outline:4.5,shadow:true,box:false,sizeMult:1,letterSpacing:"0"},
   clean:{resting:"#fff",highlight:"#64D2FF",weight:700,outline:1.5,shadow:true,box:false,sizeMult:.92,letterSpacing:"0"},
   boxed:{resting:"#fff",highlight:"#FFD60A",weight:800,outline:1,shadow:false,box:true,sizeMult:1,letterSpacing:"0"},
-  hormozi:{resting:"#FFD60A",highlight:"#FFD60A",weight:900,outline:5,shadow:false,box:false,sizeMult:1.35,letterSpacing:"-.01em"},
+  hormozi:{resting:"#FFD60A",highlight:"#FFD60A",weight:900,outline:5,shadow:false,box:false,sizeMult:1.4,letterSpacing:"-.01em"},
   neon:{resting:"#5CE1FF",highlight:"#FF2D95",weight:800,outline:2.5,shadow:true,box:false,sizeMult:1,letterSpacing:"0"},
   minimal:{resting:"#fff",highlight:"#E8E8ED",weight:600,outline:1,shadow:false,box:false,sizeMult:.85,letterSpacing:".01em"},
-  impact:{resting:"#fff",highlight:"#FF3B30",weight:900,outline:4,shadow:false,box:false,sizeMult:1.08,letterSpacing:"0"},
-  pastel:{resting:"#FFF6EC",highlight:"#FFB4C6",weight:700,outline:1.5,shadow:true,box:false,sizeMult:.95,letterSpacing:"0"},
+  impact:{resting:"#fff",highlight:"#FF3B30",weight:900,outline:2,shadow:true,box:false,sizeMult:1.08,letterSpacing:"0"},
+  pastel:{resting:"#FFF6EC",highlight:"#FFB4C6",weight:700,outline:1,shadow:true,box:false,sizeMult:.95,letterSpacing:"0"},
   gold:{resting:"#fff",highlight:"#FFC300",weight:800,outline:.5,shadow:false,box:true,sizeMult:1,letterSpacing:"0"}
 };
 // Mirrors shared/fonts.py CAPTION_FONTS (exact names go into the ASS Style line).
@@ -1875,12 +1890,14 @@ function renderCandidate(c,jid,platform,job={}){
   const title=c.manual_title||c.title||c.generated_title||hookTitle(sub)||"AI-Generated Highlight";
   const type=c.content_type||"Reality";
   const rating=Math.max(1,Math.min(10,Number(c.rating||5)));
-  // Subtitle style is job-level (jobs.subtitle_*); candidate rows don't carry it.
-  const ss=c.subtitle_style??job.subtitle_style;
-  const styleName=typeof ss==="object"&&ss?(ss.style||"outline"):(ss||"outline");
+  // Subtitle style: job-level (jobs.subtitle_*), unless this clip has its own preset (108: edit_spec.caption).
+  const ss=c.subtitle_style??job.subtitle_style,cap=c.edit_spec?.caption||{};
+  const jobStyle=typeof job.subtitle_style==="object"&&job.subtitle_style?(job.subtitle_style.style||"outline"):(job.subtitle_style||"outline");
+  const jobAnim=(typeof job.subtitle_style==="object"&&job.subtitle_style?job.subtitle_style.animation:null)||job.subtitle_animation||"karaoke";
+  const styleName=cap.style||(typeof ss==="object"&&ss?(ss.style||"outline"):(ss||"outline"));
   const fontName=c.subtitle_font||job.subtitle_font||ss?.font||"Liberation Sans Bold";
   const size=Number(c.subtitle_size||job.subtitle_size||ss?.size||42);
-  const animName=(typeof ss==="object"&&ss?ss.animation:null)||c.subtitle_animation||job.subtitle_animation||"karaoke";
+  const animName=cap.animation||(typeof ss==="object"&&ss?ss.animation:null)||c.subtitle_animation||job.subtitle_animation||"karaoke";
   const burnSubs=job.burn_subtitles!==false;  // R-09: NULL/missing = on
   const wmW=Number(job.watermark_width??settingsCache.WATERMARK_WIDTH?.value??320)||320;
   const wmPct=Math.round(100*Number(job.watermark_opacity??settingsCache.WATERMARK_OPACITY?.value??1));
@@ -1930,6 +1947,7 @@ function renderCandidate(c,jid,platform,job={}){
           </div>
           <label class="edit-subtle-label">Indonesian · ALL CAPS · karaoke word-highlight</label>
           <textarea id="sub-${esc(c.id)}" data-initial="${esc(sub)}" data-transcript="${esc(transcriptSub)}">${esc(sub)}</textarea>
+          ${captionPresetsHtml(c.id,jid,styleName,animName,jobStyle,jobAnim,!!c.edit_spec?.caption)}
           <div class="edit-style-row">
             <div><label>Font style</label><select id="style-${esc(c.id)}">${SUBTITLE_STYLES.map(([v,l])=>`<option value="${v}" ${v===styleName?"selected":""}>${l}</option>`).join("")}</select></div>
             <div><label>Font</label><select id="font-${esc(c.id)}">${SUBTITLE_FONTS.map(x=>`<option ${x===fontName?"selected":""} style="font-family:${esc(SUBTITLE_FONT_PREVIEW_STACK[x]||"inherit")};font-weight:${SUBTITLE_FONT_WEIGHT[x]||700}">${esc(x)}</option>`).join("")}</select></div>
@@ -2059,6 +2077,48 @@ function switchEditTab(cid,id,focus){
 function renderWarningsHtml(c){
   const w=Array.isArray(c.render_warnings)?c.render_warnings:[];
   return w.length?`<div class="render-warnings" role="status">${w.map(x=>`<span class="render-warn" title="${esc(x.message||"")}">⚠ ${esc(x.message||x.code)}</span>`).join("")}</div>`:"";
+}
+
+// 108 (P1): caption preset cards = fixed style+animation pairs (both are real ASS in make_ass()). Picking one
+// sets this clip's Font style + Animation selects (still there as the custom option); Apply stores it as the
+// clip's own preset (edit_spec.caption) or clears it when it equals the job style.
+const CAPTION_PRESETS=[["karaoke","Karaoke","outline","karaoke"],["pop","Word pop","impact","word_pop"],["hormozi","Hormozi","hormozi","bounce"],
+  ["clean","Clean","clean","fade_settle"],["neon","Neon","neon","typewriter"],["boxed","Boxed","boxed","word_pop"]];
+function presetTileStyle(style){
+  const c=SUBTITLE_STYLE_PREVIEW[style]||SUBTITLE_STYLE_PREVIEW.bold,o=Math.max(1,c.outline*.45);
+  const stroke=c.box?"":`text-shadow:${[[-1,-1],[1,-1],[-1,1],[1,1],[0,1.4]].map(([x,y])=>`${(x*o).toFixed(1)}px ${(y*o).toFixed(1)}px 0 #000`).join(",")};`;
+  return `--pt-rest:${c.resting};--pt-hi:${c.highlight};font-weight:${c.weight};letter-spacing:${c.letterSpacing};${stroke}${c.box?"--pt-box:1;":""}`;
+}
+function captionPresetsHtml(cid,jid,style,anim,jobStyle,jobAnim,own){
+  const cur=CAPTION_PRESETS.find(p=>p[2]===style&&p[3]===anim);
+  return `<div class="cap-presets" data-cid="${esc(cid)}" data-job-style="${esc(jobStyle)}" data-job-anim="${esc(jobAnim)}">
+    <div class="cap-presets-head"><label>Preset</label><span class="muted small" data-preset-note>${cur?"":"Custom (style + animation below)"}${own?" · this clip only":""}</span>
+      <button class="mini-ai-btn" type="button" data-preset-all="${esc(jid)}" data-cid="${esc(cid)}">Apply to all clips in this job</button></div>
+    <div class="cap-preset-grid" role="group" aria-label="Caption preset">${CAPTION_PRESETS.map(([id,label,st,an])=>`<button type="button" class="cap-preset" data-preset="${id}" data-cid="${esc(cid)}" aria-pressed="${cur&&cur[0]===id?"true":"false"}">
+      <span class="cap-preset-tile${(SUBTITLE_STYLE_PREVIEW[st]||{}).box?" boxed":""}" style="${presetTileStyle(st)}"><span>THIS</span> <span class="hi">CHANGES</span> <span>IT</span></span>
+      <span class="cap-preset-name">${esc(label)}</span><span class="cap-preset-anim">${esc((SUBTITLE_ANIMATIONS.find(a=>a[0]===an)||[,an])[1])}</span></button>`).join("")}</div></div>`;
+}
+function syncPresetCards(cid){
+  const st=$("style-"+cid)?.value,an=$("anim-"+cid)?.value,wrap=document.querySelector(`.cap-presets[data-cid="${css(cid)}"]`);if(!wrap)return;
+  const cur=CAPTION_PRESETS.find(p=>p[2]===st&&p[3]===an);
+  wrap.querySelectorAll("[data-preset]").forEach(b=>b.setAttribute("aria-pressed",String(!!cur&&b.dataset.preset===cur[0])));
+  const note=wrap.querySelector("[data-preset-note]");if(note)note.textContent=cur?"":"Custom (style + animation below)";
+}
+function pickCaptionPreset(cid,id){
+  const p=CAPTION_PRESETS.find(x=>x[0]===id);if(!p)return;
+  const st=$("style-"+cid),an=$("anim-"+cid);if(st)st.value=p[2];if(an)an.value=p[3];
+  syncPresetCards(cid);updateCaptionPreview(cid);
+}
+async function applyPresetToAll(jid,cid,btn){
+  const style=$("style-"+cid)?.value,animation=$("anim-"+cid)?.value;if(!style||!animation)return;
+  const name=(CAPTION_PRESETS.find(p=>p[2]===style&&p[3]===animation)||[,"this style"])[1];
+  if(!confirm(`Use ${name} for every clip in this job? Clips waiting for review re-render their preview; finished clips need a new final render.`))return;
+  setBusy(btn,true,"Applying…");
+  try{
+    const r=await api(`/api/jobs/${jid}/caption-preset`,{method:"POST",body:JSON.stringify({style,animation})});
+    (r.queued||[]).forEach(id=>watchCandidate(jid,id));
+    setBusy(btn,false);showToast(`${name} applied to all clips · ${(r.queued||[]).length} preview${(r.queued||[]).length===1?"":"s"} re-rendering`);
+  }catch(e){setBusy(btn,false);alert("Could not apply to all clips: "+e.message)}
 }
 
 function updateCaptionPreview(cid){
@@ -2216,6 +2276,7 @@ function changedRenderOptions(cid){
 document.addEventListener("change",e=>{
   const m=e.target.id&&e.target.id.match(/^(style|font|size|anim|sub)-(.+)$/);
   if(m)updateCaptionPreview(m[2]);
+  const sm=e.target.id&&e.target.id.match(/^(style|anim)-(.+)$/);if(sm)syncPresetCards(sm[2]);
   const up=e.target.closest("[data-upload-thumb]");
   if(up&&up.files&&up.files[0])uploadManualThumbnail(up.dataset.uploadThumb,up.dataset.cid,up.files[0]);
 });
@@ -2384,7 +2445,10 @@ async function applyEdits(jid,cid){
   setBusy(b,true,"Applying…");
   try{
     await api(`/api/jobs/${jid}/candidates/${cid}`,{method:"PATCH",body:JSON.stringify(patch)});
-    await api(`/api/jobs/${jid}/subtitle-style`,{method:"PATCH",body:JSON.stringify({subtitle_style:style,subtitle_font:font,subtitle_size:size,subtitle_animation:animation})});
+    // 108: style+animation are this clip's own (edit_spec.caption; cleared when equal to the job's); font/size stay job-level.
+    const pw=document.querySelector(`.cap-presets[data-cid="${css(cid)}"]`),jobStyle=pw?.dataset.jobStyle||style,jobAnim=pw?.dataset.jobAnim||animation;
+    await api(`/api/jobs/${jid}/candidates/${cid}`,{method:"PATCH",body:JSON.stringify({edit_spec:{caption:style===jobStyle&&animation===jobAnim?null:{style,animation}}})});
+    await api(`/api/jobs/${jid}/subtitle-style`,{method:"PATCH",body:JSON.stringify({subtitle_style:jobStyle,subtitle_font:font,subtitle_size:size,subtitle_animation:jobAnim})});
     const renderOpts=changedRenderOptions(cid);
     if(Object.keys(renderOpts).length)await api(`/api/jobs/${jid}/render-options`,{method:"PATCH",body:JSON.stringify(renderOpts)});
     await api(`/api/jobs/${jid}/candidates/${cid}/regenerate-preview`,{method:"POST"});
@@ -2952,6 +3016,8 @@ document.addEventListener("click",e=>{
   const ce=e.target.closest("[data-edit]");if(ce)return toggleCandidateEdit(ce.dataset.edit);
   const et=e.target.closest("[data-edit-tab]");if(et)return switchEditTab(et.dataset.cid,et.dataset.editTab);
   if(e.target.closest("[data-flow-editor]"))return openFlowEditor();
+  const pr=e.target.closest("[data-preset]");if(pr)return pickCaptionPreset(pr.dataset.cid,pr.dataset.preset);
+  const pa=e.target.closest("[data-preset-all]");if(pa)return applyPresetToAll(pa.dataset.presetAll,pa.dataset.cid,pa);
   const rn=e.target.closest("[data-rename]");if(rn)return renameJob(rn.dataset.rename);
   const cj=e.target.closest("[data-cancel-job]");if(cj)return cancelJob(cj.dataset.cancelJob,cj);
   const rj=e.target.closest("[data-retry-job]");if(rj)return retryJob(rj.dataset.retryJob,rj);

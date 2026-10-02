@@ -1,5 +1,10 @@
 const { test, expect, nav, blockingProblems } = require("../fixtures");
 
+// The edit drawer is tall (P1 presets): clicking its tabs makes Playwright scroll, and the app's
+// html{scroll-behavior:smooth} turns that into an animated scroll that never settles under suite load.
+// Reduced motion switches smooth scrolling off (app CSS) — the drawer itself is what's under test.
+test.use({ reducedMotion: "reduce" });
+
 test.describe("Edit panel", () => {
   test("opens, switches tab, closes, and leaves the page clickable", async ({ app }) => {
     await nav(app, "queue");
