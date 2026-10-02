@@ -1518,7 +1518,7 @@ async function renameJob(id){
 }
 function jobDisplayTitle(j){
   const c=(j.candidates||[])[0];
-  const fallback=c?(c.manual_title||c.title||c.generated_title||hookTitle(c.subtitle_override??c.subtitle_text)):"";
+  const fallback=c?(c.manual_title||c.title||c.generated_title||hookTitle(c.subtitle_override||c.subtitle_text)):"";
   return j.custom_title||j.source_title||fallback||"AI-Generated Highlight";
 }
 
@@ -1816,7 +1816,9 @@ function renderCandidate(c,jid,platform,job={}){
   const cacheBust=c.updated_at?`?t=${encodeURIComponent(c.updated_at)}`:"";
   const thumb=mediaUrl(`${API}/api/jobs/${jid}/candidates/${c.id}/thumbnail${cacheBust}`);
   const src=final||preview;
-  const sub=String(c.subtitle_override??c.subtitle_text??"").toUpperCase();
+  // QA #1: override only exists when the user edited the lines ("" = cleared); otherwise the transcript.
+  const sub=String(c.subtitle_override||c.subtitle_text||"").toUpperCase();
+  const transcriptSub=String(c.subtitle_text||"").toUpperCase();
   const title=c.manual_title||c.title||c.generated_title||hookTitle(sub)||"AI-Generated Highlight";
   const type=c.content_type||"Reality";
   const rating=Math.max(1,Math.min(10,Number(c.rating||5)));
@@ -1873,7 +1875,7 @@ function renderCandidate(c,jid,platform,job={}){
             <button class="mini-ai-btn ai-highlight" data-fix-subtitle="${esc(jid)}" data-cid="${esc(c.id)}" type="button" ${busy?"disabled":""}>${busy?"Working…":"Fix typos (AI)"}</button>
           </div>
           <label class="edit-subtle-label">Indonesian · ALL CAPS · karaoke word-highlight</label>
-          <textarea id="sub-${esc(c.id)}">${esc(sub)}</textarea>
+          <textarea id="sub-${esc(c.id)}" data-initial="${esc(sub)}" data-transcript="${esc(transcriptSub)}">${esc(sub)}</textarea>
           <div class="edit-style-row">
             <div><label>Font style</label><select id="style-${esc(c.id)}">${SUBTITLE_STYLES.map(([v,l])=>`<option value="${v}" ${v===styleName?"selected":""}>${l}</option>`).join("")}</select></div>
             <div><label>Font</label><select id="font-${esc(c.id)}">${SUBTITLE_FONTS.map(x=>`<option ${x===fontName?"selected":""} style="font-family:${esc(SUBTITLE_FONT_PREVIEW_STACK[x]||"inherit")};font-weight:${SUBTITLE_FONT_WEIGHT[x]||700}">${esc(x)}</option>`).join("")}</select></div>
@@ -2303,14 +2305,18 @@ function toggleCandidateEdit(cid){
   const b=el.querySelector("[data-edit]");if(b){b.textContent=open?"Close edit":"Edit";b.setAttribute("aria-expanded",String(open))}
 }
 async function applyEdits(jid,cid){
-  const sub=($("sub-"+cid)?.value||"").trim().toUpperCase();
+  const subEl=$("sub-"+cid),sub=(subEl?.value||"").trim().toUpperCase();
   const desc=($("desc-"+cid)?.value||"").trim();
   const style=$("style-"+cid)?.value||"outline";
   const font=$("font-"+cid)?.value||"Liberation Sans Bold";
   const size=Math.max(12,Math.min(120,Number($("size-"+cid)?.value||42)));
   const animation=$("anim-"+cid)?.value||"karaoke";
   const thumbIdx=thumbSelection[cid];
-  const patch={subtitle_override:sub,description:desc};
+  const patch={description:desc};
+  // QA #1: send the override only when the text changed; back to the transcript = clear it,
+  // so the worker keeps Whisper's word timings (karaoke) for every line.
+  const normSub=t=>String(t||"").toUpperCase().split("\n").map(l=>l.trim().replace(/\s+/g," ")).filter(Boolean).join("\n");
+  if(subEl&&normSub(sub)!==normSub(subEl.dataset.initial))patch.subtitle_override=normSub(sub)===normSub(subEl.dataset.transcript)?"":sub;
   if(thumbIdx!==undefined)patch.selected_thumbnail_index=thumbIdx;
   const b=document.querySelector(`[data-apply="${css(jid)}"][data-cid="${css(cid)}"]`);
   if(b?.disabled)return;

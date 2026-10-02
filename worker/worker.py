@@ -1,3 +1,4 @@
+import difflib
 import json
 import os
 import shutil
@@ -2332,11 +2333,37 @@ def extract_clip_segments(
     return result
 
 
+def _caption_token(word):
+    """Case/punctuation-insensitive form used to compare caption words."""
+    return re.sub(r"[^\w]+", "", str(word or "").lower())
+
+
+def _spread(tokens, t0, t1):
+    """Timings for `tokens` across [t0, t1], proportional to their length."""
+    t1 = max(t0, t1)
+    weights = [max(1, len(t)) for t in tokens]
+    total = float(sum(weights)) or 1.0
+    out, cur = [], t0
+    for t, w in zip(tokens, weights):
+        nxt = cur + (t1 - t0) * w / total
+        out.append({"word": t, "start": cur, "end": nxt})
+        cur = nxt
+    return out
+
+
 def apply_subtitle_override(
     original_segments,
     override_text,
     clip_duration,
 ):
+    """
+    QA #1/#3: the edited text keeps real timings. Lines whose words equal a
+    transcript segment's words (case/punctuation-insensitive) are that segment,
+    untouched (karaoke words included). Edited lines are aligned to Whisper's
+    words with difflib: matched words keep their timing, replaced words share
+    the span of the words they replaced, inserted words share the gap between
+    their neighbours. Line start/end follow their words, never an even split.
+    """
 
     if not override_text:
 
@@ -2352,65 +2379,120 @@ def apply_subtitle_override(
 
         return original_segments
 
-    if len(lines) == len(
-        original_segments
-    ):
+    # Without word timings, unchanged lines are found by text (each segment used once).
+    seg_by_tokens = {}
+    for seg in original_segments:
+        key = tuple(filter(None, (_caption_token(t) for t in str(seg.get("text") or "").split())))
+        if key:
+            seg_by_tokens.setdefault(key, []).append(seg)
 
-        result = []
+    src_words, src_seg = [], []
+    for si, seg in enumerate(original_segments):
+        for w in seg.get("words") or []:
+            src_words.append(w)
+            src_seg.append(si)
 
-        for segment, text in zip(
-            original_segments,
-            lines,
-        ):
+    flat = []  # (line index, token)
+    for li, line in enumerate(lines):
+        for tok in line.split():
+            flat.append((li, tok))
 
-            item = dict(
-                segment
-            )
+    times = [None] * len(flat)
+    src_of = [None] * len(flat)  # transcript word index for exact matches
 
-            item["text"] = text
-
-            # The user hand-edited this line's wording, so the
-            # original per-word timings no longer line up with
-            # what's actually written — drop them and fall back to
-            # a plain static line rather than highlighting the
-            # wrong words.
-            item["words"] = []
-
-            result.append(
-                item
-            )
-
-        return result
-
-    slice_duration = (
-        clip_duration
-        / len(lines)
-    )
+    if src_words:
+        a = [_caption_token(w["word"]) for w in src_words]
+        b = [_caption_token(t) for _, t in flat]
+        sm = difflib.SequenceMatcher(None, a, b, autojunk=False)
+        for op, i1, i2, j1, j2 in sm.get_opcodes():
+            if op == "equal":
+                for k in range(j2 - j1):
+                    w = src_words[i1 + k]
+                    times[j1 + k] = (float(w["start"]), float(w["end"]))
+                    src_of[j1 + k] = i1 + k
+            elif op == "replace":
+                span = _spread(
+                    [flat[j][1] for j in range(j1, j2)],
+                    float(src_words[i1]["start"]),
+                    float(src_words[i2 - 1]["end"]),
+                )
+                for k, w in enumerate(span):
+                    times[j1 + k] = (w["start"], w["end"])
+        # inserts: share the gap between the known neighbours
+        j = 0
+        while j < len(times):
+            if times[j] is not None:
+                j += 1
+                continue
+            k = j
+            while k < len(times) and times[k] is None:
+                k += 1
+            t0 = times[j - 1][1] if j > 0 else 0.0
+            t1 = times[k][0] if k < len(times) else max(t0, float(clip_duration))
+            first = j
+            if t1 - t0 < 0.12 * (k - j) and j > 0:
+                # No room (e.g. a word added at the end of a line): share the
+                # previous word's span instead of flashing for 10 ms.
+                first = j - 1
+                t0 = times[j - 1][0]
+                t1 = max(t1, times[j - 1][1])
+            for n, w in enumerate(_spread([flat[x][1] for x in range(first, k)], t0, t1)):
+                times[first + n] = (w["start"], w["end"])
+            j = k
+    else:
+        # No word timings at all (old transcripts): spread over the
+        # transcript's own span rather than the whole clip.
+        t0 = min((float(s["start"]) for s in original_segments), default=0.0)
+        t1 = max((float(s["end"]) for s in original_segments), default=float(clip_duration))
+        for n, w in enumerate(_spread([t for _, t in flat], t0, t1)):
+            times[n] = (w["start"], w["end"])
 
     result = []
 
-    for index, text in enumerate(
-        lines
-    ):
+    for li, line in enumerate(lines):
+
+        idx = [n for n, (l2, _) in enumerate(flat) if l2 == li]
+        same = None
+        if src_words:
+            # Unchanged = every word matched exactly, all from one segment,
+            # covering all of that segment's words.
+            hits = [src_of[n] for n in idx]
+            if hits and None not in hits:
+                si = src_seg[hits[0]]
+                if all(src_seg[h] == si for h in hits) and len(hits) == src_seg.count(si):
+                    same = original_segments[si]
+        else:
+            key = tuple(filter(None, (_caption_token(t) for t in line.split())))
+            if seg_by_tokens.get(key):
+                same = seg_by_tokens[key].pop(0)
+
+        if same is not None:
+            item = dict(same)
+            item["text"] = line
+            result.append(item)
+            continue
+
+        words = [
+            {"word": flat[n][1], "start": times[n][0], "end": times[n][1]}
+            for n in idx
+        ]
+        if not words:
+            continue
 
         result.append(
             {
-                "start":
-                    index * slice_duration,
-
-                "end":
-                    min(
-                        clip_duration,
-                        (index + 1)
-                        * slice_duration,
-                    ),
-
-                "text":
-                    text,
-
-                "words": [],
+                "start": words[0]["start"],
+                "end": max(words[-1]["end"], words[0]["start"] + 0.3),
+                "text": line,
+                "words": words if src_words else [],
             }
         )
+
+    # Keep lines in time order and non-overlapping (make_ass draws one at a time).
+    result.sort(key=lambda x: x["start"])
+    for prev, nxt in zip(result, result[1:]):
+        if prev["end"] > nxt["start"]:
+            prev["end"] = max(prev["start"], nxt["start"])
 
     return result
 
@@ -3933,6 +4015,7 @@ def make_ass(
 
             pieces = []
             cursor = seg_start
+            any_word = False
 
             for w in words:
 
@@ -3941,13 +4024,17 @@ def make_ass(
 
                 gap_cs = round((w_start - cursor) * 100)
                 if gap_cs > 0:
-                    pieces.append(f"{{\\kf{gap_cs}}} ")
+                    pieces.append(f"{{\\kf{gap_cs}}}")
 
                 dur_cs = max(1, round((w_end - w_start) * 100))
                 word_text = esc(w["word"].strip().upper())
 
+                # 083: every word after the first gets its space, gap or not
+                # (contiguous Whisper words used to run together).
                 if word_text:
-                    pieces.append(f"{{\\kf{dur_cs}}}{word_text}")
+                    sep = " " if any_word else ""
+                    pieces.append(f"{{\\kf{dur_cs}}}{sep}{word_text}")
+                    any_word = True
 
                 cursor = w_end
 
@@ -4488,6 +4575,13 @@ def create_preview(
         )
     )
 
+    # QA #1: the transcript's own text, stored as subtitle_text; the
+    # override stays NULL unless the user actually edited the lines.
+    transcript_text = "\n".join(
+        item["text"]
+        for item in clip_segments
+    )
+
     clip_segments = (
         apply_subtitle_override(
             clip_segments,
@@ -4667,11 +4761,6 @@ def create_preview(
             thumbnail_path,
         )
 
-    subtitle_text = "\n".join(
-        item["text"]
-        for item in clip_segments
-    )
-
     update_fields = dict(
 
         preview_path=
@@ -4682,17 +4771,14 @@ def create_preview(
                 face_crop
             ),
 
+        # Real timings (QA #3): exactly what make_ass() burned.
         subtitle_segments=
             json.dumps(
                 clip_segments
             ),
 
-        subtitle_override=(
-            candidate.get(
-                "subtitle_override"
-            )
-            or subtitle_text
-        ),
+        subtitle_text=
+            transcript_text,
 
     )
 
@@ -5386,7 +5472,7 @@ def _process_analysis_job(
                         reason,
                         ai_title,
                         subtitle_segments,
-                        subtitle_override,
+                        subtitle_text,
                         content_type,
                         rating,
                         hook_provider,

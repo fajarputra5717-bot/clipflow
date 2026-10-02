@@ -135,6 +135,10 @@ Language (079): `jobs.language` auto|en|id (NULL = legacy = id); read the resolv
 `shared.languages.job_language(effective_language, language)` everywhere (prompts, Submagic). Auto detects
 in `transcribe(language="auto", fallback=…)`; < 0.6 or not en/id → the form's last explicit choice.
 Indonesian hook-prompt wording is frozen (eval baseline); new language-specific text goes in a branch.
+Caption text (083): `subtitle_text` = the transcript lines, `subtitle_override` = ONLY real user edits
+(NULL/"" = none; never seed or write it back). `apply_subtitle_override()` aligns edited words to Whisper's
+(difflib): unchanged lines keep their segment + words, edited ones get timings from the words they
+replaced; never an even split. `subtitle_segments` = exactly what make_ass() burned.
 
 ## Caption fonts (R-19)
 
