@@ -5483,6 +5483,7 @@ def render_final_candidate(
     # QA #2: loudness last (after every audio step of the render).
     update_candidate(candidate_id, progress=90, message="Normalising loudness")
     normalize_loudness(output_path, duration, candidate_id=candidate_id)
+    set_render_warning(candidate_id, "final_outdated")  # 114: this final is current
 
     # Same rule as the preview: don't clobber a thumbnail the user
     # explicitly locked in (AI pick or manual upload) with a fresh
@@ -7200,6 +7201,7 @@ def process_submagic_task(candidate):
 
             raw_path.unlink(missing_ok=True)
 
+            set_render_warning(candidate_id, "final_outdated")  # 114: new final
             # QA P0: the Submagic final gets the same loudness pass as ours.
             update_candidate(candidate_id, message="Normalising loudness")
             normalize_loudness(

@@ -1543,6 +1543,9 @@ def update_render_options(job_id: str, req: RenderOptionsUpdate):
                     detail="Job not found",
                 )
 
+            if fields:
+                mark_finals_outdated(cur, job_id)  # 114
+
         conn.commit()
 
     return {"ok": True, "updated": fields}
@@ -1568,6 +1571,20 @@ def update_subtitle_style(
         with get_db() as conn:
 
             with conn.cursor() as cur:
+
+                # 114: finals go stale only when the job style really changes
+                # (Apply re-sends the unchanged job values on every clip edit).
+                cur.execute(
+                    "SELECT subtitle_style, subtitle_font, subtitle_size, subtitle_animation FROM jobs WHERE id = %s",
+                    (job_id,),
+                )
+                before = cur.fetchone()
+                changed = before is not None and (
+                    (before[0] or {}).get("style") != style.get("style")
+                    or (before[1] or None) != style["font"]
+                    or (before[2] or None) != style["size"]
+                    or (before[3] or None) != style["animation"]
+                )
 
                 cur.execute(
                     """
@@ -1598,6 +1615,9 @@ def update_subtitle_style(
                         status_code=404,
                         detail="Job not found",
                     )
+
+                if changed:
+                    mark_finals_outdated(cur, job_id)
 
             conn.commit()
 
@@ -1667,6 +1687,7 @@ def regenerate_preview(
                 record_candidate_version(
                     cur, candidate_id, "Applied changes"
                 )
+                mark_finals_outdated(cur, job_id, candidate_id)
 
             conn.commit()
 
@@ -1747,9 +1768,33 @@ def apply_caption_preset_to_all(job_id: str, req: CaptionPresetAll):
             queued = [r[0] for r in cur.fetchall()]
             for cid in queued:
                 record_candidate_version(cur, cid, "Caption preset applied to all clips")
+            mark_finals_outdated(cur, job_id)
         conn.commit()
 
     return {"status": "updated", "subtitle_style": style, "queued": queued}
+
+
+FINAL_OUTDATED_MSG = "Final outdated · re-render"
+
+
+def mark_finals_outdated(cur, job_id: str, candidate_id: str = None) -> int:
+    """114 (QA Low on 108): a render-affecting change on a clip that already has a
+    final marks that final outdated (render warning "final_outdated" → chip). The
+    worker clears it when a new final completes. candidate_id=None = every clip of
+    the job (job-level changes). Same cursor/transaction as the change."""
+    entry = json_param([{"code": "final_outdated", "message": FINAL_OUTDATED_MSG,
+                         "at": datetime.now(timezone.utc).isoformat(timespec="seconds")}])
+    cur.execute(
+        """
+        UPDATE clip_candidates
+        SET render_warnings = COALESCE((SELECT jsonb_agg(x) FROM jsonb_array_elements(
+                COALESCE(render_warnings, '[]'::jsonb)) x WHERE x->>'code' <> 'final_outdated'),
+                '[]'::jsonb) || %s::jsonb
+        WHERE job_id = %s AND final_path IS NOT NULL AND (%s::text IS NULL OR id::text = %s::text)
+        """,
+        (entry, job_id, candidate_id, candidate_id),
+    )
+    return cur.rowcount
 
 
 def candidate_rule_failures(job_id: str, candidate_id: str) -> list:
@@ -3264,6 +3309,8 @@ def restore_candidate_version(job_id: str, candidate_id: str, version: int):
                     raise HTTPException(
                         status_code=404, detail="Candidate not found"
                     )
+
+                mark_finals_outdated(cur, job_id, candidate_id)  # 114
 
                 record_candidate_version(
                     cur, candidate_id, f"Restored version {version}"

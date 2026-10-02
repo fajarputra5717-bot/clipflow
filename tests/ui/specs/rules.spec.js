@@ -24,3 +24,13 @@ test.describe("Campaign rule chips", () => {
     await expect.poll(() => api.calls.some((c) => c.method === "POST" && c.path === "/api/jobs/job-done/candidates/cand-a/fix-rule" && c.body?.rule === "hashtags")).toBe(true);
   });
 });
+
+// 114: a final made before a render-affecting change is marked outdated.
+test.describe("Outdated final chip", () => {
+  test("render warning final_outdated shows 'Final outdated · re-render'", async ({ app, api }) => {
+    api.jobs["job-done"].candidates[0].render_warnings = [{ code: "final_outdated", message: "Final outdated · re-render" }];
+    await nav(app, "queue");
+    await app.locator('[data-queue-open="job-done"]').click();
+    await expect(app.locator("#candidate-cand-a .render-warn")).toContainText("Final outdated · re-render");
+  });
+});
