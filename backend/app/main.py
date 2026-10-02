@@ -3659,6 +3659,9 @@ def get_settings():
         raise HTTPException(status_code=500, detail=str(exc))
 
 
+HOOKS_WINDOW_MIN_MINUTES = 10
+
+
 def validate_hooks_windows(values: dict):
     """QA #4: overlap must stay below the window (else the worker never
     advances); checked against the values this PUT would leave effective."""
@@ -3677,7 +3680,14 @@ def validate_hooks_windows(values: dict):
         window, overlap = (float(eff[k]) for k in keys)
     except (TypeError, ValueError):
         raise HTTPException(status_code=400, detail="Hook window settings must be numbers (minutes)")
-    if window < 1 or overlap < 0 or overlap >= window:
+    if window < HOOKS_WINDOW_MIN_MINUTES:
+        # P0: a 1-minute window = 120-240 AI calls for a 2-hour video.
+        raise HTTPException(
+            status_code=400,
+            detail=f"Hook analysis window must be at least {HOOKS_WINDOW_MIN_MINUTES} minutes "
+                   f"(smaller windows multiply AI calls)",
+        )
+    if overlap < 0 or overlap >= window:
         raise HTTPException(
             status_code=400,
             detail=f"Hook window overlap ({overlap:g} min) must be at least 0 and less than "

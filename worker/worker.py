@@ -2212,7 +2212,10 @@ def transcript_windows(segments, window_s, overlap_s):
     boundary is whole in at least one window."""
     # QA #4: overlap >= window never advances (infinite loop). The settings
     # PUT rejects it; clamp here too for env/DB values set some other way.
-    window_s = max(60.0, float(window_s))
+    # P0: never below 10 min (1 min = 120-240 AI calls for a 2-hour video).
+    if float(window_s) < 600:
+        log(f"Hooks windows: window {window_s}s below the 10 min minimum; using 600s")
+    window_s = max(600.0, float(window_s))
     if not 0 <= overlap_s < window_s:
         clamped = 0.0 if overlap_s < 0 else window_s / 2
         log(f"Hooks windows: overlap {overlap_s}s invalid for window {window_s}s; using {clamped}s")
