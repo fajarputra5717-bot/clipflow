@@ -1,10 +1,11 @@
-# Gate P1 · UI shell + editor redesign · **BLOCKED** (1 High) · 2026-10-03, re-run at HEAD 8e51f32 (106–116)
+# Gate P1 · UI shell + editor redesign · **PASS** (with carry-overs) · 2026-10-03, HEAD 8e51f32 (106–116)
 
 Reviewer: Lane C. Gated commit: main @ 985cacb ("P1 built (106–114)"); 115 (descriptions at analysis) was
 deployed during the run and is included. Checklist: gate-P1-checklist.md. Playwright run against a git-served copy
 of 985cacb (not the live working tree).
 
-**Verdict: BLOCKED by one High** (#1). Everything P1 built works. If the owner accepts the workaround for #1
+**Final verdict (owner decision 2026-10-03): PASS.** The owner accepted the workaround and re-rated #1 Medium (see
+"Owner decision" at the end). Original QA verdict was BLOCKED by one High (#1). Everything P1 built works. If the owner accepts the workaround for #1
 (import IME's GTA source with Facecam → "No facecam") and rates it Medium, this gate is a **PASS** with the items
 below carried over.
 
@@ -80,3 +81,13 @@ Submagic final render end to end (billable); "Final outdated" chip live (code + 
 
 **Verdict at HEAD: still BLOCKED by #1 (High).** PASS if the owner accepts the "No facecam" workaround / rates #1 Medium.
 New since the first run: Low · corrective loudness pass can leave −0.6 dBTP with the chip (8e51f32 #1).
+
+## Owner decision (2026-10-03) → **PASS**
+- #1 re-rated **Medium** (workaround accepted). Lane A makes "No facecam" the IME campaign default and fixes face
+  detection first in P2. QA re-checks both at the start of P2 (fresh default IME import → full-frame; facecam
+  sources still get the panel).
+- Carry-over owners:
+  - #2 Review/Editor not matching mock steps 4–5 (editor as its own page) → **Lane B** (P4 editor work).
+  - #3 two scores on cards (AI estimate + ★ rating) → **Lane A**.
+  - #6 keyword picker emphasises religious exclamations → **Lane A**.
+  - Remaining Lows (mobile nav quirks, corrective-pass TP −0.6 dBTP, compression backlog) → Lane A backlog.
