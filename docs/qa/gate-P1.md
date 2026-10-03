@@ -1,4 +1,4 @@
-# Gate P1 · UI shell + editor redesign · **BLOCKED** (1 High) · 2026-10-03
+# Gate P1 · UI shell + editor redesign · **BLOCKED** (1 High) · 2026-10-03, re-run at HEAD 8e51f32 (106–116)
 
 Reviewer: Lane C. Gated commit: main @ 985cacb ("P1 built (106–114)"); 115 (descriptions at analysis) was
 deployed during the run and is included. Checklist: gate-P1-checklist.md. Playwright run against a git-served copy
@@ -9,13 +9,16 @@ of 985cacb (not the live working tree).
 below carried over.
 
 ## Blockers
-1. **High · junk camera panel on every default IME import of the GTA source.** Third fresh GTA job in a row with
+1. **High · junk camera panel on default IME imports of the GTA source (2 of the last 3).** Correction after the
+   HEAD re-run: not every import. Since 101: fbda481f junk (tie path), 7e84933b junk (majority 2/2), 1f9224b0 clean
+   (0/2 detected → full-frame, `frames/gate-P1/rerun/`). It depends on which moments the AI picks. Earlier text:
+   third fresh GTA job in a row with
    the junk bottom panel: job 7e84933b decided `panel` by **majority** ("2/2 clips detected a face") → both finals
    show a zoomed slice of the source's chat overlay / shirt / floor in the bottom 30 %
    (`frames/gate-P1/final-a63edbbb.jpg`, `final-e989b2d0.jpg`). Earlier: fbda481f via 101's tie path (HUD at
    (0.94, 0.67)). So the detector itself returns stable false positives on this game (HUD/overlay/characters);
-   neither the majority nor the tie rule can fix that. Raised from Medium because it now hits 100 % of the
-   active campaign's default imports and regresses a P0-gated item. Fix ideas: require a face detector score floor
+   neither the majority nor the tie rule can fix that. Raised from Medium because it hits most default imports of the
+   active campaign's source and regresses a P0-gated item; the owner may rate it Medium given the workaround. Fix ideas: require a face detector score floor
    + more hits (real cams: 15–37, spread ≤ 0.012), reject boxes whose content doesn't change between samples (HUD),
    or a per-campaign/per-channel layout default (IME source = no facecam).
 
@@ -58,7 +61,7 @@ screen ✓ (no USD).
    compact clip cards). Owner decides whether this is P1 scope or later.
 3. Low · two scores on a card (AI estimate + ★ rating).
 4. Low · mobile: disabled steps give no reason; tab bar says Review while in Editor; two navigations.
-5. Low · default keyword yellow = karaoke highlight on yellow styles (Lane A follow-up announced).
+5. ~~Low · default keyword yellow = karaoke highlight~~ FIXED by 116.
 6. Low · AI keyword picker emphasised "ASTAGHFIRULLAHALADZIM" on a SARA-flagged IME clip; consider excluding
    religious exclamations from keyword picks.
 7. Low (P1 backlog) · peaky audio ~−15.2 LUFS + chip; light compression before loudnorm.
@@ -66,3 +69,14 @@ screen ✓ (no USD).
 
 ## Not verified
 Submagic final render end to end (billable); "Final outdated" chip live (code + Lane A); dark theme comparison.
+
+## Re-run at HEAD 8e51f32 (2026-10-03, after 116)
+- **116 keyword contrast: FIXED** on a fresh import (green keywords next to yellow karaoke, preview + final;
+  8e51f32-review.md). Closes carried-over #5.
+- **Playwright** (git-served 8e51f32, Lane B suite + QA capsule + steps-vs-mock): **38 passed, 4 skipped, 0 failed**.
+- **Blocker #1 re-tested:** fresh default IME import 1f9224b0 → `full` (0/2), clean. Blocker stays open: 2 of 3 default
+  GTA imports since 101 still got the junk panel, and no commit touches face detection.
+- Nothing else changed since the first run (only 116 landed), so the e2e, rule-gate and UI-vs-mock results above stand.
+
+**Verdict at HEAD: still BLOCKED by #1 (High).** PASS if the owner accepts the "No facecam" workaround / rates #1 Medium.
+New since the first run: Low · corrective loudness pass can leave −0.6 dBTP with the chip (8e51f32 #1).
