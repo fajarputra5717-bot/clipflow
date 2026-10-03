@@ -8,6 +8,7 @@
     "instagram",
     "youtube"
   ],
+  "default_layout": "auto",
   "payout": {
     "currency": "IDR",
     "model": "per full view block",

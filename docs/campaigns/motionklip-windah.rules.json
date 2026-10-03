@@ -29,6 +29,7 @@
     "x",
     "threads"
   ],
+  "default_layout": "auto",
   "watermark": {
     "required": true,
     "asset": "instgrm @motion.klip",

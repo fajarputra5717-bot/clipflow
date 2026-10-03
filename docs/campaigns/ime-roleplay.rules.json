@@ -11,6 +11,7 @@
     "x",
     "threads"
   ],
+  "default_layout": "none",
   "payout": {
     "currency": "IDR",
     "per_video": 200000,

@@ -124,12 +124,23 @@ def watermark(rules):
     }
 
 
+LAYOUTS = ("auto", "left", "right", "none")
+
+
+def default_layout(rules):
+    """117: the campaign's facecam layout for new jobs (rules "default_layout");
+    "auto" when unset/unknown. IME = "none" (GTA RP streams have no facecam)."""
+    v = str((rules or {}).get("default_layout") or "auto").strip().lower()
+    return v if v in LAYOUTS else "auto"
+
+
 def summary(rules):
     """What the API returns per campaign (no payout internals)."""
     return {
         "slug": rules["slug"],
         "name": display_name(rules),
         "brief_pending": rules["brief_pending"],
+        "default_layout": default_layout(rules),
         "platforms": platforms(rules),
         "sources": [s["channel"] for s in sources(rules)],
         "source_note": (rules.get("content") or {}).get("source"),

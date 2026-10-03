@@ -1633,7 +1633,8 @@ function jobDisplayTitle(j){
 
 function selectSplit(v){selectedSplit=Number(v);document.querySelectorAll("[data-split]").forEach(x=>x.classList.toggle("active",Number(x.dataset.split)===selectedSplit));updateImportOptionsSummary()}
 function selectPlatform(v){selectedPlatform=v;document.querySelectorAll("[data-platform]").forEach(x=>x.classList.toggle("active",x.dataset.platform===selectedPlatform));updateImportOptionsSummary()}
-function selectLayout(v){selectedLayout=v;document.querySelectorAll("[data-layout]").forEach(x=>x.classList.toggle("active",x.dataset.layout===selectedLayout));updateImportOptionsSummary()}
+let layoutTouched=false; // 117: an explicit layout pick wins over the campaign default
+function selectLayout(v,auto){if(!auto)layoutTouched=true;selectedLayout=v;document.querySelectorAll("[data-layout]").forEach(x=>x.classList.toggle("active",x.dataset.layout===selectedLayout));updateImportOptionsSummary()}
 // 081: campaigns come from docs/campaigns/*.rules.json via GET /api/campaigns.
 let campaignsCache=[],queueCampaignFilter="";
 function campaignName(slug){const c=campaignsCache.find(x=>x.slug===slug);return c?c.name:slug}
@@ -1645,6 +1646,7 @@ async function loadCampaigns(){
 }
 function updateCampaignHint(){
   const c=campaignsCache.find(x=>x.slug===$("jobCampaign")?.value),h=$("campaignHint");if(!h)return;
+  if(!layoutTouched)selectLayout(c?.default_layout||"auto",true); // 117: campaign default unless you picked one
   if(!c){h.hidden=true;h.textContent="";return}
   const src=c.sources.length?`Source: ${c.sources.join(", ")}`:(c.source_note?`Source: ${c.source_note}`:"Source: any");
   h.textContent=`${src} · ${c.platforms.length} platforms${c.brief_pending?" · brief pending":""}`;h.hidden=false;

@@ -48,7 +48,7 @@ function newState() {
                      candidate(done.id, { id: "cand-b", clip_index: 1, ai_title: "Second mock clip" })];
   return {
     current: [], queue: [done], jobs: { [done.id]: done }, calls: [],
-    campaigns: [{ slug: "ime-roleplay", name: "IME Roleplay", brief_pending: false, platforms: ["tiktok"],
+    campaigns: [{ slug: "ime-roleplay", name: "IME Roleplay", brief_pending: false, platforms: ["tiktok"], default_layout: "none",
       sources: [], source_note: "", hashtags: ["#imeroleplay"] }],
   };
 }

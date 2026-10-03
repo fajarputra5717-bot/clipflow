@@ -446,7 +446,8 @@ class ClipRequest(BaseModel):
 
     custom_title: Optional[str] = None
 
-    layout: str = "auto"
+    # 117: omitted = the campaign's default_layout (else "auto"); the UI sends an explicit choice.
+    layout: Optional[str] = None
 
     platform: str = "youtube_shorts"
 
@@ -696,6 +697,8 @@ def create_job(req: ClipRequest):
             detail="platform must be youtube_shorts, tiktok, or instagram_reels",
         )
 
+    if req.layout is None:
+        req.layout = campaigns.default_layout(campaigns.get(req.campaign)) if req.campaign else "auto"
     if req.layout not in SUPPORTED_LAYOUTS:
         raise HTTPException(
             status_code=400,
