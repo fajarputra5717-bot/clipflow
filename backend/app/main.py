@@ -83,6 +83,37 @@ OPEN_API_PATHS = {"/api/auth/login", "/api/auth/logout"}
 
 SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 
+# Ownership guard (P1.5): every route under these prefixes names a row by id; the
+# middleware 404s unless the row belongs to the caller, so no handler can forget.
+JOB_PATH_RE = re.compile(r"^/api/jobs/([^/]+)(?:/candidates/([^/]+))?(?:/|$)")
+WATERMARK_PATH_RE = re.compile(r"^/api/assets/watermarks/([^/]+)(?:/|$)")
+
+
+def _path_owned(user: dict, path: str) -> bool:
+    m = JOB_PATH_RE.match(path)
+    w = WATERMARK_PATH_RE.match(path)
+    if not m and not w:
+        return True
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            if m:
+                job_id, candidate_id = m.groups()
+                cur.execute("SELECT 1 FROM jobs WHERE id = %s AND user_id = %s", (job_id, user["id"]))
+                if not cur.fetchone():
+                    return False
+                if candidate_id:
+                    cur.execute(
+                        "SELECT 1 FROM clip_candidates WHERE id::text = %s AND job_id = %s",
+                        (candidate_id, job_id),
+                    )
+                    return bool(cur.fetchone())
+                return True
+            cur.execute(
+                "SELECT 1 FROM watermark_assets WHERE id::text = %s AND user_id = %s",
+                (w.group(1), user["id"]),
+            )
+            return bool(cur.fetchone())
+
 
 def _resolve_principal(request: Request) -> Optional[dict]:
     with get_db() as conn:
@@ -147,6 +178,13 @@ async def require_user(request: Request, call_next):
             and not _origin_allowed(request)
         ):
             return JSONResponse({"detail": "Cross-origin request refused"}, status_code=403)
+        try:
+            owned = await run_in_threadpool(_path_owned, user, path)
+        except Exception:
+            print("[auth] ownership check failed:", traceback.format_exc())
+            owned = False
+        if not owned:
+            return JSONResponse({"detail": "Not found"}, status_code=404)
         request.state.user = user
     return await call_next(request)
 
@@ -294,6 +332,12 @@ def ensure_schema():
         "ALTER TABLE clip_candidates ADD COLUMN IF NOT EXISTS safety_check JSONB",
         # P1.5: users, DB sessions, login failures, server secrets (app/auth.py).
         *auth.SCHEMA,
+        # P1.5 ownership: every user-owned table carries user_id (candidates via their job).
+        # Legacy rows are assigned to the bootstrap admin at startup, then NOT NULL.
+        "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS user_id TEXT REFERENCES users(id)",
+        "CREATE INDEX IF NOT EXISTS idx_jobs_user ON jobs (user_id, created_at DESC)",
+        "ALTER TABLE watermark_assets ADD COLUMN IF NOT EXISTS user_id TEXT REFERENCES users(id)",
+        "CREATE INDEX IF NOT EXISTS idx_watermark_assets_user ON watermark_assets (user_id)",
     ]
 
     try:
@@ -319,9 +363,25 @@ def ensure_schema():
 
     try:
         with get_db() as conn:
-            auth.ensure_bootstrap_admin(conn)
+            admin_id = auth.ensure_bootstrap_admin(conn)
+            if admin_id:
+                assign_legacy_rows(conn, admin_id)
     except Exception:
         print("[auth] bootstrap admin failed:", traceback.format_exc())
+
+
+OWNED_TABLES = ("jobs", "watermark_assets")
+
+
+def assign_legacy_rows(conn, admin_id: str) -> None:
+    """P1.5 first run: rows from before accounts belong to the bootstrap admin."""
+    for table in OWNED_TABLES:
+        with conn.cursor() as cur:
+            cur.execute(f"UPDATE {table} SET user_id = %s WHERE user_id IS NULL", (admin_id,))
+            if cur.rowcount:
+                print(f"[auth] {cur.rowcount} legacy {table} rows assigned to the bootstrap admin")
+            cur.execute(f"ALTER TABLE {table} ALTER COLUMN user_id SET NOT NULL")
+        conn.commit()
 
 
 # ============================================================
@@ -812,7 +872,8 @@ def get_disk_status():
 
 
 @app.post("/api/jobs")
-def create_job(req: ClipRequest):
+def create_job(req: ClipRequest, request: Request):
+    user = current_user(request)
 
     if req.platform not in SUPPORTED_PLATFORMS:
         raise HTTPException(
@@ -935,7 +996,8 @@ def create_job(req: ClipRequest):
                         watermark_asset_id,
                         watermark_width,
                         watermark_opacity,
-                        watermark_failure
+                        watermark_failure,
+                        user_id
                     )
                     VALUES (
                         %s,
@@ -948,6 +1010,7 @@ def create_job(req: ClipRequest):
                         %s,
                         %s,
                         %s::jsonb,
+                        %s,
                         %s,
                         %s,
                         %s,
@@ -988,6 +1051,7 @@ def create_job(req: ClipRequest):
                         wm.get("width"),
                         wm.get("opacity"),
                         wm.get("failure"),
+                        user["id"],
                     ),
                 )
 
@@ -1046,22 +1110,27 @@ JOB_RUNNING = (
 
 
 @app.get("/api/activity")
-def list_activity():
+def list_activity(request: Request):
+    # P1.5: own tasks only; admin sees everyone's (rows of other users carry "owner").
+    user = current_user(request)
+    see_all = user["role"] == "admin"
     items = []
     with get_db() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """
                 SELECT j.id, j.status, j.progress, j.message,
-                       COALESCE(NULLIF(j.custom_title, ''), sv.title), j.updated_at
+                       COALESCE(NULLIF(j.custom_title, ''), sv.title), j.updated_at,
+                       NULLIF(u.username, %s)
                 FROM jobs j LEFT JOIN source_videos sv ON sv.id = j.source_video_id
-                WHERE j.status = ANY(%s)
+                JOIN users u ON u.id = j.user_id
+                WHERE j.status = ANY(%s) AND (%s OR j.user_id = %s)
                 ORDER BY j.created_at
                 """,
-                (list(JOB_RUNNING),),
+                (user["username"], list(JOB_RUNNING), see_all, user["id"]),
             )
-            for jid, status, progress, message, title, upd in cur.fetchall():
-                items.append({
+            for jid, status, progress, message, title, upd, owner in cur.fetchall():
+                items.append({"owner": owner,
                     "kind": "job", "id": str(jid), "job_id": str(jid), "candidate_id": None,
                     "stage": status, "percent": int(progress or 0), "label": message or status,
                     "title": title, "updated_at": upd.isoformat() if upd else None,
@@ -1071,16 +1140,18 @@ def list_activity():
                 SELECT c.id, c.job_id, c.status, c.progress, c.message,
                        c.submagic_status,
                        COALESCE(NULLIF(c.manual_title, ''), NULLIF(c.title, ''), c.ai_title),
-                       c.updated_at
+                       c.updated_at, NULLIF(u.username, %s)
                 FROM clip_candidates c JOIN jobs j ON j.id = c.job_id
+                JOIN users u ON u.id = j.user_id
                 WHERE (c.status = ANY(%s) OR c.submagic_status = ANY(%s))
                   AND j.status IS DISTINCT FROM 'cancelled'
+                  AND (%s OR j.user_id = %s)
                 ORDER BY c.updated_at
                 """,
-                (list(CANDIDATE_BUSY), list(SUBMAGIC_BUSY)),
+                (user["username"], list(CANDIDATE_BUSY), list(SUBMAGIC_BUSY), see_all, user["id"]),
             )
-            for cid, jid, status, progress, message, sm, title, upd in cur.fetchall():
-                base = {"id": str(cid), "job_id": str(jid), "candidate_id": str(cid),
+            for cid, jid, status, progress, message, sm, title, upd, owner in cur.fetchall():
+                base = {"owner": owner, "id": str(cid), "job_id": str(jid), "candidate_id": str(cid),
                         "title": title, "updated_at": upd.isoformat() if upd else None}
                 if status in CANDIDATE_BUSY:
                     items.append({**base, "kind": "candidate", "stage": status,
@@ -1095,8 +1166,10 @@ def list_activity():
 
 @app.get("/api/jobs")
 def list_jobs(
+    request: Request,
     scope: str = "current",
 ):
+    user = current_user(request)
 
     try:
 
@@ -1184,11 +1257,11 @@ def list_jobs(
                     FROM jobs j
                     LEFT JOIN source_videos sv
                         ON sv.id = j.source_video_id
-                    WHERE {status_filter}
+                    WHERE {status_filter} AND j.user_id = %s
                     ORDER BY j.created_at DESC
                     """
 
-                cur.execute(query)
+                cur.execute(query, (user["id"],))
 
                 rows = cur.fetchall()
 
@@ -2312,7 +2385,10 @@ def campaign_watermark_snapshot(rules) -> dict:
             with conn.cursor() as cur:
                 if preset["asset_id"]:
                     cur.execute(
-                        "SELECT id FROM watermark_assets WHERE id::text = %s",
+                        # Campaigns are a shared, admin-managed catalogue (P1.5):
+                        # their watermark is an admin's asset, never a member's.
+                        "SELECT id FROM watermark_assets WHERE id::text = %s"
+                        " AND user_id IN (SELECT id FROM users WHERE role = 'admin')",
                         (str(preset["asset_id"]),),
                     )
                     row = cur.fetchone()
@@ -2321,6 +2397,7 @@ def campaign_watermark_snapshot(rules) -> dict:
                     cur.execute(
                         "SELECT id FROM watermark_assets WHERE lower(regexp_replace("
                         "filename, '\\.[^.]+$', '')) = lower(%s) "
+                        "AND user_id IN (SELECT id FROM users WHERE role = 'admin') "
                         "ORDER BY created_at DESC LIMIT 1",
                         (preset["asset_name"],),
                     )
@@ -2949,7 +3026,8 @@ WATERMARK_UPLOAD_MAX_BYTES = 5 * 1024 * 1024
 
 
 @app.get("/api/assets/watermarks")
-def list_watermark_assets():
+def list_watermark_assets(request: Request):
+    user = current_user(request)
 
     try:
 
@@ -2961,8 +3039,10 @@ def list_watermark_assets():
                     """
                     SELECT id, filename, width, height, created_at
                     FROM watermark_assets
+                    WHERE user_id = %s
                     ORDER BY created_at DESC
-                    """
+                    """,
+                    (user["id"],),
                 )
                 rows = cur.fetchall()
 
@@ -2986,7 +3066,8 @@ def list_watermark_assets():
 
 
 @app.post("/api/assets/watermarks")
-async def upload_watermark_asset(file: UploadFile = File(...)):
+async def upload_watermark_asset(request: Request, file: UploadFile = File(...)):
+    user = current_user(request)
 
     try:
 
@@ -3024,8 +3105,8 @@ async def upload_watermark_asset(file: UploadFile = File(...)):
                 cur.execute(
                     """
                     INSERT INTO watermark_assets
-                        (id, filename, path, width, height)
-                    VALUES (%s, %s, %s, %s, %s)
+                        (id, filename, path, width, height, user_id)
+                    VALUES (%s, %s, %s, %s, %s, %s)
                     """,
                     (
                         asset_id,
@@ -3033,6 +3114,7 @@ async def upload_watermark_asset(file: UploadFile = File(...)):
                         str(out_path.relative_to(DATA_ROOT)),
                         width,
                         height,
+                        user["id"],
                     ),
                 )
 

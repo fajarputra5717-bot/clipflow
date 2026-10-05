@@ -330,6 +330,17 @@ never a bare `fetch()` (exception: the login form + `ensureSession()`/`signOut()
 (`showLogin()`, `body.auth-locked`) and retries once. Account sheet (`#accountSheet`, username in the sidebar foot): change password (≥ 12) + Sign out. CORS origins from env `CORS_ALLOWED_ORIGINS` (comma list,
 `*` dropped, no credentials); the CORS middleware stays added *after* the auth middleware, or preflights get 401.
 
+## Ownership (P1.5) — every query is scoped by `user_id`
+
+Owned tables carry `user_id` NOT NULL (`jobs`, `watermark_assets`; candidates/versions via their job; **every new
+table from now on**). Rule: every SQL that reads or writes user data filters by the caller's id
+(`current_user(request)["id"]`); another user's row answers **404**, never 403/200. The middleware guard
+`_path_owned()` already enforces it for `/api/jobs/{id}[/candidates/{cid}]…` and `/api/assets/watermarks/{id}…`;
+lists and inserts do it in the handler. A new route family keyed by an owned id → add its regex to the guard.
+Admin is scoped like everyone except `/api/activity` (sees all, `owner` set). Campaigns are a shared catalogue
+(admin edits; P3 adds `created_by` + `visibility`); `source_videos` is a shared download cache.
+Writing tests (cross-user, settings, qa-tmp users) run on staging only (:8080/:8001), never production.
+
 ## Frontend shell (R-11/R-12/R-13, lane B 067-073; badge v2.1117)
 
 - **Navigation (106, P1 task 0):** the flow-preview **stepper** (`#flowNav`, `renderFlow()`, `FLOW_STEPS`) is the

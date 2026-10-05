@@ -93,3 +93,4 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 119 · 2026-10-05 · Lows: one score per clip card; keyword picker skips safety-flagged, exclamation and religious words (stoplists) · index.html, worker.py, shared/languages.py
 120 · 2026-10-05 · P1.5 (1): users + DB sessions + login page; argon2, rate limit, per-user media token; CLIPFLOW_API_KEY = bootstrap admin · app/auth.py, main.py, index.html, shared/settings.py
 121 · 2026-10-05 · Account sheet (change password ≥ 12, sign out); stepper sticky + compact under the toolbar; selects styled like the mockup's inputs · index.html, app/auth.py
+122 · 2026-10-05 · P1.5 (2): user_id on jobs + watermark_assets (legacy → bootstrap admin), middleware ownership guard (404), scoped lists + activity; campaigns stay shared · main.py
