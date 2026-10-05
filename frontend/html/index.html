@@ -3196,6 +3196,13 @@ const SETTING_LABELS={WATERMARK_POSITION_Y:"Watermark height (% from top, new jo
   INSTAGRAM_ACCESS_TOKEN:"Access token",INSTAGRAM_BUSINESS_ACCOUNT_ID:"Business account ID",SUBMAGIC_API_KEY:"API key",SUBMAGIC_TEMPLATE:"Template",SUBMAGIC_MAGIC_ZOOMS:"Magic zooms",SUBMAGIC_MAGIC_BROLLS:"Magic B-rolls",
   HASHTAGS:"Hashtags",CAMPAIGN_NAME:"Campaign name"};
 const SETTING_SOURCE={db:"Saved",env:"From .env",default:"Default"};
+// P1.5: scope "user" = your own value (user → admin's house default → .env → default); "global" = all users,
+// admin-only (members receive only user-scope keys). Rows the API didn't return aren't rendered.
+const USER_SETTING_SOURCE={user:"Yours",db:"House default",env:"From .env",default:"Default"};
+function settingSourceText(s){
+  const src=(s.scope==="user"?USER_SETTING_SOURCE:SETTING_SOURCE)[s.source]||(s.configured?"Configured":"Not set");
+  return currentUser?.role==="admin"?`${src} · ${s.scope==="user"?"your jobs":"all users"}`:src;
+}
 const isSecretKey=k=>/KEY|TOKEN|SECRET|PASSWORD/i.test(k);
 const EYE='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.8"/></svg>';
 async function loadDiskMeter(){
@@ -3213,12 +3220,12 @@ async function loadSettings(){
   loadDiskMeter();
   try{
     settingsCache=await api("/api/settings");
-    $("settingsPanel").innerHTML=SETTINGS_GROUPS.map(([g,keys])=>`
+    $("settingsPanel").innerHTML=SETTINGS_GROUPS.map(([g,all])=>[g,all.filter(k=>settingsCache[k])]).filter(([,keys])=>keys.length).map(([g,keys])=>`
       <section class="inset-group" data-settings-group>
         <h3 class="inset-title">${esc(g)}</h3>
-        <div class="inset-list">${keys.map(k=>{const s=settingsCache[k]||{value:"",configured:false},sec=isSecretKey(k),id="set-"+k;
+        <div class="inset-list">${keys.map(k=>{const s=settingsCache[k],sec=isSecretKey(k),id="set-"+k;
           return `<div class="inset-row" data-setting-row data-search="${esc((SETTING_LABELS[k]||k)+" "+k+" "+g).toLowerCase()}">
-            <label class="row-label" for="${id}">${esc(SETTING_LABELS[k]||k)}<small><code>${esc(k)}</code> · ${esc(SETTING_SOURCE[s.source]||(s.configured?"Configured":"Not set"))}</small></label>
+            <label class="row-label" for="${id}">${esc(SETTING_LABELS[k]||k)}<small><code>${esc(k)}</code> · ${esc(settingSourceText(s))}</small></label>
             <span class="row-control"><input id="${id}" data-setting="${esc(k)}" type="${sec?"password":"text"}" value="${esc(s.value||"")}" placeholder="${s.configured?"Configured / masked":"Not set"}" autocomplete="off" spellcheck="false">${sec?`<button class="icon-btn reveal-btn" type="button" data-reveal="${id}" aria-label="Show ${esc(SETTING_LABELS[k]||k)}" aria-pressed="false">${EYE}</button>`:""}</span>
           </div>`}).join("")}</div>
       </section>`).join("");

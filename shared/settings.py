@@ -132,23 +132,64 @@ ENV_ONLY_KEYS = {
 }
 
 
+# P1.5: user-level keys. Each user may override them (user_settings table);
+# precedence for these: user → app_settings (admin's house default) → env →
+# DEFAULT_SETTINGS. Everything else is global and admin-only to change.
+USER_SETTING_KEYS = {
+    "DEFAULT_SUBTITLE_STYLE",
+    "DEFAULT_SUBTITLE_FONT",
+    "DEFAULT_SUBTITLE_SIZE",
+    "FULLFRAME_CAPTION_Y",
+    "SUBTITLE_SEAM_GAP",
+    "WATERMARK_WIDTH",
+    "WATERMARK_OPACITY",
+    "WATERMARK_POSITION_Y",
+    "ACTIVE_WATERMARK_ID",
+    "HASHTAGS",
+}
+
+# User-level keys with NO global fallback: the value names a row the user
+# owns (a watermark asset), so another user's value must never apply.
+USER_ONLY_KEYS = {"ACTIVE_WATERMARK_ID"}
+
+
 def _present(value):
     return value is not None and str(value).strip() != ""
 
 
 class RuntimeSettings:
 
-    def __init__(self, loader, log=print):
+    def __init__(self, loader, log=print, user_loader=None):
         # loader() -> {key: value} from app_settings; may raise.
+        # user_loader(user_id) -> {key: value} from user_settings (P1.5).
         self._loader = loader
+        self._user_loader = user_loader
         self._log = log
         self._lock = threading.Lock()
         self._rows = {}
         self._loaded_at = None
+        self._user_rows = {}  # user_id -> (loaded_at, rows)
 
     def invalidate(self):
         with self._lock:
             self._loaded_at = None
+            self._user_rows = {}
+
+    def _rows_for_user(self, user_id):
+        if not user_id or not self._user_loader:
+            return {}
+        with self._lock:
+            now = time.monotonic()
+            hit = self._user_rows.get(user_id)
+            if hit and now - hit[0] < CACHE_TTL_SECONDS:
+                return hit[1]
+            rows = hit[1] if hit else {}
+            try:
+                rows = dict(self._user_loader(user_id) or {})
+            except Exception as exc:
+                self._log(f"Could not load user_settings for {user_id}: {exc}")
+            self._user_rows[user_id] = (now, rows)
+            return rows
 
     def _db_rows(self):
         with self._lock:
@@ -167,8 +208,16 @@ class RuntimeSettings:
             self._loaded_at = now
             return self._rows
 
-    def resolve(self, key, default=None):
-        """(value, source) with source in db|env|default."""
+    def resolve(self, key, default=None, user_id=None):
+        """(value, source) with source in user|db|env|default. user_id only
+        matters for USER_SETTING_KEYS; USER_ONLY_KEYS never fall back to
+        the global value when a user is given."""
+        if user_id and key in USER_SETTING_KEYS:
+            value = self._rows_for_user(user_id).get(key)
+            if _present(value):
+                return str(value), "user"
+            if key in USER_ONLY_KEYS:
+                return (default if default is not None else DEFAULT_SETTINGS.get(key)), "default"
         if key not in ENV_ONLY_KEYS:
             value = self._db_rows().get(key)
             if _present(value):
@@ -180,17 +229,17 @@ class RuntimeSettings:
             default = DEFAULT_SETTINGS.get(key)
         return default, "default"
 
-    def get(self, key, default=None):
-        return self.resolve(key, default)[0]
+    def get(self, key, default=None, user_id=None):
+        return self.resolve(key, default, user_id)[0]
 
-    def get_int(self, key, default=None):
-        return int(self._number(key, default, int))
+    def get_int(self, key, default=None, user_id=None):
+        return int(self._number(key, default, int, user_id))
 
-    def get_float(self, key, default=None):
-        return float(self._number(key, default, float))
+    def get_float(self, key, default=None, user_id=None):
+        return float(self._number(key, default, float, user_id))
 
-    def _number(self, key, default, cast):
-        value = self.get(key, default)
+    def _number(self, key, default, cast, user_id=None):
+        value = self.get(key, default, user_id)
         try:
             return cast(float(value)) if cast is int else cast(value)
         except (TypeError, ValueError):

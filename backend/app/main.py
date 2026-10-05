@@ -29,6 +29,8 @@ from shared.fonts import normalize_caption_font
 from shared.settings import (
     DEFAULT_SETTINGS,
     SECRET_SETTING_KEYS,
+    USER_ONLY_KEYS,
+    USER_SETTING_KEYS,
     RuntimeSettings,
 )
 
@@ -338,6 +340,16 @@ def ensure_schema():
         "CREATE INDEX IF NOT EXISTS idx_jobs_user ON jobs (user_id, created_at DESC)",
         "ALTER TABLE watermark_assets ADD COLUMN IF NOT EXISTS user_id TEXT REFERENCES users(id)",
         "CREATE INDEX IF NOT EXISTS idx_watermark_assets_user ON watermark_assets (user_id)",
+        # P1.5 part 3: per-user values for USER_SETTING_KEYS (shared/settings.py).
+        """
+        CREATE TABLE IF NOT EXISTS user_settings (
+            user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            key TEXT NOT NULL,
+            value TEXT,
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            PRIMARY KEY (user_id, key)
+        )
+        """,
     ]
 
     try:
@@ -382,6 +394,37 @@ def assign_legacy_rows(conn, admin_id: str) -> None:
                 print(f"[auth] {cur.rowcount} legacy {table} rows assigned to the bootstrap admin")
             cur.execute(f"ALTER TABLE {table} ALTER COLUMN user_id SET NOT NULL")
         conn.commit()
+    # Part 3: user-only settings (they name an owned row) move from the global
+    # app_settings to the bootstrap admin, whose asset they point at.
+    with conn.cursor() as cur:
+        for key in USER_ONLY_KEYS:
+            cur.execute(
+                """
+                INSERT INTO user_settings (user_id, key, value)
+                SELECT %s, key, value FROM app_settings WHERE key = %s AND COALESCE(value, '') <> ''
+                ON CONFLICT (user_id, key) DO NOTHING
+                """,
+                (admin_id, key),
+            )
+            cur.execute("DELETE FROM app_settings WHERE key = %s", (key,))
+            if cur.rowcount:
+                print(f"[auth] global {key} moved to the bootstrap admin's user settings")
+    conn.commit()
+
+
+def set_user_setting(cur, user_id: str, key: str, value: Optional[str]) -> None:
+    """Empty/None = unset (falls back to the global value, or none for USER_ONLY_KEYS)."""
+    if value is None or str(value).strip() == "":
+        cur.execute("DELETE FROM user_settings WHERE user_id = %s AND key = %s", (user_id, key))
+        return
+    cur.execute(
+        """
+        INSERT INTO user_settings (user_id, key, value, updated_at)
+        VALUES (%s, %s, %s, NOW())
+        ON CONFLICT (user_id, key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()
+        """,
+        (user_id, key, str(value)),
+    )
 
 
 # ============================================================
@@ -842,9 +885,9 @@ def change_password(payload: PasswordChange, request: Request):
 # CREATE JOB
 # ============================================================
 
-def percent_setting(key: str, fallback: float, lo: float, hi: float) -> float:
+def percent_setting(key: str, fallback: float, lo: float, hi: float, user_id: Optional[str] = None) -> float:
     try:
-        value = float(runtime_setting(key))
+        value = float(runtime_setting(key, user_id=user_id))
     except (TypeError, ValueError):
         value = fallback
     return max(lo, min(hi, value))
@@ -930,13 +973,13 @@ def create_job(req: ClipRequest, request: Request):
     style = normalize_subtitle_style(
         req.subtitle_style
         if "subtitle_style" in sent
-        else {"style": runtime_setting("DEFAULT_SUBTITLE_STYLE")},
+        else {"style": runtime_setting("DEFAULT_SUBTITLE_STYLE", user_id=user["id"])},
         req.subtitle_font
         if "subtitle_font" in sent
-        else runtime_setting("DEFAULT_SUBTITLE_FONT"),
+        else runtime_setting("DEFAULT_SUBTITLE_FONT", user_id=user["id"]),
         req.subtitle_size
         if "subtitle_size" in sent
-        else _settings.get_int("DEFAULT_SUBTITLE_SIZE"),
+        else _settings.get_int("DEFAULT_SUBTITLE_SIZE", user_id=user["id"]),
         req.subtitle_animation,
     )
 
@@ -1042,8 +1085,8 @@ def create_job(req: ClipRequest, request: Request):
                         # worker never places it above 16 % anyway (078).
                         min(85.0, max(16.0, float(wm["position_y"])))
                         if wm.get("position_y") is not None
-                        else percent_setting("WATERMARK_POSITION_Y", 25.0, 16, 85),
-                        percent_setting("SUBTITLE_SEAM_GAP", 1.5, 0, 20),
+                        else percent_setting("WATERMARK_POSITION_Y", 25.0, 16, 85, user["id"]),
+                        percent_setting("SUBTITLE_SEAM_GAP", 1.5, 0, 20, user["id"]),
                         req.language,
                         req.language_fallback,
                         req.campaign,
@@ -2142,15 +2185,24 @@ def _load_app_settings() -> dict:
             return {row[0]: row[1] for row in cur.fetchall()}
 
 
+def _load_user_settings(user_id: str) -> dict:
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT key, value FROM user_settings WHERE user_id = %s", (user_id,))
+            return {row[0]: row[1] for row in cur.fetchall()}
+
+
 _settings = RuntimeSettings(
     _load_app_settings,
     log=lambda msg: print("[backend]", msg),
+    user_loader=_load_user_settings,
 )
 
 
 def runtime_setting(
     key: str,
     fallback: str | None = None,
+    user_id: str | None = None,
 ) -> str | None:
     """
     Same rule as the worker's setting(): app_settings (DB) wins,
@@ -2158,7 +2210,8 @@ def runtime_setting(
     /api/settings invalidates it. Env-only keys (CLIPFLOW_API_KEY)
     never come from the DB.
     """
-    return _settings.get(key, fallback)
+    # P1.5: pass user_id for USER_SETTING_KEYS (user → global → default).
+    return _settings.get(key, fallback, user_id)
 
 
 # Every AI call goes through shared/ai/router.py (R-20).
@@ -2586,7 +2639,8 @@ def fix_subtitle_ai(job_id: str, candidate_id: str):
 @app.post(
     "/api/jobs/{job_id}/candidates/{candidate_id}/generate-description"
 )
-def generate_description(job_id: str, candidate_id: str):
+def generate_description(job_id: str, candidate_id: str, request: Request):
+    owner_id = current_user(request)["id"]
 
     try:
 
@@ -2622,7 +2676,7 @@ def generate_description(job_id: str, candidate_id: str):
         subtitle = (row[4] or row[5] or "")[:1500]
         platform = row[6] or "youtube_shorts"
 
-        hashtags = runtime_setting("HASHTAGS", "") or ""
+        hashtags = runtime_setting("HASHTAGS", "", user_id=owner_id) or ""
         campaign = runtime_setting("CAMPAIGN_NAME", "") or ""
 
         lang = job_language_of(job_id)
@@ -3031,7 +3085,7 @@ def list_watermark_assets(request: Request):
 
     try:
 
-        active_id = runtime_setting("ACTIVE_WATERMARK_ID") or ""
+        active_id = runtime_setting("ACTIVE_WATERMARK_ID", user_id=user["id"]) or ""
 
         with get_db() as conn:
             with conn.cursor() as cur:
@@ -3122,21 +3176,13 @@ async def upload_watermark_asset(request: Request, file: UploadFile = File(...))
                 # — otherwise uploading would silently do nothing until
                 # the user also remembers to activate it.
                 cur.execute(
-                    "SELECT COUNT(*) FROM watermark_assets"
+                    "SELECT COUNT(*) FROM watermark_assets WHERE user_id = %s",
+                    (user["id"],),
                 )
                 count = cur.fetchone()[0]
 
                 if count == 1:
-                    cur.execute(
-                        """
-                        INSERT INTO app_settings (key, value, updated_at)
-                        VALUES ('ACTIVE_WATERMARK_ID', %s, NOW())
-                        ON CONFLICT (key) DO UPDATE SET
-                            value = EXCLUDED.value,
-                            updated_at = NOW()
-                        """,
-                        (asset_id,),
-                    )
+                    set_user_setting(cur, user["id"], "ACTIVE_WATERMARK_ID", asset_id)
 
             conn.commit()
 
@@ -3156,7 +3202,8 @@ async def upload_watermark_asset(request: Request, file: UploadFile = File(...))
 
 
 @app.post("/api/assets/watermarks/{asset_id}/activate")
-def activate_watermark_asset(asset_id: str):
+def activate_watermark_asset(asset_id: str, request: Request):
+    user = current_user(request)
 
     try:
 
@@ -3171,19 +3218,11 @@ def activate_watermark_asset(asset_id: str):
                         status_code=404, detail="Watermark asset not found"
                     )
 
-                cur.execute(
-                    """
-                    INSERT INTO app_settings (key, value, updated_at)
-                    VALUES ('ACTIVE_WATERMARK_ID', %s, NOW())
-                    ON CONFLICT (key) DO UPDATE SET
-                        value = EXCLUDED.value,
-                        updated_at = NOW()
-                    """,
-                    (asset_id,),
-                )
+                set_user_setting(cur, user["id"], "ACTIVE_WATERMARK_ID", asset_id)
 
             conn.commit()
 
+        _settings.invalidate()
         return {"status": "ok", "active_id": asset_id}
 
     except HTTPException:
@@ -3194,7 +3233,8 @@ def activate_watermark_asset(asset_id: str):
 
 
 @app.delete("/api/assets/watermarks/{asset_id}")
-def delete_watermark_asset(asset_id: str):
+def delete_watermark_asset(asset_id: str, request: Request):
+    user = current_user(request)
 
     try:
 
@@ -3216,20 +3256,13 @@ def delete_watermark_asset(asset_id: str):
                     (asset_id,),
                 )
 
-                active_id = runtime_setting("ACTIVE_WATERMARK_ID") or ""
+                active_id = runtime_setting("ACTIVE_WATERMARK_ID", user_id=user["id"]) or ""
                 if active_id == asset_id:
-                    cur.execute(
-                        """
-                        INSERT INTO app_settings (key, value, updated_at)
-                        VALUES ('ACTIVE_WATERMARK_ID', '', NOW())
-                        ON CONFLICT (key) DO UPDATE SET
-                            value = EXCLUDED.value,
-                            updated_at = NOW()
-                        """
-                    )
+                    set_user_setting(cur, user["id"], "ACTIVE_WATERMARK_ID", None)
 
             conn.commit()
 
+        _settings.invalidate()
         try:
             (DATA_ROOT / row[0]).unlink(missing_ok=True)
         except Exception:
@@ -4039,26 +4072,36 @@ def get_candidate_thumbnail(
 # ============================================================
 
 @app.get("/api/settings")
-def get_settings():
+def get_settings(request: Request):
+    # P1.5: members get only the user-level keys (their own effective
+    # values); admins get everything. scope = user|global tells the UI
+    # where a save goes (user_settings vs app_settings).
+    user = current_user(request)
+    is_admin = user["role"] == "admin"
     try:
-        # Effective value (DB -> env -> default), i.e. what the
-        # worker will actually use, plus where it came from.
+        # Effective value (user -> DB -> env -> default), i.e. what the
+        # worker will actually use for this user's jobs, plus its source.
         _settings.invalidate()
         result = {}
 
         for key in DEFAULT_SETTINGS:
-            value, source = _settings.resolve(key)
+            scope = "user" if key in USER_SETTING_KEYS else "global"
+            if scope == "global" and not is_admin:
+                continue
+            value, source = _settings.resolve(key, user_id=user["id"])
             if key in SECRET_SETTING_KEYS and value:
                 result[key] = {
                     "value": "••••••••",
                     "configured": True,
                     "source": source,
+                    "scope": scope,
                 }
             else:
                 result[key] = {
                     "value": value,
                     "configured": bool(value),
                     "source": source,
+                    "scope": scope,
                 }
 
         return result
@@ -4119,13 +4162,30 @@ def validate_hooks_windows(values: dict):
 
 
 @app.put("/api/settings")
-def update_settings(req: SettingsUpdate):
+def update_settings(req: SettingsUpdate, request: Request):
+    user = current_user(request)
     unknown = [k for k in req.values if k not in DEFAULT_SETTINGS]
     if unknown:
         raise HTTPException(
             status_code=400,
             detail=f"Unknown setting key(s): {unknown}",
         )
+    global_keys = [k for k in req.values if k not in USER_SETTING_KEYS]
+    if global_keys and user["role"] != "admin":
+        # P1.5: global settings (AI keys, Whisper, disk, …) are admin-only.
+        raise HTTPException(
+            status_code=403,
+            detail=f"Only an admin can change global settings: {global_keys}",
+        )
+    if "ACTIVE_WATERMARK_ID" in req.values and str(req.values["ACTIVE_WATERMARK_ID"] or "").strip():
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT 1 FROM watermark_assets WHERE id::text = %s AND user_id = %s",
+                    (str(req.values["ACTIVE_WATERMARK_ID"]).strip(), user["id"]),
+                )
+                if not cur.fetchone():
+                    raise HTTPException(status_code=404, detail="Watermark asset not found")
 
     validate_hooks_windows(req.values)
     validate_watermark_height(req.values)
@@ -4135,6 +4195,10 @@ def update_settings(req: SettingsUpdate):
             with conn.cursor() as cur:
                 for key, value in req.values.items():
                     if value == "••••••••":
+                        continue
+                    if key in USER_SETTING_KEYS:
+                        # The caller's own value (admin too); "" = back to the global default.
+                        set_user_setting(cur, user["id"], key, value)
                         continue
                     cur.execute(
                         """

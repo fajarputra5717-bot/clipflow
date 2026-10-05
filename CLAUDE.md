@@ -206,7 +206,7 @@ fixed once already.
 
 `WATERMARK_PATH` (`/app/assets/watermark.png`) is the baked-in
 fallback only. The real source of truth is `watermark_assets` table +
-`ACTIVE_WATERMARK_ID` app_setting, resolved fresh per render by
+the job owner's `ACTIVE_WATERMARK_ID` user setting (P1.5), resolved fresh per render by
 `resolve_watermark_path()` in worker.py — never read `WATERMARK_PATH`
 directly in new code, call the resolver.
 Per render use `job_watermark_path(job, candidate_id)` (092): a job's own (campaign) asset that can't be
@@ -310,7 +310,11 @@ dead). Read once per job/render where values must agree (e.g.
 *effective* value plus `source` (db/env/default); the UI saves only
 fields the user changed, because echoing values back would pin them in
 the DB above `.env`. An empty DB value means "unset" (falls through to
-env). `ENV_ONLY_KEYS` (`CLIPFLOW_API_KEY`, `CORS_ALLOWED_ORIGINS`,
+env). Per-user (P1.5, 123): `USER_SETTING_KEYS` resolve **user_settings → app_settings → env → default** for a
+user (`runtime_setting(key, user_id=…)` in main.py; the worker's `setting()` uses the job owner set by
+`run_as_owner()` in `main()`'s loop: every new claimed-task branch must go through it). `USER_ONLY_KEYS`
+(ACTIVE_WATERMARK_ID) have no global fallback. Members see/PUT only user keys; global keys are admin-only (403).
+`ENV_ONLY_KEYS` (`CLIPFLOW_API_KEY`, `CORS_ALLOWED_ORIGINS`,
 `DATABASE_URL`) are never read from the DB. Still env-only by design:
 `TELEGRAM_*`.
 

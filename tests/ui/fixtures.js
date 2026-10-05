@@ -70,7 +70,7 @@ async function mockApi(page, api) {
     if (method === "GET" && path === "/api/auth/me") return api.user ? json({ user: api.user, via: "session" }) : json({ detail: "Unauthorized" }, 401);
     if (method === "GET") {
       if (path === "/api/media-token") return json({ token: "mock-token", expires_at: iso(-720) });
-      if (path === "/api/settings") return json({});
+      if (path === "/api/settings") return json(api.settings || {});
       if (path === "/api/campaigns") return json(api.campaigns);
       if (path === "/api/activity") return json({ items: api.activity || [] }); // 090 island feed
       if (path === "/api/assets/watermarks") return json({ assets: [] });
