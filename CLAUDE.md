@@ -178,7 +178,9 @@ research doc), hashtags, watermark. Warning only: content safety (`clip_candidat
 form choice-grid; `none` / no face detected → `face_crop.panel=false` → full-frame 9:16 gameplay,
 no bottom panel, via `vertical_layout_filter()`, the ONLY layout graph — 087),
 layout is decided PER JOB (095: `decide_face_layout()` → `jobs.face_layout`, majority, or a tie whose hit is
-`facecam_like()` (corner/edge + ≥ 3 hits, spread ≤ 0.03; 101) → panel for all, else full for all; pass `face_layout=job.get("face_layout")` to every `detect_face_for_clip`), read by `detect_face_for_clip(..., layout=...)` in
+`facecam_like()` (corner/edge + ≥ 3 hits, spread ≤ 0.03 + persistence ≥ 0.5 of sampled frames; 101/118); only
+facecam-like hits count, panel if they're ≥ half the clips, else full for all; with layout auto a non-facecam
+detection is dropped per clip; pass `face_layout=job.get("face_layout")` to every `detect_face_for_clip`), read by `detect_face_for_clip(..., layout=...)` in
 worker.py to bias corner-scoring and the no-face fallback position.
 Threaded through 3 call sites: `create_preview`, `render_final_
 candidate`, `generate_ai_thumbnails` — plus `claim_candidate_task`'s

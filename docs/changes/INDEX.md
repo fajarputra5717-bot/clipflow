@@ -89,3 +89,4 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 115 · 2026-10-02 · Campaign clips get their description at analysis (utility model, clip language) ending with the campaign hashtags; prompt + hashtag helper moved to shared · worker.py, main.py, shared
 116 · 2026-10-03 · Keyword colour defaults to the first swatch that contrasts with the style highlight (yellow styles → green); user choice kept · worker.py, shared/edit_spec.py, index.html
 117 · 2026-10-03 · Campaign default facecam layout (rules default_layout; IME = none), used unless you pick one · docs/campaigns, shared/campaigns.py, main.py, index.html
+118 · 2026-10-05 · Facecam must be a persistent (≥ 50 % of frames), steady box in a corner/edge; game faces no longer give a junk panel (Lane C) · worker.py
