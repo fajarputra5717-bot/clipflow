@@ -91,3 +91,4 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 117 · 2026-10-03 · Campaign default facecam layout (rules default_layout; IME = none), used unless you pick one · docs/campaigns, shared/campaigns.py, main.py, index.html
 118 · 2026-10-05 · Facecam must be a persistent (≥ 50 % of frames), steady box in a corner/edge; game faces no longer give a junk panel (Lane C) · worker.py
 119 · 2026-10-05 · Lows: one score per clip card; keyword picker skips safety-flagged, exclamation and religious words (stoplists) · index.html, worker.py, shared/languages.py
+120 · 2026-10-05 · P1.5 (1): users + DB sessions + login page; argon2, rate limit, per-user media token; CLIPFLOW_API_KEY = bootstrap admin · app/auth.py, main.py, index.html, shared/settings.py

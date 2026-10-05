@@ -314,22 +314,21 @@ env). `ENV_ONLY_KEYS` (`CLIPFLOW_API_KEY`, `CORS_ALLOWED_ORIGINS`,
 `DATABASE_URL`) are never read from the DB. Still env-only by design:
 `TELEGRAM_*`.
 
-## Auth + CORS (R-03)
+## Auth + CORS (P1.5, was R-03)
 
-Every `/api/*` request needs header `X-ClipFlow-Key` = env
-`CLIPFLOW_API_KEY` (env-only, never app_settings; empty = fail closed).
-Enforced by the `require_api_key` **middleware** in main.py (not a route
-dependency) so unknown `/api` paths get the same 401 as real ones.
-`/health` and `/` are open. `<img>`/`<video>`/download URLs can't send
-headers: the GET file routes matched by `MEDIA_PATH_RE` also accept
-`?mt=` from `GET /api/media-token` (HMAC of the API key, stable per
-12 h bucket, valid 12-24 h, read-only). **A new file-serving GET route
-must be added to `MEDIA_PATH_RE`** and its frontend URL wrapped in
-`mediaUrl()`; every other frontend call goes through `api()` or
-`authFetch()` (uploads). Never a bare `fetch()`. CORS origins come from env
-`CORS_ALLOWED_ORIGINS` (comma list, `*` dropped, no credentials). The
-CORS middleware must stay added *after* the auth middleware (outermost),
-or preflights get 401.
+Every `/api/*` request needs a principal; the `require_user` **middleware** in main.py (not a route dependency, so
+unknown `/api` paths also 401) puts `{id, username, role, via}` on `request.state.user`; read it with
+`current_user(request)` / `require_admin(request)`. Sources (`app/auth.py`): session cookie `clipflow_session`
+(HttpOnly, SameSite=Lax; DB row in `user_sessions`, token stored as sha256; disabled user = dead session) →
+`X-ClipFlow-Key` = env `CLIPFLOW_API_KEY` → the bootstrap admin (legacy, until the owner confirms removal) →
+`?mt=` per-user media token (`exp.user_id.sig`, GET/HEAD on `MEDIA_PATH_RE` only). Open: `/api/auth/login|logout`,
+`/health`, `/`. Passwords argon2id; login 429 after 5 fails/user or 20/IP per 15 min; no signup route.
+First run: `CLIPFLOW_ADMIN_USER/PASSWORD` (env-only, read only while `users` is empty). Cookie-authed writes
+with a foreign `Origin` → 403. **A new file-serving GET route must be added to `MEDIA_PATH_RE`** and its
+frontend URL wrapped in `mediaUrl()`; every other frontend call goes through `api()` or `authFetch()` (uploads),
+never a bare `fetch()` (exception: the login form + `ensureSession()`/`signOut()`). A 401 opens `#loginScreen`
+(`showLogin()`, `body.auth-locked`) and retries once. CORS origins from env `CORS_ALLOWED_ORIGINS` (comma list,
+`*` dropped, no credentials); the CORS middleware stays added *after* the auth middleware, or preflights get 401.
 
 ## Frontend shell (R-11/R-12/R-13, lane B 067-073; badge v2.1117)
 

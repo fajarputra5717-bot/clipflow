@@ -18,6 +18,9 @@ from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
+from starlette.concurrency import run_in_threadpool
+
+from app import auth
 
 from shared.ai import router as ai_router
 from shared import campaigns, descriptions, edit_spec as edit_specs, languages, rule_checks
@@ -50,18 +53,16 @@ app = FastAPI(
 
 
 # ============================================================
-# AUTH (R-03) — shared secret in X-ClipFlow-Key on every /api/*
-# request. /health and / stay open. The expected value is env-only
-# (CLIPFLOW_API_KEY), never app_settings: that table is served over
-# the API. Enforced as middleware rather than a route dependency so
-# unknown /api paths also get 401 (no route-existence leak).
-#
-# <img>/<video>/download links can't send headers, so the GET file
-# routes in MEDIA_PATH_RE also accept ?mt=<exp>.<hmac>, a read-only
-# media token from GET /api/media-token, HMAC'd with the API key.
-# Tokens are bucketed to MEDIA_TOKEN_WINDOW so media URLs stay stable
-# for hours (re-renders don't reload playing videos); every token is
-# valid for 12-24 h. Rotating CLIPFLOW_API_KEY revokes all of them.
+# AUTH (P1.5, replaces R-03's single key) — every /api/* request needs
+# a principal, resolved once by the middleware into request.state.user
+# ({id, username, role}); see app/auth.py:
+#   1. session cookie (browser login; HttpOnly, SameSite=Lax, DB row),
+#   2. X-ClipFlow-Key = env CLIPFLOW_API_KEY → the bootstrap admin
+#      (legacy scripts; kept until the owner confirms removal),
+#   3. ?mt= per-user media token, GET/HEAD on MEDIA_PATH_RE only.
+# Open: /api/auth/login, /api/auth/logout, /health, /. Middleware (not a
+# route dependency) so unknown /api paths also get 401. Cookie-authed
+# writes must come from an allowed Origin (CSRF belt to SameSite=Lax).
 # ============================================================
 
 API_KEY_HEADER = "X-ClipFlow-Key"
@@ -69,8 +70,6 @@ API_KEY_HEADER = "X-ClipFlow-Key"
 CLIPFLOW_API_KEY = os.getenv("CLIPFLOW_API_KEY", "").strip()
 
 MEDIA_TOKEN_PARAM = "mt"
-
-MEDIA_TOKEN_WINDOW = 12 * 3600
 
 MEDIA_PATH_RE = re.compile(
     r"^/api/("
@@ -80,79 +79,97 @@ MEDIA_PATH_RE = re.compile(
     r")$"
 )
 
-if not CLIPFLOW_API_KEY:
-    print(
-        "[backend] CLIPFLOW_API_KEY is not set: every /api/* "
-        "request will be rejected with 401 (fail closed)."
-    )
+OPEN_API_PATHS = {"/api/auth/login", "/api/auth/logout"}
+
+SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 
 
-def _media_signature(exp: int) -> str:
-    return hmac.new(
-        CLIPFLOW_API_KEY.encode(),
-        f"media:{exp}".encode(),
-        hashlib.sha256,
-    ).hexdigest()
+def _resolve_principal(request: Request) -> Optional[dict]:
+    with get_db() as conn:
+        token = request.cookies.get(auth.SESSION_COOKIE, "")
+        if token:
+            user = auth.session_user(conn, token)
+            if user:
+                user["via"] = "session"
+                return user
+
+        supplied = request.headers.get(API_KEY_HEADER, "")
+        if (
+            supplied
+            and CLIPFLOW_API_KEY
+            and secrets.compare_digest(supplied.encode(), CLIPFLOW_API_KEY.encode())
+        ):
+            user = auth.bootstrap_admin(conn)
+            if user:
+                user["via"] = "api_key"
+                return user
+
+        mt = request.query_params.get(MEDIA_TOKEN_PARAM, "")
+        if (
+            mt
+            and request.method in ("GET", "HEAD")
+            and MEDIA_PATH_RE.match(request.url.path)
+        ):
+            uid = auth.media_token_user_id(conn, mt)
+            user = auth.active_user(conn, uid) if uid else None
+            if user:
+                user["via"] = "media_token"
+                return user
+    return None
 
 
-def issue_media_token() -> dict:
-    exp = (
-        int(time.time()) // MEDIA_TOKEN_WINDOW + 2
-    ) * MEDIA_TOKEN_WINDOW
-    return {
-        "token": f"{exp}.{_media_signature(exp)}",
-        "expires_at": exp,
-    }
-
-
-def _media_token_valid(token: str) -> bool:
-    exp_raw, _, sig = token.partition(".")
-    try:
-        exp = int(exp_raw)
-    except ValueError:
-        return False
-    if exp <= time.time():
-        return False
-    return secrets.compare_digest(sig, _media_signature(exp))
-
-
-def _request_authorized(request: Request) -> bool:
-    if not CLIPFLOW_API_KEY:
-        return False
-
-    supplied = request.headers.get(API_KEY_HEADER, "")
-    if supplied and secrets.compare_digest(
-        supplied.encode(), CLIPFLOW_API_KEY.encode()
-    ):
+def _origin_allowed(request: Request) -> bool:
+    origin = request.headers.get("origin")
+    if not origin:
         return True
-
-    token = request.query_params.get(MEDIA_TOKEN_PARAM, "")
-    return bool(
-        token
-        and request.method in ("GET", "HEAD")
-        and MEDIA_PATH_RE.match(request.url.path)
-        and _media_token_valid(token)
-    )
+    origin = origin.rstrip("/")
+    host = request.headers.get("host", "")
+    if urlsplit(origin).netloc == host:
+        return True
+    return origin in cors_allowed_origins()
 
 
 @app.middleware("http")
-async def require_api_key(request: Request, call_next):
+async def require_user(request: Request, call_next):
     path = request.url.path
-    if (
-        (path == "/api" or path.startswith("/api/"))
-        and not _request_authorized(request)
-    ):
-        return JSONResponse(
-            {"detail": "Unauthorized"},
-            status_code=401,
-        )
+    request.state.user = None
+    if (path == "/api" or path.startswith("/api/")) and path not in OPEN_API_PATHS:
+        try:
+            user = await run_in_threadpool(_resolve_principal, request)
+        except Exception:
+            print("[auth] principal lookup failed:", traceback.format_exc())
+            user = None
+        if not user:
+            return JSONResponse({"detail": "Unauthorized"}, status_code=401)
+        if (
+            user["via"] == "session"
+            and request.method not in SAFE_METHODS
+            and not _origin_allowed(request)
+        ):
+            return JSONResponse({"detail": "Cross-origin request refused"}, status_code=403)
+        request.state.user = user
     return await call_next(request)
 
 
+def current_user(request: Request) -> dict:
+    user = getattr(request.state, "user", None)
+    if not user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    return user
+
+
+def require_admin(request: Request) -> dict:
+    user = current_user(request)
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admins only")
+    return user
+
+
 # CORS: explicit origin list from env CORS_ALLOWED_ORIGINS (comma
-# separated), never "*". No credentials: auth is a header, not a
-# cookie. Added AFTER the auth middleware so it wraps it: preflights
-# are answered here and 401s still carry CORS headers.
+# separated), never "*". No credentials: cross-origin callers use a
+# header token; the session cookie is same-origin only. Added AFTER the
+# auth middleware so it wraps it: preflights are answered here and 401s
+# still carry CORS headers.
 def cors_allowed_origins() -> list[str]:
     origins = [
         o.strip().rstrip("/")
@@ -275,6 +292,8 @@ def ensure_schema():
         # 109 (P1): content-safety pass {flags:[{rule, quote, reason}], checked_at,
         # provider, model, text_hash, dismissed}; warning only (worker writes it).
         "ALTER TABLE clip_candidates ADD COLUMN IF NOT EXISTS safety_check JSONB",
+        # P1.5: users, DB sessions, login failures, server secrets (app/auth.py).
+        *auth.SCHEMA,
     ]
 
     try:
@@ -297,6 +316,12 @@ def ensure_schema():
             "[backend] ensure_schema fatal error:",
             traceback.format_exc(),
         )
+
+    try:
+        with get_db() as conn:
+            auth.ensure_bootstrap_admin(conn)
+    except Exception:
+        print("[auth] bootstrap admin failed:", traceback.format_exc())
 
 
 # ============================================================
@@ -650,9 +675,107 @@ def health():
 
 
 @app.get("/api/media-token")
-def media_token():
-    """Read-only token for <img>/<video> src URLs (see AUTH above)."""
-    return issue_media_token()
+def media_token(request: Request):
+    """Read-only per-user token for <img>/<video> src URLs (see AUTH above)."""
+    user = current_user(request)
+    with get_db() as conn:
+        return auth.issue_media_token(conn, user["id"])
+
+
+# ---------- accounts (P1.5) ----------
+
+class LoginRequest(BaseModel):
+    username: str = Field(max_length=64)
+    password: str = Field(max_length=256)
+
+
+class PasswordChange(BaseModel):
+    current_password: str = Field(max_length=256)
+    new_password: str = Field(max_length=256)
+
+
+def client_ip(request: Request) -> Optional[str]:
+    # nginx is the only way in from outside (backend binds 127.0.0.1 + the compose net).
+    fwd = request.headers.get("x-real-ip") or request.headers.get("x-forwarded-for", "")
+    ip = fwd.split(",")[0].strip() if fwd else ""
+    return ip or (request.client.host if request.client else None)
+
+
+def _set_session_cookie(request: Request, response: JSONResponse, token: str) -> None:
+    secure = (
+        request.headers.get("x-forwarded-proto", request.url.scheme) == "https"
+    )
+    response.set_cookie(
+        auth.SESSION_COOKIE,
+        token,
+        max_age=auth.SESSION_TTL_DAYS * 86400,
+        httponly=True,
+        samesite="lax",
+        secure=secure,
+        path="/",
+    )
+
+
+@app.post("/api/auth/login")
+def login(payload: LoginRequest, request: Request):
+    username = payload.username.strip().lower()
+    ip = client_ip(request)
+    with get_db() as conn:
+        if auth.login_blocked(conn, username, ip):
+            raise HTTPException(
+                status_code=429,
+                detail="Too many failed logins. Try again in 15 minutes.",
+                headers={"Retry-After": str(auth.LOGIN_WINDOW_MINUTES * 60)},
+            )
+        user = auth.authenticate(conn, username, payload.password)
+        if not user:
+            auth.record_login_failure(conn, username, ip)
+            conn.commit()
+            raise HTTPException(status_code=401, detail="Wrong username or password")
+        auth.clear_login_failures(conn, username)
+        token = auth.create_session(conn, user["id"], ip, request.headers.get("user-agent"))
+        conn.commit()
+    response = JSONResponse({"user": user})
+    _set_session_cookie(request, response, token)
+    return response
+
+
+@app.post("/api/auth/logout")
+def logout(request: Request):
+    token = request.cookies.get(auth.SESSION_COOKIE, "")
+    if token:
+        with get_db() as conn:
+            auth.delete_session(conn, token)
+            conn.commit()
+    response = JSONResponse({"ok": True})
+    response.delete_cookie(auth.SESSION_COOKIE, path="/")
+    return response
+
+
+@app.get("/api/auth/me")
+def auth_me(request: Request):
+    user = current_user(request)
+    return {"user": {k: user[k] for k in ("id", "username", "role")}, "via": user["via"]}
+
+
+@app.post("/api/auth/password")
+def change_password(payload: PasswordChange, request: Request):
+    user = current_user(request)
+    problem = auth.password_problem(payload.new_password)
+    if problem:
+        raise HTTPException(status_code=400, detail=problem)
+    with get_db() as conn:
+        if not auth.authenticate(conn, user["username"], payload.current_password):
+            raise HTTPException(status_code=400, detail="Current password is wrong")
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE users SET password_hash=%s, password_changed_at=NOW() WHERE id=%s",
+                (auth.hash_password(payload.new_password), user["id"]),
+            )
+        # Every other session of this user ends; this browser stays logged in.
+        auth.delete_user_sessions(conn, user["id"], keep_token=request.cookies.get(auth.SESSION_COOKIE))
+        conn.commit()
+    return {"ok": True}
 
 
 # ============================================================
