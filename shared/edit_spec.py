@@ -13,6 +13,10 @@ Keys so far:
            Full-frame clips: replaces FULLFRAME_CAPTION_Y; camera-panel clips:
            never below the seam. Missing = auto (today's placement).
 
+  hook_title: {on, text, duration}   P4 task 1 (lane B): title card over the first seconds.
+           text "" / missing = the clip's title; duration ∈ {2, 2.5, 3} s (default 2.5).
+           Rendered by worker/render_steps.add_title_card() in preview and final.
+
 PATCH semantics (main.py update_candidate): top-level keys are merged into
 the stored spec; a key sent as null is removed.
 """
@@ -125,6 +129,8 @@ def normalize_patch(patch, styles, animations):
             value = normalize_color(value)
         elif key == "caption_y":
             value = normalize_caption_y(value)
+        elif key == "hook_title":
+            value = normalize_hook_title(value)
         else:
             raise ValueError(f"unknown edit_spec key: {key!r}")
         if value is None:
@@ -140,3 +146,34 @@ def caption_override(spec):
     if not isinstance(cap, dict):
         return None, None
     return cap.get("style") or None, cap.get("animation") or None
+
+
+# ---- hook title card (P4 task 1, lane B)
+
+HOOK_TITLE_DURATIONS = (2.0, 2.5, 3.0)
+HOOK_TITLE_DEFAULT_DURATION = 2.5
+HOOK_TITLE_MAX_CHARS = 80
+
+
+def normalize_hook_title(value):
+    """{on: bool, text: str ('' = clip title), duration: 2|2.5|3} or None (= clear)."""
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        raise ValueError("hook_title must be an object")
+    text = " ".join(str(value.get("text") or "").split())
+    if len(text) > HOOK_TITLE_MAX_CHARS:
+        raise ValueError(f"hook_title.text is longer than {HOOK_TITLE_MAX_CHARS} characters")
+    try:
+        duration = float(value.get("duration", HOOK_TITLE_DEFAULT_DURATION))
+    except (TypeError, ValueError):
+        raise ValueError("hook_title.duration must be a number")
+    if duration not in HOOK_TITLE_DURATIONS:
+        raise ValueError(f"hook_title.duration must be one of {HOOK_TITLE_DURATIONS}")
+    return {"on": bool(value.get("on", True)), "text": text, "duration": duration}
+
+
+def hook_title_of(spec):
+    """The stored hook_title dict, or None."""
+    ht = (spec or {}).get("hook_title") if isinstance(spec, dict) else None
+    return ht if isinstance(ht, dict) else None

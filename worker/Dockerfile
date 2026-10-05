@@ -35,5 +35,7 @@ RUN fc-cache -f
 COPY --from=shared . /app/shared
 COPY assets/ /app/assets/
 COPY worker.py /app/worker.py
+# lane-b hook (Dockerfile has no trailing comments)
+COPY render_steps.py /app/render_steps.py
 
 CMD ["python", "-u", "/app/worker.py"]

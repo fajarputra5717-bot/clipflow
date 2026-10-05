@@ -172,6 +172,7 @@ app.add_middleware(
     allow_methods=["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"],
     allow_headers=["Content-Type", API_KEY_HEADER],
 )
+from app import routes_editor; app.include_router(routes_editor.router)  # lane-b hook
 
 
 # ============================================================

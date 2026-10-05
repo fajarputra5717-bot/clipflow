@@ -27,6 +27,7 @@ from shared import campaigns, descriptions, edit_spec as edit_specs, languages, 
 from shared.errors import FAILURE_TRANSIENT, failure_class
 from shared.fonts import caption_font_bold, normalize_caption_font
 from shared.settings import RuntimeSettings
+import render_steps  # lane-b hook
 
 
 # ============================================================
@@ -5052,6 +5053,7 @@ def create_preview(
         )
     )
 
+    subtitle_file = render_steps.add_title_card(subtitle_file, candidate, size=(preview_width, preview_height), clip_duration=duration, avoid=watermark_rect, out_dir=SUBTITLE_DIR, log=log)  # lane-b hook
     render_vertical(
         video_path,
         preview_path,
@@ -5517,6 +5519,7 @@ def render_final_candidate(
         )
     )
 
+    subtitle_file = render_steps.add_title_card(subtitle_file, candidate, size=(FINAL_WIDTH, FINAL_HEIGHT), clip_duration=duration, avoid=watermark_rect, out_dir=SUBTITLE_DIR, log=log)  # lane-b hook
     render_vertical(
         video_path,
         output_path,

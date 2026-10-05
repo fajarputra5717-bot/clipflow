@@ -50,3 +50,9 @@ Frontend changes need no rebuild (directory mount); hard-refresh :8080. The API 
 - Sweeps can't delete: `/data` is read-only, `ORPHAN_SWEEP_DRY_RUN=true`,
   `RETENTION_DAYS_INTERMEDIATE=36500` (and any DB override of those two is deleted on reset).
 - New renders land in `/data-staging/{previews,final,…}` and are gone after the next reset.
+
+## UI tests against staging
+
+`CLIPFLOW_UI_BASE=http://localhost:8080 tests/ui/run.sh` runs the Playwright harness (mocked `/api`)
+against lane-b's frontend. Plain `tests/ui/run.sh` targets production's :80, which doesn't have lane-b
+pages yet, so new specs fail there until Lane A merges.
