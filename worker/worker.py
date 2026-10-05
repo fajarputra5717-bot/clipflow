@@ -5029,6 +5029,13 @@ def create_preview(
         )
     )
 
+    # 109 (P1): campaign clips get one utility-AI content-safety pass (warning only).
+    # 119: before the keyword pick, so flagged words are never highlighted.
+    content_safety_check(
+        candidate_id, job, candidate,
+        candidate.get("subtitle_override") or transcript_text,
+    )
+
     # 111 (P1): AI-picked keywords for this clip, before the first ASS is written.
     pick_keywords(candidate_id, job, candidate, clip_segments)
 
@@ -5151,12 +5158,6 @@ def create_preview(
             "Preview ready",
     )
 
-    # 109 (P1): campaign clips get one utility-AI content-safety pass (warning only).
-    content_safety_check(
-        candidate_id, job, candidate,
-        candidate.get("subtitle_override") or transcript_text,
-    )
-
     # 115: campaign clips get their description at analysis, ending with the
     # campaign hashtags (so the hashtag rule chip starts green).
     campaign_description(
@@ -5233,10 +5234,12 @@ def content_safety_check(candidate_id, job, candidate, clip_text):
         for f in (data or {}).get("flags", []) if isinstance(f, dict)
     ]
     flags = [f for f in flags if f["rule"] in valid]  # only rules this campaign has
-    update_candidate(candidate_id, safety_check=json.dumps({
+    result = {
         "flags": flags, "checked_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
         "provider": meta.get("provider"), "model": meta.get("model"), "text_hash": text_hash,
-    }))
+    }
+    update_candidate(candidate_id, safety_check=json.dumps(result))
+    candidate["safety_check"] = result  # 119: the keyword pick reads it next
     log(f"Content check {candidate_id}: {len(flags)} flag(s) via {meta.get('provider')} "
         + ", ".join(f["rule"] for f in flags))
 
@@ -5310,6 +5313,10 @@ def pick_keywords(candidate_id, job, candidate, clip_segments):
         return
     lang = languages.job_language(job.get("effective_language"), job.get("language"))
     stop = set(languages.stopwords_for(lang))
+    # 119: never highlight a word the content-safety check quoted.
+    safety = candidate.get("safety_check") if isinstance(candidate.get("safety_check"), dict) else {}
+    for f in safety.get("flags") or []:
+        stop |= {edit_specs.keyword_token(t) for t in str(f.get("quote", "")).split()}
     present = {edit_specs.keyword_token(w["word"]) for w in words} or \
               {edit_specs.keyword_token(t) for t in text.split()}
     prompt = (

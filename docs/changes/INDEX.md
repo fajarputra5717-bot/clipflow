@@ -90,3 +90,4 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 116 · 2026-10-03 · Keyword colour defaults to the first swatch that contrasts with the style highlight (yellow styles → green); user choice kept · worker.py, shared/edit_spec.py, index.html
 117 · 2026-10-03 · Campaign default facecam layout (rules default_layout; IME = none), used unless you pick one · docs/campaigns, shared/campaigns.py, main.py, index.html
 118 · 2026-10-05 · Facecam must be a persistent (≥ 50 % of frames), steady box in a corner/edge; game faces no longer give a junk panel (Lane C) · worker.py
+119 · 2026-10-05 · Lows: one score per clip card; keyword picker skips safety-flagged, exclamation and religious words (stoplists) · index.html, worker.py, shared/languages.py
