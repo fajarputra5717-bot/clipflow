@@ -32,7 +32,7 @@ LOGIN_MAX_FAILS_USER = 5          # per username per window
 LOGIN_MAX_FAILS_IP = 20           # per client IP per window
 
 MEDIA_TOKEN_WINDOW = 12 * 3600
-PASSWORD_MIN_LEN = 10
+PASSWORD_MIN_LEN = 12
 USERNAME_RE_TEXT = r"^[a-z0-9][a-z0-9._-]{1,31}$"
 ROLES = ("admin", "member")
 

@@ -1181,6 +1181,34 @@ body.auth-locked #appShell,body.auth-locked #tabbar,body.auth-locked #island{vis
 .account-row .account-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text);font-weight:600}
 .account-row button{min-height:32px;padding:0 12px;border-radius:999px;font-size:13px}
 @media (prefers-reduced-motion:reduce){.login-layer{transition:none}}
+/* Stepper = top-level nav: sticks under the toolbar instead of sliding beneath it (cut-off titles, v2.1117).
+   Compacts (no sub-lines, smaller dots) once the toolbar has collapsed; driven by initToolbar's .is-collapsed. */
+.flow-card{position:sticky;top:56px;z-index:50;transition:padding var(--dur-2) var(--ease-out)}
+.flow-dot,.flow li+li::before{transition:width var(--dur-2) var(--ease-out),height var(--dur-2) var(--ease-out),top var(--dur-2) var(--ease-out),background var(--dur-2) var(--ease)}
+body:has(.toolbar.is-collapsed) .flow-card{padding-block:var(--sp-1) 2px}
+body:has(.toolbar.is-collapsed) .flow-dot{width:32px;height:32px}
+body:has(.toolbar.is-collapsed) .flow-dot svg{width:16px;height:16px}
+body:has(.toolbar.is-collapsed) .flow li+li::before{top:16px;right:calc(50% + 20px);left:calc(-50% + 20px)}
+body:has(.toolbar.is-collapsed) .flow-sub{display:none}
+@media (prefers-reduced-motion:reduce){.flow-card,.flow-dot,.flow li+li::before{transition:none}}
+/* Selects match the mockup's inputs: same box, own chevron (no native control chrome). */
+select,[data-theme] select{-webkit-appearance:none;appearance:none;padding-right:40px;cursor:pointer;text-overflow:ellipsis}
+/* after the background shorthands above (incl. [data-theme=dark] … :focus), so the chevron survives every state */
+select,select:focus,[data-theme] select,[data-theme] select:focus{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5 6 6.5l5-5' fill='none' stroke='%2386868b' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 15px center;background-size:12px 8px}
+select::-ms-expand{display:none}
+/* Account sheet (P1.5) */
+.account-row .account-name{background:transparent;border:0;padding:4px 6px;margin:-4px -6px;border-radius:8px;text-align:left;cursor:pointer;font:inherit;font-weight:600;color:var(--text);min-height:0;box-shadow:none}
+.account-row .account-name:hover{background:var(--fill)}
+.account-who{color:var(--muted);font-size:15px;margin:0 0 var(--sp-2)}
+.account-who b{color:var(--text)}
+.account-form h3{font-size:17px;margin:0 0 4px}
+.account-form .hint{color:var(--muted);font-size:13px;margin:0}
+.account-form button.primary{margin-top:var(--sp-2);border-radius:999px;min-height:var(--hit)}
+.account-msg{min-height:20px;margin-top:var(--sp-1);font-size:13px}
+.account-msg.is-error{color:var(--badge-failed-fg,#d70015)}
+.account-msg.is-ok{color:var(--badge-done-fg,#248a3d)}
+.account-signout{margin-top:var(--sp-3);padding-top:var(--sp-2);border-top:1px solid var(--line)}
+.account-signout button{border-radius:999px;min-height:var(--hit)}
 </style>
 </head>
 <body>
@@ -1222,7 +1250,7 @@ body.auth-locked #appShell,body.auth-locked #tabbar,body.auth-locked #island{vis
     <button class="nav-item" type="button" data-nav="settings" aria-haspopup="dialog" aria-controls="settingsSheet"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg><span>Settings</span></button>
   </nav>
   <div class="sidebar-foot">
-    <div class="account-row" id="accountRow"><span class="account-name" id="accountName"></span><button type="button" data-signout>Sign out</button></div>
+    <div class="account-row" id="accountRow"><button type="button" class="account-name" id="accountName" data-account aria-haspopup="dialog" aria-controls="accountSheet" title="Account"></button><button type="button" data-signout>Sign out</button></div>
     <button class="nav-item theme-toggle" id="themeToggleSide" type="button" aria-label="Switch appearance"><span class="nav-icon-stack"><svg class="theme-icon-sun nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2.2M12 19.3v2.2M4.9 4.9l1.6 1.6M17.5 17.5l1.6 1.6M2.5 12h2.2M19.3 12h2.2M4.9 19.1l1.6-1.6M17.5 6.5l1.6-1.6"/></svg><svg class="theme-icon-moon nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg></span><span>Appearance</span><span class="nav-value" id="themeValue">Light</span></button>
   </div>
 </aside>
@@ -1375,6 +1403,26 @@ body.auth-locked #appShell,body.auth-locked #tabbar,body.auth-locked #island{vis
 </div>
 <nav class="tabbar" id="tabbar" aria-label="Main"><button class="tabbar-item" type="button" data-nav="current"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v10.5M8 10.5l4 4 4-4"/><path d="M4.5 15v2.5A2.5 2.5 0 0 0 7 20h10a2.5 2.5 0 0 0 2.5-2.5V15"/></svg><span>Analyze</span></button><button class="tabbar-item" type="button" data-nav="queue"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg><span>Review</span></button><button class="tabbar-item" type="button" data-nav="watermarks" aria-haspopup="dialog"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="3"/><path d="m3.5 15.5 4.5-4.5 4 4"/><path d="M14.5 16h3"/></svg><span>Watermarks</span></button><button class="tabbar-item" type="button" data-nav="settings" aria-haspopup="dialog"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg><span>Settings</span></button></nav>
 <!-- Sheets (068): Settings and Watermarks open as centred dialogs from the sidebar. Closed = visibility:hidden + pointer-events:none. -->
+<div class="sheet-layer" id="accountSheet" aria-hidden="true">
+  <div class="sheet-backdrop" data-sheet-close></div>
+  <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="accountSheetTitle">
+    <header class="sheet-head"><h2 id="accountSheetTitle">Account</h2><button class="sheet-close" type="button" data-sheet-close aria-label="Close account"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></header>
+    <div class="sheet-body">
+      <p class="account-who" id="accountWho"></p>
+      <form class="account-form" id="passwordForm" novalidate>
+        <h3>Change password</h3>
+        <p class="hint">At least 12 characters. Your other signed-in devices are signed out.</p>
+        <div class="field"><label for="pwCurrent">Current password</label><input id="pwCurrent" type="password" autocomplete="current-password"></div>
+        <div class="field"><label for="pwNew">New password</label><input id="pwNew" type="password" autocomplete="new-password" minlength="12"></div>
+        <div class="field"><label for="pwConfirm">Confirm new password</label><input id="pwConfirm" type="password" autocomplete="new-password" minlength="12"></div>
+        <div class="account-msg" id="pwMsg" role="status" aria-live="polite"></div>
+        <button class="primary" type="submit" id="pwSubmit">Change password</button>
+        <input type="text" name="username" autocomplete="username" id="pwUser" hidden>
+      </form>
+      <div class="account-signout"><button class="secondary" type="button" data-signout>Sign out</button></div>
+    </div>
+  </section>
+</div>
 <div class="sheet-layer" id="settingsSheet" aria-hidden="true">
   <div class="sheet-backdrop" data-sheet-close></div>
   <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="settingsSheetTitle">
@@ -1559,7 +1607,27 @@ function showLogin(message){
   return loginPending;
 }
 let loginResolve=null;
-function setCurrentUser(u){currentUser=u||null;$("accountName").textContent=u?u.username:""}
+function setCurrentUser(u){
+  currentUser=u||null;$("accountName").textContent=u?u.username:"";$("pwUser").value=u?u.username:"";
+  $("accountWho").innerHTML=u?`Signed in as <b>${esc(u.username)}</b> · ${u.role==="admin"?"Admin":"Member"}`:"";
+}
+const PASSWORD_MIN=12;
+function pwMessage(text,ok){const m=$("pwMsg");m.textContent=text||"";m.classList.toggle("is-ok",!!ok);m.classList.toggle("is-error",!!text&&!ok)}
+$("passwordForm").addEventListener("submit",async e=>{
+  e.preventDefault();
+  const cur=$("pwCurrent").value,next=$("pwNew").value,conf=$("pwConfirm").value;
+  const bad=!cur?["Enter your current password.","pwCurrent"]:next.length<PASSWORD_MIN?[`New password must be at least ${PASSWORD_MIN} characters.`,"pwNew"]
+    :next!==conf?["The new passwords don't match.","pwConfirm"]:next===cur?["The new password must be different.","pwNew"]:null;
+  ["pwCurrent","pwNew","pwConfirm"].forEach(id=>$(id).removeAttribute("aria-invalid"));
+  if(bad){pwMessage(bad[0]);$(bad[1]).setAttribute("aria-invalid","true");$(bad[1]).focus();return}
+  const btn=$("pwSubmit");setBusy(btn,true,"Changing…");pwMessage("");
+  try{
+    await api("/api/auth/password",{method:"POST",body:JSON.stringify({current_password:cur,new_password:next})});
+    $("passwordForm").reset();$("pwUser").value=currentUser?.username||"";
+    pwMessage("Password changed. Other devices were signed out.",true);
+  }catch(err){pwMessage(err.message);if(/current/i.test(err.message)){$("pwCurrent").setAttribute("aria-invalid","true");$("pwCurrent").focus()}}
+  finally{setBusy(btn,false)}
+});
 $("loginForm").addEventListener("submit",async e=>{
   e.preventDefault();
   const btn=$("loginSubmit"),username=$("loginUser").value.trim(),password=$("loginPass").value;
@@ -3443,6 +3511,7 @@ document.addEventListener("keydown",e=>{
 },true);
 document.addEventListener("click",e=>{
   if(e.target.closest("[data-sheet-close]"))return closeSheet();
+  if(e.target.closest("[data-account]")){pwMessage("");openSheet("accountSheet",e.target.closest("[data-account]"));closeSidebarDrawer(false);return}
   if(e.target.closest("[data-signout]")){setBusy(e.target.closest("[data-signout]"),true);signOut();return}
   const nav=e.target.closest("[data-nav]");if(nav){
     const v=nav.dataset.nav;

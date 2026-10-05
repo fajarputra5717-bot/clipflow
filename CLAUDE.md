@@ -327,13 +327,13 @@ First run: `CLIPFLOW_ADMIN_USER/PASSWORD` (env-only, read only while `users` is 
 with a foreign `Origin` → 403. **A new file-serving GET route must be added to `MEDIA_PATH_RE`** and its
 frontend URL wrapped in `mediaUrl()`; every other frontend call goes through `api()` or `authFetch()` (uploads),
 never a bare `fetch()` (exception: the login form + `ensureSession()`/`signOut()`). A 401 opens `#loginScreen`
-(`showLogin()`, `body.auth-locked`) and retries once. CORS origins from env `CORS_ALLOWED_ORIGINS` (comma list,
+(`showLogin()`, `body.auth-locked`) and retries once. Account sheet (`#accountSheet`, username in the sidebar foot): change password (≥ 12) + Sign out. CORS origins from env `CORS_ALLOWED_ORIGINS` (comma list,
 `*` dropped, no credentials); the CORS middleware stays added *after* the auth middleware, or preflights get 401.
 
 ## Frontend shell (R-11/R-12/R-13, lane B 067-073; badge v2.1117)
 
 - **Navigation (106, P1 task 0):** the flow-preview **stepper** (`#flowNav`, `renderFlow()`, `FLOW_STEPS`) is the
-  top-level navigation: Analyze (`data-nav="current"`, the Import view), Review (`data-nav="queue"`, the job
+  top-level navigation (sticky under the toolbar, compact while it is collapsed via `body:has(.toolbar.is-collapsed)`, 121): Analyze (`data-nav="current"`, the Import view), Review (`data-nav="queue"`, the job
   list/detail, formerly "Publish"), Editor (`data-flow-editor`: opens the visible job's clip drawer; disabled
   until a job detail is open); Campaign/Auto-import/Track (P3) and Schedule/Publish (P2) are disabled with
   "Coming in Px" — never mock content (mapping: docs/roadmap.md). `#pageTitle` = the active step. Gear in the
