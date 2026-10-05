@@ -3,13 +3,17 @@
 Source: owner messages 2026-10-05 (full spec; memory p15-multi-user). Lane A ships one commit per part → QA reviews each. Any open High = BLOCKED.
 
 ## Cross-user isolation: every failure is HIGH (owner 2026-10-05)
-Automated: `tests/ui/specs/qa-multiuser.spec.js` (Playwright request API, two members A and B, staging only):
+Automated: `tests/ui/specs/qa-multiuser.spec.js` (Playwright request API, two members A and B).
+**STAGING ONLY, enforced:** the spec throws "REFUSES to run" unless CLIPFLOW_API_BASE (and CLIPFLOW_UI_BASE if set) is
+localhost/127.0.0.1 on :8001 or :8080 (incident 2026-10-05: a run against production wrote WHISPER_MODEL=tiny, since
+restored). Its global-settings write attempt now re-sends the CURRENT value, so a missing guard changes nothing.
 - [ ] B gets **404** on A's job, candidates, candidate, versions
 - [ ] B's job lists (current, queue) never contain A's jobs
 - [ ] B gets **404** on A's files: preview, thumbnail, final render, watermark asset/file, with or without B's media token
 - [ ] B's write attempts on A's clip/job (PATCH, approve, regenerate, cancel, delete) → 404 and A's data unchanged
 - [ ] B's `/api/activity` never shows A's tasks
 - [ ] Settings per user; member can't PUT global (admin-only) keys (403/404); no secrets in clear for members
+      **OPEN HIGH (2026-10-05):** on production a member PUT set WHISPER_MODEL → member can write global settings.
 - [ ] Unauthenticated → 401 on every API route; files without session → 401
 To add once the API is final: campaigns ownership, per-user API tokens (B's token on A's rows → 404), admin sees all
 (activity), login rate-limit, logout invalidates the session, disabled user's session stops working.

@@ -1,7 +1,7 @@
 // QA (Lane C) · P1.5 multi-user · cross-user isolation. Every failure here is HIGH severity (owner 2026-10-05).
 // Rule: user B must get 404 (not 200/403/500) for anything owned by user A: jobs, clips, files (video, thumbnail,
 // watermark), settings, activity. Unauthenticated → 401. Non-destructive by design: only GETs, plus write ATTEMPTS
-// by B on A's rows that must be refused (404) — run against STAGING only.
+// by B on A's rows that must be refused (404). STAGING ONLY: the spec throws unless the base is localhost:8001/:8080.
 //
 // Run (staging):  QA_MULTIUSER=1 CLIPFLOW_API_BASE=http://localhost:8001 \
 //   QA_USER_A=… QA_PASS_A=… QA_USER_B=… QA_PASS_B=… npx playwright test specs/qa-multiuser.spec.js --project=desktop
@@ -10,6 +10,13 @@
 const { test, expect, request } = require("@playwright/test");
 
 const BASE = process.env.CLIPFLOW_API_BASE || "http://localhost:8001";
+// STAGING ONLY (incident 2026-10-05: a run against production changed WHISPER_MODEL). Refuse anything that isn't
+// the staging stack on this host: API :8001 or UI :8080 on localhost/127.0.0.1.
+function assertStaging(url) {
+  let u; try { u = new URL(url); } catch { throw new Error(`qa-multiuser: invalid base URL ${url}`); }
+  const hostOk = ["localhost", "127.0.0.1"].includes(u.hostname), portOk = ["8001", "8080"].includes(u.port);
+  if (!hostOk || !portOk) throw new Error(`qa-multiuser REFUSES to run against ${url}: staging only (localhost:8001 API / :8080 UI)`);
+}
 const LOGIN = process.env.QA_LOGIN_PATH || "/api/auth/login";
 const UKEY = process.env.QA_LOGIN_BODY || "username";
 const run = process.env.QA_MULTIUSER === "1";
@@ -28,6 +35,8 @@ test.describe("P1.5 cross-user isolation (HIGH)", () => {
   let A, B, anon, jobA, candA, wmA, mediaA = [];
 
   test.beforeAll(async () => {
+    assertStaging(BASE);
+    if (process.env.CLIPFLOW_UI_BASE) assertStaging(process.env.CLIPFLOW_UI_BASE);
     A = await login(process.env.QA_USER_A, process.env.QA_PASS_A);
     B = await login(process.env.QA_USER_B, process.env.QA_PASS_B);
     anon = await request.newContext({ baseURL: BASE });
@@ -107,8 +116,12 @@ test.describe("P1.5 cross-user isolation (HIGH)", () => {
     expect(b, "B /api/settings").toBeTruthy();
     // Secrets never come back in clear to members.
     expect(JSON.stringify(b)).not.toMatch(/sk-ant-|AIza[0-9A-Za-z_-]{20,}/);
-    // A member must not change global (admin-only) keys: 403 or 404, never 200.
-    const s = (await B.put("/api/settings", { data: { values: { WHISPER_MODEL: "tiny" } } })).status();
+    // A member must not change global (admin-only) keys: 403 or 404, never 200. The attempt re-sends the CURRENT
+    // value, so even if the guard is missing nothing changes (incident 2026-10-05: "tiny" was written to production).
+    const cur = (b?.settings || b)?.WHISPER_MODEL;
+    const current = (cur && typeof cur === "object" ? cur.value : cur) || (a?.settings || a)?.WHISPER_MODEL?.value;
+    test.skip(!current, "can't read the current WHISPER_MODEL; refusing to send a value that could change it");
+    const s = (await B.put("/api/settings", { data: { values: { WHISPER_MODEL: String(current) } } })).status();
     expect([403, 404], `B PUT global WHISPER_MODEL → ${s}`).toContain(s);
     expect(a, "A /api/settings").toBeTruthy();
   });
