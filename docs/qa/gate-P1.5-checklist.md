@@ -1,6 +1,6 @@
 # P1.5 gate checklist (draft) · multi-user accounts
 
-Source: owner messages 2026-10-05 (spec partly truncated; see memory p15-multi-user). Any open High = BLOCKED.
+Source: owner messages 2026-10-05 (full spec; memory p15-multi-user). Lane A ships one commit per part → QA reviews each. Any open High = BLOCKED.
 
 ## Cross-user isolation: every failure is HIGH (owner 2026-10-05)
 Automated: `tests/ui/specs/qa-multiuser.spec.js` (Playwright request API, two members A and B, staging only):
@@ -13,6 +13,13 @@ Automated: `tests/ui/specs/qa-multiuser.spec.js` (Playwright request API, two me
 - [ ] Unauthenticated → 401 on every API route; files without session → 401
 To add once the API is final: campaigns ownership, per-user API tokens (B's token on A's rows → 404), admin sees all
 (activity), login rate-limit, logout invalidates the session, disabled user's session stops working.
+
+## Auth mechanics
+- [ ] Passwords stored as argon2 hashes (no plaintext/reversible); API tokens stored hashed only
+- [ ] Session cookie HttpOnly + SameSite=Lax (+ Secure where HTTPS); sessions in DB, logout deletes the row
+- [ ] No public signup route; admin-only user create/disable/reset; login rate-limited
+- [ ] CLAUDE.md documents the ownership invariant (every query scoped by user_id); QA greps new SQL for missing scope
+- [ ] Login page matches the mock's visual style; island and stepper UNCHANGED (island + capsule specs pass)
 
 ## Migration
 - [ ] First run: admin from CLIPFLOW_ADMIN_USER/PASSWORD; ALL existing rows assigned to it (counts before = after)
