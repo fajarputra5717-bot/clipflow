@@ -22,3 +22,7 @@ re-encode in a throwaway container on a real 19.2 MB final with a 5 MB target �
 images import ok; prod read-only: `/api/telegram` (bot @aiclipmonitorbot, source env, ready), send-to-phone unknown
 clip 404 / bad platform 400, no rows created. Deploy note: the first worker start raced the backend's migration
 (UndefinedTable, one restart) → guarded. Real sends are for the owner to try (they go to his phone).
+
+**Staging (lane-b f442569 = main eb28421, no TELEGRAM_*), lane-a-tg1/tg2:** 9/9: bot_configured false; invalid chat id
+400; own chat id saved (source user); another member sees none and has no fallback; test send → 409 "isn't set up" (no
+row queued); send-to-phone unknown/other's clip 404, bad platform 400; clearing works; activity 200.
