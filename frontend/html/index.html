@@ -1985,6 +1985,8 @@ async function renameJob(id){
     if(currentTab==="current")await loadCurrentJobs();else if(currentTab==="queue")await loadQueue();
   }catch(e){alert("Rename failed: "+e.message)}
 }
+// 134: short id (first 8 chars) shown small; the full id stays in the title attribute.
+function shortId(id){return "#"+String(id||"").slice(0,8)}
 function jobDisplayTitle(j){
   const c=(j.candidates||[])[0];
   const fallback=c?(c.manual_title||c.title||c.generated_title||hookTitle(c.subtitle_override||c.subtitle_text)):"";
@@ -2212,7 +2214,7 @@ function renderQueueJob(j,i=0){
     <div class="job-header">
       <div>
         <div class="job-title-row"><h3>${esc(jobDisplayTitle(j))}</h3><button class="rename-btn" data-rename="${esc(j.id)}" type="button" aria-label="Rename job" title="Rename job">${PENCIL_ICON}</button></div>
-        <div class="job-id">${esc(j.id)}</div>
+        <div class="job-id" title="${esc(j.id)}">${esc(shortId(j.id))}</div>
       </div>
       <div class="job-header-side">
         ${campaignTag(j)}${platformIcon(j.platform,"sm")}
@@ -2803,7 +2805,7 @@ function renderDetail(j){
   const candidates=j.candidates||[];
   return `<div class="panel detail-head">
     <div class="job-header">
-      <div><h2>${esc(jobDisplayTitle(j))}</h2><div class="job-id">${esc(j.id)}</div><div class="detail-meta"><span class="tag">${esc(stageLabel(j.status))}</span><span class="tag">${platformIcon(j.platform,"sm")}${esc(platformLabel(j.platform))}</span><span class="tag">${esc(String(j.split_ratio||70))}:${esc(String(100-Number(j.split_ratio||70)))}</span><span class="tag">${esc(jobLanguageLine(j).replace(/^Language: /,""))}</span></div></div>
+      <div><h2>${esc(jobDisplayTitle(j))}</h2><div class="job-id" title="${esc(j.id)}">${esc(shortId(j.id))}</div><div class="detail-meta"><span class="tag">${esc(stageLabel(j.status))}</span><span class="tag">${platformIcon(j.platform,"sm")}${esc(platformLabel(j.platform))}</span><span class="tag">${esc(String(j.split_ratio||70))}:${esc(String(100-Number(j.split_ratio||70)))}</span><span class="tag">${esc(jobLanguageLine(j).replace(/^Language: /,""))}</span></div></div>
       <div class="actions" style="margin-top:0">${isCancellable(j.status)?`<button class="secondary cancel-job-btn" data-cancel-job="${esc(j.id)}" type="button">Cancel job</button>`:""}${j.status==="failed"?`<button class="secondary cancel-job-btn" data-retry-job="${esc(j.id)}" type="button">Retry job</button>`:""}<button class="secondary" data-back-queue type="button">Back</button></div>
     </div>
     <div class="muted" style="margin-top:7px">${esc(j.youtube_url||"")}</div>

@@ -679,21 +679,60 @@ def ensure_disk_space(stage, need_mb=0):
         )
 
 
-def estimate_download_mb(youtube_url):
-    """Size of the formats download_video() will fetch, from
-    `yt-dlp -j` (filesize or filesize_approx). None if unknown."""
+def youtube_info(youtube_url, with_format=True):
+    """`yt-dlp -j` metadata (title, sizes, …) without downloading; None on failure.
+    with_format: resolve download_video()'s formats (sizes); False = title only."""
     try:
-        _, output = run_command(
-            [
-                "yt-dlp", "-j", "--no-playlist", "--no-warnings",
-                "-f", YTDLP_FORMAT, "--", youtube_url,
-            ]
-        )
-        info = json.loads(output.strip().splitlines()[-1])
+        args = ["yt-dlp", "-j", "--no-playlist", "--no-warnings"]
+        if with_format:
+            args += ["-f", YTDLP_FORMAT]
+        _, output = run_command(args + ["--", youtube_url])
+        return json.loads(output.strip().splitlines()[-1])
     except JobCancelled:
         raise
     except Exception as exc:
-        log(f"Download size pre-flight skipped: {str(exc)[-200:]}")
+        log(f"yt-dlp metadata skipped: {str(exc)[-200:]}")
+        return None
+
+
+def store_source_title(youtube_url, info):
+    """134: source_videos.title = the YouTube title (was never set → every job showed
+    "AI-Generated Highlight"). Only fills an empty title."""
+    title = ((info or {}).get("title") or "").strip()[:300]
+    if not title:
+        return
+    with db() as conn:
+        conn.execute(
+            "UPDATE source_videos SET title = %s WHERE youtube_url = %s AND COALESCE(title, '') = ''",
+            (title, youtube_url),
+        )
+        conn.commit()
+
+
+_title_tried = set()  # per process: a removed/private video is not retried every sweep
+
+
+def backfill_source_titles(limit=3):
+    """Idle: fetch titles for sources that predate 134 (metadata only, a few per sweep)."""
+    with db() as conn:
+        rows = conn.execute(
+            "SELECT youtube_url FROM source_videos WHERE COALESCE(title, '') = '' "
+            "AND NOT (youtube_url = ANY(%s)) ORDER BY created_at DESC LIMIT %s",
+            (list(_title_tried), limit),
+        ).fetchall()
+    for row in rows:
+        _title_tried.add(row["youtube_url"])
+        info = youtube_info(row["youtube_url"], with_format=False)
+        if info and info.get("title"):
+            store_source_title(row["youtube_url"], info)
+            log(f"Source title backfilled: {info['title'][:80]}")
+
+
+def estimate_download_mb(youtube_url, info=None):
+    """Size of the formats download_video() will fetch, from
+    `yt-dlp -j` (filesize or filesize_approx). None if unknown."""
+    info = info or youtube_info(youtube_url)
+    if not info:
         return None
     formats = info.get("requested_formats") or [info]
     sizes = [
@@ -874,7 +913,7 @@ def maybe_run_sweeps(force=False):
     if not force and time.monotonic() - _last_sweep < SWEEP_INTERVAL_SECONDS:
         return
     _last_sweep = time.monotonic()
-    for sweep in (retention_sweep, orphan_sweep):
+    for sweep in (retention_sweep, orphan_sweep, backfill_source_titles):
         try:
             sweep()
         except Exception as exc:
@@ -1645,7 +1684,9 @@ def download_video(
     # R-14: refuse before downloading rather than filling the disk
     # half-way. yt-dlp keeps the video and audio parts until the merge,
     # so the peak is about twice the final size.
-    size_mb = estimate_download_mb(youtube_url)
+    info = youtube_info(youtube_url)
+    store_source_title(youtube_url, info)
+    size_mb = estimate_download_mb(youtube_url, info)
     if size_mb is not None:
         log(f"Download pre-flight: ~{size_mb:.0f} MB")
     ensure_disk_space("download", need_mb=2 * (size_mb or 0))
@@ -7449,6 +7490,10 @@ def main():
     # R-15: requeue whatever the previous worker left mid-flight
     # (was: reset_orphans(), which failed it outright).
     reclaim_stale(startup=True)
+    try:
+        backfill_source_titles(limit=20)  # 134: titles for sources from before the fix
+    except Exception as exc:
+        log(f"Title backfill failed: {exc}")
 
     while True:
 
