@@ -369,7 +369,9 @@ server-side). Windows, caps and payout math live ONLY in `shared/payouts.py` (La
 advice = `payouts.claim_advice` per post (views history `clip_post_views` gives the 24 h growth); claimed stores
 `claimed_views` + `expected_rp`; amounts reach the UI pre-formatted (`*_fmt`), never computed in index.html.
 Send to phone (141): `telegram_sends` worker queue to the user's OWN chat (user_settings TELEGRAM_CHAT_ID; admin
-falls back to env TELEGRAM_CHAT_ID, members never); ≤ 50 MB or `shrink_for_telegram()`; island via activity kind telegram. Payout amounts
+falls back to env TELEGRAM_CHAT_ID, members never); ≤ 50 MB or `shrink_for_telegram()`; island via activity kind telegram.
+Digest (142): the notifier sends each user's `shared/digest.py` text at DIGEST_HOUR (09:00 WIB) to their own chat;
+claim advice for any caller = `shared/post_advice.advice_for` (one source). `--preview-digest` prints without sending. Payout amounts
 come only from Lane B's `shared/payouts.py` (P3), never hand-rolled.
 
 ## Frontend shell (R-11/R-12/R-13, lane B 067-073; badge v2.1117)

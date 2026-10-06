@@ -113,3 +113,4 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 139 · 2026-10-06 · Login limits: 5/username+IP, 50/username any IP, 20/IP per 15 min (fixes username lockout DoS, Lane C Low) · app/auth.py, main.py
 140 · 2026-10-06 · CLIPFLOW_ENV=staging → cookie clipflow_staging_session (prod unchanged) so prod/staging sessions don't collide · app/auth.py, settings, .env.example
 141 · 2026-10-07 · P2 (6a): Send to phone — per-user Telegram chat (Account), worker queue telegram_sends, ≤ 50 MB or re-encoded, caption as 2nd message, island progress · main.py, worker.py, index.html
+142 · 2026-10-07 · P2 (6b): per-user 09:00 WIB Telegram digest (ready to post, claim now, closing in 48 h, stale views, IME week) via notifier + shared/digest.py; advice glue → shared/post_advice.py · notifier, shared, main.py

@@ -12,6 +12,11 @@ The first run with no state file records everything already in the DB
 as seen (baseline) instead of alerting about history.
 
 `python notifier.py --send-summary` sends one summary now and exits.
+
+P2 part 6b (142): plus one personal digest per user at DIGEST_HOUR (09:00 WIB) to
+that user's OWN chat (user_settings TELEGRAM_CHAT_ID; an admin without one gets it
+in TELEGRAM_CHAT_ID; a member never does), built by shared/digest.py from
+read-only queries. `--preview-digest` prints every user's digest and sends nothing.
 """
 
 import json
@@ -25,6 +30,8 @@ from pathlib import Path
 
 import psycopg
 import requests
+
+from shared import digest  # 142: copied into the image; campaign rules mounted at /app/campaigns
 
 WIB = timezone(timedelta(hours=7))  # Asia/Jakarta, no DST
 
@@ -57,6 +64,7 @@ POLL_SECONDS = env_int("POLL_SECONDS", 30)
 DISK_ALERT_PCT = env_int("DISK_ALERT_PCT", 15)
 MAX_PER_HOUR = env_int("MAX_PER_HOUR", 20)
 SUMMARY_HOUR = env_int("SUMMARY_HOUR", 8)
+DIGEST_HOUR = env_int("DIGEST_HOUR", 9)
 HEALTH_FAILS_TO_ALERT = 2
 LOOKBACK = "48 hours"  # events older than this are never alerted
 TAG = os.getenv("NOTIFIER_TAG") or ""  # e.g. "[TEST] " for a trial run
@@ -106,6 +114,7 @@ def load_state():
         state.setdefault("backend_down", False)
         state.setdefault("disk_low", False)
         state.setdefault("summary_date", "")
+        state.setdefault("digest_dates", {})
         state["fresh"] = False
         return state
     except FileNotFoundError:
@@ -138,14 +147,14 @@ def budget_left(state):
     return MAX_PER_HOUR - len(state["sent_times"])
 
 
-def send(state, text):
-    """True if Telegram accepted the message. Never logs the token."""
+def send(state, text, chat_id=None):
+    """True if Telegram accepted the message. Never logs the token. chat_id None = the ops chat."""
     if budget_left(state) <= 0:
         return False
     try:
         r = requests.post(
             f"https://api.telegram.org/bot{TOKEN}/sendMessage",
-            json={"chat_id": CHAT_ID, "text": TAG + text, "disable_web_page_preview": True},
+            json={"chat_id": chat_id or CHAT_ID, "text": TAG + text, "disable_web_page_preview": True},
             timeout=15,
         )
     except requests.RequestException as exc:
@@ -262,6 +271,31 @@ def summary_text(conn):
             f"Disk free: {pct:.0f}% ({free_gb:.0f} GB)")
 
 
+def digest_targets(conn):
+    """[(user_id, username, chat_id)] for active users with a chat (own, or the ops chat for admins)."""
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT u.id, u.username, u.role, NULLIF(TRIM(us.value), '')
+            FROM users u
+            LEFT JOIN user_settings us ON us.user_id = u.id AND us.key = 'TELEGRAM_CHAT_ID'
+            WHERE u.active ORDER BY u.created_at
+            """
+        )
+        rows = cur.fetchall()
+    out = []
+    for uid, name, role, own in rows:
+        chat = own or (CHAT_ID if role == "admin" else None)
+        if chat:
+            out.append((uid, name, chat))
+    return out
+
+
+def digest_for(conn, user_id, now):
+    with conn.cursor() as cur:
+        return digest.build(cur, user_id, now)
+
+
 def disk_free():
     u = shutil.disk_usage(DATA_ROOT)
     return 100.0 * u.free / u.total, u.free / 1e9
@@ -311,12 +345,28 @@ def poll(state):
             today = datetime.now(WIB).date().isoformat()
             if datetime.now(WIB).hour >= SUMMARY_HOUR and state["summary_date"] != today:
                 outbox.append((None, summary_text(conn), lambda: state.update(summary_date=today)))
+
+            # 142: one personal digest per user per day, at/after DIGEST_HOUR (catches up after a restart).
+            if datetime.now(WIB).hour >= DIGEST_HOUR:
+                for uid, name, chat in digest_targets(conn):
+                    if state["digest_dates"].get(uid) == today:
+                        continue
+                    mark = (lambda u=uid: state["digest_dates"].__setitem__(u, today))
+                    try:
+                        text = digest_for(conn, uid, datetime.now(timezone.utc))
+                    except Exception as exc:  # one user's bad data must not stop the others
+                        log(f"digest for {name} failed: {type(exc).__name__}: {exc}")
+                        continue
+                    if text:
+                        outbox.append((None, text, mark, chat))
+                    else:
+                        mark()  # nothing to say today
     except psycopg.Error as exc:
         log(f"db error: {type(exc).__name__}: {exc}")
 
     if state["fresh"]:
         # First run: history is not news. Mark it seen, send nothing.
-        for key, _, on_sent in outbox:
+        for key, _, on_sent, *_ in outbox:
             if key and not key.startswith(("health:", "disk:")):
                 state["sent"][key] = now
             elif key is None and on_sent:
@@ -325,11 +375,11 @@ def poll(state):
         state["fresh"] = False
         outbox = [o for o in outbox if o[0] and o[0].startswith(("health:", "disk:"))]
 
-    for i, (key, text, on_sent) in enumerate(outbox):
+    for i, (key, text, on_sent, *chat) in enumerate(outbox):
         if budget_left(state) <= 0:
             log(f"hourly cap {MAX_PER_HOUR} reached; {len(outbox) - i} pending, retried next poll")
             break
-        if send(state, text):
+        if send(state, text, chat[0] if chat else None):
             if key and not key.startswith(("health:", "disk:")):
                 state["sent"][key] = now
             if on_sent:
@@ -347,6 +397,12 @@ def main():
         while True:
             time.sleep(3600)
 
+    if "--preview-digest" in sys.argv:  # 142: print, never send
+        with connect() as conn:
+            for uid, name, chat in digest_targets(conn):
+                text = digest_for(conn, uid, datetime.now(timezone.utc))
+                print(f"--- {name} → chat …{str(chat)[-3:]} ---\n{text or '(nothing today: no message)'}")
+        return
     state = load_state()
     if "--send-summary" in sys.argv:
         with connect() as conn:
@@ -355,7 +411,7 @@ def main():
         return
 
     log(f"started: poll {POLL_SECONDS}s, disk alert <{DISK_ALERT_PCT}%, cap {MAX_PER_HOUR}/h, "
-        f"summary {SUMMARY_HOUR:02d}:00 WIB, state {STATE_PATH}")
+        f"summary {SUMMARY_HOUR:02d}:00 WIB, digests {DIGEST_HOUR:02d}:00 WIB, state {STATE_PATH}")
     while True:
         try:
             poll(state)

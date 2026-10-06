@@ -95,7 +95,10 @@ services:
   # Outbound-only Telegram alerts (change 066). One-time on the host:
   #   mkdir -p /data/notifier && chown 10001:10001 /data/notifier && chmod 700 /data/notifier
   notifier:
-    build: ./notifier
+    build:
+      context: ./notifier
+      additional_contexts:
+        shared: ./shared                # 142: per-user digest uses shared/digest.py
     container_name: riftstorm-notifier
     restart: unless-stopped
     environment:
@@ -108,6 +111,7 @@ services:
     volumes:
       - /data:/data:ro                  # disk-free check only
       - /data/notifier:/data/notifier   # state.json (dedupe), the only writable path
+      - ./docs/campaigns:/app/campaigns:ro  # 142: campaign rules for the digest (weeks, payouts)
     read_only: true
     tmpfs: [/tmp]
     security_opt: ["no-new-privileges:true"]

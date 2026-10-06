@@ -25,7 +25,7 @@ from starlette.concurrency import run_in_threadpool
 from app import auth
 
 from shared.ai import router as ai_router
-from shared import campaigns, descriptions, edit_spec as edit_specs, hook_ranges, languages, origins, payouts, posts as post_rules, rule_checks
+from shared import campaigns, descriptions, edit_spec as edit_specs, hook_ranges, languages, origins, payouts, post_advice, posts as post_rules, rule_checks
 from shared.errors import AINotConfiguredError
 from shared.fonts import normalize_caption_font
 from shared.settings import (
@@ -1741,7 +1741,7 @@ def publish_queue(request: Request):
                 now_ = datetime.now(timezone.utc)
                 for r in cur.fetchall():
                     d = _post_row(r)
-                    d["advice"] = _claim_advice(cur, user["id"], d, now_)
+                    d["advice"] = post_advice.advice_for(cur, user["id"], d, now_)
                     d.update(_post_money(d))
                     posts[(d["candidate_id"], d["platform"])] = d
             cur.execute(
@@ -1818,18 +1818,13 @@ def publish_queue(request: Request):
 # per-account monthly cap (payouts.cap_problem) and this platform's length → shown on the row; a
 # post made anyway is stored eligible=false with the reasons. One source: shared/payouts.py.
 
-def _wib_month_bounds(when: datetime) -> tuple[datetime, datetime]:
-    w = when.astimezone(payouts.WIB)
-    start = w.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    end = (start + timedelta(days=32)).replace(day=1)
-    return start, end
 
 
 def _account_usage(cur, user_id: str, campaign: Optional[str], when: datetime) -> dict:
     """Eligible, non-dropped posts per account for this campaign in when's WIB month."""
     if not campaign:
         return {}
-    start, end = _wib_month_bounds(when)
+    start, end = post_advice.wib_month_bounds(when)
     cur.execute(
         """
         SELECT account_id, COUNT(*) FROM clip_posts
@@ -1871,33 +1866,8 @@ def _post_warnings(rules, campaign, platform, duration, when, account=None, used
     return out
 
 
-def _views_day_ago(cur, post_id: str, now: datetime) -> Optional[int]:
-    """Views from an entry 18–48 h old (the newest such), for claim_advice's 24 h growth; None = no data."""
-    cur.execute(
-        """
-        SELECT views FROM clip_post_views
-        WHERE post_id = %s AND at <= %s AND at >= %s ORDER BY at DESC LIMIT 1
-        """,
-        (post_id, now - timedelta(hours=18), now - timedelta(hours=48)),
-    )
-    row = cur.fetchone()
-    return int(row[0]) if row else None
 
 
-def _claims_this_month(cur, user_id: str, post: dict) -> int:
-    """Eligible claimed/paid posts on this account + campaign in the WIB month of this upload (not this one)."""
-    if not post.get("account_id") or not post.get("posted_at"):
-        return 0
-    start, end = _wib_month_bounds(_parse_ts(post["posted_at"], "posted_at"))
-    cur.execute(
-        """
-        SELECT COUNT(*) FROM clip_posts
-        WHERE user_id = %s AND account_id = %s AND campaign IS NOT DISTINCT FROM %s AND id <> %s
-          AND eligible AND status IN ('claimed', 'paid') AND posted_at >= %s AND posted_at < %s
-        """,
-        (user_id, post["account_id"], post.get("campaign"), post["id"], start, end),
-    )
-    return cur.fetchone()[0]
 
 
 def _post_money(post: dict) -> dict:
@@ -1911,28 +1881,6 @@ def _post_money(post: dict) -> dict:
     return out
 
 
-def _claim_advice(cur, user_id: str, post: dict, now: datetime) -> Optional[dict]:
-    """payouts.claim_advice for a posted/claimed/paid post; None for planned/dropped or no campaign."""
-    if post["status"] not in ("posted", "claimed", "paid") or not post.get("campaign"):
-        return None
-    rules = campaigns.get(post["campaign"])
-    if not rules:
-        return None
-    if post.get("eligible") is False:
-        return {"action": "missed", "reason": "not_eligible", "message": post.get("ineligible_reason") or "Not eligible",
-                "payout_now_fmt": None, "views_needed": None, "deadline": None}
-    model = payouts.model_from_rules(rules)
-    _, end = payouts.campaign_period(rules)
-    a = payouts.claim_advice(
-        model, views=int(post.get("views") or 0), uploaded_at=_parse_ts(post["posted_at"], "posted_at"), now=now,
-        claimed=post["status"] in ("claimed", "paid"),
-        account_claims_this_month=_claims_this_month(cur, user_id, post),
-        views_24h_ago=_views_day_ago(cur, post["id"], now),
-        campaign_end=datetime.combine(end + timedelta(days=1), datetime.min.time(), payouts.WIB) if end else None,
-    )
-    return {"action": a.action, "reason": a.reason, "message": a.message,
-            "payout_now_fmt": payouts.format_with_idr(a.payout_now, a.currency) if a.payout_now is not None else None,
-            "views_needed": a.views_needed, "deadline": a.deadline.isoformat() if a.deadline else None}
 
 
 def _eligibility_for(cur, user_id: str, candidate_id: str, platform: str, account_id: Optional[str],
@@ -2135,7 +2083,7 @@ def update_post(post_id: str, payload: PostUpdate, request: Request):
                         else "This clip already has a post on that account",
                     )
             post = _fetch_post(cur, post_id, user["id"])
-            post["advice"] = _claim_advice(cur, user["id"], post, datetime.now(timezone.utc))
+            post["advice"] = post_advice.advice_for(cur, user["id"], post, datetime.now(timezone.utc))
             post.update(_post_money(post))
         conn.commit()
     return post
