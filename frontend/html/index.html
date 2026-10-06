@@ -3506,7 +3506,7 @@ document.addEventListener("click",e=>{
   const rm=e.target.closest("[data-account-remove]");
   if(rm){
     if(!rm.classList.contains("is-confirm")){rm.classList.add("is-confirm");rm.textContent="Confirm remove";setTimeout(()=>{if(document.contains(rm)){rm.classList.remove("is-confirm");rm.textContent="Remove"}},4000);return}
-    setBusy(rm,true);api("/api/accounts/"+encodeURIComponent(rm.dataset.accountRemove),{method:"DELETE"}).then(()=>{accountsMessage("Account removed.",true);return loadAccounts()}).catch(err=>{setBusy(rm,false);accountsMessage(err.message)});
+    setBusy(rm,true);api("/api/accounts/"+encodeURIComponent(rm.dataset.accountRemove),{method:"DELETE"}).then(d=>{accountsMessage(d?.paused?d.detail:"Account removed.",true);return loadAccounts()}).catch(err=>{setBusy(rm,false);accountsMessage(err.message)});
   }
 });
 async function loadSettings(){

@@ -341,15 +341,22 @@ leave zero active admins (409, rows locked). CORS origins from env `CORS_ALLOWED
 
 ## Ownership (P1.5) — every query is scoped by `user_id`
 
-Owned tables carry `user_id` NOT NULL (`jobs`, `watermark_assets`, `platform_accounts` (128); candidates/versions via
+Owned tables carry `user_id` NOT NULL (`jobs`, `watermark_assets`, `platform_accounts` (128), `clip_posts` (129); candidates/versions via
 their job; **every new table from now on**). Rule: every SQL that reads or writes user data filters by the caller's id
 (`current_user(request)["id"]`); another user's row answers **404**, never 403/200. The middleware guard
 `_path_owned()` already enforces it for `/api/jobs/{id}[/candidates/{cid}]…`, `/api/assets/watermarks/{id}…` and
-`/api/accounts/{id}…`;
+`/api/accounts/{id}…`, `/api/posts/{id}…`;
 lists and inserts do it in the handler. A new route family keyed by an owned id → add its regex to the guard.
 Admin is scoped like everyone except `/api/activity` (sees all, `owner` set). Campaigns are a shared catalogue
 (admin edits; P3 adds `created_by` + `visibility`); `source_videos` is a shared download cache.
 Writing tests (cross-user, settings, qa-tmp users) run on staging only (:8080/:8001), never production.
+
+## Posts (P2, 129)
+
+`clip_posts` = one row per clip per platform post; every writer (manual UI now, auto-poster/view tracker later)
+validates through `shared/posts.py` (status lifecycle, required fields, URL host per platform, paid_rp whole IDR).
+Posted rows are history: never deleted (drop them); an account with posts is paused, never deleted. Payout amounts
+come only from Lane B's `shared/payouts.py` (P3), never hand-rolled.
 
 ## Frontend shell (R-11/R-12/R-13, lane B 067-073; badge v2.1117)
 

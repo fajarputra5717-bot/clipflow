@@ -83,7 +83,9 @@ async function mockApi(page, api) {
     { const m = path.match(/^\/api\/accounts\/([^/]+)$/);
       if (m) { const a = (api.accounts || []).find((x) => x.id === m[1]); if (!a) return json({ detail: "Account not found" }, 404);
         if (method === "PATCH") { Object.assign(a, body); return json(a); }
-        if (method === "DELETE") { api.accounts = api.accounts.filter((x) => x !== a); return json({ ok: true }); } } }
+        if (method === "DELETE") {
+          if (a.posts) { a.active = false; return json({ ok: true, paused: true, detail: `Paused instead of removed: ${a.posts} posts use this account` }); }
+          api.accounts = api.accounts.filter((x) => x !== a); return json({ ok: true }); } } }
     if (path === "/api/admin/users" && method === "GET") return json({ users: api.users || [] });
     if (path === "/api/admin/users" && method === "POST") {
       if ((api.users || []).some((u) => u.username === body.username)) return json({ detail: `Username '${body.username}' is taken` }, 409);

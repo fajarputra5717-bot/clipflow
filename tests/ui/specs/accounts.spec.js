@@ -27,3 +27,13 @@ test("add, duplicate, pause/resume and remove a posting account", async ({ app, 
   await rm.click();
   await expect(app.locator("#accountsList")).toContainText("No posting accounts yet.");
 });
+
+test("removing an account that has posts pauses it and says so", async ({ app, api }) => {
+  api.accounts = [{ id: "acc-used", platform: "tiktok", platform_name: "TikTok", handle: "used", note: null, active: true, posts: 2, created_at: new Date().toISOString() }];
+  await app.reload(); await app.waitForResponse((r) => r.url().includes("/api/accounts"));
+  await app.locator('[data-nav="settings"] >> visible=true').first().click();
+  const rm = app.locator('[data-account-row="acc-used"] [data-account-remove]');
+  await rm.click(); await rm.click();
+  await expect(app.locator("#accountsMsg")).toContainText("Paused instead of removed: 2 posts");
+  await expect(app.locator('[data-account-row="acc-used"]')).toContainText("Paused");
+});
