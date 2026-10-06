@@ -949,7 +949,7 @@ def login(payload: LoginRequest, request: Request):
             auth.record_login_failure(conn, username, ip)
             conn.commit()
             raise HTTPException(status_code=401, detail="Wrong username or password")
-        auth.clear_login_failures(conn, username)
+        auth.clear_login_failures(conn, username, ip)
         token = auth.create_session(conn, user["id"], ip, request.headers.get("user-agent"))
         conn.commit()
     must_change = bool(user.pop("must_change_password", False))
