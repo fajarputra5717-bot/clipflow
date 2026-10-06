@@ -324,7 +324,9 @@ Every `/api/*` request needs a principal; the `require_user` **middleware** in m
 unknown `/api` paths also 401) puts `{id, username, role, via}` on `request.state.user`; read it with
 `current_user(request)` / `require_admin(request)`. Sources (`app/auth.py`): session cookie `clipflow_session`
 (HttpOnly, SameSite=Lax; DB row in `user_sessions`, token stored as sha256; disabled user = dead session) →
-`X-ClipFlow-Key` = env `CLIPFLOW_API_KEY` → the bootstrap admin (legacy, until the owner confirms removal) →
+per-user API token `cf_…` (`X-ClipFlow-Key` or `Authorization: Bearer`; `api_tokens` stores sha256 only;
+managed in the Account sheet, never by a token; 124) → `X-ClipFlow-Key` = env `CLIPFLOW_API_KEY` → the bootstrap
+admin (legacy, until the owner confirms removal) →
 `?mt=` per-user media token (`exp.user_id.sig`, GET/HEAD on `MEDIA_PATH_RE` only). Open: `/api/auth/login|logout`,
 `/health`, `/`. Passwords argon2id; login 429 after 5 fails/user or 20/IP per 15 min; no signup route.
 First run: `CLIPFLOW_ADMIN_USER/PASSWORD` (env-only, read only while `users` is empty). Cookie-authed writes

@@ -72,6 +72,20 @@ SCHEMA = [
     )
     """,
     "CREATE INDEX IF NOT EXISTS idx_login_failures_at ON login_failures (at)",
+    # Part 4: per-user API tokens for scripts. Only the sha256 is stored; `prefix`
+    # (first chars) lets the UI tell tokens apart. Deleting the row revokes it.
+    """
+    CREATE TABLE IF NOT EXISTS api_tokens (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        token_hash TEXT NOT NULL UNIQUE,
+        prefix TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        last_used_at TIMESTAMPTZ
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_api_tokens_user ON api_tokens (user_id)",
     # Server-side secrets that must never be served (app_settings is): media-token HMAC key.
     """
     CREATE TABLE IF NOT EXISTS server_secrets (
@@ -348,3 +362,77 @@ def active_user(conn, user_id: str) -> dict | None:
         )
         row = cur.fetchone()
     return {"id": row[0], "username": row[1], "role": row[2]} if row else None
+
+
+# ---------- API tokens (part 4) ----------
+
+API_TOKEN_PREFIX = "cf_"
+API_TOKEN_MAX_PER_USER = 20
+API_TOKEN_TOUCH_SECONDS = 300
+
+
+def create_api_token(conn, user_id: str, name: str) -> dict:
+    """Returns the plaintext token ONCE; only its sha256 is stored."""
+    with conn.cursor() as cur:
+        cur.execute("SELECT COUNT(*) FROM api_tokens WHERE user_id = %s", (user_id,))
+        if cur.fetchone()[0] >= API_TOKEN_MAX_PER_USER:
+            raise ValueError(f"At most {API_TOKEN_MAX_PER_USER} tokens per user; revoke one first")
+        token = API_TOKEN_PREFIX + secrets.token_urlsafe(32)
+        tid = str(uuid.uuid4())
+        cur.execute(
+            """
+            INSERT INTO api_tokens (id, user_id, name, token_hash, prefix)
+            VALUES (%s, %s, %s, %s, %s)
+            RETURNING created_at
+            """,
+            (tid, user_id, name, token_hash(token), token[:10]),
+        )
+        created = cur.fetchone()[0]
+    return {"id": tid, "name": name, "prefix": token[:10], "token": token,
+            "created_at": created.isoformat(), "last_used_at": None}
+
+
+def list_api_tokens(conn, user_id: str) -> list:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, name, prefix, created_at, last_used_at FROM api_tokens
+            WHERE user_id = %s ORDER BY created_at DESC
+            """,
+            (user_id,),
+        )
+        return [
+            {"id": r[0], "name": r[1], "prefix": r[2],
+             "created_at": r[3].isoformat() if r[3] else None,
+             "last_used_at": r[4].isoformat() if r[4] else None}
+            for r in cur.fetchall()
+        ]
+
+
+def delete_api_token(conn, user_id: str, token_id: str) -> bool:
+    with conn.cursor() as cur:
+        cur.execute("DELETE FROM api_tokens WHERE id = %s AND user_id = %s", (token_id, user_id))
+        return cur.rowcount > 0
+
+
+def api_token_user(conn, token: str) -> dict | None:
+    if not token.startswith(API_TOKEN_PREFIX):
+        return None
+    th = token_hash(token)
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT u.id, u.username, u.role,
+                   EXTRACT(EPOCH FROM NOW() - COALESCE(t.last_used_at, 'epoch'))
+            FROM api_tokens t JOIN users u ON u.id = t.user_id
+            WHERE t.token_hash = %s AND u.active
+            """,
+            (th,),
+        )
+        row = cur.fetchone()
+        if not row:
+            return None
+        if float(row[3]) > API_TOKEN_TOUCH_SECONDS:
+            cur.execute("UPDATE api_tokens SET last_used_at = NOW() WHERE token_hash = %s", (th,))
+            conn.commit()
+    return {"id": row[0], "username": row[1], "role": row[2]}

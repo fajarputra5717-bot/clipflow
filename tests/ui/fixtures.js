@@ -67,6 +67,14 @@ async function mockApi(page, api) {
       return json({ user: api.user });
     }
     if (path === "/api/auth/logout") { api.user = null; return json({ ok: true }); }
+    if (path === "/api/auth/tokens" && method === "GET") return json({ tokens: api.tokens || [] });
+    if (path === "/api/auth/tokens" && method === "POST") {
+      const t = { id: "tok-" + ((api.tokens || []).length + 1), name: body?.name, prefix: "cf_mock123", created_at: iso(0), last_used_at: null };
+      api.tokens = [t, ...(api.tokens || [])];
+      return json({ ...t, token: "cf_mock123-full-secret" });
+    }
+    { const m = path.match(/^\/api\/auth\/tokens\/([^/]+)$/);
+      if (m && method === "DELETE") { api.tokens = (api.tokens || []).filter((t) => t.id !== m[1]); return json({ ok: true }); } }
     if (method === "GET" && path === "/api/auth/me") return api.user ? json({ user: api.user, via: "session" }) : json({ detail: "Unauthorized" }, 401);
     if (method === "GET") {
       if (path === "/api/media-token") return json({ token: "mock-token", expires_at: iso(-720) });

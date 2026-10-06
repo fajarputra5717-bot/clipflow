@@ -1209,6 +1209,25 @@ select::-ms-expand{display:none}
 .account-msg.is-ok{color:var(--badge-done-fg,#248a3d)}
 .account-signout{margin-top:var(--sp-3);padding-top:var(--sp-2);border-top:1px solid var(--line)}
 .account-signout button{border-radius:999px;min-height:var(--hit)}
+/* API tokens (P1.5 part 4) */
+.account-tokens{margin-top:var(--sp-3);padding-top:var(--sp-2);border-top:1px solid var(--line)}
+.account-tokens h3{font-size:17px;margin:0 0 4px}
+.account-tokens .hint{color:var(--muted);font-size:13px;margin:0}
+.account-tokens code{font-size:12px}
+.token-form{display:flex;gap:var(--sp-1);align-items:flex-end}
+.token-form .field{flex:1;min-width:0}
+.token-form button,.token-new-row button,.token-list button{border-radius:999px;min-height:var(--hit);white-space:nowrap}
+.token-new{margin-top:var(--sp-1);padding:var(--sp-2);border-radius:16px;background:var(--fill)}
+.token-new-row{display:flex;gap:var(--sp-1);margin-top:var(--sp-1)}
+.token-new-row input{flex:1;min-width:0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px}
+.token-list{list-style:none;margin:var(--sp-2) 0 0;padding:0;display:grid;gap:var(--sp-1)}
+.token-list li{display:flex;align-items:center;gap:var(--sp-1);padding:10px 12px;border-radius:14px;background:var(--panel2)}
+.token-list .token-meta{flex:1;min-width:0}
+.token-list .token-name{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.token-list small{display:block;color:var(--muted);font-size:12px}
+.token-list .token-empty{color:var(--muted);font-size:13px;background:transparent;padding:0}
+.token-list button.is-confirm{color:var(--badge-failed-fg,#d70015)}
+@media (max-width:600px){.token-form{flex-direction:column;align-items:stretch}}
 </style>
 </head>
 <body>
@@ -1419,6 +1438,20 @@ select::-ms-expand{display:none}
         <button class="primary" type="submit" id="pwSubmit">Change password</button>
         <input type="text" name="username" autocomplete="username" id="pwUser" hidden>
       </form>
+      <section class="account-tokens" aria-labelledby="tokensTitle">
+        <h3 id="tokensTitle">API tokens</h3>
+        <p class="hint">For scripts and automations. Send it as <code>Authorization: Bearer &lt;token&gt;</code>. A token acts as you; revoke it when it's no longer used.</p>
+        <form class="token-form" id="tokenForm" novalidate>
+          <div class="field"><label for="tokenName">Token name</label><input id="tokenName" maxlength="60" placeholder="e.g. n8n import" autocomplete="off"></div>
+          <button class="secondary" type="submit" id="tokenCreate">Create token</button>
+        </form>
+        <div class="account-msg" id="tokenMsg" role="status" aria-live="polite"></div>
+        <div class="token-new" id="tokenNew" hidden>
+          <p class="hint">Copy it now. It won't be shown again.</p>
+          <div class="token-new-row"><input id="tokenValue" readonly spellcheck="false" aria-label="New API token"><button class="secondary" type="button" data-token-copy>Copy</button></div>
+        </div>
+        <ul class="token-list" id="tokenList"></ul>
+      </section>
       <div class="account-signout"><button class="secondary" type="button" data-signout>Sign out</button></div>
     </div>
   </section>
@@ -1613,6 +1646,29 @@ function setCurrentUser(u){
 }
 const PASSWORD_MIN=12;
 function pwMessage(text,ok){const m=$("pwMsg");m.textContent=text||"";m.classList.toggle("is-ok",!!ok);m.classList.toggle("is-error",!!text&&!ok)}
+// API tokens (part 4): listed when the Account sheet opens; the plaintext is shown once after Create.
+function fmtWhen(iso){if(!iso)return "never";const d=new Date(iso);return d.toLocaleDateString(undefined,{day:"numeric",month:"short",year:"numeric"})}
+function tokenMessage(text,ok){const m=$("tokenMsg");m.textContent=text||"";m.classList.toggle("is-ok",!!ok);m.classList.toggle("is-error",!!text&&!ok)}
+async function loadTokens(){
+  const ul=$("tokenList");
+  try{
+    const {tokens}=await api("/api/auth/tokens");
+    ul.innerHTML=tokens.length?tokens.map(t=>`<li data-token-row="${esc(t.id)}"><span class="token-meta"><span class="token-name">${esc(t.name)}</span><small><code>${esc(t.prefix)}…</code> · created ${esc(fmtWhen(t.created_at))} · last used ${esc(fmtWhen(t.last_used_at))}</small></span><button class="secondary" type="button" data-token-revoke="${esc(t.id)}" aria-label="Revoke ${esc(t.name)}">Revoke</button></li>`).join("")
+      :`<li class="token-empty">No tokens yet.</li>`;
+  }catch(err){ul.innerHTML="";tokenMessage(err.message)}
+}
+$("tokenForm").addEventListener("submit",async e=>{
+  e.preventDefault();
+  const name=$("tokenName").value.trim();
+  if(!name){tokenMessage("Give the token a name.");$("tokenName").focus();return}
+  const btn=$("tokenCreate");setBusy(btn,true,"Creating…");tokenMessage("");
+  try{
+    const t=await api("/api/auth/tokens",{method:"POST",body:JSON.stringify({name})});
+    $("tokenName").value="";$("tokenValue").value=t.token;$("tokenNew").hidden=false;$("tokenValue").select();
+    await loadTokens();
+  }catch(err){tokenMessage(err.message)}
+  finally{setBusy(btn,false)}
+});
 $("passwordForm").addEventListener("submit",async e=>{
   e.preventDefault();
   const cur=$("pwCurrent").value,next=$("pwNew").value,conf=$("pwConfirm").value;
@@ -3518,7 +3574,16 @@ document.addEventListener("keydown",e=>{
 },true);
 document.addEventListener("click",e=>{
   if(e.target.closest("[data-sheet-close]"))return closeSheet();
-  if(e.target.closest("[data-account]")){pwMessage("");openSheet("accountSheet",e.target.closest("[data-account]"));closeSidebarDrawer(false);return}
+  if(e.target.closest("[data-account]")){pwMessage("");tokenMessage("");$("tokenNew").hidden=true;$("tokenValue").value="";openSheet("accountSheet",e.target.closest("[data-account]"));closeSidebarDrawer(false);loadTokens();return}
+  const tc=e.target.closest("[data-token-copy]");
+  if(tc){navigator.clipboard?.writeText($("tokenValue").value).then(()=>{tc.textContent="Copied";setTimeout(()=>{tc.textContent="Copy"},motionMs(1500)||1200)},()=>{$("tokenValue").select()});return}
+  const tr=e.target.closest("[data-token-revoke]");
+  if(tr){ // two-step: first click asks, second revokes (no browser dialog)
+    if(!tr.classList.contains("is-confirm")){tr.classList.add("is-confirm");tr.textContent="Confirm revoke";setTimeout(()=>{if(document.contains(tr)){tr.classList.remove("is-confirm");tr.textContent="Revoke"}},4000);return}
+    setBusy(tr,true,"Revoking…");
+    api("/api/auth/tokens/"+encodeURIComponent(tr.dataset.tokenRevoke),{method:"DELETE"}).then(()=>{tokenMessage("Token revoked.",true);return loadTokens()}).catch(err=>{setBusy(tr,false);tokenMessage(err.message)});
+    return;
+  }
   if(e.target.closest("[data-signout]")){setBusy(e.target.closest("[data-signout]"),true);signOut();return}
   const nav=e.target.closest("[data-nav]");if(nav){
     const v=nav.dataset.nav;

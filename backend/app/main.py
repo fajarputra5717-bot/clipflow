@@ -59,7 +59,9 @@ app = FastAPI(
 # a principal, resolved once by the middleware into request.state.user
 # ({id, username, role}); see app/auth.py:
 #   1. session cookie (browser login; HttpOnly, SameSite=Lax, DB row),
-#   2. X-ClipFlow-Key = env CLIPFLOW_API_KEY → the bootstrap admin
+#   2. a per-user API token `cf_…` (part 4) in X-ClipFlow-Key or
+#      Authorization: Bearer (scripts; hashed in api_tokens),
+#      or X-ClipFlow-Key = env CLIPFLOW_API_KEY → the bootstrap admin
 #      (legacy scripts; kept until the owner confirms removal),
 #   3. ?mt= per-user media token, GET/HEAD on MEDIA_PATH_RE only.
 # Open: /api/auth/login, /api/auth/logout, /health, /. Middleware (not a
@@ -127,6 +129,15 @@ def _resolve_principal(request: Request) -> Optional[dict]:
                 return user
 
         supplied = request.headers.get(API_KEY_HEADER, "")
+        bearer = request.headers.get("authorization", "")
+        if bearer[:7].lower() == "bearer ":
+            supplied = supplied or bearer[7:].strip()
+        if supplied.startswith(auth.API_TOKEN_PREFIX):
+            user = auth.api_token_user(conn, supplied)
+            if user:
+                user["via"] = "api_token"
+                return user
+            return None
         if (
             supplied
             and CLIPFLOW_API_KEY
@@ -227,7 +238,7 @@ app.add_middleware(
     allow_origins=cors_allowed_origins(),
     allow_credentials=False,
     allow_methods=["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"],
-    allow_headers=["Content-Type", API_KEY_HEADER],
+    allow_headers=["Content-Type", API_KEY_HEADER, "Authorization"],
 )
 
 
@@ -792,6 +803,10 @@ class LoginRequest(BaseModel):
     password: str = Field(max_length=256)
 
 
+class TokenCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=60)
+
+
 class PasswordChange(BaseModel):
     current_password: str = Field(max_length=256)
     new_password: str = Field(max_length=256)
@@ -859,6 +874,49 @@ def logout(request: Request):
 def auth_me(request: Request):
     user = current_user(request)
     return {"user": {k: user[k] for k in ("id", "username", "role")}, "via": user["via"]}
+
+
+# ---------- API tokens (part 4): per user, for scripts ----------
+# Managed from a browser session (or the legacy admin key), never by a token
+# itself, so a leaked token can't mint or list others.
+
+def _token_manager(request: Request) -> dict:
+    user = current_user(request)
+    if user["via"] not in ("session", "api_key"):
+        raise HTTPException(status_code=403, detail="Manage API tokens from a signed-in browser")
+    return user
+
+
+@app.get("/api/auth/tokens")
+def list_tokens(request: Request):
+    user = _token_manager(request)
+    with get_db() as conn:
+        return {"tokens": auth.list_api_tokens(conn, user["id"])}
+
+
+@app.post("/api/auth/tokens")
+def create_token(payload: TokenCreate, request: Request):
+    user = _token_manager(request)
+    name = payload.name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Give the token a name")
+    with get_db() as conn:
+        try:
+            token = auth.create_api_token(conn, user["id"], name)
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc))
+        conn.commit()
+    return token
+
+
+@app.delete("/api/auth/tokens/{token_id}")
+def revoke_token(token_id: str, request: Request):
+    user = _token_manager(request)
+    with get_db() as conn:
+        if not auth.delete_api_token(conn, user["id"], token_id):
+            raise HTTPException(status_code=404, detail="Token not found")
+        conn.commit()
+    return {"ok": True}
 
 
 @app.post("/api/auth/password")
