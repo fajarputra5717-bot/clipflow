@@ -1209,6 +1209,48 @@ select::-ms-expand{display:none}
 .account-msg.is-ok{color:var(--badge-done-fg,#248a3d)}
 .account-signout{margin-top:var(--sp-3);padding-top:var(--sp-2);border-top:1px solid var(--line)}
 .account-signout button{border-radius:999px;min-height:var(--hit)}
+/* API tokens (P1.5 part 4) */
+.account-tokens{margin-top:var(--sp-3);padding-top:var(--sp-2);border-top:1px solid var(--line)}
+.account-tokens h3{font-size:17px;margin:0 0 4px}
+.account-tokens .hint{color:var(--muted);font-size:13px;margin:0}
+.account-tokens code{font-size:12px}
+.token-form{display:flex;gap:var(--sp-1);align-items:flex-end}
+.token-form .field{flex:1;min-width:0}
+.token-form button,.token-new-row button,.token-list button{border-radius:999px;min-height:var(--hit);white-space:nowrap}
+.token-new{margin-top:var(--sp-1);padding:var(--sp-2);border-radius:16px;background:var(--fill)}
+.token-new-row{display:flex;gap:var(--sp-1);margin-top:var(--sp-1)}
+.token-new-row input{flex:1;min-width:0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px}
+.token-list{list-style:none;margin:var(--sp-2) 0 0;padding:0;display:grid;gap:var(--sp-1)}
+.token-list li{display:flex;align-items:center;gap:var(--sp-1);padding:10px 12px;border-radius:14px;background:var(--panel2)}
+.token-list .token-meta{flex:1;min-width:0}
+.token-list .token-name{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.token-list small{display:block;color:var(--muted);font-size:12px}
+.token-list .token-empty{color:var(--muted);font-size:13px;background:transparent;padding:0}
+.token-list button.is-confirm{color:var(--badge-failed-fg,#d70015)}
+@media (max-width:600px){.token-form{flex-direction:column;align-items:stretch}}
+/* Users admin (P1.5 part 5) */
+.users-admin .inset-list{margin-bottom:var(--sp-2)}
+.user-row{display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:10px 12px 10px 14px;border-top:1px solid var(--hairline)}
+.user-row:first-child{border-top:0}
+.user-meta{flex:1;min-width:160px}
+.user-name{font-weight:600}
+.user-meta small{display:block;color:var(--muted);font-size:12px}
+.user-tag{display:inline-block;margin-left:6px;padding:1px 8px;border-radius:999px;font-size:11px;font-weight:600;background:var(--fill);color:var(--muted);vertical-align:1px}
+.user-tag.is-admin{background:var(--badge-run-bg);color:var(--accent)}
+.user-tag.is-off{background:var(--badge-failed-bg,rgba(215,0,21,.12));color:var(--badge-failed-fg,#d70015)}
+.user-actions{display:flex;gap:6px;flex-wrap:wrap}
+.user-actions button{min-height:36px;padding:0 12px;border-radius:999px;font-size:13px;white-space:nowrap}
+.user-actions button.is-confirm{color:var(--badge-failed-fg,#d70015)}
+.user-reset{flex-basis:100%;display:flex;gap:6px;flex-wrap:wrap}
+.user-reset input{flex:1;min-width:180px}
+.user-reset button{min-height:var(--hit);border-radius:999px}
+.user-create{display:grid;grid-template-columns:1fr 1.4fr .8fr auto;gap:var(--sp-1);align-items:end}
+.user-create .field{margin-top:0}
+.user-create button.primary,.temp-pass button{min-height:var(--hit);border-radius:999px;white-space:nowrap}
+.temp-pass{display:flex;gap:6px}
+.temp-pass input{flex:1;min-width:0}
+.users-hint{color:var(--muted);font-size:12px;margin:var(--sp-1) 4px 0}
+@media (max-width:760px){.user-create{grid-template-columns:1fr}}
 </style>
 <link rel="stylesheet" href="editor/editor.css"><!-- lane-b hook -->
 </head>
@@ -1223,6 +1265,17 @@ select::-ms-expand{display:none}
     <div class="field"><label for="loginPass">Password</label><input id="loginPass" name="password" type="password" autocomplete="current-password" required></div>
     <div class="login-error" id="loginError" role="alert"></div>
     <button class="primary" id="loginSubmit" type="submit">Sign in</button>
+  </form>
+  <form class="login-card" id="forceForm" novalidate hidden>
+    <div class="login-brand"><img class="brand-mark" src="clipflow-mark.svg" alt="" width="28" height="28">ClipFlow</div>
+    <h1 id="forceTitle">Choose a new password</h1>
+    <p class="login-sub">Your admin set a temporary password. Pick your own to continue (at least 12 characters).</p>
+    <input type="text" name="username" autocomplete="username" id="forceUser" hidden>
+    <div class="field" id="forceCurrentField" hidden><label for="forceCurrent">Temporary password</label><input id="forceCurrent" type="password" autocomplete="current-password"></div>
+    <div class="field"><label for="forceNew">New password</label><input id="forceNew" type="password" autocomplete="new-password" minlength="12"></div>
+    <div class="field"><label for="forceConfirm">Confirm new password</label><input id="forceConfirm" type="password" autocomplete="new-password" minlength="12"></div>
+    <div class="login-error" id="forceError" role="alert"></div>
+    <button class="primary" id="forceSubmit" type="submit">Save and continue</button>
   </form>
 </div>
 
@@ -1420,6 +1473,20 @@ select::-ms-expand{display:none}
         <button class="primary" type="submit" id="pwSubmit">Change password</button>
         <input type="text" name="username" autocomplete="username" id="pwUser" hidden>
       </form>
+      <section class="account-tokens" aria-labelledby="tokensTitle">
+        <h3 id="tokensTitle">API tokens</h3>
+        <p class="hint">For scripts and automations. Send it as <code>Authorization: Bearer &lt;token&gt;</code>. A token acts as you; revoke it when it's no longer used.</p>
+        <form class="token-form" id="tokenForm" novalidate>
+          <div class="field"><label for="tokenName">Token name</label><input id="tokenName" maxlength="60" placeholder="e.g. n8n import" autocomplete="off"></div>
+          <button class="secondary" type="submit" id="tokenCreate">Create token</button>
+        </form>
+        <div class="account-msg" id="tokenMsg" role="status" aria-live="polite"></div>
+        <div class="token-new" id="tokenNew" hidden>
+          <p class="hint">Copy it now. It won't be shown again.</p>
+          <div class="token-new-row"><input id="tokenValue" readonly spellcheck="false" aria-label="New API token"><button class="secondary" type="button" data-token-copy>Copy</button></div>
+        </div>
+        <ul class="token-list" id="tokenList"></ul>
+      </section>
       <div class="account-signout"><button class="secondary" type="button" data-signout>Sign out</button></div>
     </div>
   </section>
@@ -1431,6 +1498,18 @@ select::-ms-expand{display:none}
     <div class="sheet-search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg><input type="search" id="settingsSearch" placeholder="Search settings" autocomplete="off" aria-label="Search settings" aria-controls="settingsPanel"></div>
     <div class="sheet-body settings-body">
       <div class="disk-meter" id="diskMeter" aria-live="polite"></div>
+      <section class="inset-group users-admin" id="usersAdmin" hidden aria-labelledby="usersTitle">
+        <h3 class="inset-title" id="usersTitle">Users</h3>
+        <div class="inset-list" id="usersList"></div>
+        <form class="user-create" id="userCreateForm" novalidate>
+          <div class="field"><label for="newUserName">Username</label><input id="newUserName" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="32" placeholder="e.g. rina"></div>
+          <div class="field"><label for="newUserPass">Temporary password</label><span class="temp-pass"><input id="newUserPass" type="text" autocomplete="off" spellcheck="false" minlength="12"><button class="secondary" type="button" data-gen-pass="newUserPass">Generate</button></span></div>
+          <div class="field"><label for="newUserRole">Role</label><select id="newUserRole"><option value="member">Member</option><option value="admin">Admin</option></select></div>
+          <button class="primary" type="submit" id="userCreateBtn">Create user</button>
+        </form>
+        <p class="hint users-hint">New and reset accounts must choose their own password at their next sign-in. Disabling signs the user out everywhere and deletes their API tokens.</p>
+        <div class="account-msg" id="usersMsg" role="status" aria-live="polite"></div>
+      </section>
       <div id="settingsPanel"></div>
       <div id="settingsNoMatch" class="settings-nomatch" hidden>No settings match “<span></span>”.</div>
       <p class="hint settings-hint">Secrets are masked. Leaving a masked value unchanged keeps the saved secret.</p>
@@ -1614,6 +1693,29 @@ function setCurrentUser(u){
 }
 const PASSWORD_MIN=12;
 function pwMessage(text,ok){const m=$("pwMsg");m.textContent=text||"";m.classList.toggle("is-ok",!!ok);m.classList.toggle("is-error",!!text&&!ok)}
+// API tokens (part 4): listed when the Account sheet opens; the plaintext is shown once after Create.
+function fmtWhen(iso){if(!iso)return "never";const d=new Date(iso);return d.toLocaleDateString(undefined,{day:"numeric",month:"short",year:"numeric"})}
+function tokenMessage(text,ok){const m=$("tokenMsg");m.textContent=text||"";m.classList.toggle("is-ok",!!ok);m.classList.toggle("is-error",!!text&&!ok)}
+async function loadTokens(){
+  const ul=$("tokenList");
+  try{
+    const {tokens}=await api("/api/auth/tokens");
+    ul.innerHTML=tokens.length?tokens.map(t=>`<li data-token-row="${esc(t.id)}"><span class="token-meta"><span class="token-name">${esc(t.name)}</span><small><code>${esc(t.prefix)}…</code> · created ${esc(fmtWhen(t.created_at))} · last used ${esc(fmtWhen(t.last_used_at))}</small></span><button class="secondary" type="button" data-token-revoke="${esc(t.id)}" aria-label="Revoke ${esc(t.name)}">Revoke</button></li>`).join("")
+      :`<li class="token-empty">No tokens yet.</li>`;
+  }catch(err){ul.innerHTML="";tokenMessage(err.message)}
+}
+$("tokenForm").addEventListener("submit",async e=>{
+  e.preventDefault();
+  const name=$("tokenName").value.trim();
+  if(!name){tokenMessage("Give the token a name.");$("tokenName").focus();return}
+  const btn=$("tokenCreate");setBusy(btn,true,"Creating…");tokenMessage("");
+  try{
+    const t=await api("/api/auth/tokens",{method:"POST",body:JSON.stringify({name})});
+    $("tokenName").value="";$("tokenValue").value=t.token;$("tokenNew").hidden=false;$("tokenValue").select();
+    await loadTokens();
+  }catch(err){tokenMessage(err.message)}
+  finally{setBusy(btn,false)}
+});
 $("passwordForm").addEventListener("submit",async e=>{
   e.preventDefault();
   const cur=$("pwCurrent").value,next=$("pwNew").value,conf=$("pwConfirm").value;
@@ -1640,16 +1742,46 @@ $("loginForm").addEventListener("submit",async e=>{
     if(!r.ok){$("loginError").textContent=d?.detail||`Sign-in failed (HTTP ${r.status})`;$("loginPass").select();return}
     const prev=currentUser;$("loginPass").value="";
     if(prev&&prev.id!==d.user.id){location.reload();return} // another account: start clean
-    setCurrentUser(d.user);refreshMediaToken();
-    document.body.classList.remove("auth-locked");
-    ["appShell","tabbar","island"].forEach(id=>{const el=$(id);if(el)el.inert=false});
-    const done=loginResolve;loginResolve=null;done&&done(d.user);
+    setCurrentUser(d.user);
+    if(d.must_change_password){showForceForm(password);return}
+    unlockApp(d.user);
   }catch(err){$("loginError").textContent="Can't reach the server: "+err.message}
+  finally{setBusy(btn,false)}
+});
+function unlockApp(user){
+  refreshMediaToken();
+  $("forceForm").hidden=true;$("loginForm").hidden=false;
+  document.body.classList.remove("auth-locked");
+  ["appShell","tabbar","island"].forEach(id=>{const el=$(id);if(el)el.inert=false});
+  const done=loginResolve;loginResolve=null;done&&done(user);
+}
+// Part 5: an admin-set (temporary) password must be replaced before anything else loads.
+// temp = the password just typed at sign-in; null after a reload → ask for it.
+let forceTemp=null;
+function showForceForm(temp){
+  forceTemp=temp||null;
+  $("loginForm").hidden=true;$("forceForm").hidden=false;$("forceError").textContent="";
+  $("forceUser").value=currentUser?.username||"";$("forceCurrentField").hidden=!!forceTemp;
+  requestAnimationFrame(()=>(forceTemp?$("forceNew"):$("forceCurrent")).focus({preventScroll:true}));
+}
+$("forceForm").addEventListener("submit",async e=>{
+  e.preventDefault();
+  const cur=forceTemp||$("forceCurrent").value,next=$("forceNew").value,conf=$("forceConfirm").value,err=$("forceError");
+  err.textContent=!cur?"Enter the temporary password.":next.length<PASSWORD_MIN?`New password must be at least ${PASSWORD_MIN} characters.`
+    :next!==conf?"The new passwords don't match.":next===cur?"Choose a password different from the temporary one.":"";
+  if(err.textContent)return;
+  const btn=$("forceSubmit");setBusy(btn,true,"Saving…");
+  try{
+    const r=await fetch(API+"/api/auth/password",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({current_password:cur,new_password:next})});
+    let d=null;try{d=await r.json()}catch{}
+    if(!r.ok){err.textContent=d?.detail||`HTTP ${r.status}`;if(/current/i.test(err.textContent)){forceTemp=null;$("forceCurrentField").hidden=false;$("forceCurrent").focus()}return}
+    $("forceForm").reset();forceTemp=null;unlockApp(currentUser);
+  }catch(e2){err.textContent="Can't reach the server: "+e2.message}
   finally{setBusy(btn,false)}
 });
 async function ensureSession(){
   const r=await fetch(API+"/api/auth/me");
-  if(r.ok){setCurrentUser((await r.json()).user);return}
+  if(r.ok){const d=await r.json();setCurrentUser(d.user);if(!d.must_change_password)return;const p=showLogin();showForceForm(null);await p;return}
   await showLogin();
 }
 async function signOut(){
@@ -3218,8 +3350,69 @@ async function loadDiskMeter(){
       <div class="hint">${d.ok?`New jobs are refused below the ${gb(d.min_mb)} reserve.`:`Below the ${gb(d.min_mb)} reserve: new jobs are refused until space is freed.`}</div>`;
   }catch(e){el.textContent=""}
 }
+// Users (part 5, admins only): list, create with a temporary password, enable/disable, role, reset password.
+// The API refuses to disable/demote the last active admin (409); its message is shown in #usersMsg.
+function usersMessage(text,ok){const m=$("usersMsg");m.textContent=text||"";m.classList.toggle("is-ok",!!ok);m.classList.toggle("is-error",!!text&&!ok)}
+function tempPassword(){const a="ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789",r=crypto.getRandomValues(new Uint32Array(16));return [...r].map(x=>a[x%a.length]).join("")}
+async function loadUsers(){
+  const box=$("usersAdmin");if(!box)return;
+  box.hidden=currentUser?.role!=="admin";if(box.hidden)return;
+  try{
+    const {users}=await api("/api/admin/users");
+    $("usersList").innerHTML=users.map(u=>{const me=u.id===currentUser.id;
+      return `<div class="user-row" data-user-row="${esc(u.id)}">
+        <span class="user-meta"><span class="user-name">${esc(u.username)}${me?" (you)":""}</span><span class="user-tag ${u.role==="admin"?"is-admin":""}">${u.role==="admin"?"Admin":"Member"}</span>${u.active?"":`<span class="user-tag is-off">Disabled</span>`}${u.must_change_password&&u.active?`<span class="user-tag">Temporary password</span>`:""}
+          <small>${u.jobs} job${u.jobs===1?"":"s"} · ${u.tokens} token${u.tokens===1?"":"s"} · last seen ${esc(fmtWhen(u.last_seen_at))}</small></span>
+        <span class="user-actions">
+          <button class="secondary" type="button" data-user-active="${u.active?"false":"true"}" data-user-id="${esc(u.id)}" aria-label="${u.active?"Disable":"Enable"} ${esc(u.username)}">${u.active?"Disable":"Enable"}</button>
+          <button class="secondary" type="button" data-user-role="${u.role==="admin"?"member":"admin"}" data-user-id="${esc(u.id)}">${u.role==="admin"?"Make member":"Make admin"}</button>
+          <button class="secondary" type="button" data-user-reset="${esc(u.id)}" aria-expanded="false">Reset password</button>
+        </span>
+        <form class="user-reset" data-user-reset-form="${esc(u.id)}" hidden novalidate><input type="text" autocomplete="off" spellcheck="false" aria-label="Temporary password for ${esc(u.username)}" placeholder="Temporary password (12+)"><button class="secondary" type="button" data-gen-pass>Generate</button><button class="primary" type="submit">Set</button></form>
+      </div>`}).join("");
+  }catch(err){usersMessage(err.message)}
+}
+async function adminUserAction(btn,path,options,okText){
+  setBusy(btn,true);usersMessage("");
+  try{await api(path,options);await loadUsers();usersMessage(okText,true)}
+  catch(err){setBusy(btn,false);usersMessage(err.message)}
+}
+$("userCreateForm").addEventListener("submit",async e=>{
+  e.preventDefault();
+  const username=$("newUserName").value.trim().toLowerCase(),password=$("newUserPass").value,role=$("newUserRole").value;
+  if(!username){usersMessage("Enter a username.");$("newUserName").focus();return}
+  if(password.length<PASSWORD_MIN){usersMessage(`The temporary password needs at least ${PASSWORD_MIN} characters (or press Generate).`);$("newUserPass").focus();return}
+  const btn=$("userCreateBtn");setBusy(btn,true,"Creating…");usersMessage("");
+  try{
+    await api("/api/admin/users",{method:"POST",body:JSON.stringify({username,password,role})});
+    $("newUserName").value="";$("newUserPass").value="";$("newUserRole").value="member";
+    await loadUsers();usersMessage(`Created ${username}. Give them the temporary password; they'll choose their own at first sign-in.`,true);
+  }catch(err){usersMessage(err.message)}
+  finally{setBusy(btn,false)}
+});
+document.addEventListener("submit",e=>{
+  const f=e.target.closest?.("[data-user-reset-form]");if(!f)return;
+  e.preventDefault();
+  const pw=f.querySelector("input").value;
+  if(pw.length<PASSWORD_MIN){usersMessage(`The temporary password needs at least ${PASSWORD_MIN} characters.`);f.querySelector("input").focus();return}
+  adminUserAction(f.querySelector("button[type=submit]"),`/api/admin/users/${encodeURIComponent(f.dataset.userResetForm)}/reset-password`,{method:"POST",body:JSON.stringify({password:pw})},"Password reset. They're signed out and must choose a new one at next sign-in.");
+});
+document.addEventListener("click",e=>{
+  const g=e.target.closest("[data-gen-pass]");
+  if(g){const inp=g.dataset.genPass?$(g.dataset.genPass):g.closest("form").querySelector("input");inp.value=tempPassword();inp.select();return}
+  const a=e.target.closest("[data-user-active]");
+  if(a){
+    const id=a.dataset.userId,enable=a.dataset.userActive==="true";
+    if(!enable&&!a.classList.contains("is-confirm")){a.classList.add("is-confirm");a.textContent="Confirm disable";setTimeout(()=>{if(document.contains(a)){a.classList.remove("is-confirm");a.textContent="Disable"}},4000);return}
+    return adminUserAction(a,`/api/admin/users/${encodeURIComponent(id)}`,{method:"PATCH",body:JSON.stringify({active:enable})},enable?"User enabled.":"User disabled: signed out everywhere, API tokens deleted.");
+  }
+  const ro=e.target.closest("[data-user-role]");
+  if(ro)return adminUserAction(ro,`/api/admin/users/${encodeURIComponent(ro.dataset.userId)}`,{method:"PATCH",body:JSON.stringify({role:ro.dataset.userRole})},"Role changed.");
+  const rs=e.target.closest("[data-user-reset]");
+  if(rs){const f=document.querySelector(`[data-user-reset-form="${css(rs.dataset.userReset)}"]`),open=f.hidden;f.hidden=!open;rs.setAttribute("aria-expanded",String(open));if(open)f.querySelector("input").focus()}
+});
 async function loadSettings(){
-  loadDiskMeter();
+  loadDiskMeter();loadUsers();
   try{
     settingsCache=await api("/api/settings");
     $("settingsPanel").innerHTML=SETTINGS_GROUPS.map(([g,all])=>[g,all.filter(k=>settingsCache[k])]).filter(([,keys])=>keys.length).map(([g,keys])=>`
@@ -3246,6 +3439,7 @@ function updateSettingsDirty(){
 function filterSettings(){
   const q=($("settingsSearch")?.value||"").trim().toLowerCase();let any=false;
   document.querySelectorAll("[data-settings-group]").forEach(g=>{let shown=0;g.querySelectorAll("[data-setting-row]").forEach(r=>{const ok=!q||r.dataset.search.includes(q);r.hidden=!ok;if(ok)shown++});g.hidden=!shown;if(shown)any=true});
+  const ua=$("usersAdmin");if(ua&&currentUser?.role==="admin"){const hit=!q||"users accounts members admins password".includes(q);ua.hidden=!hit;if(hit&&q)any=true}
   const nm=$("settingsNoMatch");nm.hidden=any||!q;nm.querySelector("span").textContent=q;
 }
 async function saveSettings(){
@@ -3520,7 +3714,16 @@ document.addEventListener("keydown",e=>{
 },true);
 document.addEventListener("click",e=>{
   if(e.target.closest("[data-sheet-close]"))return closeSheet();
-  if(e.target.closest("[data-account]")){pwMessage("");openSheet("accountSheet",e.target.closest("[data-account]"));closeSidebarDrawer(false);return}
+  if(e.target.closest("[data-account]")){pwMessage("");tokenMessage("");$("tokenNew").hidden=true;$("tokenValue").value="";openSheet("accountSheet",e.target.closest("[data-account]"));closeSidebarDrawer(false);loadTokens();return}
+  const tc=e.target.closest("[data-token-copy]");
+  if(tc){navigator.clipboard?.writeText($("tokenValue").value).then(()=>{tc.textContent="Copied";setTimeout(()=>{tc.textContent="Copy"},motionMs(1500)||1200)},()=>{$("tokenValue").select()});return}
+  const tr=e.target.closest("[data-token-revoke]");
+  if(tr){ // two-step: first click asks, second revokes (no browser dialog)
+    if(!tr.classList.contains("is-confirm")){tr.classList.add("is-confirm");tr.textContent="Confirm revoke";setTimeout(()=>{if(document.contains(tr)){tr.classList.remove("is-confirm");tr.textContent="Revoke"}},4000);return}
+    setBusy(tr,true,"Revoking…");
+    api("/api/auth/tokens/"+encodeURIComponent(tr.dataset.tokenRevoke),{method:"DELETE"}).then(()=>{tokenMessage("Token revoked.",true);return loadTokens()}).catch(err=>{setBusy(tr,false);tokenMessage(err.message)});
+    return;
+  }
   if(e.target.closest("[data-signout]")){setBusy(e.target.closest("[data-signout]"),true);signOut();return}
   const nav=e.target.closest("[data-nav]");if(nav){
     const v=nav.dataset.nav;
