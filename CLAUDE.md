@@ -367,9 +367,11 @@ Writing tests (cross-user, settings, qa-tmp users) run on staging only (:8080/:8
   (`body.sidebar-open`) over `#sidebarScrim`. Toggles are
   `[data-sidebar-toggle]`; hidden sidebar gets `inert`. **Every closed
   overlay layer must be `visibility:hidden; pointer-events:none`**:
-  a stray layer once made the whole app unclickable. Import options
-  (split/facecam/platform) live in `<details id="importOptions">`;
-  `updateImportOptionsSummary()` runs from the `select*()` fns.
+  a stray layer once made the whole app unclickable. Analyze step (126) = flow-preview
+  step 3: segmented `<button aria-pressed>` controls + layout cards (`data-layout-card` facecam|full → `jobs.layout`
+  auto/left/right | none; 3 disabled "Coming soon" cards, P4); campaign `default_layout`/`default_language` pre-fill
+  with a "from campaign" tag unless touched; estimate from `GET /api/analysis-estimate` (own jobs; hidden without
+  history). POST /api/jobs payload unchanged (analyze.spec pins it).
 - **Toolbar (072, replaces the tabs pill):** sticky `#toolbar` with ONE title
   element `#pageTitle` ("Analyze"/"Review"/"Editor", `syncPageTitle()`). `initToolbar()`
   is the **only** scroll driver: rAF, passive, maps `scrollY/TITLE_RANGE(48)` →

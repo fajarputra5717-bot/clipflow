@@ -49,7 +49,9 @@ function newState() {
     user: { id: "u-admin", username: "admin", role: "admin" }, // P1.5: signed in unless a test clears it
     current: [], queue: [done], jobs: { [done.id]: done }, calls: [],
     campaigns: [{ slug: "ime-roleplay", name: "IME Roleplay", brief_pending: false, platforms: ["tiktok"], default_layout: "none",
-      sources: [], source_note: "", hashtags: ["#imeroleplay"] }],
+      sources: [], source_note: "", hashtags: ["#imeroleplay"] },
+      { slug: "windah", name: "Windah", brief_pending: false, platforms: ["tiktok"], default_layout: "auto", default_language: "id",
+        sources: [], source_note: "", hashtags: [] }],
   };
 }
 
@@ -102,6 +104,7 @@ async function mockApi(page, api) {
       if (path === "/api/media-token") return json({ token: "mock-token", expires_at: iso(-720) });
       if (path === "/api/settings") return json(api.settings || {});
       if (path === "/api/campaigns") return json(api.campaigns);
+      if (path === "/api/analysis-estimate") return json(api.estimate || { samples: 0 });
       if (path === "/api/activity") return json({ items: api.activity || [] }); // 090 island feed
       if (path === "/api/assets/watermarks") return json({ assets: [] });
       if (path === "/api/jobs") return json(url.searchParams.get("scope") === "queue" ? api.queue : api.current);

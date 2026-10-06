@@ -5,6 +5,7 @@ import os
 import re
 import secrets
 import shutil
+import statistics
 import time
 import traceback
 import uuid
@@ -1341,6 +1342,41 @@ JOB_RUNNING = (
     "queued", "reanalyze_queued", "processing", "downloading", "download", "transcribing",
     "transcription", "transcribed", "analyzing", "analysis",
 )
+
+
+# Analyze form: "≈ 6 min for a 1 h 24 min video" from the caller's own finished jobs
+# (P1.5 scope). Video length = end of the last transcript segment; processing =
+# started_at → review_ready_at (queue wait excluded). samples 0 = no history (UI hides it).
+@app.get("/api/analysis-estimate")
+def analysis_estimate(request: Request):
+    user = current_user(request)
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT EXTRACT(EPOCH FROM review_ready_at - started_at),
+                       (transcript_segments -> -1 ->> 'end')::float
+                FROM jobs
+                WHERE user_id = %s AND review_ready_at IS NOT NULL AND started_at IS NOT NULL
+                  AND review_ready_at > started_at
+                  AND jsonb_typeof(transcript_segments) = 'array'
+                  AND jsonb_array_length(transcript_segments) > 0
+                ORDER BY review_ready_at DESC
+                LIMIT 20
+                """,
+                (user["id"],),
+            )
+            rows = [(float(p), float(v)) for p, v in cur.fetchall() if p and v and v >= 60]
+    if not rows:
+        return {"samples": 0}
+    rate = statistics.median(p / v for p, v in rows)
+    video = statistics.median(v for _, v in rows)
+    return {
+        "samples": len(rows),
+        "video_seconds": round(video),
+        "processing_seconds": round(rate * video),
+        "seconds_per_video_minute": round(rate * 60, 1),
+    }
 
 
 @app.get("/api/activity")

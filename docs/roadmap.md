@@ -45,6 +45,7 @@ per-block with cap); "$ CPM + cap" only for a campaign that really is CPM. (No s
 | **P2** Manual publish (v2a) | accounts · `clip_posts` · Ready to post · pre-post checks · claim advice · Telegram send + 09:00 WIB digest (6 parts, as agreed) | P1 |
 | **P3** Campaigns + intake + Track | Campaign screen: brief → rules via Lane B's `brief_parser`, Lane A confirms before saving · auto-import via Lane B's `source_watch` · Track dashboard (views, claims, Rp from `shared/payouts.py`) | P2 |
 | **P4** Timeline + effects | Trim timeline + click-to-seek, silence/filler removal (opt-in, Audio tab), zoom punch-ins, hook title, progress bar, transitions + CC0 SFX, using Lane B's `shared/retention.py` | P3 |
+| **P4 · Layouts** (added 2026-10-06) | Three more Analyze layouts, shown today as disabled "Coming soon" cards: **Speaker follow** (crop tracks the active speaker), **Two-speaker stacked** (host top, guest bottom), **Wide + blur** (full frame on a blurred fill). Each = a new `jobs.layout` value + a branch in `vertical_layout_filter()` (the only layout graph, 087) + detection where needed; the card is enabled when its render ships | P3 |
 | **P5** Auto-post + view pulling | IG/FB Reels auto-post and view pulling into `clip_posts` (official APIs per the research doc) | P4 |
 
 Lane B modules not on main yet: `shared/payouts.py`, `brief_parser`, `source_watch` (P3), plus newer

@@ -134,6 +134,16 @@ def default_layout(rules):
     return v if v in LAYOUTS else "auto"
 
 
+def default_language(rules):
+    """Analyze form pre-fill: the campaign's spoken language when its rules state
+    one explicitly ("language", content.title_language or title.language), else
+    None = keep Auto. Never the title_language() fallback "id"."""
+    content = (rules or {}).get("content") or {}
+    title = (rules or {}).get("title") or {}
+    v = str((rules or {}).get("language") or content.get("title_language") or title.get("language") or "").strip().lower()
+    return v if v in ("en", "id") else None
+
+
 def summary(rules):
     """What the API returns per campaign (no payout internals)."""
     return {
@@ -141,6 +151,7 @@ def summary(rules):
         "name": display_name(rules),
         "brief_pending": rules["brief_pending"],
         "default_layout": default_layout(rules),
+        "default_language": default_language(rules),
         "platforms": platforms(rules),
         "sources": [s["channel"] for s in sources(rules)],
         "source_note": (rules.get("content") or {}).get("source"),
