@@ -101,3 +101,6 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 127 · 2026-10-06 · Shared CLIPFLOW_API_KEY removed (owner decision; Lane C gate doc pending); only per-user cf_ tokens; .env.example/bootstrap use CLIPFLOW_ADMIN_* · main.py, app/auth.py, shared/settings.py, .env.example, scripts
 128 · 2026-10-06 · P2 (1): posting accounts per user (platform_accounts, owned + guarded), Settings → Posting accounts · main.py, index.html
 129 · 2026-10-06 · P2 (2): clip_posts (owned, snapshots, status lifecycle in shared/posts.py, url per platform, paid_rp IDR) + /api/posts; account with posts is paused not deleted · shared/posts.py, main.py
+130 · 2026-10-06 · P2 (3): Publish step = flow-preview step 7: publish queue (clip × platform), download campaign_platform_slug.mp4, copy title/caption (iOS-safe), Mark posted → clip_posts, statuses; tab bar 5 items · main.py, shared/posts.py, index.html
+131 · 2026-10-06 · Lane B shared/payouts.py (+ tests) merged to main (payout models, claim advice, IDR) · shared/payouts.py, tests/test_payouts.py
+132 · 2026-10-06 · P2 (4): pre-post checks on Publish rows — red = Approve-blocking rules (409), amber = window/cap/length from shared/payouts.py; posting anyway records eligible=false + reason · shared/payouts.py, main.py, index.html

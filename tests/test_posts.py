@@ -60,3 +60,31 @@ class Fields(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PublishQueue(unittest.TestCase):
+    def test_caption_keeps_hashtags_in_order(self):
+        cap, trimmed = p.trim_caption("Gila lompatan ini", ["#ime", "#imeroleplay", "#gta"], 2200)
+        self.assertEqual(cap, "Gila lompatan ini\n\n#ime #imeroleplay #gta")
+        self.assertFalse(trimmed)
+
+    def test_long_body_trimmed_tags_intact(self):
+        body = "kata " * 200
+        cap, trimmed = p.trim_caption(body, ["#a", "#b"], 280)
+        self.assertTrue(trimmed)
+        self.assertLessEqual(len(cap), 280)
+        self.assertTrue(cap.endswith("\n\n#a #b"))
+        self.assertIn("…", cap)
+
+    def test_no_body_or_no_tags(self):
+        self.assertEqual(p.trim_caption("", ["#a"], 100), ("#a", False))
+        self.assertEqual(p.trim_caption("hi", [], 100), ("hi", False))
+
+    def test_title_limit(self):
+        self.assertEqual(len(p.trim_title("x" * 150, "youtube")), 100)
+        self.assertEqual(p.trim_title("x" * 150, "tiktok"), "x" * 150)
+
+    def test_download_name(self):
+        self.assertEqual(p.download_name("ime-roleplay", "tiktok", "Lompatan GILA di Kota!"), "ime-roleplay_tiktok_lompatan-gila-di-kota.mp4")
+        self.assertEqual(p.download_name(None, "youtube", "Ça va? 🎮"), "clip_youtube_ca-va.mp4")
+        self.assertEqual(p.download_name(None, "x", ""), "clip_x_clip.mp4")

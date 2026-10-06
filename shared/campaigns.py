@@ -166,8 +166,14 @@ def with_campaign_hashtags(text, rules):
     """081/093: campaign captions END with the campaign hashtags, in their exact
     order, nothing between them; any hashtag the model wrote is removed first.
     (Moved from main.py in 115 so the worker uses the same rule.)"""
+    body = caption_body(text)
+    return f"{body}\n\n{' '.join(hashtags(rules))}".strip()
+
+
+def caption_body(text):
+    """The caption without any hashtag (whitespace tidied): what precedes the
+    campaign hashtags. Shared by with_campaign_hashtags and the Publish queue (130)."""
     body = _HASHTAG_RE.sub("", text or "")
     body = re.sub(r"[ \t]+", " ", body)
     body = re.sub(r" +([,.!?;:])", r"\1", body)
-    body = re.sub(r" *\n *", "\n", body).strip()
-    return f"{body}\n\n{' '.join(hashtags(rules))}".strip()
+    return re.sub(r" *\n *", "\n", body).strip()

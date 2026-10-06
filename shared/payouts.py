@@ -410,3 +410,53 @@ def model_from_rules(rules: Optional[dict]) -> Model:
                         max_counted_views=p.get("max_paid_views_per_video") or p.get("max_counted_views"),
                         claims_per_post=int(p.get("claims_per_video") or 1))
     return Unknown(f"unrecognised payout: {p.get('model') or p.get('stated_as') or 'no model'}")
+
+
+# --------------------------------------------------------------------------- posting eligibility
+# Lane A, P2 part 4 (131): pre-post checks for the Publish step. They WARN; a post made anyway is
+# recorded as not eligible with these reasons (clip_posts.eligible / ineligible_reason).
+
+def campaign_period(rules: Optional[dict]) -> tuple[Optional[date], Optional[date]]:
+    """rules["period"] start/end (ISO dates, inclusive, WIB); None = open."""
+    per = (rules or {}).get("period") or {}
+
+    def d(v):
+        try:
+            return date.fromisoformat(str(v)) if v else None
+        except ValueError:
+            return None
+    return d(per.get("start")), d(per.get("end"))
+
+
+def _day(d: date) -> str:
+    return f"{d.day} {d.strftime('%b')}"
+
+
+def window_problems(rules: Optional[dict], model: Model, when: datetime, campaign_name: str = "") -> list[dict]:
+    """Is a post made at `when` inside the campaign's posting window? [] = yes.
+    Period (any model) + week windows (FixedThreshold: IME W1–W4; days outside every
+    week, e.g. 29–31 Oct, are not eligible)."""
+    out, day, name = [], _wib(when).date(), campaign_name or "the campaign"
+    start, end = campaign_period(rules)
+    if start and day < start:
+        out.append({"code": "before_start", "message": f"Before {name} starts ({_day(start)})"})
+    if end and day > end:
+        out.append({"code": "after_end", "message": f"After {name} ended ({_day(end)})"})
+    if isinstance(model, FixedThreshold) and model.windows and not any(w.contains(when) for w in model.windows):
+        first, last = model.windows[0], model.windows[-1]
+        out.append({"code": "outside_window",
+                    "message": f"Outside {name} week window ({first.id}–{last.id}: {_day(first.start)}–{_day(last.end)})"})
+    return out
+
+
+def account_cap(model: Model) -> Optional[int]:
+    """Eligible posts allowed per platform account per WIB calendar month (None = no cap)."""
+    return getattr(model, "max_eligible_per_account_month", None)
+
+
+def cap_problem(model: Model, used_this_month: int, handle: str, platform_name: str) -> Optional[dict]:
+    cap = account_cap(model)
+    if cap is not None and used_this_month >= cap:
+        return {"code": "account_cap",
+                "message": f"Cap reached for @{handle} on {platform_name} this month ({used_this_month} of {cap})"}
+    return None

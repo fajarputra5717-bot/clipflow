@@ -199,3 +199,37 @@ class FromRules(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PostingEligibility(unittest.TestCase):
+    """Lane A, P2 part 4 (131): window + cap pre-post checks from the real rules files."""
+
+    def rules(self, slug):
+        return json.loads((CAMPAIGNS / f"{slug}.rules.json").read_text())
+
+    def test_ime_week_windows(self):
+        r = self.rules("ime-roleplay"); m = p.model_from_rules(r)
+        self.assertEqual(p.window_problems(r, m, wib(2026, 10, 6), "IME"), [])
+        self.assertEqual(p.window_problems(r, m, wib(2026, 10, 28, 23, 59), "IME"), [])
+        for d in (29, 30, 31):
+            probs = p.window_problems(r, m, wib(2026, 10, d), "IME")
+            self.assertEqual([x["code"] for x in probs], ["outside_window"], d)
+        self.assertIn("Outside IME week window (W1–W4: 1 Oct–28 Oct)", p.window_problems(r, m, wib(2026, 10, 30), "IME")[0]["message"])
+        # WIB, not UTC: 28 Oct 23:30 UTC is already 29 Oct WIB
+        self.assertTrue(p.window_problems(r, m, datetime(2026, 10, 28, 17, 30, tzinfo=p.timezone.utc), "IME"))
+
+    def test_fandra_from_sep_30(self):
+        r = self.rules("fandra-octo"); m = p.model_from_rules(r)
+        self.assertEqual([x["code"] for x in p.window_problems(r, m, wib(2026, 9, 29, 23), "Fandra")], ["before_start"])
+        self.assertEqual(p.window_problems(r, m, wib(2026, 9, 30, 0, 1), "Fandra"), [])
+        self.assertEqual(p.window_problems(r, m, wib(2027, 3, 1), "Fandra"), [])  # open end (until budget runs out)
+
+    def test_ime_cap_two_per_account_month(self):
+        m = p.model_from_rules(self.rules("ime-roleplay"))
+        self.assertEqual(p.account_cap(m), 2)
+        self.assertIsNone(p.cap_problem(m, 1, "imeclips", "TikTok"))
+        self.assertEqual(p.cap_problem(m, 2, "imeclips", "TikTok")["message"], "Cap reached for @imeclips on TikTok this month (2 of 2)")
+        self.assertIsNone(p.cap_problem(p.model_from_rules(self.rules("fandra-octo")), 50, "x", "TikTok"))
+
+    def test_no_rules(self):
+        self.assertEqual(p.window_problems(None, p.Unknown(), wib(2026, 10, 6)), [])

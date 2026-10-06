@@ -355,14 +355,20 @@ Writing tests (cross-user, settings, qa-tmp users) run on staging only (:8080/:8
 
 `clip_posts` = one row per clip per platform post; every writer (manual UI now, auto-poster/view tracker later)
 validates through `shared/posts.py` (status lifecycle, required fields, URL host per platform, paid_rp whole IDR).
-Posted rows are history: never deleted (drop them); an account with posts is paused, never deleted. Payout amounts
+Posted rows are history: never deleted (drop them); an account with posts is paused, never deleted. Publish step (130):
+`GET /api/publish-queue` builds rows server-side (clip × campaign platform; caption via `campaigns.caption_body` +
+hashtags in order, trimmed by `posts.trim_caption`, never cutting tags); downloads use `…/render?download=<platform>`
+(server-side filename). Copy buttons go through `copyText()` (sync Clipboard API in the tap + execCommand fallback). Pre-post
+checks (132): red = `rule_checks` blocking failures (same as Approve; posting → 409); amber = `payouts.window_problems`
+/ `cap_problem` / platform length; posting with warnings stores `eligible=false` + `ineligible_reason` (computed
+server-side). Windows, caps and payout math live ONLY in `shared/payouts.py` (Lane B module, 131). Payout amounts
 come only from Lane B's `shared/payouts.py` (P3), never hand-rolled.
 
 ## Frontend shell (R-11/R-12/R-13, lane B 067-073; badge v2.1117)
 
 - **Navigation (106, P1 task 0):** the flow-preview **stepper** (`#flowNav`, `renderFlow()`, `FLOW_STEPS`) is the
   top-level navigation (sticky under the toolbar, compact while it is collapsed via `body:has(.toolbar.is-collapsed)`, 121): Analyze (`data-nav="current"`, the Import view), Review (`data-nav="queue"`, the job
-  list/detail, formerly "Publish"), Editor (`data-flow-editor`: opens the visible job's clip drawer; disabled
+  list/detail, formerly "Publish"), Publish (`data-nav="publish"`, 130), Editor (`data-flow-editor`: opens the visible job's clip drawer; disabled
   until a job detail is open); Campaign/Auto-import/Track (P3) and Schedule/Publish (P2) are disabled with
   "Coming in Px" — never mock content (mapping: docs/roadmap.md). `#pageTitle` = the active step. Gear in the
   toolbar (`data-nav="settings"`). `syncNav()` repaints the stepper.

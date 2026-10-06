@@ -9,7 +9,7 @@ import statistics
 import time
 import traceback
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import urlsplit
 from typing import Any, Optional
@@ -24,7 +24,7 @@ from starlette.concurrency import run_in_threadpool
 from app import auth
 
 from shared.ai import router as ai_router
-from shared import campaigns, descriptions, edit_spec as edit_specs, languages, posts as post_rules, rule_checks
+from shared import campaigns, descriptions, edit_spec as edit_specs, languages, payouts, posts as post_rules, rule_checks
 from shared.errors import AINotConfiguredError
 from shared.fonts import normalize_caption_font
 from shared.settings import (
@@ -416,6 +416,10 @@ def ensure_schema():
         )
         """,
         "CREATE INDEX IF NOT EXISTS idx_clip_posts_user ON clip_posts (user_id, status, created_at DESC)",
+        # P2 part 4 (131): a post made despite a pre-post warning (outside the campaign window, account cap
+        # reached, platform length) is recorded as not eligible, with the reasons, so history stays honest.
+        "ALTER TABLE clip_posts ADD COLUMN IF NOT EXISTS eligible BOOLEAN NOT NULL DEFAULT TRUE",
+        "ALTER TABLE clip_posts ADD COLUMN IF NOT EXISTS ineligible_reason TEXT",
         "CREATE INDEX IF NOT EXISTS idx_clip_posts_candidate ON clip_posts (candidate_id)",
         "CREATE UNIQUE INDEX IF NOT EXISTS uq_clip_posts_url ON clip_posts (user_id, url) WHERE url IS NOT NULL",
         # A clip goes to one account once (re-post = drop the old row first).
@@ -1550,7 +1554,7 @@ def delete_account(account_id: str, request: Request):
 POST_COLUMNS = (
     "p.id, p.candidate_id, p.job_id, p.campaign, p.title, p.platform, p.account_id, a.handle, p.status, "
     "p.source, p.scheduled_for, p.posted_at, p.url, p.external_id, p.views, p.views_at, p.claimed_at, "
-    "p.paid_at, p.paid_rp, p.note, p.error, p.created_at, p.updated_at"
+    "p.paid_at, p.paid_rp, p.note, p.error, p.created_at, p.updated_at, p.eligible, p.ineligible_reason"
 )
 POST_FROM = "clip_posts p LEFT JOIN platform_accounts a ON a.id = p.account_id"
 
@@ -1558,7 +1562,8 @@ POST_FROM = "clip_posts p LEFT JOIN platform_accounts a ON a.id = p.account_id"
 def _post_row(r) -> dict:
     keys = ("id", "candidate_id", "job_id", "campaign", "title", "platform", "account_id", "account_handle",
             "status", "source", "scheduled_for", "posted_at", "url", "external_id", "views", "views_at",
-            "claimed_at", "paid_at", "paid_rp", "note", "error", "created_at", "updated_at")
+            "claimed_at", "paid_at", "paid_rp", "note", "error", "created_at", "updated_at", "eligible",
+            "ineligible_reason")
     d = dict(zip(keys, r))
     for k in ("scheduled_for", "posted_at", "views_at", "claimed_at", "paid_at", "created_at", "updated_at"):
         d[k] = d[k].isoformat() if d[k] else None
@@ -1630,6 +1635,192 @@ def _complete_problem(post: dict) -> Optional[str]:
     return None
 
 
+# Publish step (P2 part 3, 130): one row per finished clip × allowed platform (campaign
+# platforms, else the job's Analyze platform), caption = body + campaign hashtags in exact
+# order, trimmed to the platform limit (hashtags never cut), plus that row's latest post.
+@app.get("/api/publish-queue")
+def publish_queue(request: Request):
+    user = current_user(request)
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT c.id, c.job_id, j.campaign, j.platform,
+                       COALESCE(NULLIF(c.manual_title, ''), NULLIF(c.title, ''), c.ai_title),
+                       c.description, c.duration_seconds, c.rendered_at, c.thumbnail_path,
+                       COALESCE(NULLIF(j.custom_title, ''), sv.title),
+                       c.start_time, c.end_time, c.render_warnings, c.safety_check
+                FROM clip_candidates c
+                JOIN jobs j ON j.id = c.job_id
+                LEFT JOIN source_videos sv ON sv.id = j.source_video_id
+                WHERE j.user_id = %s AND c.status = 'completed'
+                  AND COALESCE(c.final_path, '') <> '' AND j.status IS DISTINCT FROM 'cancelled'
+                ORDER BY c.rendered_at DESC NULLS LAST, c.updated_at DESC
+                LIMIT 300
+                """,
+                (user["id"],),
+            )
+            clips = cur.fetchall()
+            ids = [r[0] for r in clips]
+            posts = {}
+            if ids:
+                # Latest post per (clip, platform); a live one wins over a dropped one.
+                cur.execute(
+                    f"""
+                    SELECT DISTINCT ON (p.candidate_id, p.platform) {POST_COLUMNS}
+                    FROM {POST_FROM}
+                    WHERE p.user_id = %s AND p.candidate_id = ANY(%s)
+                    ORDER BY p.candidate_id, p.platform, (p.status = 'dropped'), p.created_at DESC
+                    """,
+                    (user["id"], ids),
+                )
+                for r in cur.fetchall():
+                    d = _post_row(r)
+                    posts[(d["candidate_id"], d["platform"])] = d
+            cur.execute(
+                "SELECT id, platform, handle FROM platform_accounts WHERE user_id = %s AND active ORDER BY lower(handle)",
+                (user["id"],),
+            )
+            accounts = cur.fetchall()
+            now = datetime.now(timezone.utc)
+            usage = {c: _account_usage(cur, user["id"], c, now) for c in {r[2] for r in clips if r[2]}}
+    groups = {}
+    for (cid, jid, camp, job_platform, title, desc, dur, rendered_at, thumb, job_title,
+         start_time, end_time, render_warnings, safety) in clips:
+        rules = campaigns.get(camp) if camp else None
+        blocking = rule_checks.blocking_failures(rule_checks.check(rules, {
+            "start_time": start_time, "end_time": end_time, "description": desc,
+            "render_warnings": render_warnings, "safety_check": safety,
+        })) if rules else []
+        if rules:
+            plats = [p for p in campaigns.platforms(rules) if p in rule_checks.PLATFORM_LIMITS]
+            tags = campaigns.hashtags(rules)
+            body = campaigns.caption_body(desc) or (title or "")
+        else:
+            plats = [post_rules.JOB_PLATFORM.get(job_platform or "", "youtube")]
+            tags, body = [], (desc or title or "").strip()
+        g = groups.setdefault(camp or "", {
+            "campaign": camp, "campaign_name": campaigns.display_name(rules) if rules else "No campaign", "rows": [],
+        })
+        for plat in plats:
+            caption, trimmed = post_rules.trim_caption(body, tags, post_rules.CAPTION_LIMITS.get(plat, 2200))
+            model = payouts.model_from_rules(rules) if rules else None
+            cap = payouts.account_cap(model) if model else None
+            acct_usage = {a[0]: {"used": usage.get(camp, {}).get(a[0], 0), "cap": cap}
+                          for a in accounts if a[1] == plat}
+            checks = [{"level": "block", "code": ch["id"], "message": ch["label"]} for ch in blocking]
+            warns = _post_warnings(rules, camp, plat, dur, now)
+            for a in accounts:
+                if a[1] == plat and model:
+                    cp = payouts.cap_problem(model, acct_usage[a[0]]["used"], a[2], rule_checks.PLATFORM_LIMITS[plat][2])
+                    if cp:
+                        warns.append({**cp, "account_id": a[0]})
+            checks += [{"level": "warn", **w} for w in warns]
+            g["rows"].append({
+                "candidate_id": cid, "job_id": jid, "job_title": job_title, "campaign": camp,
+                "title": post_rules.trim_title(title or "", plat), "caption": caption,
+                "caption_trimmed": trimmed, "hashtags": tags,
+                "platform": plat, "platform_name": rule_checks.PLATFORM_LIMITS[plat][2],
+                "duration": dur, "rendered_at": rendered_at.isoformat() if rendered_at else None,
+                "has_thumbnail": bool(thumb),
+                "filename": post_rules.download_name(camp, plat, title or ""),
+                "post": posts.get((cid, plat)),
+                "checks": checks, "account_usage": acct_usage,
+            })
+    order = sorted(groups.values(), key=lambda g: (g["campaign"] is None, g["campaign_name"].lower()))
+    return {"groups": order}
+
+
+# ---------- pre-post checks (P2 part 4, 131) ----------
+# block = the clip-level rule failures that already block Approve (rule_checks: length, hashtags,
+# watermark) → Mark posted refused (409). warn = campaign window (payouts.window_problems), the
+# per-account monthly cap (payouts.cap_problem) and this platform's length → shown on the row; a
+# post made anyway is stored eligible=false with the reasons. One source: shared/payouts.py.
+
+def _wib_month_bounds(when: datetime) -> tuple[datetime, datetime]:
+    w = when.astimezone(payouts.WIB)
+    start = w.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    end = (start + timedelta(days=32)).replace(day=1)
+    return start, end
+
+
+def _account_usage(cur, user_id: str, campaign: Optional[str], when: datetime) -> dict:
+    """Eligible, non-dropped posts per account for this campaign in when's WIB month."""
+    if not campaign:
+        return {}
+    start, end = _wib_month_bounds(when)
+    cur.execute(
+        """
+        SELECT account_id, COUNT(*) FROM clip_posts
+        WHERE user_id = %s AND campaign = %s AND eligible AND status <> 'dropped'
+          AND account_id IS NOT NULL AND posted_at >= %s AND posted_at < %s
+        GROUP BY account_id
+        """,
+        (user_id, campaign, start, end),
+    )
+    return {r[0]: r[1] for r in cur.fetchall()}
+
+
+def _length_warning(platform: str, duration) -> Optional[dict]:
+    lo, hi, name = rule_checks.PLATFORM_LIMITS.get(platform, (None, None, platform))
+    try:
+        d = float(duration or 0)
+    except (TypeError, ValueError):
+        return None
+    if hi is not None and d > hi:
+        return {"code": "length", "message": f"Over {hi} s for {name} ({round(d)} s)"}
+    if lo is not None and 0 < d < lo:
+        return {"code": "length", "message": f"Under {lo} s for {name} ({round(d)} s)"}
+    return None
+
+
+def _post_warnings(rules, campaign, platform, duration, when, account=None, used=0) -> list:
+    """Warnings for one post (account = (handle) when known)."""
+    out = []
+    if rules:
+        model = payouts.model_from_rules(rules)
+        out += payouts.window_problems(rules, model, when, campaigns.display_name(rules))
+        if account:
+            cp = payouts.cap_problem(model, used, account, rule_checks.PLATFORM_LIMITS[platform][2])
+            if cp:
+                out.append(cp)
+    lw = _length_warning(platform, duration)
+    if lw:
+        out.append(lw)
+    return out
+
+
+def _eligibility_for(cur, user_id: str, candidate_id: str, platform: str, account_id: Optional[str],
+                     posted_at: datetime) -> tuple[bool, Optional[str]]:
+    """(eligible, reason) recorded when a post becomes posted. Raises 409 on Approve-blocking failures."""
+    cur.execute(
+        "SELECT c.job_id, j.campaign, c.duration_seconds FROM clip_candidates c JOIN jobs j ON j.id = c.job_id "
+        "WHERE c.id = %s AND j.user_id = %s",
+        (candidate_id, user_id),
+    )
+    row = cur.fetchone()
+    if not row:
+        return True, None  # clip deleted since: nothing to check against
+    job_id, campaign, dur = row
+    failing = candidate_rule_failures(job_id, candidate_id)
+    if failing:
+        raise HTTPException(
+            status_code=409,
+            detail="Fix before posting: " + "; ".join(ch["label"] for ch in failing),
+        )
+    rules = campaigns.get(campaign) if campaign else None
+    handle, used = None, 0
+    if account_id:
+        cur.execute("SELECT handle FROM platform_accounts WHERE id = %s", (account_id,))
+        a = cur.fetchone()
+        handle = a[0] if a else None
+        used = _account_usage(cur, user_id, campaign, posted_at).get(account_id, 0)
+    warns = _post_warnings(rules, campaign, platform, dur, posted_at, handle, used)
+    if not rules:
+        return True, None  # eligibility is a campaign concept
+    return (not warns), ("; ".join(w["message"] for w in warns) or None)
+
+
 @app.get("/api/posts")
 def list_posts(
     request: Request,
@@ -1688,17 +1879,21 @@ def create_post(payload: PostCreate, request: Request):
             problem = _complete_problem(post)
             if problem:
                 raise HTTPException(status_code=400, detail=problem)
+            eligible, reason = True, None
+            if payload.status == "posted":
+                eligible, reason = _eligibility_for(cur, user["id"], payload.candidate_id, platform,
+                                                    payload.account_id, posted_at)
             pid = str(uuid.uuid4())
             try:
                 cur.execute(
                     """
                     INSERT INTO clip_posts (id, user_id, candidate_id, job_id, campaign, title, platform, account_id,
-                                            status, scheduled_for, posted_at, url, note)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                                            status, scheduled_for, posted_at, url, note, eligible, ineligible_reason)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """,
                     (pid, user["id"], payload.candidate_id, clip[0], clip[1], clip[2], platform,
                      payload.account_id, payload.status, _parse_ts(payload.scheduled_for, "scheduled_for"),
-                     posted_at, url, (payload.note or "").strip() or None),
+                     posted_at, url, (payload.note or "").strip() or None, eligible, reason),
                 )
             except psycopg.errors.UniqueViolation as exc:
                 raise HTTPException(
@@ -1761,6 +1956,10 @@ def update_post(post_id: str, payload: PostUpdate, request: Request):
             problem = _complete_problem(new)
             if problem:
                 raise HTTPException(status_code=400, detail=problem)
+            if current["status"] == "planned" and new["status"] == "posted" and current["candidate_id"]:
+                when = new["posted_at"] if isinstance(new["posted_at"], datetime) else _parse_ts(new["posted_at"], "posted_at")
+                sets["eligible"], sets["ineligible_reason"] = _eligibility_for(
+                    cur, user["id"], current["candidate_id"], current["platform"], new["account_id"], when)
             if new["status"] == "paid" and new.get("paid_rp") is None:
                 raise HTTPException(status_code=400, detail="A paid post needs the amount (paid_rp, Rupiah)")
             if sets:
@@ -4624,6 +4823,7 @@ def _serve_candidate_file(
     primary_column: str,
     fallback_column: Optional[str] = None,
     media_type: str = "video/mp4",
+    download_name: Optional[str] = None,
 ):
 
     columns = [primary_column]
@@ -4685,6 +4885,9 @@ def _serve_candidate_file(
                 detail=f"File missing on disk: {path}",
             )
 
+        if download_name:
+            # Publish queue (130): Content-Disposition attachment, campaign_platform_slug.mp4.
+            return FileResponse(path, media_type=media_type, filename=download_name)
         return FileResponse(
             path,
             media_type=media_type,
@@ -4727,13 +4930,33 @@ def get_candidate_preview(
 def get_candidate_render(
     job_id: str,
     candidate_id: str,
+    download: Optional[str] = None,
 ):
+    # ?download=<platform> (Publish queue, 130): same file, saved as campaign_platform_slug.mp4.
+    name = None
+    if download:
+        if download not in rule_checks.PLATFORM_LIMITS:
+            raise HTTPException(status_code=400, detail="Unknown platform")
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT j.campaign, COALESCE(NULLIF(c.manual_title, ''), NULLIF(c.title, ''), c.ai_title)
+                    FROM clip_candidates c JOIN jobs j ON j.id = c.job_id WHERE c.id = %s AND c.job_id = %s
+                    """,
+                    (candidate_id, job_id),
+                )
+                row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Candidate not found")
+        name = post_rules.download_name(row[0], download, row[1] or "")
 
     return _serve_candidate_file(
         job_id,
         candidate_id,
         "final_path",
         fallback_column="render_path",
+        download_name=name,
     )
 
 
