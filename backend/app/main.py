@@ -1783,7 +1783,7 @@ def publish_queue(request: Request):
                 )
                 for r in cur.fetchall():
                     sends[(r[0], r[1])] = {"status": r[2], "message": r[3], "error": r[4], "mode": r[5],
-                                           "sent_at": r[6].isoformat() if r[6] else None}
+                                           "sent_at": r[6].isoformat() if r[6] else None, "_at": r[7]}
     groups = {}
     for (cid, jid, camp, job_platform, title, desc, dur, rendered_at, thumb, job_title,
          start_time, end_time, render_warnings, safety) in clips:
@@ -1792,15 +1792,23 @@ def publish_queue(request: Request):
             "start_time": start_time, "end_time": end_time, "description": desc,
             "render_warnings": render_warnings, "safety_check": safety,
         })) if rules else []
+        plats = post_rules.clip_platforms(rules, job_platform)
         if rules:
-            plats = [p for p in campaigns.platforms(rules) if p in rule_checks.PLATFORM_LIMITS]
             tags = campaigns.hashtags(rules)
             body = campaigns.caption_body(desc) or (title or "")
         else:
-            plats = [post_rules.JOB_PLATFORM.get(job_platform or "", "youtube")]
             tags, body = [], (desc or title or "").strip()
         g = groups.setdefault(camp or "", {
-            "campaign": camp, "campaign_name": campaigns.display_name(rules) if rules else "No campaign", "rows": [],
+            "campaign": camp, "campaign_name": campaigns.display_name(rules) if rules else "No campaign",
+            "rows": [], "cards": [],
+        })
+        clip_sends = [v for (c, _), v in sends.items() if c == cid]
+        g["cards"].append({
+            "candidate_id": cid, "job_id": jid, "job_title": job_title, "title": title or "",
+            "caption": post_rules.trim_caption(body, tags, 2200)[0], "has_thumbnail": bool(thumb),
+            "filename": post_rules.download_name(camp, None, title or ""),
+            "platforms": plats, "summary": _card_summary([posts.get((cid, p)) for p in plats]),
+            "last_send": max(clip_sends, key=lambda v: v["_at"]) if clip_sends else None,
         })
         for plat in plats:
             caption, trimmed = post_rules.trim_caption(body, tags, post_rules.CAPTION_LIMITS.get(plat, 2200))
@@ -1827,8 +1835,21 @@ def publish_queue(request: Request):
                 "post": posts.get((cid, plat)),
                 "checks": checks, "account_usage": acct_usage, "last_send": sends.get((cid, plat)),
             })
+    for v in sends.values():
+        v.pop("_at", None)
     order = sorted(groups.values(), key=lambda g: (g["campaign"] is None, g["campaign_name"].lower()))
     return {"groups": order}
+
+
+def _card_summary(posts_: list) -> dict:
+    """Publish card line (P2 fix, 144): live posts out of the clip's platforms + the Rp it should earn
+    (claimed/paid: expected_rp; posted: the claim advice's amount now), formatted by payouts."""
+    live = [p for p in posts_ if p and p["status"] in ("posted", "claimed", "paid")]
+    amounts = [p.get("expected_rp") if p["status"] in ("claimed", "paid") else (p.get("advice") or {}).get("payout_now_rp")
+               for p in live]
+    amounts = [a for a in amounts if a is not None]
+    return {"posted": len(live), "total": len(posts_),
+            "expected_fmt": payouts.format_idr(sum(amounts)) if amounts else None}
 
 
 # ---------- pre-post checks (P2 part 4, 131) ----------
@@ -2232,14 +2253,14 @@ def telegram_test(request: Request):
 
 class SendToPhone(BaseModel):
     candidate_id: str = Field(max_length=64)
-    platform: str = Field(max_length=20)
+    platform: Optional[str] = Field(default=None, max_length=20)  # None = the clip card: video once + every platform's caption
 
 
 @app.post("/api/publish/send-to-phone")
 def send_to_phone(payload: SendToPhone, request: Request):
-    """Queue: the final mp4 + title + caption (this platform's) to the user's own Telegram chat."""
+    """Queue: the final mp4 + title + caption (this platform's, or one per platform) to the user's own Telegram chat."""
     user = current_user(request)
-    if payload.platform not in rule_checks.PLATFORM_LIMITS:
+    if payload.platform is not None and payload.platform not in rule_checks.PLATFORM_LIMITS:
         raise HTTPException(status_code=400, detail="Unknown platform")
     with get_db() as conn:
         with conn.cursor() as cur:
@@ -2257,8 +2278,8 @@ def send_to_phone(payload: SendToPhone, request: Request):
                 raise HTTPException(status_code=409, detail="This clip has no final render yet")
             cur.execute(
                 """
-                SELECT 1 FROM telegram_sends WHERE user_id = %s AND candidate_id = %s AND platform = %s
-                  AND status IN ('queued', 'sending')
+                SELECT 1 FROM telegram_sends WHERE user_id = %s AND candidate_id = %s
+                  AND platform IS NOT DISTINCT FROM %s AND status IN ('queued', 'sending')
                 """,
                 (user["id"], payload.candidate_id, payload.platform),
             )
@@ -5247,10 +5268,11 @@ def get_candidate_render(
     candidate_id: str,
     download: Optional[str] = None,
 ):
-    # ?download=<platform> (Publish queue, 130): same file, saved as campaign_platform_slug.mp4.
+    # ?download=<platform> (Publish queue, 130): same file, saved as campaign_platform_slug.mp4;
+    # ?download=clip (the Publish card, 144) → campaign_slug.mp4.
     name = None
     if download:
-        if download not in rule_checks.PLATFORM_LIMITS:
+        if download != "clip" and download not in rule_checks.PLATFORM_LIMITS:
             raise HTTPException(status_code=400, detail="Unknown platform")
         with get_db() as conn:
             with conn.cursor() as cur:
@@ -5264,7 +5286,7 @@ def get_candidate_render(
                 row = cur.fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Candidate not found")
-        name = post_rules.download_name(row[0], download, row[1] or "")
+        name = post_rules.download_name(row[0], None if download == "clip" else download, row[1] or "")
 
     return _serve_candidate_file(
         job_id,

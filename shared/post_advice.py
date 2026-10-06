@@ -64,7 +64,7 @@ def advice_for(cur, user_id: str, post: dict, now: datetime) -> Optional[dict]:
         return None
     if post.get("eligible") is False:
         return {"action": "missed", "reason": "not_eligible", "message": post.get("ineligible_reason") or "Not eligible",
-                "payout_now_fmt": None, "views_needed": None, "deadline": None}
+                "payout_now_fmt": None, "payout_now_rp": None, "views_needed": None, "deadline": None}
     model = payouts.model_from_rules(rules)
     _, end = payouts.campaign_period(rules)
     a = payouts.claim_advice(
@@ -76,4 +76,5 @@ def advice_for(cur, user_id: str, post: dict, now: datetime) -> Optional[dict]:
     )
     return {"action": a.action, "reason": a.reason, "message": a.message,
             "payout_now_fmt": payouts.format_with_idr(a.payout_now, a.currency) if a.payout_now is not None else None,
+            "payout_now_rp": payouts.to_idr(a.payout_now, a.currency) if a.payout_now is not None else None,
             "views_needed": a.views_needed, "deadline": a.deadline.isoformat() if a.deadline else None}

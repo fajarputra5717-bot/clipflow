@@ -608,7 +608,8 @@ def telegram_call(method, data=None, files=None, timeout=60):
 
 
 def telegram_post_text(send):
-    """(title, caption, filename) for a clip send, same rules as the Publish queue (130)."""
+    """(clip, title, captions, filename) for a clip send, same rules as the Publish queue (130).
+    captions = [(platform, caption)]: the send's platform, or every platform of the clip (card send, 144)."""
     with db() as conn:
         c = conn.execute(
             """
@@ -626,9 +627,10 @@ def telegram_post_text(send):
         tags, body = campaigns.hashtags(rules), campaigns.caption_body(c["description"]) or (c["title"] or "")
     else:
         tags, body = [], (c["description"] or c["title"] or "").strip()
-    caption, _ = post_rules.trim_caption(body, tags, post_rules.CAPTION_LIMITS.get(plat, 2200))
-    title = post_rules.trim_title(c["title"] or "", plat)
-    return c, title, caption, post_rules.download_name(c["campaign"], plat, c["title"] or "")
+    plats = [plat] if plat else post_rules.clip_platforms(rules, c["job_platform"])
+    captions = [(p, post_rules.trim_caption(body, tags, post_rules.CAPTION_LIMITS.get(p, 2200))[0]) for p in plats]
+    title = post_rules.trim_title(c["title"] or "", plat) if plat else (c["title"] or "").strip()
+    return c, title, captions, post_rules.download_name(c["campaign"], plat, c["title"] or "")
 
 
 def shrink_for_telegram(src, send_id, duration):
@@ -658,7 +660,7 @@ def process_telegram_send(send):
             telegram_call("sendMessage", {"chat_id": chat, "text": "ClipFlow ✓ Send to phone will deliver your clips to this chat."})
             update_telegram_send(sid, status="sent", progress=100, message="Test message sent", mode="text", sent_at=datetime.now(timezone.utc))
             return
-        c, title, caption, filename = telegram_post_text(send)
+        c, title, captions, filename = telegram_post_text(send)
         src = Path(c["final_path"])
         if not src.is_absolute():
             src = DATA_ROOT / src
@@ -673,8 +675,9 @@ def process_telegram_send(send):
                 update_telegram_send(sid, tmp_path=str(tmp.relative_to(DATA_ROOT)))
             else:
                 path, mode = None, "too_big"
-        platform_name = rule_checks_platform_name(send["platform"])
-        head = f"{title}\n{platform_name} · {filename}"
+        where = rule_checks_platform_name(send["platform"]) if send["platform"] else \
+            ", ".join(rule_checks_platform_name(p) for p, _ in captions)
+        head = f"{title}\n{where} · {filename}"
         if path:
             update_telegram_send(sid, progress=40, message="Uploading to Telegram")
             with open(path, "rb") as fh:
@@ -684,8 +687,13 @@ def process_telegram_send(send):
                 telegram_call("sendMessage", {"chat_id": chat, "text": "Note: re-encoded to fit Telegram's 50 MB limit; download the original from ClipFlow → Publish for full quality."})
         else:
             telegram_call("sendMessage", {"chat_id": chat, "text": f"{head}\n\nThis clip is over Telegram's 50 MB limit and couldn't be shrunk without wrecking it: download it from ClipFlow → Publish."})
-        update_telegram_send(sid, progress=85, message="Sending the caption")
-        telegram_call("sendMessage", {"chat_id": chat, "text": caption[:4096] or title})
+        update_telegram_send(sid, progress=85, message="Sending the caption" if len(captions) == 1 else "Sending the captions")
+        for plat, caption in captions:
+            if len(captions) == 1:
+                telegram_call("sendMessage", {"chat_id": chat, "text": caption[:4096] or title})
+            else:  # one message per platform, so each copies on its own
+                label = rule_checks_platform_name(plat)
+                telegram_call("sendMessage", {"chat_id": chat, "text": f"{label}:\n{caption}"[:4096]})
         msg = {"video": "Sent to your phone", "reencoded": "Sent (re-encoded under 50 MB)", "too_big": "Too big for Telegram: caption + note sent"}[mode]
         update_telegram_send(sid, status="sent", progress=100, message=msg, mode=mode, sent_at=datetime.now(timezone.utc), error=None)
         log(f"Telegram send {sid}: {mode}")

@@ -40,8 +40,7 @@ def _ready(cur, user_id):
     out = []
     for cid, camp, job_platform, title in clips:
         rules = campaigns.get(camp) if camp else None
-        plats = ([p for p in campaigns.platforms(rules) if p in rule_checks.PLATFORM_LIMITS] if rules
-                 else [post_rules.JOB_PLATFORM.get(job_platform or "", "youtube")])
+        plats = post_rules.clip_platforms(rules, job_platform)
         missing = [p for p in plats if (cid, p) not in live]
         if missing:
             out.append((title or "Untitled clip", campaigns.display_name(rules) if rules else None, missing))

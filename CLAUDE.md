@@ -363,9 +363,11 @@ Writing tests (cross-user, settings, qa-tmp users) run on staging only (:8080/:8
 `clip_posts` = one row per clip per platform post; every writer (manual UI now, auto-poster/view tracker later)
 validates through `shared/posts.py` (status lifecycle, required fields, URL host per platform, paid_rp whole IDR).
 Posted rows are history: never deleted (drop them); an account with posts is paused, never deleted. Publish step (130):
-`GET /api/publish-queue` builds rows server-side (clip × campaign platform; caption via `campaigns.caption_body` +
-hashtags in order, trimmed by `posts.trim_caption`, never cutting tags); downloads use `…/render?download=<platform>`
-(server-side filename). Copy buttons go through `copyText()` (sync Clipboard API in the tap + execCommand fallback). Pre-post
+`GET /api/publish-queue` builds rows server-side (clip × platform from `posts.clip_platforms()`; caption via `campaigns.caption_body` +
+hashtags in order, trimmed by `posts.trim_caption`, never cutting tags); downloads use `…/render?download=<platform|clip>`
+(server-side filename). UI (144): ONE card per clip (`cards[]`: summary "Posted on N of M · Rp X expected" formatted
+server-side) + a chip per platform → that platform's panel (≤ 600 px a bottom sheet in body-level `#publishSheetHost`,
+because `.view-section` always has a transform; only in the DOM while open). Card Send to phone = no platform → video once + every caption. Copy buttons go through `copyText()` (sync Clipboard API in the tap + execCommand fallback). Pre-post
 checks (132): red = `rule_checks` blocking failures (same as Approve; posting → 409); amber = `payouts.window_problems`
 / `cap_problem` / platform length; posting with warnings stores `eligible=false` + `ineligible_reason` (computed
 server-side). Windows, caps and payout math live ONLY in `shared/payouts.py` (Lane B module, 131). Claims (133):

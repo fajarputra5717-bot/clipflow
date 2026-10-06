@@ -115,3 +115,4 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 141 · 2026-10-07 · P2 (6a): Send to phone — per-user Telegram chat (Account), worker queue telegram_sends, ≤ 50 MB or re-encoded, caption as 2nd message, island progress · main.py, worker.py, index.html
 142 · 2026-10-07 · P2 (6b): per-user 09:00 WIB Telegram digest (ready to post, claim now, closing in 48 h, stale views, IME week) via notifier + shared/digest.py; advice glue → shared/post_advice.py · notifier, shared, main.py
 143 · 2026-10-07 · Deploy order: /health 503 until the schema is migrated; backend healthcheck; worker + notifier depends_on service_healthy · main.py, docker-compose.yml
+144 · 2026-10-07 · P2 fix: Publish = one card per clip, per-platform status chips + panel (bottom sheet on mobile), campaign / left-to-post filters; card send = video + every caption · index.html, main.py, worker.py, shared
