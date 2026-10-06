@@ -23,7 +23,10 @@ import uuid
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatchError
 
-SESSION_COOKIE = "clipflow_session"
+# 140: cookies are scoped to the host, not the port, so prod (:80) and staging (:8080) on one box would
+# overwrite each other's session. CLIPFLOW_ENV=staging (env only) gives staging its own cookie name.
+CLIPFLOW_ENV = (os.getenv("CLIPFLOW_ENV") or "production").strip().lower()
+SESSION_COOKIE = "clipflow_session" if CLIPFLOW_ENV == "production" else f"clipflow_{CLIPFLOW_ENV}_session"
 SESSION_TTL_DAYS = 30
 SESSION_TOUCH_SECONDS = 300       # last_seen_at/expiry slide at most every 5 min
 

@@ -111,3 +111,4 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 137 · 2026-10-06 · Bug: Get another hook returned used moments → per-job used_hook_ranges, server-side overlap check (>30 % / <10 s), 2 retries, 'No new distinct moment found' · main.py, shared/hook_ranges.py
 138 · 2026-10-06 · Origin check = scheme+host+port (X-Forwarded-Host $http_host from nginx), non-80 deployments work; configurable list unchanged · shared/origins.py, main.py, nginx
 139 · 2026-10-06 · Login limits: 5/username+IP, 50/username any IP, 20/IP per 15 min (fixes username lockout DoS, Lane C Low) · app/auth.py, main.py
+140 · 2026-10-06 · CLIPFLOW_ENV=staging → cookie clipflow_staging_session (prod unchanged) so prod/staging sessions don't collide · app/auth.py, settings, .env.example
