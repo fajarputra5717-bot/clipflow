@@ -5136,6 +5136,7 @@ def create_preview(
     # QA P0: previews sound like the final (same chain + verify, never fatal).
     normalize_loudness(preview_path, duration, candidate_id=candidate_id,
                        audio_bitrate="96k")
+    render_steps.write_timeline(preview_path, clip_segments, duration, candidate_id, PREVIEW_DIR, log=log)  # lane-b hook
 
     # A locked thumbnail (an AI option or a manual upload the user
     # explicitly picked via Apply changes) must survive preview

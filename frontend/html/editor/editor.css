@@ -8,7 +8,7 @@
 .ed-title{font:700 24px/1.2 var(--font-display);margin:2px 0 0;letter-spacing:-.01em}
 .ed-reason{color:var(--muted);font-size:13px;margin:6px 0 0}
 .ed-grid{display:grid;grid-template-columns:288px minmax(0,1fr);gap:var(--sp-3);align-items:start}
-.ed-player{position:sticky;top:76px}
+.ed-player{min-width:0}  /* not sticky: the compact stepper (121) is sticky now */
 .ed-frame{position:relative;aspect-ratio:9/16;border-radius:18px;overflow:hidden;background:#000;box-shadow:var(--shadow);container-type:size}
 .ed-frame video{width:100%;height:100%;object-fit:cover;display:block}
 .ed-novideo{position:absolute;inset:0;display:grid;place-items:center;color:#8e8e93;font-size:13px}
@@ -60,3 +60,21 @@
   .ed-state{flex-basis:100%}
 }
 @media (prefers-reduced-motion:reduce){.ed-hook{transform:none!important}}
+/* Timeline (task 2): ruler, waveform canvas, word chips, playhead. Scrolls inside its box. */
+.ed-tl{margin-top:var(--sp-3);background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:12px 12px 10px;box-shadow:var(--shadow)}
+.ed-tl-head{display:flex;align-items:center;gap:var(--sp-1);margin-bottom:8px;flex-wrap:wrap}
+.ed-tl-scroll{overflow-x:auto;overscroll-behavior-x:contain;border-radius:12px;background:var(--panel2,var(--fill))}
+.ed-tl-inner{position:relative;height:118px;cursor:pointer;user-select:none;-webkit-user-select:none}
+.ed-tl-ruler{position:absolute;left:0;right:0;top:0;height:18px;font-size:10px;color:var(--muted2);font-variant-numeric:tabular-nums;pointer-events:none}
+.ed-tl-ruler i{position:absolute;top:0;width:1px;height:6px;background:var(--line2,var(--line))}
+.ed-tl-ruler span{position:absolute;top:4px;transform:translateX(3px)}
+.ed-tl-wave{position:absolute;left:0;top:22px;color:var(--muted2);pointer-events:none}
+.ed-tl-words{position:absolute;left:0;right:0;top:72px;height:34px}
+.ed-word{position:absolute;top:0;height:32px;padding:0 3px;border:0;border-radius:7px;background:var(--fill);color:var(--text);
+  font:500 12px var(--font-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;
+  transition:background var(--dur-1) var(--ease),color var(--dur-1) var(--ease)}
+.ed-word:hover{background:var(--fill2,rgba(120,120,128,.24))}
+.ed-word.now{background:var(--accent);color:#fff}
+.ed-word:focus-visible{outline:none;box-shadow:var(--ring)}
+.ed-tl-playhead{position:absolute;top:0;bottom:0;left:-1px;width:2px;background:var(--bad);pointer-events:none;will-change:transform}
+.ed-tl-playhead::before{content:"";position:absolute;top:0;left:-4px;width:10px;height:10px;border-radius:50%;background:var(--bad)}

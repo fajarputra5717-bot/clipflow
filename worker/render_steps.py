@@ -187,3 +187,17 @@ def add_title_card(ass_path, candidate: dict, *, size: tuple[int, int], clip_dur
     except Exception as e:  # never break a render over the card
         log(f"WARNING: hook title card skipped: {e}")
         return ass_path
+
+
+# --------------------------------------------------------------------------- timeline (task 2)
+
+def write_timeline(preview_path, segments, duration, candidate_id, previews_dir, log=print):
+    """After a preview render: waveform peaks + word chips → previews/<cid>.timeline.json.
+    Never fatal (the editor falls back to chips without a waveform)."""
+    from shared import timeline
+    try:
+        data = timeline.build(preview_path, segments, duration)
+        timeline.write_cache(timeline.cache_path(previews_dir, candidate_id), data, preview_path)
+        log(f"Timeline: {len(data['words'])} words, {len(data['peaks'] or [])} peaks")
+    except Exception as e:
+        log(f"WARNING: timeline skipped: {e}")

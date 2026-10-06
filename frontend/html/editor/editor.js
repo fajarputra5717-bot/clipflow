@@ -12,7 +12,8 @@
   const READY_TABS = new Set(["captions"]);   // the rest arrive with P4 tasks 3–5
   const edUrl = (jid, cid) => `/api/jobs/${encodeURIComponent(jid)}/candidates/${encodeURIComponent(cid)}/editor`;
   const reduced = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const E = { jid: null, cid: null, state: null, hook: null, saveT: 0, pollT: 0, hidden: [], tab: "captions", busy: false };
+  const PPS = 100;                              // timeline pixels per second
+  const E = { tl: null, raf: 0, nowWord: -1, jid: null, cid: null, state: null, hook: null, saveT: 0, pollT: 0, hidden: [], tab: "captions", busy: false };
 
   function section() {
     let s = $("editorSection");
@@ -60,7 +61,7 @@
   }
 
   function close(setHash = true) {
-    clearTimeout(E.saveT); clearInterval(E.pollT);
+    clearTimeout(E.saveT); clearInterval(E.pollT); cancelAnimationFrame(E.raf); E.tl = null; E.nowWord = -1;
     const s = $("editorSection");
     if (s) { s.hidden = true; s.classList.add("hidden"); s.innerHTML = ""; }
     E.hidden.forEach(([v, hadHidden]) => v.classList.toggle("hidden", hadHidden));
@@ -109,6 +110,7 @@
           <div class="ed-panel" role="tabpanel" aria-labelledby="edtab-captions">${captionsPanel()}</div>
         </div>
       </div>
+      <div class="ed-tl" id="edTl" aria-label="Timeline"><div class="ed-hint">Loading the timeline…</div></div>
       <div class="ed-foot">
         <span class="ed-state" id="edState"></span>
         <span class="ed-spacer"></span>
@@ -118,6 +120,97 @@
     paintHook();
     paintState();
     requestAnimationFrame(moveSeg);
+    loadTimeline();
+  }
+
+  // ------------------------------------------------------------------ timeline (task 2)
+  async function loadTimeline() {
+    try {
+      E.tl = await api(edUrl(E.jid, E.cid) + "/timeline");
+      renderTimeline();
+    } catch (e) {
+      const el = $("edTl"); if (el) el.innerHTML = `<div class="ed-hint">Timeline unavailable: ${esc(e.message)}</div>`;
+    }
+  }
+
+  function renderTimeline() {
+    const el = $("edTl"), tl = E.tl;
+    if (!el || !tl) return;
+    const dur = Number(tl.duration) || 0, W = Math.max(1, Math.ceil(dur * PPS));
+    let ruler = "";
+    for (let t = 0; t <= dur; t++) ruler += `<i style="left:${t * PPS}px"></i>${t % 2 === 0 ? `<span style="left:${t * PPS}px">${fmt(t)}</span>` : ""}`;
+    const chips = tl.words.map((w) => `<button type="button" class="ed-word" data-ed-word="${w.i}" title="${esc(w.text)} · ${w.start.toFixed(2)} s"
+        style="left:${(w.start * PPS).toFixed(1)}px;width:${Math.max(16, (w.end - w.start) * PPS - 2).toFixed(1)}px">${esc(w.text)}</button>`).join("");
+    el.innerHTML = `
+      <div class="ed-tl-head"><span class="ed-label">Timeline</span>
+        <span class="ed-hint">${E.state.candidate.has_preview ? "Click a word to jump there" : "Render a preview to play"}</span>
+        <span class="ed-spacer"></span><span class="ed-time" id="edTlTime">0:00.0 / ${fmt(dur)}</span></div>
+      <div class="ed-tl-scroll" id="edTlScroll">
+        <div class="ed-tl-inner" id="edTlInner" style="width:${W}px" data-ed-seekarea>
+          <div class="ed-tl-ruler" aria-hidden="true">${ruler}</div>
+          <canvas class="ed-tl-wave" id="edWave" aria-hidden="true"></canvas>
+          <div class="ed-tl-words" role="group" aria-label="Words">${chips}</div>
+          <div class="ed-tl-playhead" id="edPlayhead" aria-hidden="true"></div>
+        </div>
+      </div>
+      ${tl.peaks ? "" : `<div class="ed-hint">The waveform appears after the next Render preview.</div>`}`;
+    drawWave();
+    paintPlayhead();
+  }
+
+  function drawWave() {
+    const cv = $("edWave"), tl = E.tl;
+    if (!cv || !tl) return;
+    const dpr = window.devicePixelRatio || 1, W = Math.ceil(tl.duration * PPS), H = 44;
+    cv.style.width = W + "px"; cv.style.height = H + "px";
+    cv.width = Math.ceil(W * dpr); cv.height = Math.ceil(H * dpr);
+    const g = cv.getContext("2d");
+    g.scale(dpr, dpr);
+    g.fillStyle = getComputedStyle(cv).color || "#8e8e93";
+    if (!tl.peaks) { g.fillRect(0, H / 2 - 0.5, W, 1); return; }
+    const col = 3, per = tl.rate / PPS;              // peaks per pixel
+    for (let x = 0; x < W; x += col) {
+      let m = 0;
+      for (let i = Math.floor(x * per); i < Math.min(tl.peaks.length, Math.floor((x + col) * per) + 1); i++) m = Math.max(m, tl.peaks[i]);
+      const h = Math.max(1, m * (H - 4));
+      g.fillRect(x, (H - h) / 2, col - 1, h);
+    }
+  }
+
+  function wordAt(t) {                              // last word that started at or before t
+    const w = E.tl ? E.tl.words : [];
+    let lo = 0, hi = w.length - 1, ans = -1;
+    while (lo <= hi) { const mid = (lo + hi) >> 1; if (w[mid].start <= t) { ans = mid; lo = mid + 1; } else hi = mid - 1; }
+    return ans >= 0 && t < w[ans].end + 0.15 ? ans : -1;
+  }
+
+  function paintPlayhead(follow) {
+    const v = $("edVideo"), ph = $("edPlayhead");
+    if (!ph || !E.tl) return;
+    const t = v ? v.currentTime : 0, x = t * PPS;
+    ph.style.transform = `translateX(${x}px)`;
+    const tm = $("edTlTime"); if (tm) tm.textContent = `${fmt(t)}.${Math.floor((t % 1) * 10)} / ${fmt(E.tl.duration)}`;
+    const i = wordAt(t);
+    if (i !== E.nowWord) {
+      document.querySelector(".ed-word.now")?.classList.remove("now");
+      if (i >= 0) document.querySelector(`[data-ed-word="${i}"]`)?.classList.add("now");
+      E.nowWord = i;
+    }
+    const sc = $("edTlScroll");
+    if (follow && sc && (x < sc.scrollLeft + 24 || x > sc.scrollLeft + sc.clientWidth - 48)) sc.scrollLeft = Math.max(0, x - 48);
+  }
+
+  function loop() {
+    const v = $("edVideo");
+    paintPlayhead(true);
+    if (v && !v.paused && E.cid) E.raf = requestAnimationFrame(loop);
+  }
+
+  function seek(t) {
+    const v = $("edVideo");
+    if (!v || !E.state.candidate.has_preview) return;
+    v.currentTime = Math.max(0, Math.min(t, (E.tl && E.tl.duration) || v.duration || t));
+    paintPlayhead(false); paintHook();
   }
 
   function captionsPanel() {
@@ -173,8 +266,8 @@
     const v = $("edVideo"); if (!v) return;
     const tick = () => { paintHook(); const tm = $("edTime"); if (tm) tm.textContent = fmt(v.currentTime); };
     v.addEventListener("timeupdate", tick);
-    v.addEventListener("seeked", tick);
-    v.addEventListener("play", () => setPlay(true));
+    v.addEventListener("seeked", () => { tick(); paintPlayhead(false); });
+    v.addEventListener("play", () => { setPlay(true); cancelAnimationFrame(E.raf); E.raf = requestAnimationFrame(loop); });
     v.addEventListener("pause", () => setPlay(false));
     if (!reduced()) v.play().catch(() => {});
   }
@@ -234,7 +327,7 @@
         clearInterval(E.pollT); E.busy = false; E.dirty = false; paintHook();
         setBusy(btn, false);
         const v = $("edVideo");
-        if (v && st.candidate.has_preview) { v.src = previewSrc(); if (!reduced()) v.play().catch(() => {}); }
+        if (v && st.candidate.has_preview) { v.src = previewSrc(); if (!reduced()) v.play().catch(() => {}); loadTimeline(); }
         else render();
         paintState(st.candidate.status === "failed" ? "Preview render failed: see the clip in Review" : undefined);
       } catch (_) { /* keep polling; the island shows the job state */ }
@@ -243,7 +336,7 @@
 
   // ------------------------------------------------------------------ events (delegated, data-*)
   document.addEventListener("click", (e) => {
-    const t = e.target.closest("[data-ed-back],[data-ed-hook-on],[data-ed-hook-dur],[data-ed-render],[data-ed-play],[data-ed-tab]");
+    const t = e.target.closest("[data-ed-back],[data-ed-hook-on],[data-ed-hook-dur],[data-ed-render],[data-ed-play],[data-ed-tab],[data-ed-word],[data-ed-seekarea]");
     if (!t || !E.state && !t.matches("[data-ed-back]")) return;
     if (t.matches("[data-ed-back]")) {
       e.preventDefault(); close(true);
@@ -260,6 +353,10 @@
       document.querySelectorAll("[data-ed-hook-dur]").forEach((b) => b.setAttribute("aria-pressed", String(b === t)));
       const v = $("edVideo"); if (v) { v.currentTime = 0; }
       paintHook(); scheduleSave(); return;
+    }
+    if (t.matches("[data-ed-word]")) { const w = E.tl && E.tl.words[Number(t.dataset.edWord)]; if (w) seek(w.start + 0.001); return; }
+    if (t.matches("[data-ed-seekarea]")) {                  // click on the ruler/waveform, not a chip
+      const r = t.getBoundingClientRect(); seek((e.clientX - r.left) / PPS); return;
     }
     if (t.matches("[data-ed-render]")) return renderPreview(t);
     if (t.matches("[data-ed-play]")) { const v = $("edVideo"); if (v) v.paused ? v.play() : v.pause(); return; }

@@ -12,9 +12,19 @@ function editorState(over = {}) {
   };
 }
 
-async function mockEditor(page, api) {
+const TIMELINE = {
+  version: 1, duration: 6, rate: 50, cached: true,
+  peaks: Array.from({ length: 300 }, (_, i) => Math.abs(Math.sin(i / 9))),
+  words: [{ i: 0, text: "Hahahaha", start: 0, end: 0.4 }, { i: 1, text: "Kekuatan", start: 0.5, end: 1.1 },
+          { i: 2, text: "hitam", start: 3.0, end: 3.5 }],
+  gaps: [{ start: 1.1, end: 3.0 }],
+};
+
+async function mockEditor(page, api, timeline = TIMELINE) {
   api.editor = editorState();
-  await page.route(/\/api\/jobs\/[^/]+\/candidates\/[^/]+\/editor/, async (route) => {
+  await page.route(/\/api\/jobs\/[^/]+\/candidates\/[^/]+\/editor\/timeline/, (route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(timeline) }));
+  await page.route(/\/api\/jobs\/[^/]+\/candidates\/[^/]+\/editor(\/hook-title)?(\?.*)?$/, async (route) => {
     const req = route.request();
     if (req.method() === "PUT") {
       const body = req.postDataJSON();
@@ -24,6 +34,28 @@ async function mockEditor(page, api) {
     return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(api.editor) });
   });
 }
+
+test.describe("Editor timeline", () => {
+  test("ruler, waveform and one chip per word, positioned by time", async ({ app, api }) => {
+    await mockEditor(app, api);
+    await app.evaluate(() => { location.hash = "#editor/job-done/cand-a"; });
+    const chips = app.locator(".ed-word");
+    await expect(chips).toHaveCount(3);
+    await expect(chips.nth(2)).toHaveText("hitam");
+    const left = await chips.nth(2).evaluate((el) => parseFloat(el.style.left));
+    const inner = await app.locator("#edTlInner").evaluate((el) => parseFloat(el.style.width));
+    expect(left / inner).toBeCloseTo(3.0 / 6, 2);                   // chip at 3.0 s of a 6 s clip
+    expect(await app.locator("#edWave").evaluate((c) => c.width > 0)).toBe(true);
+    await expect(app.locator("#edTl")).not.toContainText("waveform appears");
+  });
+
+  test("without a cached waveform: chips + a hint, no crash", async ({ app, api }) => {
+    await mockEditor(app, api, { ...TIMELINE, peaks: null, cached: false });
+    await app.evaluate(() => { location.hash = "#editor/job-done/cand-a"; });
+    await expect(app.locator(".ed-word")).toHaveCount(3);
+    await expect(app.locator("#edTl")).toContainText("waveform appears after the next Render preview");
+  });
+});
 
 test.describe("Editor page", () => {
   test("Open editor from Review shows the editor as its own view", async ({ app, api }) => {

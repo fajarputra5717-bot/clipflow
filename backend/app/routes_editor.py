@@ -13,6 +13,7 @@ implementation of auth, the DB connection, json params and the 114 "final outdat
 Routes (all under /api, so the auth middleware applies):
   GET /api/jobs/{jid}/candidates/{cid}/editor              editor state for one clip
   PUT /api/jobs/{jid}/candidates/{cid}/editor/hook-title   {on, text, duration} → edit_spec.hook_title
+  GET /api/jobs/{jid}/candidates/{cid}/editor/timeline     waveform peaks + word chips (task 2)
 Rendering stays on the existing POST /api/jobs/{jid}/candidates/{cid}/regenerate-preview (island
 progress via /api/activity, version history).
 """
@@ -23,6 +24,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from shared import edit_spec as edit_specs
+from shared import timeline as timelines
 
 router = APIRouter(prefix="/api/jobs/{job_id}/candidates/{candidate_id}/editor", tags=["editor"])
 
@@ -136,3 +138,19 @@ def put_hook_title(job_id: str, candidate_id: str, body: HookTitleIn, user: dict
             core.mark_finals_outdated(cur, c["job_id"], candidate_id)  # 114: same transaction
         conn.commit()
         return _state(_load(cur, job_id, candidate_id, user))
+
+
+@router.get("/timeline")
+def editor_timeline(job_id: str, candidate_id: str, user: dict = Depends(get_current_user)):
+    """Cached timeline written by the worker after the last preview render; without one (older
+    previews), word chips only (`peaks: null`) so the UI still seeks by word."""
+    core = _core()
+    with core.get_db() as conn, conn.cursor() as cur:
+        c = _load(cur, job_id, candidate_id, user)
+        cur.execute("SELECT subtitle_segments FROM clip_candidates WHERE id::text = %s", (candidate_id,))
+        segments = (cur.fetchone() or [None])[0] or []
+    duration = c["duration_seconds"] or ((c["end_time"] or 0) - (c["start_time"] or 0))
+    cached = timelines.read_cache(timelines.cache_path(core.DATA_ROOT / "previews", candidate_id), c["preview_path"])
+    if cached and cached.get("words"):
+        return {**cached, "cached": True}
+    return {**timelines.words_only(segments, duration), "cached": False}
