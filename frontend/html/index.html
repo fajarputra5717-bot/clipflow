@@ -1329,6 +1329,15 @@ select::-ms-expand{display:none}
   .qrow .qp{grid-column:2}.qrow .qwhen{grid-column:2/4}.qrow .qs{grid-column:3;grid-row:1}
   .qactions,.qmark,.qnote{margin-left:0}
 }
+/* Pre-post checks (P2 part 4, 131): red = blocks like Approve; amber = warning (post anyway → not eligible) */
+.qchecks{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 0 calc(40px + var(--sp-2));padding:0;list-style:none}
+.qcheck{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:3px 10px;border-radius:999px;border:1px solid}
+.qcheck.is-block{background:var(--badge-bad-bg);border-color:var(--badge-bad-line);color:var(--badge-bad-fg)}
+.qcheck.is-warn{background:var(--badge-warn-bg);border-color:var(--badge-warn-line);color:var(--badge-warn-fg)}
+.qcheck::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;flex:none}
+.qmark .qmark-warn{flex-basis:100%;margin:0;font-size:12px;color:var(--badge-warn-fg)}
+.badge.not-eligible{margin-left:4px;background:var(--badge-warn-bg);border-color:var(--badge-warn-line);color:var(--badge-warn-fg)}
+@media (max-width:760px){.qchecks{margin-left:0}}
 </style>
 </head>
 <body>
@@ -3551,10 +3560,14 @@ function publishRowHtml(r){
   const when=st==="ready"?`<b>Not posted</b><small>${esc(r.job_title||"")}</small>`
     :`<b>${esc(fmtPostedAt(r.post.posted_at)||"—")}</b><small>${r.post.account_handle?"@"+esc(r.post.account_handle):""}${r.post.url?` · <a href="${esc(r.post.url)}" target="_blank" rel="noopener">open post</a>`:""}</small>`;
   const accts=accountsCache.filter(a=>a.platform===r.platform&&a.active);
+  const checks=r.checks||[],blocks=checks.filter(c=>c.level==="block");
+  const rowWarns=checks.filter(c=>c.level==="warn"&&!c.account_id);
+  const usage=r.account_usage||{},capLabel=a=>{const u=usage[a.id];return u&&u.cap!=null?` · ${u.used}/${u.cap} this month${u.used>=u.cap?" (cap reached)":""}`:""};
   const form=!open?"":accts.length?`<form class="qmark" data-mark-form="${esc(k)}" novalidate>
-      <div class="field"><label for="acct-${esc(k)}">Account</label><select id="acct-${esc(k)}">${accts.map(a=>`<option value="${esc(a.id)}">@${esc(a.handle)}</option>`).join("")}</select></div>
+      <div class="field"><label for="acct-${esc(k)}">Account</label><select id="acct-${esc(k)}" data-mark-account="${esc(k)}">${accts.map(a=>`<option value="${esc(a.id)}">@${esc(a.handle)}${esc(capLabel(a))}</option>`).join("")}</select></div>
       <div class="field"><label for="url-${esc(k)}">Link to the post</label><input id="url-${esc(k)}" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://…"></div>
       <button class="primary" type="submit">Save</button><button class="secondary" type="button" data-mark-cancel="${esc(k)}">Cancel</button>
+      <p class="qmark-warn" data-mark-warn ${markWarnings(r,accts[0]?.id).length?"":"hidden"}>${esc(markWarnText(r,accts[0]?.id))}</p>
       <div class="account-msg" role="status" aria-live="polite"></div></form>`
     :`<p class="qnote">No active ${esc(r.platform_name)} account yet. <button class="plain" type="button" data-nav="settings">Add one in Settings → Posting accounts</button></p>`;
   return `<div class="qitem" data-publish-row="${esc(k)}" data-platform="${esc(r.platform)}">
@@ -3563,18 +3576,27 @@ function publishRowHtml(r){
       <div class="qn"><div class="qt" title="${esc(r.title)}">${esc(r.title||"Untitled clip")}</div><div class="qc" title="${esc(r.caption)}">${esc(r.caption.replace(/\s+/g," "))}</div></div>
       <div class="qp"><span class="pchip" title="${esc(r.platform_name)}">${PLATFORM_ICON[r.platform]||""}${esc(PLATFORM_SHORT[r.platform]||r.platform_name)}</span></div>
       <div class="qwhen">${when}</div>
-      <div class="qs"><span class="badge ${cls}">${label}</span></div>
+      <div class="qs"><span class="badge ${cls}">${label}</span>${r.post&&r.post.eligible===false&&st!=="ready"?`<span class="badge not-eligible" title="${esc(r.post.ineligible_reason||"")}">Not eligible</span>`:""}</div>
     </div>
     <div class="qactions">
       <a class="btn-sm" href="${esc(mediaUrl(base+"/render")+(mediaUrl(base+"/render").includes("?")?"&":"?")+"download="+encodeURIComponent(r.platform))}" download="${esc(r.filename)}" data-download>Download</a>
       <button class="secondary" type="button" data-copy-title="${esc(k)}">Copy title</button>
       <button class="secondary" type="button" data-copy-caption="${esc(k)}">Copy caption</button>
-      ${st==="ready"?`<button class="secondary" type="button" data-mark-open="${esc(k)}" aria-expanded="${open?"true":"false"}">Mark posted</button>`:""}
+      ${st==="ready"?`<button class="secondary" type="button" data-mark-open="${esc(k)}" aria-expanded="${open?"true":"false"}" ${blocks.length?`disabled title="Fix the red checks first (same rules as Approve)"`:""}>Mark posted</button>`:""}
     </div>
+    ${blocks.length||rowWarns.length||(r.post&&r.post.eligible===false&&st!=="ready")?`<ul class="qchecks">${blocks.map(c=>`<li class="qcheck is-block">${esc(c.message)}</li>`).join("")}${st==="ready"?rowWarns.map(c=>`<li class="qcheck is-warn">${esc(c.message)}</li>`).join("")+checks.filter(c=>c.level==="warn"&&c.account_id).map(c=>`<li class="qcheck is-warn">${esc(c.message)}</li>`).join(""):""}${r.post&&r.post.eligible===false&&st!=="ready"?`<li class="qcheck is-warn">Not eligible: ${esc(r.post.ineligible_reason||"")}</li>`:""}</ul>`:""}
     ${r.caption_trimmed?`<p class="qnote">Caption shortened to fit ${esc(r.platform_name)}; hashtags kept in order.</p>`:""}
     ${form}
   </div>`;
 }
+// What "Mark posted" will record as the not-eligible reason for this account (row warnings + its cap).
+function markWarnings(r,accountId){return (r.checks||[]).filter(c=>c.level==="warn"&&(!c.account_id||c.account_id===accountId))}
+function markWarnText(r,accountId){const w=markWarnings(r,accountId);return w.length?(r.campaign?"Will be recorded as not eligible: ":"Heads-up: ")+w.map(c=>c.message).join("; "):""}
+document.addEventListener("change",e=>{
+  const sel=e.target.closest?.("[data-mark-account]");if(!sel)return;
+  const r=publishRow(sel.dataset.markAccount),p=sel.closest("form").querySelector("[data-mark-warn]");
+  p.textContent=markWarnText(r,sel.value);p.hidden=!p.textContent;
+});
 function renderPublish(){
   const rows=publishGroups.flatMap(g=>g.rows),plats=[...new Set(rows.map(r=>r.platform))];
   if(publishFilter!=="all"&&!plats.includes(publishFilter))publishFilter="all";

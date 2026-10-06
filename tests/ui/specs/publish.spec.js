@@ -76,3 +76,33 @@ test("mobile tab bar keeps every item on one row (Publish added)", async ({ app 
   expect(ys.length).toBe(5);
   expect(new Set(ys).size).toBe(1);
 });
+
+test("pre-post checks: red blocks Mark posted; warnings show and preview 'not eligible' per account", async ({ app, api }) => {
+  api.accounts = [{ id: "acc-1", platform: "tiktok", platform_name: "TikTok", handle: "imeclips", active: true },
+                  { id: "acc-2", platform: "tiktok", platform_name: "TikTok", handle: "imespare", active: true }];
+  api.publishGroups = [{ campaign: "ime-roleplay", campaign_name: "IME Roleplay", rows: [
+    row({ campaign: "ime-roleplay", checks: [
+      { level: "warn", code: "outside_window", message: "Outside IME Roleplay week window (W1–W4: 1 Oct–28 Oct)" },
+      { level: "warn", code: "account_cap", account_id: "acc-1", message: "Cap reached for @imeclips on TikTok this month (2 of 2)" }],
+      account_usage: { "acc-1": { used: 2, cap: 2 }, "acc-2": { used: 0, cap: 2 } } }),
+    row({ candidate_id: "cand-red", campaign: "ime-roleplay", platform: "facebook", platform_name: "Facebook Reels",
+      checks: [{ level: "block", code: "hashtags", message: "Hashtags missing or out of order" }, { level: "warn", code: "length", message: "Over 90 s for Facebook Reels (104 s)" }] }),
+  ] }];
+  await app.reload(); await app.waitForResponse((r) => r.url().includes("/api/accounts"));
+  await app.locator('#flow [data-nav="publish"]').click();
+  const red = app.locator('[data-publish-row="cand-red:facebook"]');
+  await expect(red.locator(".qcheck.is-block")).toHaveText("Hashtags missing or out of order");
+  await expect(red.locator(".qcheck.is-warn")).toHaveText("Over 90 s for Facebook Reels (104 s)");
+  await expect(red.locator("[data-mark-open]")).toBeDisabled();
+  const tt = app.locator('[data-publish-row="cand-a:tiktok"]');
+  await expect(tt.locator(".qcheck.is-warn")).toHaveText(["Outside IME Roleplay week window (W1–W4: 1 Oct–28 Oct)", "Cap reached for @imeclips on TikTok this month (2 of 2)"]);
+  await tt.locator("[data-mark-open]").click();
+  const sel = tt.locator("select");
+  await expect(sel.locator("option").first()).toHaveText("@imeclips · 2/2 this month (cap reached)");
+  await expect(tt.locator("[data-mark-warn]")).toHaveText(/Will be recorded as not eligible: Outside .*; Cap reached for @imeclips/);
+  await sel.selectOption("acc-2");
+  await expect(tt.locator("[data-mark-warn]")).toHaveText("Will be recorded as not eligible: Outside IME Roleplay week window (W1–W4: 1 Oct–28 Oct)");
+  await tt.locator("input").fill("https://www.tiktok.com/@imespare/video/9");
+  await tt.locator("button[type=submit]").click();   // still allowed: warnings never block
+  await expect.poll(() => api.calls.some((c) => c.method === "POST" && c.path === "/api/posts" && c.body.account_id === "acc-2")).toBe(true);
+});
