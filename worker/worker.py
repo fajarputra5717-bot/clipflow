@@ -3204,6 +3204,13 @@ def detect_face_for_clip(
             _FACE_CACHE.clear()
         _FACE_CACHE[key] = _detect_face_raw(video_path, start, end, layout=layout)
     face = dict(_FACE_CACHE[key])
+    # 118: with layout auto a face that isn't facecam-like (moves, rarely there,
+    # mid-frame) is a face IN the video, not a camera: no panel for it. A
+    # left/right hint means the user says there is a cam: trust the detection.
+    if layout == "auto" and face.get("detected") and "frame_w" in face and not facecam_like(face):
+        log(f"Face: clip {float(start):.1f}-{float(end):.1f}s: {facecam_reason(face)}; no panel")
+        face["detected"] = False
+        face["override"] = "not_facecam"
     mode = (face_layout or {}).get("mode")
     if mode == "panel" and not face.get("detected"):
         fb = face_layout.get("fallback") or {}
@@ -3226,6 +3233,9 @@ def detect_face_for_clip(
 # cy 0.84-0.90; lone hits inside the video: 1-2 hits, mid-frame or top.
 FACECAM_MIN_HITS = 3
 FACECAM_MAX_SPREAD = 0.03
+# 118: present (same place, similar size) in >= half the sampled frames. Measured:
+# facecams 0.75-1.00 of 16 frames; GTA game faces that caused junk panels 0.06.
+FACECAM_MIN_PERSISTENCE = 0.5
 
 
 def facecam_region(face):
@@ -3238,7 +3248,8 @@ def facecam_region(face):
 def facecam_like(face):
     return (bool(face.get("detected")) and "frame_w" in face and facecam_region(face)
             and face.get("hits", 0) >= FACECAM_MIN_HITS
-            and face.get("spread", 1) <= FACECAM_MAX_SPREAD)
+            and face.get("spread", 1) <= FACECAM_MAX_SPREAD
+            and face.get("persistence", 0) >= FACECAM_MIN_PERSISTENCE)
 
 
 def facecam_reason(face):
@@ -3247,7 +3258,8 @@ def facecam_reason(face):
     x, y = face["cx"] / face["frame_w"], face["cy"] / face["frame_h"]
     where = "corner/edge" if facecam_region(face) else "mid-frame"
     verdict = "facecam" if facecam_like(face) else "not a facecam"
-    return f"face at ({x:.2f}, {y:.2f}) {where}, {face.get('hits', 0)} hits, spread {face.get('spread', 0):.3f} → {verdict}"
+    return (f"face at ({x:.2f}, {y:.2f}) {where}, {face.get('hits', 0)} hits, in "
+            f"{face.get('persistence', 0):.0%} of frames, spread {face.get('spread', 0):.3f} → {verdict}")
 
 
 def decide_face_layout(video_path, highlights, layout="auto"):
@@ -3265,25 +3277,17 @@ def decide_face_layout(video_path, highlights, layout="auto"):
              for h in highlights]
     hits = [f for f in faces if f.get("detected")]
     total, n = len(faces), len(hits)
-    fallback = ({k: statistics.median([f[k] for f in hits]) for k in ("cx", "cy", "w", "h")}
-                if hits else None)
-    if n * 2 > total:
-        decision = {"mode": "panel", "detected": n, "total": total, "fallback": fallback}
-        why = "majority"
-    elif n * 2 < total:
-        decision = {"mode": "full", "detected": n, "total": total}
-        why = "majority without a face"
+    # 118: only facecam-like hits count (corner/edge, persistent, steady): game
+    # faces were detected in every GTA clip and gave the whole job a junk panel.
+    cams = [f for f in hits if facecam_like(f)]
+    nc = len(cams)
+    if nc and nc * 2 >= total:
+        fb = {k: statistics.median([f[k] for f in cams]) for k in ("cx", "cy", "w", "h")}
+        decision = {"mode": "panel", "detected": nc, "total": total, "fallback": fb}
     else:
-        # Tie (pre-P1 #3, replaces 095's position-agreement rule): panel if a
-        # hit looks like a facecam: corner/edge region AND persistent; else full.
-        cams = [f for f in hits if facecam_like(f)]
-        if cams:
-            fb = {k: statistics.median([f[k] for f in cams]) for k in ("cx", "cy", "w", "h")}
-            decision = {"mode": "panel", "detected": n, "total": total, "fallback": fb}
-        else:
-            decision = {"mode": "full", "detected": n, "total": total}
-        why = "tie: " + "; ".join(facecam_reason(f) for f in hits)
-    log(f"Face layout for the job: {decision['mode']} ({n}/{total} clips detected a face; {why})")
+        decision = {"mode": "full", "detected": nc, "total": total}
+    why = "; ".join(facecam_reason(f) for f in hits) or "no faces"
+    log(f"Face layout for the job: {decision['mode']} ({nc}/{total} clips with a facecam, {n} with any face; {why})")
     return decision
 
 
@@ -3483,6 +3487,7 @@ def _detect_face_raw(
 
             detections.append(
                 {
+                    "frame": index,  # 118: which sampled frame (persistence)
                     "cx": float(cx),
                     "cy": float(cy),
                     "w": float(face["w"]),
@@ -3535,9 +3540,23 @@ def _detect_face_raw(
         statistics.median([abs(x["cy"] - mcy) for x in best]) / height,
     )
 
+    # 118: persistence = share of sampled frames that have a face within 4 % of
+    # the frame (both axes) of the median position at a similar size (±35 %).
+    # A facecam overlay is there in nearly every frame; a game character's face
+    # shows up in a few frames or moves with the gameplay.
+    mw = statistics.median([x["w"] for x in best])
+    near = {
+        x["frame"] for x in detections
+        if abs(x["cx"] - mcx) <= 0.04 * width and abs(x["cy"] - mcy) <= 0.04 * height
+        and 0.65 * mw <= x["w"] <= 1.35 * mw
+    }
+    persistence = len(near) / max(1, samples)
+
     return {
         "detected": True,
         "spread": round(spread, 4),
+        "persistence": round(persistence, 3),
+        "samples": samples,
         "hits": len(detections),
         "frame_w": width,
         "frame_h": height,
@@ -5011,6 +5030,13 @@ def create_preview(
         )
     )
 
+    # 109 (P1): campaign clips get one utility-AI content-safety pass (warning only).
+    # 119: before the keyword pick, so flagged words are never highlighted.
+    content_safety_check(
+        candidate_id, job, candidate,
+        candidate.get("subtitle_override") or transcript_text,
+    )
+
     # 111 (P1): AI-picked keywords for this clip, before the first ASS is written.
     pick_keywords(candidate_id, job, candidate, clip_segments)
 
@@ -5134,12 +5160,6 @@ def create_preview(
             "Preview ready",
     )
 
-    # 109 (P1): campaign clips get one utility-AI content-safety pass (warning only).
-    content_safety_check(
-        candidate_id, job, candidate,
-        candidate.get("subtitle_override") or transcript_text,
-    )
-
     # 115: campaign clips get their description at analysis, ending with the
     # campaign hashtags (so the hashtag rule chip starts green).
     campaign_description(
@@ -5216,10 +5236,12 @@ def content_safety_check(candidate_id, job, candidate, clip_text):
         for f in (data or {}).get("flags", []) if isinstance(f, dict)
     ]
     flags = [f for f in flags if f["rule"] in valid]  # only rules this campaign has
-    update_candidate(candidate_id, safety_check=json.dumps({
+    result = {
         "flags": flags, "checked_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
         "provider": meta.get("provider"), "model": meta.get("model"), "text_hash": text_hash,
-    }))
+    }
+    update_candidate(candidate_id, safety_check=json.dumps(result))
+    candidate["safety_check"] = result  # 119: the keyword pick reads it next
     log(f"Content check {candidate_id}: {len(flags)} flag(s) via {meta.get('provider')} "
         + ", ".join(f["rule"] for f in flags))
 
@@ -5293,6 +5315,10 @@ def pick_keywords(candidate_id, job, candidate, clip_segments):
         return
     lang = languages.job_language(job.get("effective_language"), job.get("language"))
     stop = set(languages.stopwords_for(lang))
+    # 119: never highlight a word the content-safety check quoted.
+    safety = candidate.get("safety_check") if isinstance(candidate.get("safety_check"), dict) else {}
+    for f in safety.get("flags") or []:
+        stop |= {edit_specs.keyword_token(t) for t in str(f.get("quote", "")).split()}
     present = {edit_specs.keyword_token(w["word"]) for w in words} or \
               {edit_specs.keyword_token(t) for t in text.split()}
     prompt = (

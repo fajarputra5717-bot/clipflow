@@ -1973,7 +1973,7 @@ function renderCandidate(c,jid,platform,job={}){
         <div class="preview-frame">
           <video controls playsinline preload="metadata" poster="${esc(thumb)}" src="${esc(src)}"></video>
           <div class="preview-badges"><span class="chip chip-genre">${esc(type)}</span></div>
-          <div class="preview-badges-right"><span class="chip chip-rating">★ ${esc(rating)}/10</span></div>
+          ${c.score==null||c.score===""?`<div class="preview-badges-right"><span class="chip chip-rating">★ ${esc(rating)}/10</span></div>`:""}<!-- 119: one score per card: the AI estimate when there is one -->
           <div class="preview-footer">${platformIcon(platform,"sm")}</div>
         </div>
         <div class="preview-note">Thumbnail appears before playback · ${burnSubs?"subtitle is burned into the video itself.":"subtitles are off for this job (clean video)."}</div>

@@ -29,8 +29,8 @@ def name(code):
     return NAMES.get(code, NAMES[DEFAULT])
 
 
-# Caption stoplists, prepared for TASKS-3 T2 keyword highlighting (not used
-# yet): words never worth highlighting. Lower-case; compare after stripping
+# Caption stoplists for keyword highlighting (111): words never worth
+# highlighting, incl. exclamations and religious words (119). Lower-case; compare after stripping
 # punctuation. Indonesian includes common spoken/slang particles.
 STOPWORDS = {
     "id": frozenset("""
@@ -43,7 +43,14 @@ STOPWORDS = {
         mereka mungkin nah nanti nih nya oleh pada para pun saat saja
         sama sampai sangat saya se sebuah sedang seperti sih siapa sini
         situ sudah tapi telah tentang terus tuh untuk wah waktu yang yuk
-    """.split()),
+    """.split()) | frozenset("""
+        astaghfirullah astaghfirullahaladzim astagfirullah astagfirullahaladzim
+        astaghfirulloh allah alloh ya allahu akbar masyaallah mashaallah
+        masya subhanallah alhamdulillah insyaallah inshaallah bismillah
+        wallahi wallah demi tuhan astaga ampun anjir anjay anjing anjrit
+        buset busyet bjir njir waduh wadaw wih woy woi weh lho loh dih
+        hah heh hahaha haha wkwk wkwkwk
+    """.split()),  # 119: exclamations / religious words (never highlight)
     "en": frozenset("""
         a about after again all also am an and any are as at be because
         been before being but by can could did do does doing down during
@@ -54,7 +61,10 @@ STOPWORDS = {
         they this those through to too under until up very was we were
         what when where which while who whom why will with would you
         your yeah okay ok like gonna wanna oh uh um
-    """.split()),
+    """.split()) | frozenset("""
+        omg wow whoa woah god gosh jesus christ lord holy damn hell
+        dang yo bro dude haha hahaha lol wtf
+    """.split()),  # 119: exclamations / religious words (never highlight)
 }
 
 
