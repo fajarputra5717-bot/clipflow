@@ -23,7 +23,7 @@ import uuid
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatchError
 
-SESSION_COOKIE = "clipflow_session"
+SESSION_COOKIE = os.getenv("CLIPFLOW_SESSION_COOKIE") or "clipflow_session"  # lane-b hook: staging uses its own cookie
 SESSION_TTL_DAYS = 30
 SESSION_TOUCH_SECONDS = 300       # last_seen_at/expiry slide at most every 5 min
 

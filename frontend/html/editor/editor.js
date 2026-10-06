@@ -377,6 +377,15 @@
   document.addEventListener("click", (e) => {
     if (E.cid && e.target.closest("[data-nav],[data-flow-editor]")) close(true);
   }, true);
+  // STAGING banner (Lane C): /api/env is open and secret-free; a plain fetch on purpose (works on the
+  // login screen too, before any session exists).
+  fetch("/api/env").then((r) => (r.ok ? r.json() : null)).then((d) => {
+    if (!d || d.env !== "staging" || document.getElementById("stagingBanner")) return;
+    const b = document.createElement("div");
+    b.id = "stagingBanner"; b.className = "staging-banner"; b.setAttribute("role", "note");
+    b.textContent = "STAGING · test data, not production";
+    document.body.appendChild(b); document.body.classList.add("is-staging");
+  }).catch(() => {});
   window.addEventListener("hashchange", route);
   window.addEventListener("resize", () => { if (E.cid) moveSeg(); }, { passive: true });
   window.addEventListener("load", () => setTimeout(route, 0));

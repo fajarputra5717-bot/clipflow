@@ -78,3 +78,9 @@
 .ed-word:focus-visible{outline:none;box-shadow:var(--ring)}
 .ed-tl-playhead{position:absolute;top:0;bottom:0;left:-1px;width:2px;background:var(--bad);pointer-events:none;will-change:transform}
 .ed-tl-playhead::before{content:"";position:absolute;top:0;left:-4px;width:10px;height:10px;border-radius:50%;background:var(--bad)}
+/* STAGING banner (staging stack only, from /api/env): fixed strip above everything, incl. the login screen */
+.staging-banner{position:fixed;left:0;right:0;top:0;z-index:2000;height:22px;display:flex;align-items:center;justify-content:center;
+  background:repeating-linear-gradient(135deg,#ff9f0a 0 14px,#ffb340 14px 28px);color:#1d1d1f;font:800 11px/1 var(--font-text);
+  letter-spacing:.12em;pointer-events:none}
+body.is-staging{padding-top:22px}
+body.is-staging #island{top:30px}

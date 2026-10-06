@@ -26,7 +26,10 @@ from pydantic import BaseModel
 from shared import edit_spec as edit_specs
 from shared import timeline as timelines
 
-router = APIRouter(prefix="/api/jobs/{job_id}/candidates/{candidate_id}/editor", tags=["editor"])
+import os
+
+editor = APIRouter(prefix="/api/jobs/{job_id}/candidates/{candidate_id}/editor", tags=["editor"])
+router = APIRouter()   # what main.py includes: the editor routes + /api/env (registered at the end)
 
 
 def get_current_user(request: Request) -> dict:
@@ -97,7 +100,7 @@ def _state(c: dict) -> dict:
 
 # --------------------------------------------------------------------------- routes
 
-@router.get("")
+@editor.get("")
 def editor_state(job_id: str, candidate_id: str, user: dict = Depends(get_current_user)):
     core = _core()
     with core.get_db() as conn, conn.cursor() as cur:
@@ -110,7 +113,7 @@ class HookTitleIn(BaseModel):
     duration: float = edit_specs.HOOK_TITLE_DEFAULT_DURATION
 
 
-@router.put("/hook-title")
+@editor.put("/hook-title")
 def put_hook_title(job_id: str, candidate_id: str, body: HookTitleIn, user: dict = Depends(get_current_user)):
     try:
         value = edit_specs.normalize_hook_title(body.model_dump())
@@ -140,7 +143,7 @@ def put_hook_title(job_id: str, candidate_id: str, body: HookTitleIn, user: dict
         return _state(_load(cur, job_id, candidate_id, user))
 
 
-@router.get("/timeline")
+@editor.get("/timeline")
 def editor_timeline(job_id: str, candidate_id: str, user: dict = Depends(get_current_user)):
     """Cached timeline written by the worker after the last preview render; without one (older
     previews), word chips only (`peaks: null`) so the UI still seeks by word."""
@@ -154,3 +157,12 @@ def editor_timeline(job_id: str, candidate_id: str, user: dict = Depends(get_cur
     if cached and cached.get("words"):
         return {**cached, "cached": True}
     return {**timelines.words_only(segments, duration), "cached": False}
+
+
+def environment():
+    """Open (no auth, no secrets): which stack this is, for the STAGING banner on every screen."""
+    return {"env": os.getenv("CLIPFLOW_ENV") or "production"}
+
+
+router.include_router(editor)
+router.add_api_route("/api/env", environment, methods=["GET"], tags=["meta"])

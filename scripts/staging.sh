@@ -53,7 +53,11 @@ with psycopg.connect(os.environ["DATABASE_URL"]) as conn, conn.cursor() as cur:
 print("staging admin login set for:", ", ".join(names) or "(no admin user)")
 PY2
 }
-up() { "${DC[@]}" up -d --build 2>&1 | tail -3; status; }
+purge_auth() {   # restored from production: no session or API token from there may work on staging
+  "${DC[@]}" exec -T postgres sh -c 'psql -q -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "DELETE FROM user_sessions; DELETE FROM api_tokens; DELETE FROM login_failures;"' >/dev/null 2>&1 \
+    && echo "staging: sessions + API tokens cleared" || echo "staging: (no auth tables yet)"
+}
+up() { "${DC[@]}" up -d --build 2>&1 | tail -3; purge_auth; status; }
 status() { "${DC[@]}" ps --format '{{.Service}}\t{{.Status}}'; echo "UI http://localhost:8080  API http://127.0.0.1:8001/health"; }
 
 [ -f .env.staging ] || make_env

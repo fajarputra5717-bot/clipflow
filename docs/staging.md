@@ -37,7 +37,13 @@ Staging restores production's users, but **every admin account gets a staging-on
 gitignored; generated once and kept across resets). Production's `CLIPFLOW_ADMIN_PASSWORD` is never
 copied; admin sessions are dropped on reset. `scripts/staging.sh admin` re-applies it.
 Members keep their production passwords; QA can add staging-only members in the staging DB.
-`CLIPFLOW_API_KEY` (same as production) still works as an admin token for scripts.
+
+**No production credential works on staging** (QA Low): `reset` and `up` delete every session, API token and
+login failure restored from production; the session cookie is `clipflow_staging_session` (production's
+`clipflow_session` is ignored on :8080, cookies are per host not port); production's
+`CLIPFLOW_API_KEY` no longer authenticates anywhere (main 127). Scripts: sign in, then use a per-user token
+(Account → API tokens) or the session cookie. A "STAGING" strip sits above every screen, login included
+(`GET /api/env` → `{"env": "staging"}`, open, no secrets).
 
 ## What the reset does
 
