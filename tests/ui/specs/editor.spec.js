@@ -8,6 +8,7 @@ function editorState(over = {}) {
                  has_preview: false, has_final: false, preview_url: "/api/jobs/job-done/candidates/cand-a/preview",
                  updated_at: "2026-10-05T10:00:00+00:00", edit_spec: {} },
     hook_title: { on: false, text: "", duration: 2.5, default_text: "First mock clip", durations: [2, 2.5, 3], max_chars: 80 },
+    cuts: { trim: null, removed: [], output_seconds: 6, suggest_min_gap: 0.6, pad: 0.12 },
     ...over,
   };
 }
@@ -24,12 +25,13 @@ async function mockEditor(page, api, timeline = TIMELINE) {
   api.editor = editorState();
   await page.route(/\/api\/jobs\/[^/]+\/candidates\/[^/]+\/editor\/timeline/, (route) =>
     route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(timeline) }));
-  await page.route(/\/api\/jobs\/[^/]+\/candidates\/[^/]+\/editor(\/hook-title)?(\?.*)?$/, async (route) => {
+  await page.route(/\/api\/jobs\/[^/]+\/candidates\/[^/]+\/editor(\/hook-title|\/cuts)?(\?.*)?$/, async (route) => {
     const req = route.request();
     if (req.method() === "PUT") {
-      const body = req.postDataJSON();
-      api.calls.push({ method: "PUT", path: new URL(req.url()).pathname, body });
-      api.editor.hook_title = { ...api.editor.hook_title, ...body };
+      const body = req.postDataJSON(), path = new URL(req.url()).pathname;
+      api.calls.push({ method: "PUT", path, body });
+      if (path.endsWith("/cuts")) api.editor.cuts = { ...api.editor.cuts, trim: body.trim, removed: body.removed };
+      else api.editor.hook_title = { ...api.editor.hook_title, ...body };
     }
     return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(api.editor) });
   });
@@ -39,7 +41,7 @@ test.describe("Editor timeline", () => {
   test("ruler, waveform and one chip per word, positioned by time", async ({ app, api }) => {
     await mockEditor(app, api);
     await app.evaluate(() => { location.hash = "#editor/job-done/cand-a"; });
-    const chips = app.locator(".ed-word");
+    const chips = app.locator("[data-ed-word]");
     await expect(chips).toHaveCount(3);
     await expect(chips.nth(2)).toHaveText("hitam");
     const left = await chips.nth(2).evaluate((el) => parseFloat(el.style.left));
@@ -52,8 +54,61 @@ test.describe("Editor timeline", () => {
   test("without a cached waveform: chips + a hint, no crash", async ({ app, api }) => {
     await mockEditor(app, api, { ...TIMELINE, peaks: null, cached: false });
     await app.evaluate(() => { location.hash = "#editor/job-done/cand-a"; });
-    await expect(app.locator(".ed-word")).toHaveCount(3);
+    await expect(app.locator("[data-ed-word]")).toHaveCount(3);
     await expect(app.locator("#edTl")).toContainText("waveform appears after the next Render preview");
+  });
+});
+
+test.describe("Editor cuts", () => {
+  const lastCuts = (api) => api.calls.filter((c) => c.method === "PUT" && c.path.endsWith("/cuts")).at(-1)?.body;
+
+  test("cut mode: click a word to strike it, again to restore; readout follows", async ({ app, api }) => {
+    await mockEditor(app, api);
+    await app.evaluate(() => { location.hash = "#editor/job-done/cand-a"; });
+    await expect(app.locator("#edOut")).toHaveText("Output 6.0 s");
+    await app.locator('[data-ed-mode="cut"]').click();
+    const w = app.locator('[data-ed-word="1"]');                    // "Kekuatan" 0.5–1.1
+    await w.click();
+    await expect(w).toHaveClass(/cut/);
+    await expect(app.locator("#edOut")).toHaveText("Output 5.4 s");
+    await expect.poll(() => lastCuts(api), { timeout: 4000 }).toEqual({ trim: null, removed: [[0.5, 1.1]] });
+    await w.click();
+    await expect(w).not.toHaveClass(/cut/);
+    await expect.poll(() => lastCuts(api), { timeout: 4000 }).toEqual({ trim: null, removed: [] });
+  });
+
+  test("seek mode clicks don't cut; C toggles the mode", async ({ app, api }) => {
+    await mockEditor(app, api);
+    await app.evaluate(() => { location.hash = "#editor/job-done/cand-a"; });
+    await app.locator('[data-ed-word="1"]').click();
+    await expect(app.locator('[data-ed-word="1"]')).not.toHaveClass(/cut/);
+    await app.keyboard.press("c");
+    await expect(app.locator('[data-ed-mode="cut"]')).toHaveAttribute("aria-pressed", "true");
+  });
+
+  test("suggested pauses (≥ 0.6 s) cut in one click, padded 0.12 s each side", async ({ app, api }) => {
+    await mockEditor(app, api);
+    await app.evaluate(() => { location.hash = "#editor/job-done/cand-a"; });
+    const btn = app.locator("[data-ed-suggest]");
+    await expect(btn).toHaveText("Cut 1 pause ≥ 0.6 s");
+    await btn.click();
+    await expect(app.locator('[data-ed-pause="0"]')).toHaveClass(/cut/);
+    await expect.poll(() => lastCuts(api), { timeout: 4000 }).toEqual({ trim: null, removed: [[1.22, 2.88]] });
+    await expect(btn).toBeDisabled();
+    await app.locator("[data-ed-cuts-reset]").click();
+    await expect.poll(() => lastCuts(api), { timeout: 4000 }).toEqual({ trim: null, removed: [] });
+  });
+
+  test("trim handle: arrow keys move the start, Shift = 1 s", async ({ app, api }) => {
+    await mockEditor(app, api);
+    await app.evaluate(() => { location.hash = "#editor/job-done/cand-a"; });
+    const h = app.locator("#edTrimA");
+    await h.focus();
+    await app.keyboard.press("Shift+ArrowRight");
+    await expect(h).toHaveAttribute("aria-valuenow", "1.0");
+    await expect(app.locator('[data-ed-word="0"]')).toHaveClass(/cut/);   // "Hahahaha" 0–0.4 is outside
+    await expect(app.locator("#edOut")).toHaveText("Output 5.0 s");
+    await expect.poll(() => lastCuts(api), { timeout: 4000 }).toEqual({ trim: [1, 6], removed: [] });
   });
 });
 

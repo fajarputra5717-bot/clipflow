@@ -13,7 +13,7 @@
   const edUrl = (jid, cid) => `/api/jobs/${encodeURIComponent(jid)}/candidates/${encodeURIComponent(cid)}/editor`;
   const reduced = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const PPS = 100;                              // timeline pixels per second
-  const E = { tl: null, raf: 0, nowWord: -1, jid: null, cid: null, state: null, hook: null, saveT: 0, pollT: 0, hidden: [], tab: "captions", busy: false };
+  const E = { mode: "seek", cuts: { trim: null, removed: [] }, cutT: 0, drag: null, tl: null, raf: 0, nowWord: -1, jid: null, cid: null, state: null, hook: null, saveT: 0, pollT: 0, hidden: [], tab: "captions", busy: false };
 
   function section() {
     let s = $("editorSection");
@@ -53,6 +53,8 @@
     try {
       E.state = await api(edUrl(jid, cid));
       E.hook = { ...E.state.hook_title };
+      E.cuts = { trim: E.state.cuts.trim, removed: E.state.cuts.removed.map((r) => r.slice()) };
+      E.mode = "seek";
       render();
       if (RENDERING.includes(E.state.candidate.status)) watchRender();
     } catch (e) {
@@ -61,7 +63,7 @@
   }
 
   function close(setHash = true) {
-    clearTimeout(E.saveT); clearInterval(E.pollT); cancelAnimationFrame(E.raf); E.tl = null; E.nowWord = -1;
+    clearTimeout(E.saveT); clearTimeout(E.cutT); clearInterval(E.pollT); cancelAnimationFrame(E.raf); E.tl = null; E.nowWord = -1; E.drag = null;
     const s = $("editorSection");
     if (s) { s.hidden = true; s.classList.add("hidden"); s.innerHTML = ""; }
     E.hidden.forEach(([v, hadHidden]) => v.classList.toggle("hidden", hadHidden));
@@ -139,23 +141,147 @@
     const dur = Number(tl.duration) || 0, W = Math.max(1, Math.ceil(dur * PPS));
     let ruler = "";
     for (let t = 0; t <= dur; t++) ruler += `<i style="left:${t * PPS}px"></i>${t % 2 === 0 ? `<span style="left:${t * PPS}px">${fmt(t)}</span>` : ""}`;
-    const chips = tl.words.map((w) => `<button type="button" class="ed-word" data-ed-word="${w.i}" title="${esc(w.text)} · ${w.start.toFixed(2)} s"
-        style="left:${(w.start * PPS).toFixed(1)}px;width:${Math.max(16, (w.end - w.start) * PPS - 2).toFixed(1)}px">${esc(w.text)}</button>`).join("");
+    const chip = (cls, data, a, b, label, title) => `<button type="button" class="${cls}" ${data} title="${esc(title)}"
+        style="left:${(a * PPS).toFixed(1)}px;width:${Math.max(14, (b - a) * PPS - 2).toFixed(1)}px">${esc(label)}</button>`;
+    const words = tl.words.map((w) => chip("ed-word", `data-ed-word="${w.i}"`, w.start, w.end, w.text, `${w.text} · ${w.start.toFixed(2)} s`)).join("");
+    const pauses = (tl.gaps || []).map((g, k) => chip("ed-word ed-pause" + (g.end - g.start >= E.state.cuts.suggest_min_gap ? " suggest" : ""),
+      `data-ed-pause="${k}"`, g.start, g.end, `${(g.end - g.start).toFixed(1)}s`, `Pause ${(g.end - g.start).toFixed(2)} s`)).join("");
+    const nSuggest = suggestedPauses().length;
     el.innerHTML = `
       <div class="ed-tl-head"><span class="ed-label">Timeline</span>
-        <span class="ed-hint">${E.state.candidate.has_preview ? "Click a word to jump there" : "Render a preview to play"}</span>
-        <span class="ed-spacer"></span><span class="ed-time" id="edTlTime">0:00.0 / ${fmt(dur)}</span></div>
+        <div class="ed-chips" role="group" aria-label="Click mode">
+          <button type="button" class="ed-chip" data-ed-mode="seek" aria-pressed="${E.mode === "seek"}">Seek</button>
+          <button type="button" class="ed-chip" data-ed-mode="cut" aria-pressed="${E.mode === "cut"}" title="Cut mode (C)">✂ Cut</button>
+        </div>
+        <button type="button" class="ed-chip" data-ed-suggest ${nSuggest ? "" : "disabled"}>Cut ${nSuggest} pause${nSuggest === 1 ? "" : "s"} ≥ ${E.state.cuts.suggest_min_gap} s</button>
+        <button type="button" class="ed-chip" data-ed-cuts-reset>Restore all</button>
+        <span class="ed-spacer"></span>
+        <span class="ed-out" id="edOut"></span>
+        <span class="ed-time" id="edTlTime">0:00.0 / ${fmt(dur)}</span></div>
+      <div class="ed-hint" id="edTlHint"></div>
       <div class="ed-tl-scroll" id="edTlScroll">
         <div class="ed-tl-inner" id="edTlInner" style="width:${W}px" data-ed-seekarea>
           <div class="ed-tl-ruler" aria-hidden="true">${ruler}</div>
           <canvas class="ed-tl-wave" id="edWave" aria-hidden="true"></canvas>
-          <div class="ed-tl-words" role="group" aria-label="Words">${chips}</div>
+          <div id="edBands" aria-hidden="true"></div>
+          <div class="ed-tl-words" role="group" aria-label="Words and pauses">${pauses}${words}</div>
+          <div class="ed-trim-shade l" id="edShadeL" aria-hidden="true"></div><div class="ed-trim-shade r" id="edShadeR" aria-hidden="true"></div>
+          <div class="ed-trim-h" id="edTrimA" role="slider" tabindex="0" aria-label="Clip start" data-ed-trim="a"></div>
+          <div class="ed-trim-h" id="edTrimB" role="slider" tabindex="0" aria-label="Clip end" data-ed-trim="b"></div>
           <div class="ed-tl-playhead" id="edPlayhead" aria-hidden="true"></div>
         </div>
       </div>
       ${tl.peaks ? "" : `<div class="ed-hint">The waveform appears after the next Render preview.</div>`}`;
     drawWave();
+    paintCuts();
     paintPlayhead();
+  }
+
+  // ---- cuts (task 3): source-time ranges; the rendered preview's keep maps video ↔ timeline
+  const PAD = () => (E.state && E.state.cuts.pad) || 0.12;
+  function trimWin() { return E.cuts.trim || [0, E.tl ? E.tl.duration : 0]; }
+  function covered(a, b) { return E.cuts.removed.some(([s, e]) => s <= a + 0.02 && e >= b - 0.02); }
+  const ms = (x) => Math.round(x * 1000) / 1000;
+  function merge(rs) {
+    const out = [];
+    rs.map(([s, e]) => [ms(s), ms(e)]).sort((x, y) => x[0] - y[0]).forEach(([s, e]) => {
+      if (out.length && s <= out[out.length - 1][1] + 0.001) out[out.length - 1][1] = Math.max(out[out.length - 1][1], e);
+      else out.push([s, e]);
+    });
+    return out;
+  }
+  function subtract(rs, a, b) {
+    const out = [];
+    rs.forEach(([s, e]) => { if (e <= a || s >= b) out.push([s, e]); else { if (s < a) out.push([s, a]); if (e > b) out.push([b, e]); } });
+    return out.filter(([s, e]) => e - s >= 0.04);
+  }
+  function pauseRange(g) {
+    const p = PAD();
+    return g.end - g.start > 2 * p + 0.08 ? [g.start + p, g.end - p] : [g.start, g.end];
+  }
+  function suggestedPauses() {
+    if (!E.tl) return [];
+    const [lo, hi] = trimWin();
+    return (E.tl.gaps || []).filter((g) => g.end - g.start >= E.state.cuts.suggest_min_gap && g.start >= lo && g.end <= hi
+      && g.start > 0.01 && g.end < E.tl.duration - 0.01 && !covered(...pauseRange(g)));   // inner pauses only (edges = trim)
+  }
+  function plannedKeep() {
+    const [lo, hi] = trimWin();
+    let keep = [[lo, hi]];
+    E.cuts.removed.forEach(([s, e]) => { keep = subtract(keep, s, e); });
+    return keep;
+  }
+  const outputSeconds = () => plannedKeep().reduce((a, [s, e]) => a + e - s, 0);
+  function toggleRange(a, b) {
+    E.cuts.removed = covered(a, b) ? subtract(E.cuts.removed, a, b) : merge([...E.cuts.removed, [a, b]]);
+    cutsChanged();
+  }
+  function cutsChanged() {
+    paintCuts();
+    E.dirty = true; paintHook();
+    clearTimeout(E.cutT);
+    paintState("Saving…");
+    E.cutT = setTimeout(saveCuts, 600);
+  }
+  async function saveCuts() {
+    clearTimeout(E.cutT); E.cutT = 0;
+    try {
+      E.state = await api(edUrl(E.jid, E.cid) + "/cuts", { method: "PUT", body: JSON.stringify({ trim: E.cuts.trim, removed: E.cuts.removed }) });
+      paintState();
+    } catch (e) { paintState("Not saved: " + e.message); throw e; }
+  }
+
+  function paintCuts() {
+    if (!E.tl || !$("edTlInner")) return;
+    const [lo, hi] = trimWin(), dur = E.tl.duration;
+    document.querySelectorAll("[data-ed-word]").forEach((b) => {
+      const w = E.tl.words[Number(b.dataset.edWord)];
+      b.classList.toggle("cut", covered(w.start, w.end) || w.end <= lo + 0.01 || w.start >= hi - 0.01);
+    });
+    document.querySelectorAll("[data-ed-pause]").forEach((b) => {
+      const g = E.tl.gaps[Number(b.dataset.edPause)];
+      b.classList.toggle("cut", covered(...pauseRange(g)) || g.end <= lo + 0.01 || g.start >= hi - 0.01);
+    });
+    $("edBands").innerHTML = E.cuts.removed.map(([s, e]) => `<div class="ed-cut-band" style="left:${s * PPS}px;width:${(e - s) * PPS}px"></div>`).join("");
+    $("edShadeL").style.width = lo * PPS + "px";
+    $("edShadeR").style.width = Math.max(0, dur - hi) * PPS + "px";
+    [["edTrimA", lo], ["edTrimB", hi]].forEach(([id, v]) => {
+      const h = $(id); h.style.left = v * PPS + "px";
+      h.setAttribute("aria-valuenow", v.toFixed(1)); h.setAttribute("aria-valuemin", "0"); h.setAttribute("aria-valuemax", dur.toFixed(1));
+      h.setAttribute("aria-valuetext", `${v.toFixed(1)} seconds`);
+    });
+    const out = outputSeconds(), o = $("edOut");
+    if (o) o.textContent = `Output ${out.toFixed(1)} s`;
+    const hint = $("edTlHint");
+    if (hint) hint.textContent = E.mode === "cut" ? "Cut mode: click a word or pause to cut it, click again to restore. Drag the orange handles to trim."
+      : (E.state.candidate.has_preview ? "Click a word to jump there. Switch to ✂ Cut (C) to cut words and pauses." : "Render a preview to play.");
+    const s = document.querySelector("[data-ed-suggest]"), n = suggestedPauses().length;
+    if (s) { s.disabled = !n; s.textContent = `Cut ${n} pause${n === 1 ? "" : "s"} ≥ ${E.state.cuts.suggest_min_gap} s`; }
+  }
+
+  function setTrim(which, v) {
+    const [lo, hi] = trimWin(), dur = E.tl.duration, MIN = 1;
+    let a = lo, b = hi;
+    if (which === "a") a = Math.max(0, Math.min(v, b - MIN)); else b = Math.min(dur, Math.max(v, a + MIN));
+    a = Math.round(a * 100) / 100; b = Math.round(b * 100) / 100;
+    E.cuts.trim = a <= 0.005 && b >= dur - 0.005 ? null : [a, b];
+    E.cuts.removed = E.cuts.removed.map(([s, e]) => [Math.max(s, a), Math.min(e, b)]).filter(([s, e]) => e - s >= 0.04);
+  }
+
+  // rendered preview's keep (source time) ↔ video time
+  function toOut(t) {
+    const keep = E.tl && E.tl.keep;
+    if (!keep) return t;
+    let acc = 0;
+    for (const [a, b] of keep) { if (t < b) return acc + Math.max(0, t - a); acc += b - a; }
+    return acc;
+  }
+  function toSrc(o) {
+    const keep = E.tl && E.tl.keep;
+    if (!keep) return o;
+    let acc = 0;
+    for (const [a, b] of keep) { if (o <= acc + (b - a)) return a + (o - acc); acc += b - a; }
+    return keep.length ? keep[keep.length - 1][1] : o;
   }
 
   function drawWave() {
@@ -187,7 +313,7 @@
   function paintPlayhead(follow) {
     const v = $("edVideo"), ph = $("edPlayhead");
     if (!ph || !E.tl) return;
-    const t = v ? v.currentTime : 0, x = t * PPS;
+    const t = toSrc(v ? v.currentTime : 0), x = t * PPS;
     ph.style.transform = `translateX(${x}px)`;
     const tm = $("edTlTime"); if (tm) tm.textContent = `${fmt(t)}.${Math.floor((t % 1) * 10)} / ${fmt(E.tl.duration)}`;
     const i = wordAt(t);
@@ -209,7 +335,7 @@
   function seek(t) {
     const v = $("edVideo");
     if (!v || !E.state.candidate.has_preview) return;
-    v.currentTime = Math.max(0, Math.min(t, (E.tl && E.tl.duration) || v.duration || t));
+    v.currentTime = Math.max(0, Math.min(toOut(t), v.duration || toOut(t)));
     paintPlayhead(false); paintHook();
   }
 
@@ -258,7 +384,7 @@
     const c = E.state.candidate;
     if (msg) { el.textContent = msg; return; }
     if (RENDERING.includes(c.status)) el.textContent = "Rendering the preview…";
-    else if (E.dirty) el.textContent = "Changes saved · not rendered yet";
+    else if (E.dirty) el.textContent = `Changes saved · not rendered yet · output ${outputSeconds().toFixed(1)} s`;
     else el.textContent = c.has_preview ? "Preview is up to date" : "No preview yet";
   }
 
@@ -303,6 +429,7 @@
     setBusy(btn, true, "Rendering…");
     try {
       if (E.saveT) await save();
+      if (E.cutT) await saveCuts();
       await api(`/api/jobs/${encodeURIComponent(E.jid)}/candidates/${encodeURIComponent(E.cid)}/regenerate-preview`, { method: "POST" });
       E.state.candidate.status = "preview_queued";
       paintState();
@@ -336,7 +463,7 @@
 
   // ------------------------------------------------------------------ events (delegated, data-*)
   document.addEventListener("click", (e) => {
-    const t = e.target.closest("[data-ed-back],[data-ed-hook-on],[data-ed-hook-dur],[data-ed-render],[data-ed-play],[data-ed-tab],[data-ed-word],[data-ed-seekarea]");
+    const t = e.target.closest("[data-ed-back],[data-ed-hook-on],[data-ed-hook-dur],[data-ed-render],[data-ed-play],[data-ed-tab],[data-ed-word],[data-ed-pause],[data-ed-mode],[data-ed-suggest],[data-ed-cuts-reset],[data-ed-trim],[data-ed-seekarea]");
     if (!t || !E.state && !t.matches("[data-ed-back]")) return;
     if (t.matches("[data-ed-back]")) {
       e.preventDefault(); close(true);
@@ -354,8 +481,21 @@
       const v = $("edVideo"); if (v) { v.currentTime = 0; }
       paintHook(); scheduleSave(); return;
     }
-    if (t.matches("[data-ed-word]")) { const w = E.tl && E.tl.words[Number(t.dataset.edWord)]; if (w) seek(w.start + 0.001); return; }
-    if (t.matches("[data-ed-seekarea]")) {                  // click on the ruler/waveform, not a chip
+    if (t.matches("[data-ed-mode]")) { setMode(t.dataset.edMode); return; }
+    if (t.matches("[data-ed-suggest]")) { E.cuts.removed = merge([...E.cuts.removed, ...suggestedPauses().map(pauseRange)]); cutsChanged(); return; }
+    if (t.matches("[data-ed-cuts-reset]")) { E.cuts = { trim: null, removed: [] }; cutsChanged(); return; }
+    if (t.matches("[data-ed-trim]")) return;                       // handles drag (pointer events below)
+    if (t.matches("[data-ed-word]")) {
+      const w = E.tl && E.tl.words[Number(t.dataset.edWord)]; if (!w) return;
+      if (E.mode === "cut") toggleRange(w.start, w.end); else seek(w.start + 0.001);
+      return;
+    }
+    if (t.matches("[data-ed-pause]")) {
+      const g = E.tl && E.tl.gaps[Number(t.dataset.edPause)]; if (!g) return;
+      if (E.mode === "cut") toggleRange(...pauseRange(g)); else seek(g.start + 0.001);
+      return;
+    }
+    if (t.matches("[data-ed-seekarea]") && E.mode === "seek") {   // click on the ruler/waveform, not a chip
       const r = t.getBoundingClientRect(); seek((e.clientX - r.left) / PPS); return;
     }
     if (t.matches("[data-ed-render]")) return renderPreview(t);
@@ -364,6 +504,33 @@
       E.tab = t.dataset.edTab;
       document.querySelectorAll("[data-ed-tab]").forEach((b) => b.setAttribute("aria-selected", String(b === t)));
       moveSeg();
+    }
+  });
+  function setMode(m) {
+    E.mode = m;
+    document.querySelectorAll("[data-ed-mode]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.edMode === m)));
+    const inner = $("edTlInner"); if (inner) inner.classList.toggle("is-cut", m === "cut");
+    paintCuts();
+  }
+  // trim handles: pointer drag (touch too) + arrow keys
+  document.addEventListener("pointerdown", (e) => {
+    const h = e.target.closest("[data-ed-trim]"); if (!h || !E.tl) return;
+    E.drag = h.dataset.edTrim; h.setPointerCapture(e.pointerId); e.preventDefault();
+  });
+  document.addEventListener("pointermove", (e) => {
+    if (!E.drag) return;
+    const inner = $("edTlInner"); setTrim(E.drag, (e.clientX - inner.getBoundingClientRect().left) / PPS); paintCuts();
+  });
+  document.addEventListener("pointerup", () => { if (E.drag) { E.drag = null; cutsChanged(); } });
+  document.addEventListener("keydown", (e) => {
+    if (!E.state) return;
+    const h = e.target.closest && e.target.closest("[data-ed-trim]");
+    if (h && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
+      const [lo, hi] = trimWin(), step = (e.shiftKey ? 1 : 0.1) * (e.key === "ArrowRight" ? 1 : -1);
+      setTrim(h.dataset.edTrim, (h.dataset.edTrim === "a" ? lo : hi) + step); cutsChanged(); e.preventDefault(); return;
+    }
+    if ((e.key === "c" || e.key === "C") && !e.target.closest("input,textarea,select,[contenteditable]") && !e.metaKey && !e.ctrlKey) {
+      setMode(E.mode === "cut" ? "seek" : "cut");
     }
   });
   document.addEventListener("input", (e) => {

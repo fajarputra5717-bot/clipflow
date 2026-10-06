@@ -20,7 +20,7 @@ from array import array
 from pathlib import Path
 from typing import Iterable, Optional
 
-VERSION = 1
+VERSION = 2                    # 2: source-time waveform + rendered `keep` (task 3)
 PEAKS_PER_SECOND = 50          # one bar per 20 ms; 35 s clip → 1,750 values (~9 KB of JSON)
 DECODE_RATE = 8000             # mono samples/s for peak extraction (plenty for a waveform)
 FLOOR_DB = -48.0               # quietest level that still draws (dB full scale)
@@ -72,30 +72,37 @@ def peaks_from_samples(samples: Iterable[float], sample_rate: int = DECODE_RATE,
     return out
 
 
-def decode_cmd(media_path: str, sample_rate: int = DECODE_RATE) -> list[str]:
-    return ["ffmpeg", "-v", "error", "-nostdin", "-i", str(media_path), "-vn", "-ac", "1",
+def decode_cmd(media_path: str, sample_rate: int = DECODE_RATE, start: Optional[float] = None,
+               duration: Optional[float] = None) -> list[str]:
+    seek = (["-ss", f"{start:.3f}"] if start else []) + (["-t", f"{duration:.3f}"] if duration else [])
+    return ["ffmpeg", "-v", "error", "-nostdin", *seek, "-i", str(media_path), "-vn", "-ac", "1",
             "-ar", str(sample_rate), "-f", "f32le", "-"]
 
 
-def build(media_path, segments, duration: float, *, timeout: int = 120) -> dict:
-    """Timeline dict for a rendered preview (runs ffmpeg once to decode its audio)."""
+def build(media_path, segments, duration: float, *, start: Optional[float] = None, keep=None,
+          timeout: int = 120) -> dict:
+    """Timeline dict in SOURCE time (the uncut clip window, so cut words stay visible): decodes
+    media_path from `start` for `duration` once. keep = the segments the preview was rendered with
+    (None = uncut); the editor maps the cut preview's time back to source time with it."""
     words = words_from_segments(segments)
     peaks: Optional[list] = None
     try:
-        raw = subprocess.run(decode_cmd(media_path), capture_output=True, check=True, timeout=timeout).stdout
+        raw = subprocess.run(decode_cmd(media_path, start=start, duration=duration), capture_output=True,
+                             check=True, timeout=timeout).stdout
         samples = array("f")
         samples.frombytes(raw[: len(raw) - len(raw) % 4])
         peaks = peaks_from_samples(samples)
     except (subprocess.SubprocessError, OSError):
         peaks = None  # chips still work without a waveform
     return {"version": VERSION, "duration": round(float(duration), 3), "rate": PEAKS_PER_SECOND,
-            "peaks": peaks, "words": words, "gaps": gaps_between(words, duration)}
+            "peaks": peaks, "words": words, "gaps": gaps_between(words, duration),
+            "keep": [[round(a, 3), round(b, 3)] for a, b in keep] if keep else None}
 
 
 def words_only(segments, duration: float) -> dict:
     words = words_from_segments(segments)
     return {"version": VERSION, "duration": round(float(duration), 3), "rate": PEAKS_PER_SECOND,
-            "peaks": None, "words": words, "gaps": gaps_between(words, duration)}
+            "peaks": None, "words": words, "gaps": gaps_between(words, duration), "keep": None}
 
 
 def cache_path(previews_dir, candidate_id) -> Path:

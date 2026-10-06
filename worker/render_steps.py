@@ -128,18 +128,21 @@ def _esc(s: str) -> str:
 POP = r"\fscx90\fscy90\t(0,200,0.6,\fscx103\fscy103)\t(200,330,\fscx100\fscy100)\fad(160,220)"
 
 
-def card_events(text: str, width: int, height: int, duration: float, avoid: Optional[dict] = None) -> list[str]:
-    """Dialogue lines (shadow, card, text) on layers above the captions."""
+def card_events(text: str, width: int, height: int, duration: float, avoid: Optional[dict] = None,
+                start: float = 0.0) -> list[str]:
+    """Dialogue lines (shadow, card, text) on layers above the captions, from `start` to `duration`
+    (both in the render's source time)."""
     g = card_layout(text, width, height, avoid)
     end = _ts(duration)
+    t0 = _ts(start)
     pos = rf"\an5\pos({g['cx']},{g['cy']})"
     shadow_pos = rf"\an5\pos({g['cx']},{g['cy'] + round(height * 0.004)})"
     shape = _rounded_rect(g["w"], g["h"], g["r"])
     text_ass = r"\N".join(_esc(l) for l in g["lines"])
     return [
-        f"Dialogue: 20,{_ts(0)},{end},HookCard,,0,0,0,,{{{shadow_pos}{POP}\\p1\\bord0\\shad0\\1c&H000000&\\1a&HA0&\\blur{max(2, round(height * 0.006))}}}{shape}",
-        f"Dialogue: 21,{_ts(0)},{end},HookCard,,0,0,0,,{{{pos}{POP}\\p1\\bord0\\shad0\\1c&HFFFFFF&\\1a&H00&}}{shape}",
-        f"Dialogue: 22,{_ts(0)},{end},HookCard,,0,0,0,,{{{pos}{POP}\\fs{g['fs']}\\q2}}{text_ass}",
+        f"Dialogue: 20,{t0},{end},HookCard,,0,0,0,,{{{shadow_pos}{POP}\\p1\\bord0\\shad0\\1c&H000000&\\1a&HA0&\\blur{max(2, round(height * 0.006))}}}{shape}",
+        f"Dialogue: 21,{t0},{end},HookCard,,0,0,0,,{{{pos}{POP}\\p1\\bord0\\shad0\\1c&HFFFFFF&\\1a&H00&}}{shape}",
+        f"Dialogue: 22,{t0},{end},HookCard,,0,0,0,,{{{pos}{POP}\\fs{g['fs']}\\q2}}{text_ass}",
     ]
 
 
@@ -158,6 +161,19 @@ def _header(width: int, height: int) -> str:
         "Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text", ""])
 
 
+def card_window(dur: float, keep) -> tuple[float, float]:
+    """(start, end) in SOURCE time so the card fills `dur` seconds of the OUTPUT after cuts:
+    starts at the first kept moment and ends where the cut timeline reaches `dur`."""
+    if not keep:
+        return 0.0, dur
+    left = dur
+    for a, b in keep:
+        if b - a >= left:
+            return keep[0][0], a + left
+        left -= b - a
+    return keep[0][0], keep[-1][1]
+
+
 def add_title_card(ass_path, candidate: dict, *, size: tuple[int, int], clip_duration: float,
                    avoid: Optional[dict] = None, out_dir=None, log=print):
     """The worker hook. Returns the .ass path the render should burn: unchanged when the card is off,
@@ -170,6 +186,7 @@ def add_title_card(ass_path, candidate: dict, *, size: tuple[int, int], clip_dur
         width, height = size
         spec = edit_specs.hook_title_of(candidate.get("edit_spec"))
         dur = min(float(spec.get("duration") or edit_specs.HOOK_TITLE_DEFAULT_DURATION), float(clip_duration))
+        t0, t1 = card_window(dur, cut_plan(candidate, clip_duration))
         fs = max(12, round(height * 0.030))
         if ass_path and Path(ass_path).exists():
             path = Path(ass_path)
@@ -180,7 +197,7 @@ def add_title_card(ass_path, candidate: dict, *, size: tuple[int, int], clip_dur
         style = STYLE.format(font=CARD_FONT, fs=fs)
         # style goes right after the Format line of [V4+ Styles]; events at the end
         body = re.sub(r"(\[V4\+ Styles\]\s*\nFormat:[^\n]*\n)", lambda m: m.group(1) + style + "\n", body, count=1)
-        body = body.rstrip("\n") + "\n" + "\n".join(card_events(text, width, height, dur, avoid)) + "\n"
+        body = body.rstrip("\n") + "\n" + "\n".join(card_events(text, width, height, t1, avoid, start=t0)) + "\n"
         path.write_text(body, encoding="utf-8")
         log(f"Hook title card: {dur:.1f} s, {len(text)} chars, canvas {width}x{height}")
         return str(path)
@@ -189,14 +206,67 @@ def add_title_card(ass_path, candidate: dict, *, size: tuple[int, int], clip_dur
         return ass_path
 
 
+# --------------------------------------------------------------------------- cuts (task 3)
+
+CUT_FPS_DEFAULT = 30.0
+
+
+def cut_plan(candidate: dict, clip_duration: float, fps: Optional[float] = None):
+    """Keep segments (source seconds) from edit_spec.cuts, frame-snapped; None = no cuts."""
+    from shared import retention
+    cuts = edit_specs.cuts_of(candidate.get("edit_spec"))
+    if not cuts:
+        return None
+    trim = cuts.get("trim") or [0.0, float(clip_duration)]
+    keep = retention.plan_keep_segments(float(clip_duration), forced_cuts=[tuple(r) for r in cuts.get("removed") or []],
+                                        window=(float(trim[0]), float(trim[1])), fps=fps or CUT_FPS_DEFAULT)
+    full = [(0.0, float(clip_duration))]
+    return None if not keep or keep == full else keep
+
+
+def _probe_fps(path) -> Optional[float]:
+    import subprocess
+    try:
+        out = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
+                              "stream=avg_frame_rate", "-of", "csv=p=0", str(path)],
+                             capture_output=True, text=True, timeout=30).stdout.strip()
+        num, den = out.split("/")
+        return float(num) / float(den) if float(den) else None
+    except Exception:
+        return None
+
+
+def apply_cuts(path, candidate: dict, clip_duration: float, *, preset, crf, run, timeout=None, log=print):
+    """After render_vertical (captions + card already burned, so karaoke is cut WITH the video): trim +
+    remove the edit_spec.cuts ranges in place, 40 ms audio crossfade at each seam
+    (retention.silence_trim_graph). Goes through the worker's run_command (cancel + watchdog).
+    Returns the output duration, or None when the clip has no cuts. Loudnorm runs after this."""
+    from shared import retention
+    keep = cut_plan(candidate, clip_duration, _probe_fps(path))
+    if not keep:
+        return None
+    tmp = Path(str(path) + ".cut.mp4")
+    graph = retention.silence_trim_graph(keep, crossfade=retention.CUT_CROSSFADE, duration=float(clip_duration))
+    run(["ffmpeg", "-hide_banner", "-nostats", "-y", "-i", str(path), "-filter_complex", graph,
+         "-map", "[vtrim]", "-map", "[atrim]", *retention.encode_args(preset, crf), str(tmp)], timeout=timeout)
+    tmp.replace(path)
+    out = sum(b - a for a, b in keep)
+    log(f"Cuts: {len(keep)} segments, {clip_duration:.1f} s -> {out:.1f} s")
+    return out
+
+
 # --------------------------------------------------------------------------- timeline (task 2)
 
-def write_timeline(preview_path, segments, duration, candidate_id, previews_dir, log=print):
-    """After a preview render: waveform peaks + word chips → previews/<cid>.timeline.json.
-    Never fatal (the editor falls back to chips without a waveform)."""
+def write_timeline(preview_path, segments, duration, candidate, previews_dir, *, source_path=None, start=None, log=print):
+    """After a preview render: waveform peaks + word chips → previews/<cid>.timeline.json, in SOURCE
+    time (decoded from the source clip window, so cut words stay visible and restorable) plus the
+    keep segments this preview was cut with. Never fatal (the editor then shows chips only)."""
     from shared import timeline
     try:
-        data = timeline.build(preview_path, segments, duration)
+        candidate_id = candidate["id"] if isinstance(candidate, dict) else candidate
+        keep = cut_plan(candidate, duration, _probe_fps(preview_path)) if isinstance(candidate, dict) else None
+        data = timeline.build(source_path or preview_path, segments, duration,
+                              start=start if source_path else None, keep=keep)
         timeline.write_cache(timeline.cache_path(previews_dir, candidate_id), data, preview_path)
         log(f"Timeline: {len(data['words'])} words, {len(data['peaks'] or [])} peaks")
     except Exception as e:

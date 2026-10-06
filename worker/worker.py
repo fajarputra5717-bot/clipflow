@@ -5133,10 +5133,11 @@ def create_preview(
         watermark_center_y=wm_center_y,
     )
 
+    render_steps.apply_cuts(preview_path, candidate, duration, preset=setting("FFMPEG_PREVIEW_PRESET"), crf=setting("FFMPEG_PREVIEW_CRF"), run=run_command, timeout=render_timeout_seconds(duration), log=log)  # lane-b hook
     # QA P0: previews sound like the final (same chain + verify, never fatal).
     normalize_loudness(preview_path, duration, candidate_id=candidate_id,
                        audio_bitrate="96k")
-    render_steps.write_timeline(preview_path, clip_segments, duration, candidate_id, PREVIEW_DIR, log=log)  # lane-b hook
+    render_steps.write_timeline(preview_path, clip_segments, duration, candidate, PREVIEW_DIR, source_path=video_path, start=start, log=log)  # lane-b hook
 
     # A locked thumbnail (an AI option or a manual upload the user
     # explicitly picked via Apply changes) must survive preview
@@ -5599,6 +5600,7 @@ def render_final_candidate(
         watermark_center_y=wm_center_y,
     )
 
+    render_steps.apply_cuts(output_path, candidate, duration, preset=setting("FFMPEG_PRESET"), crf=setting("FFMPEG_CRF"), run=run_command, timeout=render_timeout_seconds(duration), log=log)  # lane-b hook
     # QA #2: loudness last (after every audio step of the render).
     update_candidate(candidate_id, progress=90, message="Normalising loudness")
     normalize_loudness(output_path, duration, candidate_id=candidate_id)

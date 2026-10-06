@@ -14,6 +14,7 @@ Routes (all under /api, so the auth middleware applies):
   GET /api/jobs/{jid}/candidates/{cid}/editor              editor state for one clip
   PUT /api/jobs/{jid}/candidates/{cid}/editor/hook-title   {on, text, duration} → edit_spec.hook_title
   GET /api/jobs/{jid}/candidates/{cid}/editor/timeline     waveform peaks + word chips (task 2)
+  PUT /api/jobs/{jid}/candidates/{cid}/editor/cuts         {trim, removed} → edit_spec.cuts (task 3)
 Rendering stays on the existing POST /api/jobs/{jid}/candidates/{cid}/regenerate-preview (island
 progress via /api/activity, version history).
 """
@@ -89,6 +90,7 @@ def _state(c: dict) -> dict:
             "updated_at": c["updated_at"].isoformat() if c["updated_at"] else None,
             "edit_spec": spec,
         },
+        "cuts": _cuts_state(spec, duration),
         "hook_title": {
             "on": bool(ht.get("on", False)), "text": ht.get("text", ""),
             "duration": ht.get("duration", edit_specs.HOOK_TITLE_DEFAULT_DURATION),
@@ -96,6 +98,44 @@ def _state(c: dict) -> dict:
             "max_chars": edit_specs.HOOK_TITLE_MAX_CHARS,
         },
     }
+
+
+def _cuts_state(spec: dict, duration) -> dict:
+    cuts = edit_specs.cuts_of(spec) or {}
+    d = float(duration or 0)
+    trim = cuts.get("trim") or [0.0, d]
+    removed = cuts.get("removed") or []
+    out = (trim[1] - trim[0]) - sum(e - s for s, e in removed)
+    return {"trim": cuts.get("trim"), "removed": removed, "output_seconds": round(max(0.0, out), 2),
+            "suggest_min_gap": 0.6, "pad": 0.12}
+
+
+def _save_spec_key(job_id, candidate_id, user, key, value):
+    """Merge one edit_spec key (None = remove) for an owned, idle clip; 114 outdated-final mark."""
+    core = _core()
+    with core.get_db() as conn, conn.cursor() as cur:
+        c = _load(cur, job_id, candidate_id, user)
+        if c["status"] in ("preview_queued", "preview_rendering", "render_queued", "rendering"):
+            raise HTTPException(status_code=409, detail="This clip is rendering; try again when it's done")
+        before = (c["edit_spec"] or {}).get(key) if isinstance(c["edit_spec"], dict) else None
+        where, params = owner_filter(user)
+        cur.execute(
+            f"""
+            UPDATE clip_candidates c
+            SET edit_spec = NULLIF((COALESCE(c.edit_spec, '{{}}'::jsonb) || %s::jsonb) - %s::text[], '{{}}'::jsonb),
+                updated_at = NOW()
+            FROM jobs j
+            WHERE c.id::text = %s AND c.job_id::text = %s AND j.id = c.job_id AND {where}
+            """,
+            [core.json_param({key: value} if value is not None else {}), [] if value is not None else [key],
+             candidate_id, job_id, *params],
+        )
+        if cur.rowcount != 1:
+            raise HTTPException(status_code=404, detail="Clip not found")
+        if value != before:
+            core.mark_finals_outdated(cur, c["job_id"], candidate_id)  # 114: same transaction
+        conn.commit()
+        return _state(_load(cur, job_id, candidate_id, user))
 
 
 # --------------------------------------------------------------------------- routes
@@ -157,6 +197,25 @@ def editor_timeline(job_id: str, candidate_id: str, user: dict = Depends(get_cur
     if cached and cached.get("words"):
         return {**cached, "cached": True}
     return {**timelines.words_only(segments, duration), "cached": False}
+
+
+class CutsIn(BaseModel):
+    trim: list[float] | None = None
+    removed: list[list[float]] = []
+
+
+@editor.put("/cuts")
+def put_cuts(job_id: str, candidate_id: str, body: CutsIn, user: dict = Depends(get_current_user)):
+    """Trim window + removed ranges (clip-relative source seconds). Empty = no cuts (key removed)."""
+    core = _core()
+    with core.get_db() as conn, conn.cursor() as cur:
+        c = _load(cur, job_id, candidate_id, user)
+    duration = c["duration_seconds"] or ((c["end_time"] or 0) - (c["start_time"] or 0))
+    try:
+        value = edit_specs.normalize_cuts(body.model_dump(), duration)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return _save_spec_key(job_id, candidate_id, user, "cuts", value)
 
 
 def environment():
