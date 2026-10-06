@@ -22,6 +22,8 @@ docs/tasks/          original task specs
 ```
 
 Rebuild/restart one service: `docker compose build worker && docker compose up -d worker`.
+Import-test every rebuilt image BEFORE `up` (no job running): `docker compose run --rm --no-deps -T --entrypoint python
+worker -c "import worker"` / `backend -c "import app.main"` (134: a load-time NameError crash-looped the prod worker).
 Frontend changes need no rebuild (directory bind mount); hard-refresh the browser.
 Logs: `docker compose logs -f --tail=200 worker`.
 DB shell: `docker compose exec postgres psql -U clipflow -d clipflow`.
@@ -292,7 +294,7 @@ Hook input (077): `select_hooks()` sends the WHOLE timed transcript (no cut) up 
 ranking call returning candidate ids. Providers return `(data, model, usage)`; router `meta["usage"]`.
 Keep prompt construction in `build_hooks_prompt()` so the eval and production send identical text. Clips per
 video (136): `jobs.clip_count` (form → campaign `default_clip_count` → user `CLIPS_PER_JOB`, 1–8), read by
-`clips_per_job()`; only the count varies in the prompt. Before `up` of a rebuilt worker, import-test the image.
+`clips_per_job()`; only the count varies in the prompt.
 
 ## Runtime settings
 
