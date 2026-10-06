@@ -106,3 +106,31 @@ test("pre-post checks: red blocks Mark posted; warnings show and preview 'not el
   await tt.locator("button[type=submit]").click();   // still allowed: warnings never block
   await expect.poll(() => api.calls.some((c) => c.method === "POST" && c.path === "/api/posts" && c.body.account_id === "acc-2")).toBe(true);
 });
+
+test("claim advice, views as of, Mark claimed with views, Mark paid with the difference", async ({ app, api }) => {
+  api.publishGroups = [{ campaign: "fandra-octo", campaign_name: "Fandra", rows: [row({ campaign: "fandra-octo", post: {
+    id: "p-f", status: "posted", account_handle: "fan", url: "https://tiktok.com/@fan/video/1", posted_at: new Date().toISOString(),
+    views: 40000, views_at: new Date().toISOString(), eligible: true,
+    advice: { action: "wait", reason: "still_growing", message: "+9.000 views in 24 h; Rp 156.000 now, about Rp 192.000 tomorrow at this pace.", payout_now_fmt: "Rp 156.000", views_needed: 2000, deadline: null } } })] }];
+  await app.locator('#flow [data-nav="publish"]').click();
+  const r = app.locator('[data-publish-row="cand-a:tiktok"]');
+  await expect(r.locator(".qadvice .badge")).toHaveText("Wait");
+  await expect(r.locator(".qadvice-msg")).toContainText("about Rp 192.000 tomorrow");
+  await expect(r.locator(".qviews")).toContainText("Views 40.000 as of");
+  await r.locator("[data-views-form] input").fill("45500");
+  await r.locator("[data-views-form] button").click();
+  await expect(r.locator(".qviews b")).toHaveText("45.500");
+  expect(api.calls.find((c) => c.method === "PATCH").body).toEqual({ views: 45500 });
+  await r.locator("[data-claim-open]").click();
+  await expect(r.locator("[data-claim-form] input")).toHaveValue("45500");
+  await r.locator("[data-claim-form] button[type=submit]").click();
+  await expect(r.locator(".qs .badge").first()).toHaveText("Claimed");
+  await expect(r.locator(".qmoney")).toHaveText("Claimed at 45.500 views · expected Rp 180.000");
+  expect(api.calls.filter((c) => c.method === "PATCH").at(-1).body).toEqual({ status: "claimed", views: 45500 });
+  await r.locator("[data-claim-open]").click();
+  await expect(r.locator("[data-paid-form] input")).toHaveValue("180000");
+  await r.locator("[data-paid-form] input").fill("168000");
+  await r.locator("[data-paid-form] button[type=submit]").click();
+  await expect(r.locator(".qmoney")).toContainText("Paid Rp 168.000 · expected Rp 180.000 · −Rp 12.000");
+  expect(api.calls.filter((c) => c.method === "PATCH").at(-1).body).toEqual({ status: "paid", paid_rp: 168000 });
+});

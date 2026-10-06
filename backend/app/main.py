@@ -418,6 +418,20 @@ def ensure_schema():
         # reached, platform length) is recorded as not eligible, with the reasons, so history stays honest.
         "ALTER TABLE clip_posts ADD COLUMN IF NOT EXISTS eligible BOOLEAN NOT NULL DEFAULT TRUE",
         "ALTER TABLE clip_posts ADD COLUMN IF NOT EXISTS ineligible_reason TEXT",
+        # P2 part 5 (133): views history (every entry time-stamped; feeds claim_advice's 24 h growth) and the
+        # claim snapshot: views submitted with the claim (Fandra pays on them) + the payout expected for them.
+        """
+        CREATE TABLE IF NOT EXISTS clip_post_views (
+            id BIGSERIAL PRIMARY KEY,
+            post_id TEXT NOT NULL REFERENCES clip_posts(id) ON DELETE CASCADE,
+            user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            views BIGINT NOT NULL,
+            at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS idx_clip_post_views_post ON clip_post_views (post_id, at DESC)",
+        "ALTER TABLE clip_posts ADD COLUMN IF NOT EXISTS claimed_views BIGINT",
+        "ALTER TABLE clip_posts ADD COLUMN IF NOT EXISTS expected_rp BIGINT",
         "CREATE INDEX IF NOT EXISTS idx_clip_posts_candidate ON clip_posts (candidate_id)",
         "CREATE UNIQUE INDEX IF NOT EXISTS uq_clip_posts_url ON clip_posts (user_id, url) WHERE url IS NOT NULL",
         # A clip goes to one account once (re-post = drop the old row first).
@@ -1552,7 +1566,8 @@ def delete_account(account_id: str, request: Request):
 POST_COLUMNS = (
     "p.id, p.candidate_id, p.job_id, p.campaign, p.title, p.platform, p.account_id, a.handle, p.status, "
     "p.source, p.scheduled_for, p.posted_at, p.url, p.external_id, p.views, p.views_at, p.claimed_at, "
-    "p.paid_at, p.paid_rp, p.note, p.error, p.created_at, p.updated_at, p.eligible, p.ineligible_reason"
+    "p.paid_at, p.paid_rp, p.note, p.error, p.created_at, p.updated_at, p.eligible, p.ineligible_reason, "
+    "p.claimed_views, p.expected_rp"
 )
 POST_FROM = "clip_posts p LEFT JOIN platform_accounts a ON a.id = p.account_id"
 
@@ -1561,7 +1576,7 @@ def _post_row(r) -> dict:
     keys = ("id", "candidate_id", "job_id", "campaign", "title", "platform", "account_id", "account_handle",
             "status", "source", "scheduled_for", "posted_at", "url", "external_id", "views", "views_at",
             "claimed_at", "paid_at", "paid_rp", "note", "error", "created_at", "updated_at", "eligible",
-            "ineligible_reason")
+            "ineligible_reason", "claimed_views", "expected_rp")
     d = dict(zip(keys, r))
     for k in ("scheduled_for", "posted_at", "views_at", "claimed_at", "paid_at", "created_at", "updated_at"):
         d[k] = d[k].isoformat() if d[k] else None
@@ -1672,8 +1687,11 @@ def publish_queue(request: Request):
                     """,
                     (user["id"], ids),
                 )
+                now_ = datetime.now(timezone.utc)
                 for r in cur.fetchall():
                     d = _post_row(r)
+                    d["advice"] = _claim_advice(cur, user["id"], d, now_)
+                    d.update(_post_money(d))
                     posts[(d["candidate_id"], d["platform"])] = d
             cur.execute(
                 "SELECT id, platform, handle FROM platform_accounts WHERE user_id = %s AND active ORDER BY lower(handle)",
@@ -1786,6 +1804,70 @@ def _post_warnings(rules, campaign, platform, duration, when, account=None, used
     if lw:
         out.append(lw)
     return out
+
+
+def _views_day_ago(cur, post_id: str, now: datetime) -> Optional[int]:
+    """Views from an entry 18–48 h old (the newest such), for claim_advice's 24 h growth; None = no data."""
+    cur.execute(
+        """
+        SELECT views FROM clip_post_views
+        WHERE post_id = %s AND at <= %s AND at >= %s ORDER BY at DESC LIMIT 1
+        """,
+        (post_id, now - timedelta(hours=18), now - timedelta(hours=48)),
+    )
+    row = cur.fetchone()
+    return int(row[0]) if row else None
+
+
+def _claims_this_month(cur, user_id: str, post: dict) -> int:
+    """Eligible claimed/paid posts on this account + campaign in the WIB month of this upload (not this one)."""
+    if not post.get("account_id") or not post.get("posted_at"):
+        return 0
+    start, end = _wib_month_bounds(_parse_ts(post["posted_at"], "posted_at"))
+    cur.execute(
+        """
+        SELECT COUNT(*) FROM clip_posts
+        WHERE user_id = %s AND account_id = %s AND campaign IS NOT DISTINCT FROM %s AND id <> %s
+          AND eligible AND status IN ('claimed', 'paid') AND posted_at >= %s AND posted_at < %s
+        """,
+        (user_id, post["account_id"], post.get("campaign"), post["id"], start, end),
+    )
+    return cur.fetchone()[0]
+
+
+def _post_money(post: dict) -> dict:
+    """Formatted claim/paid amounts (payouts.format_idr; the UI never formats money itself)."""
+    exp, paid = post.get("expected_rp"), post.get("paid_rp")
+    out = {"expected_fmt": payouts.format_idr(exp) if exp is not None else None,
+           "paid_fmt": payouts.format_idr(paid) if paid is not None else None, "paid_diff_fmt": None}
+    if exp is not None and paid is not None and paid != exp:
+        diff = int(paid) - int(exp)
+        out["paid_diff_fmt"] = ("+" if diff > 0 else "−") + payouts.format_idr(abs(diff))
+    return out
+
+
+def _claim_advice(cur, user_id: str, post: dict, now: datetime) -> Optional[dict]:
+    """payouts.claim_advice for a posted/claimed/paid post; None for planned/dropped or no campaign."""
+    if post["status"] not in ("posted", "claimed", "paid") or not post.get("campaign"):
+        return None
+    rules = campaigns.get(post["campaign"])
+    if not rules:
+        return None
+    if post.get("eligible") is False:
+        return {"action": "missed", "reason": "not_eligible", "message": post.get("ineligible_reason") or "Not eligible",
+                "payout_now_fmt": None, "views_needed": None, "deadline": None}
+    model = payouts.model_from_rules(rules)
+    _, end = payouts.campaign_period(rules)
+    a = payouts.claim_advice(
+        model, views=int(post.get("views") or 0), uploaded_at=_parse_ts(post["posted_at"], "posted_at"), now=now,
+        claimed=post["status"] in ("claimed", "paid"),
+        account_claims_this_month=_claims_this_month(cur, user_id, post),
+        views_24h_ago=_views_day_ago(cur, post["id"], now),
+        campaign_end=datetime.combine(end + timedelta(days=1), datetime.min.time(), payouts.WIB) if end else None,
+    )
+    return {"action": a.action, "reason": a.reason, "message": a.message,
+            "payout_now_fmt": payouts.format_with_idr(a.payout_now, a.currency) if a.payout_now is not None else None,
+            "views_needed": a.views_needed, "deadline": a.deadline.isoformat() if a.deadline else None}
 
 
 def _eligibility_for(cur, user_id: str, candidate_id: str, platform: str, account_id: Optional[str],
@@ -1940,8 +2022,12 @@ def update_post(post_id: str, payload: PostUpdate, request: Request):
             if "scheduled_for" in sent:
                 sets["scheduled_for"] = _parse_ts(payload.scheduled_for, "scheduled_for")
             if "views" in sent and payload.views is not None:
-                sets["views"] = payload.views
+                sets["views"] = new["views"] = payload.views
                 sets["views_at"] = datetime.now(timezone.utc)  # every views entry is stamped
+                cur.execute(
+                    "INSERT INTO clip_post_views (post_id, user_id, views) VALUES (%s, %s, %s)",
+                    (post_id, user["id"], payload.views),
+                )
             if "paid_rp" in sent:
                 problem = post_rules.rp_problem(payload.paid_rp)
                 if problem:
@@ -1958,6 +2044,16 @@ def update_post(post_id: str, payload: PostUpdate, request: Request):
                 when = new["posted_at"] if isinstance(new["posted_at"], datetime) else _parse_ts(new["posted_at"], "posted_at")
                 sets["eligible"], sets["ineligible_reason"] = _eligibility_for(
                     cur, user["id"], current["candidate_id"], current["platform"], new["account_id"], when)
+            if current["status"] != "claimed" and new["status"] == "claimed":
+                # 133: the claim is submitted with the views it pays on (Fandra: views at submit time).
+                if new.get("views") is None:
+                    raise HTTPException(status_code=400, detail="Enter the views at claim time first")
+                sets["claimed_views"] = new["views"]
+                rules = campaigns.get(current["campaign"]) if current["campaign"] else None
+                if rules:
+                    model = payouts.model_from_rules(rules)
+                    amount = payouts.payout_for(model, int(new["views"]))
+                    sets["expected_rp"] = payouts.to_idr(amount, model.currency) if amount is not None else None
             if new["status"] == "paid" and new.get("paid_rp") is None:
                 raise HTTPException(status_code=400, detail="A paid post needs the amount (paid_rp, Rupiah)")
             if sets:
@@ -1974,6 +2070,8 @@ def update_post(post_id: str, payload: PostUpdate, request: Request):
                         else "This clip already has a post on that account",
                     )
             post = _fetch_post(cur, post_id, user["id"])
+            post["advice"] = _claim_advice(cur, user["id"], post, datetime.now(timezone.utc))
+            post.update(_post_money(post))
         conn.commit()
     return post
 

@@ -74,6 +74,17 @@ async function mockApi(page, api) {
       api.mustChange = false; return json({ ok: true });
     }
     if (path === "/api/publish-queue" && method === "GET") return json({ groups: api.publishGroups || [] });
+    { const m = path.match(/^\/api\/posts\/([^/]+)$/);
+      if (m && method === "PATCH") {
+        const row = (api.publishGroups || []).flatMap((g) => g.rows).find((r) => r.post?.id === m[1]);
+        if (!row) return json({ detail: "Post not found" }, 404);
+        const p = row.post;
+        if (body.views != null) { p.views = body.views; p.views_at = iso(0); }
+        if (body.status === "claimed") { p.status = "claimed"; p.claimed_views = p.views; p.expected_rp = 12000 * Math.floor(Math.min(p.views, 500000) / 3000); p.expected_fmt = "Rp " + p.expected_rp.toLocaleString("id-ID"); }
+        if (body.status === "paid") { p.status = "paid"; p.paid_rp = body.paid_rp; p.paid_fmt = "Rp " + body.paid_rp.toLocaleString("id-ID");
+          const d = body.paid_rp - p.expected_rp; p.paid_diff_fmt = d ? (d > 0 ? "+" : "−") + "Rp " + Math.abs(d).toLocaleString("id-ID") : null; }
+        return json(p);
+      } }
     if (path === "/api/posts" && method === "POST") {
       const row = (api.publishGroups || []).flatMap((g) => g.rows).find((r) => r.candidate_id === body.candidate_id && r.platform === body.platform);
       const acc = (api.accounts || []).find((a) => a.id === body.account_id);

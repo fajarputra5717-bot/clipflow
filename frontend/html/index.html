@@ -1338,6 +1338,22 @@ select::-ms-expand{display:none}
 .qmark .qmark-warn{flex-basis:100%;margin:0;font-size:12px;color:var(--badge-warn-fg)}
 .badge.not-eligible{margin-left:4px;background:var(--badge-warn-bg);border-color:var(--badge-warn-line);color:var(--badge-warn-fg)}
 @media (max-width:760px){.qchecks{margin-left:0}}
+/* Claim advice + views + claim/paid (P2 part 5, 133). Money strings come formatted from the API (payouts.py). */
+.qpost{margin:8px 0 0 calc(40px + var(--sp-2));display:flex;flex-direction:column;gap:6px}
+.qadvice{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px;font-size:13px}
+.qadvice .badge{font-size:12px;padding:2px 9px}
+.qadvice .qadvice-msg{color:var(--text)}
+.qadvice small{color:var(--muted);font-size:12px}
+.qviews{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:13px;color:var(--muted)}
+.qviews b{color:var(--text)}
+.qviews form,.qclaim{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.qviews input,.qclaim input{width:150px;min-height:36px;padding:6px 12px}
+.qviews button,.qclaim button{min-height:36px;padding:0 12px;border-radius:999px;font-size:13px}
+.qclaim{padding:10px 12px;border-radius:14px;background:var(--panel2)}
+.qclaim .hint{flex-basis:100%;margin:0;font-size:12px;color:var(--muted)}
+.qmoney{font-size:13px}
+.qmoney .diff-up{color:var(--badge-good-fg)}.qmoney .diff-down{color:var(--badge-bad-fg)}
+@media (max-width:760px){.qpost{margin-left:0}}
 </style>
 </head>
 <body>
@@ -3539,6 +3555,41 @@ const PLATFORM_ICON={youtube:'<svg viewBox="0 0 24 24" fill="currentColor" aria-
   threads:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M17 8.5C16 5.5 13.8 4 11.5 4 7.5 4 5 7.2 5 12s2.5 8 6.5 8c3 0 5.5-1.7 5.5-4.5 0-4-6.5-4.5-6.5-1.5 0 1.3 1 2 2.3 2 2.2 0 3.2-2 3.2-5"/></svg>',
   x:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M5 4l14 16M19 4 5 20"/></svg>'};
 const PLATFORM_SHORT={youtube:"YouTube",instagram:"Reels",tiktok:"TikTok",facebook:"Facebook",threads:"Threads",x:"X"};
+const ADVICE_BADGE={claim_now:["Claim now","completed"],wait:["Wait","idle"],missed:["Missed","failed"],claimed:["Claimed","attention"],unknown:["Check brief","idle"]};
+let claimOpen={};
+function fmtViews(n){return n==null?"—":Number(n).toLocaleString("id-ID")}
+function postBlockHtml(r,k){
+  const p=r.post,st=rowStatus(r);if(st==="ready"||st==="planned")return "";
+  const a=p.advice,[al,ac]=a?(ADVICE_BADGE[a.action]||ADVICE_BADGE.unknown):[];
+  const adv=a&&st==="posted"?`<div class="qadvice"><span class="badge ${ac}">${al}</span><span class="qadvice-msg">${esc(a.message)}</span>${a.deadline?`<small>claim by ${esc(fmtPostedAt(a.deadline))}</small>`:""}</div>`:"";
+  const views=`<div class="qviews">Views <b>${fmtViews(p.views)}</b>${p.views_at?` <span>as of ${esc(fmtPostedAt(p.views_at))}</span>`:" <span>not entered yet</span>"}
+    <form data-views-form="${esc(p.id)}" novalidate><input type="number" min="0" step="1" inputmode="numeric" aria-label="Current views" placeholder="Current views"><button class="secondary" type="submit">Save views</button></form></div>`;
+  let money="";
+  if(st==="claimed")money=`<div class="qmoney">Claimed at ${fmtViews(p.claimed_views)} views · expected <b>${esc(p.expected_fmt||"Rp ?")}</b></div>`;
+  if(st==="paid")money=`<div class="qmoney">Paid <b>${esc(p.paid_fmt)}</b>${p.expected_fmt?` · expected ${esc(p.expected_fmt)}`:""}${p.paid_diff_fmt?` · <span class="${p.paid_diff_fmt.startsWith("+")?"diff-up":"diff-down"}">${esc(p.paid_diff_fmt)}</span>`:""}</div>`;
+  const open=claimOpen[p.id];
+  const act=st==="posted"?(open?`<form class="qclaim" data-claim-form="${esc(p.id)}" novalidate><input type="number" min="0" step="1" inputmode="numeric" value="${p.views??""}" aria-label="Views at claim time"><button class="primary" type="submit">Claim</button><button class="secondary" type="button" data-claim-cancel="${esc(p.id)}">Cancel</button><p class="hint">Claims pay on the views you submit (Fandra) and are made once per post. Enter the views shown when you submit the claim form.</p><div class="account-msg" role="status"></div></form>`:`<div><button class="secondary" type="button" data-claim-open="${esc(p.id)}">Mark claimed</button></div>`)
+    :st==="claimed"?(open?`<form class="qclaim" data-paid-form="${esc(p.id)}" novalidate><span>Rp</span><input type="number" min="0" step="1" inputmode="numeric" value="${p.expected_rp??""}" aria-label="Amount received (Rp)"><button class="primary" type="submit">Save</button><button class="secondary" type="button" data-claim-cancel="${esc(p.id)}">Cancel</button><p class="hint">Enter what you actually received; any difference from the expected ${esc(p.expected_fmt||"amount")} is shown.</p><div class="account-msg" role="status"></div></form>`:`<div><button class="secondary" type="button" data-claim-open="${esc(p.id)}">Mark paid</button></div>`):"";
+  return `<div class="qpost">${adv}${views}${money}${act}</div>`;
+}
+async function patchPost(id,body,form){
+  const btn=form?.querySelector("button[type=submit]"),msg=form?.querySelector(".account-msg");if(btn)setBusy(btn,true);
+  try{await api("/api/posts/"+encodeURIComponent(id),{method:"PATCH",body:JSON.stringify(body)});delete claimOpen[id];await loadPublish()}
+  catch(err){if(btn)setBusy(btn,false);if(msg){msg.textContent=err.message;msg.classList.add("is-error")}else alert(err.message)}
+}
+document.addEventListener("submit",e=>{
+  const vf=e.target.closest?.("[data-views-form]"),cf=e.target.closest?.("[data-claim-form]"),pf=e.target.closest?.("[data-paid-form]");
+  if(!vf&&!cf&&!pf)return;e.preventDefault();
+  const f=vf||cf||pf,v=f.querySelector("input").value.trim(),n=Number(v);
+  if(v===""||!Number.isInteger(n)||n<0){f.querySelector("input").focus();f.querySelector("input").setAttribute("aria-invalid","true");return}
+  if(vf)return patchPost(vf.dataset.viewsForm,{views:n},vf);
+  if(cf)return patchPost(cf.dataset.claimForm,{status:"claimed",views:n},cf);
+  return patchPost(pf.dataset.paidForm,{status:"paid",paid_rp:n},pf);
+});
+document.addEventListener("click",e=>{
+  const o=e.target.closest("[data-claim-open]");if(o){claimOpen[o.dataset.claimOpen]=true;renderPublish();return}
+  const c=e.target.closest("[data-claim-cancel]");if(c){delete claimOpen[c.dataset.claimCancel];renderPublish()}
+});
 const POST_STATUS={ready:["Ready","idle"],planned:["Planned","idle"],posted:["Posted","completed"],claimed:["Claimed","attention"],paid:["Paid","completed"]};
 let publishGroups=[],publishFilter="all",publishOpen={};
 function publishRowKey(r){return r.candidate_id+":"+r.platform}
@@ -3586,7 +3637,7 @@ function publishRowHtml(r){
     </div>
     ${blocks.length||rowWarns.length||(r.post&&r.post.eligible===false&&st!=="ready")?`<ul class="qchecks">${blocks.map(c=>`<li class="qcheck is-block">${esc(c.message)}</li>`).join("")}${st==="ready"?rowWarns.map(c=>`<li class="qcheck is-warn">${esc(c.message)}</li>`).join("")+checks.filter(c=>c.level==="warn"&&c.account_id).map(c=>`<li class="qcheck is-warn">${esc(c.message)}</li>`).join(""):""}${r.post&&r.post.eligible===false&&st!=="ready"?`<li class="qcheck is-warn">Not eligible: ${esc(r.post.ineligible_reason||"")}</li>`:""}</ul>`:""}
     ${r.caption_trimmed?`<p class="qnote">Caption shortened to fit ${esc(r.platform_name)}; hashtags kept in order.</p>`:""}
-    ${form}
+    ${form}${postBlockHtml(r,k)}
   </div>`;
 }
 // What "Mark posted" will record as the not-eligible reason for this account (row warnings + its cap).
