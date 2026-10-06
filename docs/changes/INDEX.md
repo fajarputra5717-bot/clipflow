@@ -107,3 +107,4 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 133 · 2026-10-06 · P2 (5): claim advice per post (payouts.claim_advice), views history + 'as of', Mark claimed stores views + expected Rp, Mark paid shows the difference · main.py, index.html
 134 · 2026-10-06 · Bug: job titles 'AI-Generated Highlight' → YouTube title stored from yt-dlp metadata (+ backfill); short job id · worker.py, index.html
 135 · 2026-10-06 · Bug: Review cards' empty thumbnails → list API returns thumb_candidate_id (first clip with a thumbnail) · main.py, index.html
+136 · 2026-10-06 · Clips per video: per-user CLIPS_PER_JOB (default 4, 1–8, replaces CLIP_COUNT), jobs.clip_count snapshot, Analyze 'Clips 2/4/6', campaign default_clip_count; prompt changes only the count · settings, main.py, worker.py, index.html

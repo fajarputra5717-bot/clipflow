@@ -144,6 +144,15 @@ def default_language(rules):
     return v if v in ("en", "id") else None
 
 
+def default_clip_count(rules):
+    """136: rules "default_clip_count" (1–8) pre-selects the Analyze form's Clips; None = the user's setting."""
+    try:
+        v = int((rules or {}).get("default_clip_count") or 0)
+    except (TypeError, ValueError):
+        return None
+    return v if 1 <= v <= 8 else None
+
+
 def summary(rules):
     """What the API returns per campaign (no payout internals)."""
     return {
@@ -152,6 +161,7 @@ def summary(rules):
         "brief_pending": rules["brief_pending"],
         "default_layout": default_layout(rules),
         "default_language": default_language(rules),
+        "default_clip_count": default_clip_count(rules),
         "platforms": platforms(rules),
         "sources": [s["channel"] for s in sources(rules)],
         "source_note": (rules.get("content") or {}).get("source"),

@@ -431,6 +431,8 @@ def ensure_schema():
         """,
         "CREATE INDEX IF NOT EXISTS idx_clip_post_views_post ON clip_post_views (post_id, at DESC)",
         "ALTER TABLE clip_posts ADD COLUMN IF NOT EXISTS claimed_views BIGINT",
+        # 136: clips per video, snapshotted at creation (form → campaign → owner's CLIPS_PER_JOB); NULL = legacy.
+        "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS clip_count INT",
         "ALTER TABLE clip_posts ADD COLUMN IF NOT EXISTS expected_rp BIGINT",
         "CREATE INDEX IF NOT EXISTS idx_clip_posts_candidate ON clip_posts (candidate_id)",
         "CREATE UNIQUE INDEX IF NOT EXISTS uq_clip_posts_url ON clip_posts (user_id, url) WHERE url IS NOT NULL",
@@ -685,6 +687,9 @@ class ClipRequest(BaseModel):
 
     # 081: campaign slug (GET /api/campaigns); None = no campaign.
     campaign: Optional[str] = None
+
+    # 136: clips per video (Analyze form 2/4/6); None = campaign default, else the user's CLIPS_PER_JOB.
+    clip_count: Optional[int] = Field(default=None, ge=1, le=8)
 
     split_ratio: float = Field(
         default=70.0,
@@ -1192,6 +1197,14 @@ def create_job(req: ClipRequest, request: Request):
 
     if req.layout is None:
         req.layout = campaigns.default_layout(campaigns.get(req.campaign)) if req.campaign else "auto"
+    # 136: clips per video = the form's choice, else the campaign default, else the user's CLIPS_PER_JOB.
+    clip_count = req.clip_count or (campaigns.default_clip_count(campaigns.get(req.campaign)) if req.campaign else None)
+    if not clip_count:
+        try:
+            clip_count = int(runtime_setting("CLIPS_PER_JOB", user_id=user["id"]) or 4)
+        except (TypeError, ValueError):
+            clip_count = 4
+    clip_count = max(1, min(8, clip_count))
     if req.layout not in SUPPORTED_LAYOUTS:
         raise HTTPException(
             status_code=400,
@@ -1306,7 +1319,8 @@ def create_job(req: ClipRequest, request: Request):
                         watermark_width,
                         watermark_opacity,
                         watermark_failure,
-                        user_id
+                        user_id,
+                        clip_count
                     )
                     VALUES (
                         %s,
@@ -1319,6 +1333,7 @@ def create_job(req: ClipRequest, request: Request):
                         %s,
                         %s,
                         %s::jsonb,
+                        %s,
                         %s,
                         %s,
                         %s,
@@ -1361,6 +1376,7 @@ def create_job(req: ClipRequest, request: Request):
                         wm.get("opacity"),
                         wm.get("failure"),
                         user["id"],
+                        clip_count,
                     ),
                 )
 
@@ -5196,6 +5212,9 @@ def update_settings(req: SettingsUpdate, request: Request):
                     raise HTTPException(status_code=404, detail="Watermark asset not found")
 
     validate_hooks_windows(req.values)
+    v = str(req.values.get("CLIPS_PER_JOB") or "").strip()
+    if v and (not v.isdigit() or not 1 <= int(v) <= 8):
+        raise HTTPException(status_code=400, detail="Clips per video must be a whole number from 1 to 8")
     validate_watermark_height(req.values)
 
     try:

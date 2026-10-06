@@ -1492,9 +1492,16 @@ select::-ms-expand{display:none}
             </div>
           </div>
 
-          <div class="form-row">
-            <span class="field" id="platformLbl">Output platform</span>
-            <div class="seg" role="group" aria-labelledby="platformLbl"><button type="button" data-platform="youtube_shorts" aria-pressed="true">YouTube Shorts</button><button type="button" data-platform="instagram_reels" aria-pressed="false">Reels</button><button type="button" data-platform="tiktok" aria-pressed="false">TikTok</button></div>
+          <div class="form-row grid-2">
+            <div>
+              <span class="field" id="platformLbl">Output platform</span>
+              <div class="seg" role="group" aria-labelledby="platformLbl"><button type="button" data-platform="youtube_shorts" aria-pressed="true">YouTube Shorts</button><button type="button" data-platform="instagram_reels" aria-pressed="false">Reels</button><button type="button" data-platform="tiktok" aria-pressed="false">TikTok</button></div>
+            </div>
+            <div>
+              <span class="field" id="clipsLbl">Clips <span class="from-campaign" id="clipsFromCampaign" hidden>from campaign</span></span>
+              <div class="seg" role="group" aria-labelledby="clipsLbl"><button type="button" data-clips="2" aria-pressed="false">2</button><button type="button" data-clips="4" aria-pressed="true">4</button><button type="button" data-clips="6" aria-pressed="false">6</button></div>
+              <p class="tiny muted seg-note" id="clipsNote"></p>
+            </div>
           </div>
 
           <p class="form-row small muted subtitle-defaults" id="subtitleDefaults">Subtitles: <span id="subtitleDefaultsText">your defaults</span> · <button class="plain" type="button" data-nav="settings">Change in Settings</button></p>
@@ -2020,6 +2027,7 @@ function updateCampaignHint(){
   const c=campaignsCache.find(x=>x.slug===$("jobCampaign")?.value),h=$("campaignHint");if(!h)return;
   if(!layoutTouched){layoutFromCampaign=!!c&&!!c.default_layout&&c.default_layout!=="auto";selectLayout(c?.default_layout||"auto",true)} // 117: campaign default unless you picked one
   if(!languageTouched){languageFromCampaign=!!c?.default_language;selectLanguage(c?.default_language||"auto",true)} // 126: same for the language
+  if(!clipsTouched){clipsFromCampaign=!!c?.default_clip_count;selectClips(c?.default_clip_count||defaultClips(),true)} // 136
   if(!c){h.hidden=true;h.textContent="";return}
   const src=c.sources.length?`Source: ${c.sources.join(", ")}`:(c.source_note?`Source: ${c.source_note}`:"Source: any");
   h.textContent=`${src} · ${c.platforms.length} platforms${c.brief_pending?" · brief pending":""}`;h.hidden=false;
@@ -2029,6 +2037,17 @@ function updateCampaignHint(){
 // language_fallback, which the worker uses when Auto-detect confidence is below 0.6.
 const LANG_NAMES={en:"English",id:"Indonesian"},LAST_LANG_KEY="clipflow_last_language";
 function lastExplicitLanguage(){try{const v=localStorage.getItem(LAST_LANG_KEY);return LANG_NAMES[v]?v:null}catch{return null}}
+// 136: clips per video. Pre-selected from the campaign's default_clip_count, else your CLIPS_PER_JOB setting
+// (Settings → Clips & rendering, 1–8); an explicit pick wins. A setting outside 2/4/6 shows no button pressed and
+// is sent as is.
+let clipsTouched=false,clipsFromCampaign=false,selectedClips=null;
+function defaultClips(){const n=parseInt((settingsCache.CLIPS_PER_JOB||{}).value,10);return n>=1&&n<=8?n:4}
+function selectClips(n,auto){
+  if(!auto){clipsTouched=true;clipsFromCampaign=false}
+  selectedClips=Math.max(1,Math.min(8,Number(n)||defaultClips()));setPressed("clips",selectedClips);
+  const t=$("clipsFromCampaign");if(t)t.hidden=!clipsFromCampaign;
+  const note=$("clipsNote");if(note)note.textContent=clipsTouched?"":`Your default: ${defaultClips()} (Settings)`;
+}
 let languageTouched=false,languageFromCampaign=false;
 // auto = set by a campaign default: not remembered as the user's explicit choice (language_fallback).
 function selectLanguage(v,auto){selectedLanguage=LANG_NAMES[v]?v:"auto";
@@ -2111,7 +2130,7 @@ async function createJob(){
       // subtitle style/font/size omitted: the backend fills them from the DEFAULT_SUBTITLE_* settings
       youtube_url:url,custom_title:customTitle||null,layout:selectedLayout,platform:selectedPlatform,split_ratio:selectedSplit,
       subtitle_animation:"karaoke",
-      language:selectedLanguage,language_fallback:lastExplicitLanguage(),
+      language:selectedLanguage,language_fallback:lastExplicitLanguage(),clip_count:selectedClips||defaultClips(),
       campaign:$("jobCampaign").value||null
     })});
     const id=j.job_id||j.id;if(!id)throw new Error("Backend did not return a job ID.");
@@ -3452,7 +3471,7 @@ document.addEventListener("change",e=>{
 const SETTINGS_GROUPS=[
   ["AI & transcription",["GEMINI_API_KEY","GEMINI_ANALYSIS_MODEL","GEMINI_MAX_ATTEMPTS","WHISPER_MODEL","WHISPER_LANGUAGE","RUNWAY_API_KEY","RUNWAY_MODEL"]],
   ["Face detection",["FACE_DETECTION_SAMPLE_COUNT","FACE_CONFIDENCE_THRESHOLD","FACE_ZOOM_RATIO"]],
-  ["Clips & rendering",["CLIP_COUNT","CLIP_TARGET_DURATION","CLIP_MIN_DURATION","CLIP_MAX_DURATION","PREVIEW_WIDTH","WATERMARK_WIDTH","WATERMARK_OPACITY","WATERMARK_POSITION_Y","SUBTITLE_SEAM_GAP","FULLFRAME_CAPTION_Y"]],
+  ["Clips & rendering",["CLIPS_PER_JOB","CLIP_TARGET_DURATION","CLIP_MIN_DURATION","CLIP_MAX_DURATION","PREVIEW_WIDTH","WATERMARK_WIDTH","WATERMARK_OPACITY","WATERMARK_POSITION_Y","SUBTITLE_SEAM_GAP","FULLFRAME_CAPTION_Y"]],
   ["YouTube",["YOUTUBE_CLIENT_ID","YOUTUBE_CLIENT_SECRET","YOUTUBE_REFRESH_TOKEN"]],
   ["TikTok",["TIKTOK_CLIENT_KEY","TIKTOK_CLIENT_SECRET","TIKTOK_ACCESS_TOKEN"]],
   ["Instagram",["INSTAGRAM_ACCESS_TOKEN","INSTAGRAM_BUSINESS_ACCOUNT_ID"]],
@@ -3463,7 +3482,7 @@ const SETTINGS_GROUPS=[
 ];
 const SETTING_LABELS={WATERMARK_POSITION_Y:"Watermark height (% from top, new jobs)",SUBTITLE_SEAM_GAP:"Caption gap above facecam (%, new jobs)",FULLFRAME_CAPTION_Y:"Caption height, no-facecam clips (% from top)",DISK_SPACE_MIN_MB:"Disk reserve (MB)",RETENTION_DAYS_INTERMEDIATE:"Keep downloads (days)",ORPHAN_SWEEP_DRY_RUN:"Orphan sweep dry run",GEMINI_API_KEY:"Gemini API key",GEMINI_ANALYSIS_MODEL:"Gemini model",GEMINI_MAX_ATTEMPTS:"Gemini attempts",WHISPER_MODEL:"Whisper model",WHISPER_LANGUAGE:"Fallback language",RUNWAY_API_KEY:"Runway API key",RUNWAY_MODEL:"Runway model",
   FACE_DETECTION_SAMPLE_COUNT:"Frames sampled",FACE_CONFIDENCE_THRESHOLD:"Confidence threshold",FACE_ZOOM_RATIO:"Facecam zoom",
-  CLIP_COUNT:"Clips per video",CLIP_TARGET_DURATION:"Target length (s)",CLIP_MIN_DURATION:"Minimum length (s)",CLIP_MAX_DURATION:"Maximum length (s)",PREVIEW_WIDTH:"Preview width (px)",WATERMARK_WIDTH:"Watermark width (px)",WATERMARK_OPACITY:"Watermark opacity",
+  CLIPS_PER_JOB:"Clips per video (1–8, new jobs)",CLIP_TARGET_DURATION:"Target length (s)",CLIP_MIN_DURATION:"Minimum length (s)",CLIP_MAX_DURATION:"Maximum length (s)",PREVIEW_WIDTH:"Preview width (px)",WATERMARK_WIDTH:"Watermark width (px)",WATERMARK_OPACITY:"Watermark opacity",
   YOUTUBE_CLIENT_ID:"Client ID",YOUTUBE_CLIENT_SECRET:"Client secret",YOUTUBE_REFRESH_TOKEN:"Refresh token",TIKTOK_CLIENT_KEY:"Client key",TIKTOK_CLIENT_SECRET:"Client secret",TIKTOK_ACCESS_TOKEN:"Access token",
   INSTAGRAM_ACCESS_TOKEN:"Access token",INSTAGRAM_BUSINESS_ACCOUNT_ID:"Business account ID",SUBMAGIC_API_KEY:"API key",SUBMAGIC_TEMPLATE:"Template",SUBMAGIC_MAGIC_ZOOMS:"Magic zooms",SUBMAGIC_MAGIC_BROLLS:"Magic B-rolls",
   HASHTAGS:"Hashtags",CAMPAIGN_NAME:"Campaign name",
@@ -3727,7 +3746,7 @@ async function loadSettings(){
             <span class="row-control"><input id="${id}" data-setting="${esc(k)}" type="${sec?"password":"text"}" value="${esc(s.value||"")}" placeholder="${s.configured?"Configured / masked":"Not set"}" autocomplete="off" spellcheck="false">${sec?`<button class="icon-btn reveal-btn" type="button" data-reveal="${id}" aria-label="Show ${esc(SETTING_LABELS[k]||k)}" aria-pressed="false">${EYE}</button>`:""}</span>
           </div>`}).join("")}</div>
       </section>`).join("");
-    filterSettings();updateSettingsDirty();updateSubtitleDefaultsLine();
+    filterSettings();updateSettingsDirty();updateSubtitleDefaultsLine();if(!clipsTouched)updateCampaignHint();
   }catch(e){$("settingsPanel").innerHTML=`<div class="error-box">${esc(e.message)}</div>`}
 }
 // Send only fields the user changed: the form shows effective values (DB → env → default), and
@@ -3779,6 +3798,7 @@ document.addEventListener("click",e=>{
   const lo=e.target.closest("[data-layout]");if(lo)return selectLayout(lo.dataset.layout);
   const lc=e.target.closest("[data-layout-card]");if(lc)return selectLayout(lc.dataset.layoutCard==="full"?"none":lastCamLayout);
   const lg=e.target.closest("[data-language]");if(lg)return selectLanguage(lg.dataset.language);
+  const cl=e.target.closest("[data-clips]");if(cl)return selectClips(cl.dataset.clips);
   if(e.target.closest("#analyzeButton"))return createJob();
   const ce=e.target.closest("[data-edit]");if(ce)return toggleCandidateEdit(ce.dataset.edit);
   const et=e.target.closest("[data-edit-tab]");if(et)return switchEditTab(et.dataset.cid,et.dataset.editTab);

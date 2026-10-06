@@ -74,7 +74,7 @@ for directory in [
 FINAL_WIDTH = 1080
 FINAL_HEIGHT = 1920
 
-# PREVIEW_WIDTH, CLIP_COUNT, CLIP_*_DURATION, FACE_*, WATERMARK_*,
+# PREVIEW_WIDTH, CLIPS_PER_JOB (per user, 136), CLIP_*_DURATION, FACE_*, WATERMARK_*,
 # FFMPEG_* are runtime settings: read them through setting_int() /
 # setting_float() at use time, never as import-time constants (the
 # baseline froze them from env, so the settings UI had no effect).
@@ -509,6 +509,18 @@ def setting_int(name, default=None):
 
 def setting_float(name, default=None):
     return _settings.get_float(name, default, _job_owner.get())
+
+
+CLIPS_MIN, CLIPS_MAX = 1, 8
+
+
+def clips_per_job(value=None):
+    """136: clips to cut per video: the job's snapshot, else the owner's CLIPS_PER_JOB; clamped 1–8."""
+    try:
+        n = int(value) if value else setting_int("CLIPS_PER_JOB")
+    except (TypeError, ValueError):
+        n = 4
+    return max(CLIPS_MIN, min(CLIPS_MAX, n))
 
 
 def run_as_owner(job_id, fn, arg):
@@ -2291,7 +2303,7 @@ def analyze_hooks(
         )
 
     if clip_count is None:
-        clip_count = setting_int("CLIP_COUNT")
+        clip_count = clips_per_job()
 
     clip_target_duration = setting_int("CLIP_TARGET_DURATION")
     clip_min_duration = setting_int("CLIP_MIN_DURATION")
@@ -6026,7 +6038,8 @@ def _process_analysis_job(
 
         # Read once: the prompt, the "enough clips" check and the
         # final review/partial decision must agree for this job.
-        clip_count = setting_int("CLIP_COUNT")
+        # 136: the job's own count (Analyze form / campaign / owner's CLIPS_PER_JOB at creation).
+        clip_count = clips_per_job(job.get("clip_count"))
 
         highlights = (
             analyze_hooks(

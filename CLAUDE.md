@@ -290,7 +290,9 @@ it on any new hook-producing path (pass `with_meta=True`).
 Hook input (077): `select_hooks()` sends the WHOLE timed transcript (no cut) up to
 `HOOKS_FULL_TRANSCRIPT_MAX_CHARS`; above it, 30-min windows (+2 min overlap) → `dedupe_hooks()` → one
 ranking call returning candidate ids. Providers return `(data, model, usage)`; router `meta["usage"]`.
-Keep prompt construction in `build_hooks_prompt()` so the eval and production send identical text.
+Keep prompt construction in `build_hooks_prompt()` so the eval and production send identical text. Clips per
+video (136): `jobs.clip_count` (form → campaign `default_clip_count` → user `CLIPS_PER_JOB`, 1–8), read by
+`clips_per_job()`; only the count varies in the prompt. Before `up` of a rebuilt worker, import-test the image.
 
 ## Runtime settings
 

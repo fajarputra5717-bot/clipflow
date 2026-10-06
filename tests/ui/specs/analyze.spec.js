@@ -9,7 +9,7 @@ test("default payload is exactly the pre-rebuild one", async ({ app, api }) => {
   await app.click("#analyzeButton");
   await expect.poll(() => post(api)).toEqual({
     youtube_url: URL, custom_title: null, layout: "auto", platform: "youtube_shorts", split_ratio: 70,
-    subtitle_animation: "karaoke", language: "auto", language_fallback: null, campaign: null,
+    subtitle_animation: "karaoke", language: "auto", language_fallback: null, campaign: null, clip_count: 4,
   });
 });
 
@@ -21,10 +21,11 @@ test("every control maps onto the same fields", async ({ app, api }) => {
   await app.click('[data-language="id"]');
   await app.click('[data-platform="tiktok"]');
   await app.locator("#jobCampaign").selectOption("windah");
+  await app.click('[data-clips="6"]');
   await app.click("#analyzeButton");
   await expect.poll(() => post(api)).toEqual({
     youtube_url: URL, custom_title: "My job", layout: "left", platform: "tiktok", split_ratio: 60,
-    subtitle_animation: "karaoke", language: "id", language_fallback: "id", campaign: "windah",
+    subtitle_animation: "karaoke", language: "id", language_fallback: "id", campaign: "windah", clip_count: 6,
   });
 });
 
@@ -62,4 +63,19 @@ test("subtitle defaults line links to Settings", async ({ app, api }) => {
   await app.locator('#subtitleDefaults [data-nav="settings"]').click();
   await expect(app.locator("#settingsSheet")).toHaveClass(/open/);
   await expect(app.locator("#set-DEFAULT_SUBTITLE_FONT")).toHaveValue("Montserrat Black");
+});
+
+test("clips: default from your setting, campaign default tagged, explicit pick wins (136)", async ({ app, api }) => {
+  api.settings = { CLIPS_PER_JOB: { value: "2", source: "user", scope: "user" } };
+  api.campaigns = [...api.campaigns, { slug: "six", name: "Six clips", brief_pending: false, platforms: [], default_layout: "auto", default_clip_count: 6, sources: [], hashtags: [] }];
+  await app.reload(); await app.waitForResponse((r) => r.url().includes("/api/campaigns"));
+  await expect(app.locator('[data-clips="2"]')).toHaveAttribute("aria-pressed", "true");
+  await app.locator("#jobCampaign").selectOption("six");
+  await expect(app.locator('[data-clips="6"]')).toHaveAttribute("aria-pressed", "true");
+  await expect(app.locator("#clipsFromCampaign")).toBeVisible();
+  await app.click('[data-clips="4"]');
+  await app.locator("#jobCampaign").selectOption("");
+  await expect(app.locator('[data-clips="4"]')).toHaveAttribute("aria-pressed", "true");
+  await app.fill("#youtubeUrl", URL); await app.click("#analyzeButton");
+  await expect.poll(() => post(api)?.clip_count).toBe(4);
 });
