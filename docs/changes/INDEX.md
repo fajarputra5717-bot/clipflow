@@ -98,7 +98,7 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 124 · 2026-10-06 · P1.5 (4): per-user API tokens (cf_…, sha256 only, Bearer or X-ClipFlow-Key), Account sheet create/copy-once/revoke; legacy key stays admin · app/auth.py, main.py, index.html
 125 · 2026-10-06 · P1.5 (5): admin Users in Settings (create w/ temp password, disable = sessions + tokens gone, role, reset → forced change), last-admin 409; legacy key kept until gate · app/auth.py, main.py, index.html
 126 · 2026-10-06 · Analyze step = flow-preview step 3: segmented language/platform, layout cards (+3 Coming soon, P4), campaign layout+language pre-fill tagged, subtitle line → Settings, time estimate; same payload · index.html, main.py, shared/campaigns.py
-127 · 2026-10-06 · Shared CLIPFLOW_API_KEY removed (owner decision; Lane C gate doc pending); only per-user cf_ tokens; .env.example/bootstrap use CLIPFLOW_ADMIN_* · main.py, app/auth.py, shared/settings.py, .env.example, scripts
+127 · 2026-10-06 · Shared CLIPFLOW_API_KEY removed (owner decision; P1.5 gate PASS, qa bb09d11); only per-user cf_ tokens; .env.example/bootstrap use CLIPFLOW_ADMIN_* · main.py, app/auth.py, shared/settings.py, .env.example, scripts
 128 · 2026-10-06 · P2 (1): posting accounts per user (platform_accounts, owned + guarded), Settings → Posting accounts · main.py, index.html
 129 · 2026-10-06 · P2 (2): clip_posts (owned, snapshots, status lifecycle in shared/posts.py, url per platform, paid_rp IDR) + /api/posts; account with posts is paused not deleted · shared/posts.py, main.py
 130 · 2026-10-06 · P2 (3): Publish step = flow-preview step 7: publish queue (clip × platform), download campaign_platform_slug.mp4, copy title/caption (iOS-safe), Mark posted → clip_posts, statuses; tab bar 5 items · main.py, shared/posts.py, index.html
@@ -109,3 +109,6 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 135 · 2026-10-06 · Bug: Review cards' empty thumbnails → list API returns thumb_candidate_id (first clip with a thumbnail) · main.py, index.html
 136 · 2026-10-06 · Clips per video: per-user CLIPS_PER_JOB (default 4, 1–8, replaces CLIP_COUNT), jobs.clip_count snapshot, Analyze 'Clips 2/4/6', campaign default_clip_count; prompt changes only the count · settings, main.py, worker.py, index.html
 137 · 2026-10-06 · Bug: Get another hook returned used moments → per-job used_hook_ranges, server-side overlap check (>30 % / <10 s), 2 retries, 'No new distinct moment found' · main.py, shared/hook_ranges.py
+138 · 2026-10-06 · Origin check = scheme+host+port (X-Forwarded-Host $http_host from nginx), non-80 deployments work; configurable list unchanged · shared/origins.py, main.py, nginx
+139 · 2026-10-06 · Login limits: 5/username+IP, 50/username any IP, 20/IP per 15 min (fixes username lockout DoS, Lane C Low) · app/auth.py, main.py
+140 · 2026-10-06 · CLIPFLOW_ENV=staging → cookie clipflow_staging_session (prod unchanged) so prod/staging sessions don't collide · app/auth.py, settings, .env.example

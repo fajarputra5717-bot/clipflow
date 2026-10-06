@@ -23,13 +23,19 @@ import uuid
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatchError
 
-SESSION_COOKIE = os.getenv("CLIPFLOW_SESSION_COOKIE") or "clipflow_session"  # lane-b hook: staging uses its own cookie
+# 140: cookies are scoped to the host, not the port, so prod (:80) and staging (:8080) on one box would
+# overwrite each other's session. CLIPFLOW_ENV=staging (env only) gives staging its own cookie name.
+CLIPFLOW_ENV = (os.getenv("CLIPFLOW_ENV") or "production").strip().lower()
+SESSION_COOKIE = "clipflow_session" if CLIPFLOW_ENV == "production" else f"clipflow_{CLIPFLOW_ENV}_session"
 SESSION_TTL_DAYS = 30
 SESSION_TOUCH_SECONDS = 300       # last_seen_at/expiry slide at most every 5 min
 
 LOGIN_WINDOW_MINUTES = 15
-LOGIN_MAX_FAILS_USER = 5          # per username per window
-LOGIN_MAX_FAILS_IP = 20           # per client IP per window
+# 139: the tight limit is per username + IP, so a stranger's 5 bad guesses no longer lock YOU out
+# (was per username alone: a lockout DoS); a looser per-username limit still stops distributed guessing.
+LOGIN_MAX_FAILS_USER_IP = 5       # per username + client IP per window
+LOGIN_MAX_FAILS_USER = 50         # per username from any IP per window
+LOGIN_MAX_FAILS_IP = 20           # per client IP (any usernames) per window
 
 MEDIA_TOKEN_WINDOW = 12 * 3600
 PASSWORD_MIN_LEN = 12
@@ -252,15 +258,17 @@ def login_blocked(conn, username: str, ip: str | None) -> bool:
         cur.execute(
             """
             SELECT
+              COUNT(*) FILTER (WHERE username = %s AND ip IS NOT DISTINCT FROM %s),
               COUNT(*) FILTER (WHERE username = %s),
               COUNT(*) FILTER (WHERE ip = %s)
             FROM login_failures
             WHERE at > NOW() - make_interval(mins => %s)
             """,
-            (username, ip or "", LOGIN_WINDOW_MINUTES),
+            (username, ip, username, ip or "", LOGIN_WINDOW_MINUTES),
         )
-        by_user, by_ip = cur.fetchone()
-    return by_user >= LOGIN_MAX_FAILS_USER or by_ip >= LOGIN_MAX_FAILS_IP
+        by_user_ip, by_user, by_ip = cur.fetchone()
+    return (by_user_ip >= LOGIN_MAX_FAILS_USER_IP or by_user >= LOGIN_MAX_FAILS_USER
+            or by_ip >= LOGIN_MAX_FAILS_IP)
 
 
 def record_login_failure(conn, username: str, ip: str | None) -> None:
@@ -272,9 +280,13 @@ def record_login_failure(conn, username: str, ip: str | None) -> None:
         cur.execute("DELETE FROM login_failures WHERE at < NOW() - INTERVAL '1 day'")
 
 
-def clear_login_failures(conn, username: str) -> None:
+def clear_login_failures(conn, username: str, ip: str | None = None) -> None:
+    """After a good login: this user's failures from this IP (all IPs when ip is None, e.g. admin reset)."""
     with conn.cursor() as cur:
-        cur.execute("DELETE FROM login_failures WHERE username = %s", (username,))
+        if ip is None:
+            cur.execute("DELETE FROM login_failures WHERE username = %s", (username,))
+        else:
+            cur.execute("DELETE FROM login_failures WHERE username = %s AND ip IS NOT DISTINCT FROM %s", (username, ip))
 
 
 def authenticate(conn, username: str, password: str) -> dict | None:

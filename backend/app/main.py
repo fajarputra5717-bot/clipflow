@@ -24,7 +24,7 @@ from starlette.concurrency import run_in_threadpool
 from app import auth
 
 from shared.ai import router as ai_router
-from shared import campaigns, descriptions, edit_spec as edit_specs, hook_ranges, languages, payouts, posts as post_rules, rule_checks
+from shared import campaigns, descriptions, edit_spec as edit_specs, hook_ranges, languages, origins, payouts, posts as post_rules, rule_checks
 from shared.errors import AINotConfiguredError
 from shared.fonts import normalize_caption_font
 from shared.settings import (
@@ -174,14 +174,19 @@ def _resolve_principal(request: Request) -> Optional[dict]:
 
 
 def _origin_allowed(request: Request) -> bool:
+    """138: Origin must equal our own scheme+host+port (X-Forwarded-Proto/Host/Port from our nginx,
+    else the request's own) or be listed in CORS_ALLOWED_ORIGINS; see shared/origins.py."""
     origin = request.headers.get("origin")
     if not origin:
         return True
-    origin = origin.rstrip("/")
-    host = request.headers.get("host", "")
-    if urlsplit(origin).netloc == host:
-        return True
-    return origin in cors_allowed_origins()
+    h = request.headers
+    return origins.allowed(
+        origin,
+        scheme=h.get("x-forwarded-proto") or request.url.scheme,
+        host=h.get("x-forwarded-host") or h.get("host", ""),
+        forwarded_port=h.get("x-forwarded-port"),
+        extra=cors_allowed_origins(),
+    )
 
 
 @app.middleware("http")
@@ -946,7 +951,7 @@ def login(payload: LoginRequest, request: Request):
             auth.record_login_failure(conn, username, ip)
             conn.commit()
             raise HTTPException(status_code=401, detail="Wrong username or password")
-        auth.clear_login_failures(conn, username)
+        auth.clear_login_failures(conn, username, ip)
         token = auth.create_session(conn, user["id"], ip, request.headers.get("user-agent"))
         conn.commit()
     must_change = bool(user.pop("must_change_password", False))

@@ -28,5 +28,6 @@ account → `eligible=false`, "Cap reached for @qa_a_tt on TikTok this month (2 
 wrong host 400; B can't read/patch/delete A's post or post A's clip (404); lifecycle (posted→paid 409, claim without
 views 400, paid needs amount, paid is final, posted can't be deleted, drop then delete ok); views stamped + history
 row; IME 41k inside W1 → claim_now; claimed at 42k → expected Rp 200.000; paid 190.000 → "−Rp 10.000"; account with
-posts → paused. Staging data changed for this: qa-tmp-a's job + one reassigned job tagged ime-roleplay, descriptions
-given the IME hashtags, a paused account, 3 posts.
+posts → paused. Staging data changed for this: qa-tmp-a's job 0957133b tagged ime-roleplay, a paused account, 3 posts —
+and, wrongly, Lane C's job 2ee13f97 (qa_a's IME import): reassigned, tagged, 2 clip descriptions overwritten, 1 post
+(dropped + deleted). Reported to Lane C; staging test data is now per lane (lane-a-* only).

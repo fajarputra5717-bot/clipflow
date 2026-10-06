@@ -22,6 +22,8 @@ docs/tasks/          original task specs
 ```
 
 Rebuild/restart one service: `docker compose build worker && docker compose up -d worker`.
+Import-test every rebuilt image BEFORE `up` (no job running): `docker compose run --rm --no-deps -T --entrypoint python
+worker -c "import worker"` / `backend -c "import app.main"` (134: a load-time NameError crash-looped the prod worker).
 Frontend changes need no rebuild (directory bind mount); hard-refresh the browser.
 Logs: `docker compose logs -f --tail=200 worker`.
 DB shell: `docker compose exec postgres psql -U clipflow -d clipflow`.
@@ -292,7 +294,7 @@ Hook input (077): `select_hooks()` sends the WHOLE timed transcript (no cut) up 
 ranking call returning candidate ids. Providers return `(data, model, usage)`; router `meta["usage"]`.
 Keep prompt construction in `build_hooks_prompt()` so the eval and production send identical text. Clips per
 video (136): `jobs.clip_count` (form → campaign `default_clip_count` → user `CLIPS_PER_JOB`, 1–8), read by
-`clips_per_job()`; only the count varies in the prompt. Before `up` of a rebuilt worker, import-test the image.
+`clips_per_job()`; only the count varies in the prompt.
 
 ## Runtime settings
 
@@ -330,9 +332,9 @@ per-user API token `cf_…` (`X-ClipFlow-Key` or `Authorization: Bearer`; `api_t
 managed in the Account sheet from a session only, never by a token; 124) → (the shared `CLIPFLOW_API_KEY` admin
 key was removed in 127; there is no shared key) →
 `?mt=` per-user media token (`exp.user_id.sig`, GET/HEAD on `MEDIA_PATH_RE` only). Open: `/api/auth/login|logout`,
-`/health`, `/`. Passwords argon2id; login 429 after 5 fails/user or 20/IP per 15 min; no signup route.
+`/health`, `/`. Passwords argon2id; login 429 after 5 fails per user+IP, 50 per user, or 20 per IP in 15 min (139); no signup route.
 First run: `CLIPFLOW_ADMIN_USER/PASSWORD` (env-only, read only while `users` is empty). Cookie-authed writes
-with a foreign `Origin` → 403. **A new file-serving GET route must be added to `MEDIA_PATH_RE`** and its
+with a foreign `Origin` → 403 (scheme+host+port via `shared/origins.py`; nginx sends `X-Forwarded-Host $http_host`, 138). **A new file-serving GET route must be added to `MEDIA_PATH_RE`** and its
 frontend URL wrapped in `mediaUrl()`; every other frontend call goes through `api()` or `authFetch()` (uploads),
 never a bare `fetch()` (exception: the login form + `ensureSession()`/`signOut()`). A 401 opens `#loginScreen`
 (`showLogin()`, `body.auth-locked`) and retries once. Account sheet (`#accountSheet`, username in the sidebar foot): change password (≥ 12) + Sign out. Users (125): admins only
