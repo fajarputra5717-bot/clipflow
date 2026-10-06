@@ -15,6 +15,7 @@ restored). Its global-settings write attempt now re-sends the CURRENT value, so 
 - [ ] Settings per user; member can't PUT global (admin-only) keys (403/404); no secrets in clear for members
       **OPEN HIGH (2026-10-05):** on production a member PUT set WHISPER_MODEL → member can write global settings.
 - [ ] Unauthenticated → 401 on every API route; files without session → 401
+**Blocked 2026-10-06:** staging lacks P1.5 (lane-b not merged past 54f04e9) and no member-creation path exists; see p15-staging-status-2026-10-06.md.
 To add once the API is final: campaigns ownership, per-user API tokens (B's token on A's rows → 404), admin sees all
 (activity), login rate-limit, logout invalidates the session, disabled user's session stops working.
 
