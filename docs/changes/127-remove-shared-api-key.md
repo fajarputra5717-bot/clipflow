@@ -1,7 +1,8 @@
 # 127 · Shared CLIPFLOW_API_KEY removed (owner decision); per-user cf_ tokens only · main.py, app/auth.py, shared/settings.py, .env.example, scripts/bootstrap.sh, tests/ui
 
-- Owner 2026-10-06 ("P1.5 gate PASS", owner's message; Lane C's `docs/qa/gate-P1.5.md` was still pending, its member
-  e2e still running): the legacy admin key is gone. `X-ClipFlow-Key` /
+- Owner 2026-10-06 removed the legacy admin key before Lane C's gate doc existed (owner: "PASS was premature"). Lane C's
+  `docs/qa/gate-P1.5.md` (origin/qa bb09d11, 2026-10-06) then confirmed **P1.5 gate PASS**, no open High; Low carry-overs:
+  username lockout DoS, host-scoped cookies across prod/staging, cross-lane test-data process note. `X-ClipFlow-Key` /
   `Authorization: Bearer` now accept only per-user `cf_…` tokens (any other value → 401). `bootstrap_admin()` and the
   `api_key` principal are removed; tokens are managed from a signed-in session only.
 - `ENV_ONLY_KEYS` no longer lists `CLIPFLOW_API_KEY`. `.env.example` documents `CLIPFLOW_ADMIN_USER` /
