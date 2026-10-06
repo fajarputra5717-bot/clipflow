@@ -314,7 +314,7 @@ env). Per-user (P1.5, 123): `USER_SETTING_KEYS` resolve **user_settings → app_
 user (`runtime_setting(key, user_id=…)` in main.py; the worker's `setting()` uses the job owner set by
 `run_as_owner()` in `main()`'s loop: every new claimed-task branch must go through it). `USER_ONLY_KEYS`
 (ACTIVE_WATERMARK_ID) have no global fallback. Members see/PUT only user keys; global keys are admin-only (403).
-`ENV_ONLY_KEYS` (`CLIPFLOW_API_KEY`, `CORS_ALLOWED_ORIGINS`,
+`ENV_ONLY_KEYS` (`CLIPFLOW_ADMIN_USER/PASSWORD`, `CORS_ALLOWED_ORIGINS`,
 `DATABASE_URL`) are never read from the DB. Still env-only by design:
 `TELEGRAM_*`.
 
@@ -325,8 +325,8 @@ unknown `/api` paths also 401) puts `{id, username, role, via}` on `request.stat
 `current_user(request)` / `require_admin(request)`. Sources (`app/auth.py`): session cookie `clipflow_session`
 (HttpOnly, SameSite=Lax; DB row in `user_sessions`, token stored as sha256; disabled user = dead session) →
 per-user API token `cf_…` (`X-ClipFlow-Key` or `Authorization: Bearer`; `api_tokens` stores sha256 only;
-managed in the Account sheet, never by a token; 124) → `X-ClipFlow-Key` = env `CLIPFLOW_API_KEY` → the bootstrap
-admin (legacy, until the owner confirms removal) →
+managed in the Account sheet from a session only, never by a token; 124) → (the shared `CLIPFLOW_API_KEY` admin
+key was removed in 127; there is no shared key) →
 `?mt=` per-user media token (`exp.user_id.sig`, GET/HEAD on `MEDIA_PATH_RE` only). Open: `/api/auth/login|logout`,
 `/health`, `/`. Passwords argon2id; login 429 after 5 fails/user or 20/IP per 15 min; no signup route.
 First run: `CLIPFLOW_ADMIN_USER/PASSWORD` (env-only, read only while `users` is empty). Cookie-authed writes
@@ -336,7 +336,7 @@ never a bare `fetch()` (exception: the login form + `ensureSession()`/`signOut()
 (`showLogin()`, `body.auth-locked`) and retries once. Account sheet (`#accountSheet`, username in the sidebar foot): change password (≥ 12) + Sign out. Users (125): admins only
 (`/api/admin/*`, middleware 403 for members; Settings → Users); create/reset set `must_change_password` (session limited to
 `/api/auth/me|password` until changed; `#forceForm` in the login layer); disable deletes sessions + API tokens; never
-leave zero active admins (409, rows locked). `CLIPFLOW_API_KEY` stays until the P1.5 gate passes on staging + owner OK. CORS origins from env `CORS_ALLOWED_ORIGINS` (comma list,
+leave zero active admins (409, rows locked). CORS origins from env `CORS_ALLOWED_ORIGINS` (comma list,
 `*` dropped, no credentials); the CORS middleware stays added *after* the auth middleware, or preflights get 401.
 
 ## Ownership (P1.5) — every query is scoped by `user_id`
@@ -465,7 +465,7 @@ Writing tests (cross-user, settings, qa-tmp users) run on staging only (:8080/:8
 
 `tests/ui/run.sh` (Playwright, mocked `/api` from `tests/ui/fixtures.js`, never creates jobs; desktop 1280 +
 mobile 390). Run it before committing frontend changes; add a spec for new UI. Live read-only mode:
-`CLIPFLOW_UI_LIVE=1 CLIPFLOW_API_KEY=… tests/ui/run.sh specs/live.spec.js`.
+`CLIPFLOW_UI_LIVE=1 CLIPFLOW_API_TOKEN=cf_… tests/ui/run.sh specs/live.spec.js`.
 
 ## Token discipline (always)
 - Never read main.py / worker.py / index.html whole. `grep -n` the function, then read only ~60 lines around it.

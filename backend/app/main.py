@@ -61,9 +61,8 @@ app = FastAPI(
 # ({id, username, role}); see app/auth.py:
 #   1. session cookie (browser login; HttpOnly, SameSite=Lax, DB row),
 #   2. a per-user API token `cf_…` (part 4) in X-ClipFlow-Key or
-#      Authorization: Bearer (scripts; hashed in api_tokens),
-#      or X-ClipFlow-Key = env CLIPFLOW_API_KEY → the bootstrap admin
-#      (legacy scripts; kept until the owner confirms removal),
+#      Authorization: Bearer (scripts; hashed in api_tokens). The old
+#      shared CLIPFLOW_API_KEY is gone (127): any other value is 401,
 #   3. ?mt= per-user media token, GET/HEAD on MEDIA_PATH_RE only.
 # Open: /api/auth/login, /api/auth/logout, /health, /. Middleware (not a
 # route dependency) so unknown /api paths also get 401. Cookie-authed
@@ -71,8 +70,6 @@ app = FastAPI(
 # ============================================================
 
 API_KEY_HEADER = "X-ClipFlow-Key"
-
-CLIPFLOW_API_KEY = os.getenv("CLIPFLOW_API_KEY", "").strip()
 
 MEDIA_TOKEN_PARAM = "mt"
 
@@ -137,21 +134,13 @@ def _resolve_principal(request: Request) -> Optional[dict]:
         bearer = request.headers.get("authorization", "")
         if bearer[:7].lower() == "bearer ":
             supplied = supplied or bearer[7:].strip()
-        if supplied.startswith(auth.API_TOKEN_PREFIX):
+        if supplied:
+            # Only per-user tokens; the shared CLIPFLOW_API_KEY was removed (127).
             user = auth.api_token_user(conn, supplied)
             if user:
                 user["via"] = "api_token"
                 return user
             return None
-        if (
-            supplied
-            and CLIPFLOW_API_KEY
-            and secrets.compare_digest(supplied.encode(), CLIPFLOW_API_KEY.encode())
-        ):
-            user = auth.bootstrap_admin(conn)
-            if user:
-                user["via"] = "api_key"
-                return user
 
         mt = request.query_params.get(MEDIA_TOKEN_PARAM, "")
         if (
@@ -894,12 +883,12 @@ def auth_me(request: Request):
 
 
 # ---------- API tokens (part 4): per user, for scripts ----------
-# Managed from a browser session (or the legacy admin key), never by a token
+# Managed from a signed-in browser session only, never by a token
 # itself, so a leaked token can't mint or list others.
 
 def _token_manager(request: Request) -> dict:
     user = current_user(request)
-    if user["via"] not in ("session", "api_key"):
+    if user["via"] != "session":
         raise HTTPException(status_code=403, detail="Manage API tokens from a signed-in browser")
     return user
 
@@ -2434,7 +2423,7 @@ def runtime_setting(
     """
     Same rule as the worker's setting(): app_settings (DB) wins,
     then env, then fallback / DEFAULT_SETTINGS. 5 s cache; PUT
-    /api/settings invalidates it. Env-only keys (CLIPFLOW_API_KEY)
+    /api/settings invalidates it. Env-only keys (DATABASE_URL, CORS_ALLOWED_ORIGINS, admin bootstrap)
     never come from the DB.
     """
     # P1.5: pass user_id for USER_SETTING_KEYS (user → global → default).

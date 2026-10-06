@@ -18,7 +18,7 @@ frontend). Takes about 25 s, 2 workers.
 - **Default (mocked API):** the real `index.html` from nginx, with every `/api/*` call answered by
   `fixtures.js`. No API key, deterministic, and it **never creates a job** (Lane A may be rendering).
   Writes are recorded in `api.calls` so tests can assert what the UI sent.
-- **Live, read-only:** `CLIPFLOW_UI_LIVE=1 CLIPFLOW_API_KEY=… tests/ui/run.sh specs/live.spec.js`.
+- **Live, read-only:** `CLIPFLOW_UI_LIVE=1 CLIPFLOW_API_TOKEN=cf_… tests/ui/run.sh specs/live.spec.js`.
   Real backend for GETs; every non-GET `/api` request is aborted and fails the test.
 
 ## What's covered (`specs/`)
