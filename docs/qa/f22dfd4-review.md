@@ -1,0 +1,2 @@
+# QA review · f22dfd4 · docs(133,137): staging write checks 35/35 (P2 posts/claims, new-hook distinct x3)
+Reviewer: Lane C · 2026-10-06 · Covered by Lane A's staging write checks (35/35, cited) + QA's P2 write checks (22/22) where applicable; 134 job titles from YouTube metadata seen on QA's staging jobs ✓; production containers 0 restarts after the 13:56–13:59 deploy ✓. Docs commits: no findings. UI parts → P2 gate.
