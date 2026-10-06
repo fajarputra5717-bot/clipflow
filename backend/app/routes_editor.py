@@ -25,6 +25,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from shared import edit_spec as edit_specs
+from shared import languages
 from shared import timeline as timelines
 
 import os
@@ -190,13 +191,19 @@ def editor_timeline(job_id: str, candidate_id: str, user: dict = Depends(get_cur
     core = _core()
     with core.get_db() as conn, conn.cursor() as cur:
         c = _load(cur, job_id, candidate_id, user)
-        cur.execute("SELECT subtitle_segments FROM clip_candidates WHERE id::text = %s", (candidate_id,))
-        segments = (cur.fetchone() or [None])[0] or []
+        cur.execute("SELECT c.subtitle_segments, j.effective_language, j.language FROM clip_candidates c "
+                    "JOIN jobs j ON j.id = c.job_id WHERE c.id::text = %s", (candidate_id,))
+        segments, eff_lang, req_lang = cur.fetchone() or (None, None, None)
+        segments = segments or []
     duration = c["duration_seconds"] or ((c["end_time"] or 0) - (c["start_time"] or 0))
     cached = timelines.read_cache(timelines.cache_path(core.DATA_ROOT / "previews", candidate_id), c["preview_path"])
-    if cached and cached.get("words"):
-        return {**cached, "cached": True}
-    return {**timelines.words_only(segments, duration), "cached": False}
+    data = {**cached, "cached": True} if cached and cached.get("words") else {**timelines.words_only(segments, duration), "cached": False}
+    # 5b: filler-word SUGGESTIONS (never cut until the user accepts), computed per request so list
+    # changes in shared/languages.py apply without re-rendering
+    lang = languages.job_language(eff_lang, req_lang)
+    data["fillers"] = languages.filler_spans(data["words"], lang)
+    data["language"] = lang
+    return data
 
 
 class CutsIn(BaseModel):

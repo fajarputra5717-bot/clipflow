@@ -154,6 +154,7 @@
           <button type="button" class="ed-chip" data-ed-mode="cut" aria-pressed="${E.mode === "cut"}" title="Cut mode (C)">✂ Cut</button>
         </div>
         <button type="button" class="ed-chip" data-ed-suggest ${nSuggest ? "" : "disabled"}>Cut ${nSuggest} pause${nSuggest === 1 ? "" : "s"} ≥ ${E.state.cuts.suggest_min_gap} s</button>
+        <button type="button" class="ed-chip" data-ed-fillers ${(tl.fillers || []).length ? "" : "hidden"}></button>
         <button type="button" class="ed-chip" data-ed-cuts-reset>Restore all</button>
         <span class="ed-spacer"></span>
         <span class="ed-out" id="edOut"></span>
@@ -205,6 +206,15 @@
     return (E.tl.gaps || []).filter((g) => g.end - g.start >= E.state.cuts.suggest_min_gap && g.start >= lo && g.end <= hi
       && g.start > 0.01 && g.end < E.tl.duration - 0.01 && !covered(...pauseRange(g)));   // inner pauses only (edges = trim)
   }
+  // 5b: filler words (shared/languages.py lists, server-side per job language) = suggestions only
+  function pendingFillers() {
+    if (!E.tl) return [];
+    const [lo, hi] = trimWin();
+    return (E.tl.fillers || []).filter((f) => f.start >= lo - 0.01 && f.end <= hi + 0.01 && !covered(f.start, f.end));
+  }
+  function fillerOf(i) {
+    return (E.tl && E.tl.fillers || []).find((f) => i >= f.i0 && i <= f.i1);
+  }
   function plannedKeep() {
     const [lo, hi] = trimWin();
     let keep = [[lo, hi]];
@@ -235,9 +245,14 @@
     if (!E.tl || !$("edTlInner")) return;
     const [lo, hi] = trimWin(), dur = E.tl.duration;
     document.querySelectorAll("[data-ed-word]").forEach((b) => {
-      const w = E.tl.words[Number(b.dataset.edWord)];
-      b.classList.toggle("cut", covered(w.start, w.end) || w.end <= lo + 0.01 || w.start >= hi - 0.01);
+      const w = E.tl.words[Number(b.dataset.edWord)], f = fillerOf(Number(b.dataset.edWord));
+      const isCut = covered(w.start, w.end) || w.end <= lo + 0.01 || w.start >= hi - 0.01;
+      b.classList.toggle("cut", isCut);
+      b.classList.toggle("filler-suggest", !!f && !isCut && !covered(f.start, f.end));
+      if (f) b.title = `${w.text} · filler “${f.text}” · ${isCut ? "cut" : "suggested cut: accept with “Cut fillers” or click in ✂ Cut mode"}`;
     });
+    const fb = document.querySelector("[data-ed-fillers]"), nf = pendingFillers().length;
+    if (fb) { fb.disabled = !nf; fb.textContent = `Cut ${nf} filler${nf === 1 ? "" : "s"}`; }
     document.querySelectorAll("[data-ed-pause]").forEach((b) => {
       const g = E.tl.gaps[Number(b.dataset.edPause)];
       b.classList.toggle("cut", covered(...pauseRange(g)) || g.end <= lo + 0.01 || g.start >= hi - 0.01);
@@ -463,7 +478,7 @@
 
   // ------------------------------------------------------------------ events (delegated, data-*)
   document.addEventListener("click", (e) => {
-    const t = e.target.closest("[data-ed-back],[data-ed-hook-on],[data-ed-hook-dur],[data-ed-render],[data-ed-play],[data-ed-tab],[data-ed-word],[data-ed-pause],[data-ed-mode],[data-ed-suggest],[data-ed-cuts-reset],[data-ed-trim],[data-ed-seekarea]");
+    const t = e.target.closest("[data-ed-back],[data-ed-hook-on],[data-ed-hook-dur],[data-ed-render],[data-ed-play],[data-ed-tab],[data-ed-word],[data-ed-pause],[data-ed-mode],[data-ed-suggest],[data-ed-fillers],[data-ed-cuts-reset],[data-ed-trim],[data-ed-seekarea]");
     if (!t || !E.state && !t.matches("[data-ed-back]")) return;
     if (t.matches("[data-ed-back]")) {                       // back to the Review page (step 4) for this job
       e.preventDefault(); const jid = E.jid; close(false); location.hash = `#review/${encodeURIComponent(jid || "")}`;
@@ -482,11 +497,14 @@
     }
     if (t.matches("[data-ed-mode]")) { setMode(t.dataset.edMode); return; }
     if (t.matches("[data-ed-suggest]")) { E.cuts.removed = merge([...E.cuts.removed, ...suggestedPauses().map(pauseRange)]); cutsChanged(); return; }
+    if (t.matches("[data-ed-fillers]")) { E.cuts.removed = merge([...E.cuts.removed, ...pendingFillers().map((f) => [f.start, f.end])]); cutsChanged(); return; }
     if (t.matches("[data-ed-cuts-reset]")) { E.cuts = { trim: null, removed: [] }; cutsChanged(); return; }
     if (t.matches("[data-ed-trim]")) return;                       // handles drag (pointer events below)
     if (t.matches("[data-ed-word]")) {
       const w = E.tl && E.tl.words[Number(t.dataset.edWord)]; if (!w) return;
-      if (E.mode === "cut") toggleRange(w.start, w.end); else seek(w.start + 0.001);
+      const f = fillerOf(w.i);
+      if (E.mode === "cut") { if (f && !covered(w.start, w.end)) toggleRange(f.start, f.end); else toggleRange(w.start, w.end); }
+      else seek(w.start + 0.001);
       return;
     }
     if (t.matches("[data-ed-pause]")) {

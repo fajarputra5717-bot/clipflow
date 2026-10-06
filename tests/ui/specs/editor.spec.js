@@ -112,6 +112,48 @@ test.describe("Editor cuts", () => {
   });
 });
 
+test.describe("Editor filler suggestions", () => {
+  const FILLERS_TL = { ...TIMELINE,
+    words: [...TIMELINE.words, { i: 3, text: "you", start: 4.0, end: 4.2 }, { i: 4, text: "know", start: 4.2, end: 4.5 },
+            { i: 5, text: "eh", start: 5.0, end: 5.3 }],
+    fillers: [{ i0: 3, i1: 4, start: 4.0, end: 4.5, text: "you know" }, { i0: 5, i1: 5, start: 5.0, end: 5.3, text: "eh" }] };
+  const lastCuts = (api) => api.calls.filter((c) => c.method === "PUT" && c.path.endsWith("/cuts")).at(-1)?.body;
+
+  test("fillers show pre-struck as suggestions, nothing is cut until accepted", async ({ app, api }) => {
+    await mockEditor(app, api, FILLERS_TL);
+    await app.evaluate(() => { location.hash = "#editor/job-done/cand-a"; });
+    await expect(app.locator('[data-ed-word="3"]')).toHaveClass(/filler-suggest/);
+    await expect(app.locator('[data-ed-word="5"]')).toHaveClass(/filler-suggest/);
+    await expect(app.locator('[data-ed-word="5"]')).not.toHaveClass(/\bcut\b/);
+    await expect(app.locator("#edOut")).toHaveText("Output 6.0 s");
+    await app.waitForTimeout(800);
+    expect(api.calls.some((c) => c.method === "PUT")).toBe(false);          // never auto-cut
+    await expect(app.locator("[data-ed-fillers]")).toHaveText("Cut 2 fillers");
+  });
+
+  test("Cut fillers accepts all; Restore all brings them back", async ({ app, api }) => {
+    await mockEditor(app, api, FILLERS_TL);
+    await app.evaluate(() => { location.hash = "#editor/job-done/cand-a"; });
+    await app.locator("[data-ed-fillers]").click();
+    await expect(app.locator('[data-ed-word="4"]')).toHaveClass(/\bcut\b/);
+    await expect(app.locator('[data-ed-word="4"]')).not.toHaveClass(/filler-suggest/);
+    await expect(app.locator("#edOut")).toHaveText("Output 5.2 s");
+    await expect.poll(() => lastCuts(api), { timeout: 4000 }).toEqual({ trim: null, removed: [[4, 4.5], [5, 5.3]] });
+    await expect(app.locator("[data-ed-fillers]")).toBeDisabled();
+    await app.locator("[data-ed-cuts-reset]").click();
+    await expect(app.locator('[data-ed-word="5"]')).toHaveClass(/filler-suggest/);
+    await expect.poll(() => lastCuts(api), { timeout: 4000 }).toEqual({ trim: null, removed: [] });
+  });
+
+  test("in cut mode, clicking one word of a multi-word filler cuts the whole filler", async ({ app, api }) => {
+    await mockEditor(app, api, FILLERS_TL);
+    await app.evaluate(() => { location.hash = "#editor/job-done/cand-a"; });
+    await app.locator('[data-ed-mode="cut"]').click();
+    await app.locator('[data-ed-word="4"]').click();
+    await expect.poll(() => lastCuts(api), { timeout: 4000 }).toEqual({ trim: null, removed: [[4, 4.5]] });
+  });
+});
+
 test.describe("Editor page", () => {
   test("Open editor from Review shows the editor as its own view", async ({ app, api }) => {
     await mockEditor(app, api);

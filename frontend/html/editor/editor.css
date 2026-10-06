@@ -145,3 +145,6 @@ body.is-staging #toolbar{top:22px}
 @media (max-width:900px){.rv-grid{grid-template-columns:minmax(0,1fr)}}
 @media (max-width:600px){.rv-clip{grid-template-columns:110px minmax(0,1fr);gap:12px;padding:12px}.rv-title{font-size:21px}}
 .rv-checks .badge{white-space:normal;max-width:100%;text-align:left;line-height:1.3}
+/* 5b: filler-word suggestions — pre-struck, dashed, not cut until accepted */
+.ed-word.filler-suggest{background:transparent;color:var(--badge-warn-fg);box-shadow:inset 0 0 0 1px var(--badge-warn-line);
+  text-decoration:line-through dashed;text-decoration-thickness:1px;outline:1px dashed var(--badge-warn-line);outline-offset:-1px}
