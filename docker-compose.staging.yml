@@ -46,6 +46,13 @@ services:
       - /data-staging:/data-staging
       - ./docs/campaigns:/app/campaigns:ro
     ports: ["127.0.0.1:8001:8000"]
+    # mirrors main 143: /health is 503 until ensure_schema() has run; the worker waits for it
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
     depends_on: { postgres: { condition: service_healthy } }
     logging: *logging
 
@@ -63,7 +70,9 @@ services:
       - /data-staging:/data-staging
       - hf_cache:/cache/huggingface:ro
       - ./docs/campaigns:/app/campaigns:ro
-    depends_on: { postgres: { condition: service_healthy } }
+    depends_on:
+      postgres: { condition: service_healthy }
+      backend: { condition: service_healthy }   # main 143
     logging: *logging
 
   frontend:
