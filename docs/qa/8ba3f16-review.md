@@ -1,0 +1,2 @@
+# QA review · 8ba3f16 · 124 per-user API tokens (hashed)
+Reviewer: Lane C · 2026-10-06 · Code: `cf_` prefix, sha256 only stored, `Authorization: Bearer`, lookup requires `u.active`, delete scoped to owner. Live on staging (member qa_b): mint → own list 200, A's job **404**, mint via token 403, admin route 403, revoke → 401; no plaintext `cf_` in DB ✓. Lane A's 56 staging checks also cover tokens. No findings.
