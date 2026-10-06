@@ -15,8 +15,9 @@ checks with lane-a-* users, `user_id` scoping, island-only progress).
 | S4 | Telegram reminder at the planned time | M | S2, 141 send-to-phone |
 
 **S1 · Suggested times.** `POSTING_TIMES` in `USER_SETTING_KEYS` (user → app → default), JSON
-`{platform: ["HH:MM", …]}` in **WIB (Asia/Jakarta)**, defaults per platform in `DEFAULT_SETTINGS` (e.g. tiktok
-12:00/19:00/21:00, instagram 11:00/19:00, facebook 12:00/20:00, youtube 17:00/20:00; owner may adjust). Validated
+`{platform: ["HH:MM", …]}` in **WIB (Asia/Jakarta)**, defaults per platform in `DEFAULT_SETTINGS` (owner-approved
+2026-10-07, common Indonesian lunch/evening peaks, user-adjustable): tiktok 12:00/19:00/21:00, instagram (Reels)
+11:30/19:30, youtube (Shorts) 17:00/20:00, facebook 12:00/19:00. Keys = `rule_checks.PLATFORM_LIMITS` names. Validated
 in a pure helper `shared/schedule.py` (`normalize_posting_times`, `next_slots(times, platform, after, taken)` →
 the next free slots, skipping ones already taken by this user on that account and slots outside the campaign's
 posting window via `payouts.window_for` / `window_problems`). Settings → Posting times editor (members edit
@@ -39,7 +40,7 @@ existing posted flow with URL), Drop. Overdue planned posts (time passed, not po
 days show the free suggested slots. Matches the mockup's visual system; no progress UI outside the island.
 
 **S4 · Reminder.** The notifier (already per-user since 142) checks every minute for planned posts with
-`scheduled_for` ≤ now + `REMINDER_LEAD_MIN` (user setting, default 10) and no reminder sent yet
+`scheduled_for` ≤ now + `REMINDER_LEAD_MIN` (user setting, default 15, owner-approved) and no reminder sent yet
 (`clip_posts.reminded_at`, new column, set in the same transaction). It enqueues the send-to-phone package via
 the existing `telegram_sends` queue (141: video ≤ 50 MB or shrunk + caption/hashtags as 2nd message) plus a
 header line "⏰ Post now: <platform> @<account> · <time WIB> · <campaign>", to the user's OWN chat (no chat → no
