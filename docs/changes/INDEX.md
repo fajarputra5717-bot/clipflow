@@ -99,3 +99,4 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 125 · 2026-10-06 · P1.5 (5): admin Users in Settings (create w/ temp password, disable = sessions + tokens gone, role, reset → forced change), last-admin 409; legacy key kept until gate · app/auth.py, main.py, index.html
 126 · 2026-10-06 · Analyze step = flow-preview step 3: segmented language/platform, layout cards (+3 Coming soon, P4), campaign layout+language pre-fill tagged, subtitle line → Settings, time estimate; same payload · index.html, main.py, shared/campaigns.py
 127 · 2026-10-06 · Shared CLIPFLOW_API_KEY removed (owner decision; Lane C gate doc pending); only per-user cf_ tokens; .env.example/bootstrap use CLIPFLOW_ADMIN_* · main.py, app/auth.py, shared/settings.py, .env.example, scripts
+128 · 2026-10-06 · P2 (1): posting accounts per user (platform_accounts, owned + guarded), Settings → Posting accounts · main.py, index.html

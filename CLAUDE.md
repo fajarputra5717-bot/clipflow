@@ -341,10 +341,11 @@ leave zero active admins (409, rows locked). CORS origins from env `CORS_ALLOWED
 
 ## Ownership (P1.5) — every query is scoped by `user_id`
 
-Owned tables carry `user_id` NOT NULL (`jobs`, `watermark_assets`; candidates/versions via their job; **every new
-table from now on**). Rule: every SQL that reads or writes user data filters by the caller's id
+Owned tables carry `user_id` NOT NULL (`jobs`, `watermark_assets`, `platform_accounts` (128); candidates/versions via
+their job; **every new table from now on**). Rule: every SQL that reads or writes user data filters by the caller's id
 (`current_user(request)["id"]`); another user's row answers **404**, never 403/200. The middleware guard
-`_path_owned()` already enforces it for `/api/jobs/{id}[/candidates/{cid}]…` and `/api/assets/watermarks/{id}…`;
+`_path_owned()` already enforces it for `/api/jobs/{id}[/candidates/{cid}]…`, `/api/assets/watermarks/{id}…` and
+`/api/accounts/{id}…`;
 lists and inserts do it in the handler. A new route family keyed by an owned id → add its regex to the guard.
 Admin is scoped like everyone except `/api/activity` (sees all, `owner` set). Campaigns are a shared catalogue
 (admin edits; P3 adds `created_by` + `visibility`); `source_videos` is a shared download cache.

@@ -73,6 +73,17 @@ async function mockApi(page, api) {
       if (body?.current_password !== "temporary pass1") return json({ detail: "Current password is wrong" }, 400);
       api.mustChange = false; return json({ ok: true });
     }
+    if (path === "/api/accounts" && method === "GET") return json({ accounts: api.accounts || [], platforms: [
+      { slug: "facebook", name: "Facebook Reels" }, { slug: "instagram", name: "Instagram Reels" }, { slug: "youtube", name: "YouTube Shorts" }, { slug: "tiktok", name: "TikTok" }] });
+    if (path === "/api/accounts" && method === "POST") {
+      if ((api.accounts || []).some((a) => a.platform === body.platform && a.handle.toLowerCase() === body.handle.toLowerCase())) return json({ detail: `You already have @${body.handle} on this platform` }, 409);
+      const a = { id: "acc-" + body.handle, platform: body.platform, platform_name: body.platform, handle: body.handle, note: body.note, active: true, created_at: iso(0) };
+      api.accounts = [...(api.accounts || []), a]; return json(a);
+    }
+    { const m = path.match(/^\/api\/accounts\/([^/]+)$/);
+      if (m) { const a = (api.accounts || []).find((x) => x.id === m[1]); if (!a) return json({ detail: "Account not found" }, 404);
+        if (method === "PATCH") { Object.assign(a, body); return json(a); }
+        if (method === "DELETE") { api.accounts = api.accounts.filter((x) => x !== a); return json({ ok: true }); } } }
     if (path === "/api/admin/users" && method === "GET") return json({ users: api.users || [] });
     if (path === "/api/admin/users" && method === "POST") {
       if ((api.users || []).some((u) => u.username === body.username)) return json({ detail: `Username '${body.username}' is taken` }, 409);

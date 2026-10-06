@@ -93,12 +93,14 @@ SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 # middleware 404s unless the row belongs to the caller, so no handler can forget.
 JOB_PATH_RE = re.compile(r"^/api/jobs/([^/]+)(?:/candidates/([^/]+))?(?:/|$)")
 WATERMARK_PATH_RE = re.compile(r"^/api/assets/watermarks/([^/]+)(?:/|$)")
+ACCOUNT_PATH_RE = re.compile(r"^/api/accounts/([^/]+)(?:/|$)")
 
 
 def _path_owned(user: dict, path: str) -> bool:
     m = JOB_PATH_RE.match(path)
     w = WATERMARK_PATH_RE.match(path)
-    if not m and not w:
+    a = ACCOUNT_PATH_RE.match(path)
+    if not m and not w and not a:
         return True
     with get_db() as conn:
         with conn.cursor() as cur:
@@ -114,6 +116,12 @@ def _path_owned(user: dict, path: str) -> bool:
                     )
                     return bool(cur.fetchone())
                 return True
+            if a:
+                cur.execute(
+                    "SELECT 1 FROM platform_accounts WHERE id = %s AND user_id = %s",
+                    (a.group(1), user["id"]),
+                )
+                return bool(cur.fetchone())
             cur.execute(
                 "SELECT 1 FROM watermark_assets WHERE id::text = %s AND user_id = %s",
                 (w.group(1), user["id"]),
@@ -352,6 +360,19 @@ def ensure_schema():
         "CREATE INDEX IF NOT EXISTS idx_jobs_user ON jobs (user_id, created_at DESC)",
         "ALTER TABLE watermark_assets ADD COLUMN IF NOT EXISTS user_id TEXT REFERENCES users(id)",
         "CREATE INDEX IF NOT EXISTS idx_watermark_assets_user ON watermark_assets (user_id)",
+        # P2 part 1 (128): the user's own posting accounts per platform (rule_checks.PLATFORM_LIMITS keys).
+        """
+        CREATE TABLE IF NOT EXISTS platform_accounts (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            platform TEXT NOT NULL,
+            handle TEXT NOT NULL,
+            note TEXT,
+            active BOOLEAN NOT NULL DEFAULT TRUE,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """,
+        "CREATE UNIQUE INDEX IF NOT EXISTS uq_platform_accounts ON platform_accounts (user_id, platform, lower(handle))",
         # P1.5 part 3: per-user values for USER_SETTING_KEYS (shared/settings.py).
         """
         CREATE TABLE IF NOT EXISTS user_settings (
@@ -1331,6 +1352,136 @@ JOB_RUNNING = (
     "queued", "reanalyze_queued", "processing", "downloading", "download", "transcribing",
     "transcription", "transcribed", "analyzing", "analysis",
 )
+
+
+# ============================================================
+# POSTING ACCOUNTS (P2 part 1, 128) — the caller's own accounts per
+# platform, used by "Mark posted" (clip_posts, part 2) and the per-account
+# monthly caps (part 4). Owned rows: the middleware guard 404s other users'.
+# ============================================================
+
+ACCOUNT_HANDLE_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
+
+
+class AccountCreate(BaseModel):
+    platform: str = Field(max_length=20)
+    handle: str = Field(max_length=80)
+    note: Optional[str] = Field(default=None, max_length=120)
+
+
+class AccountUpdate(BaseModel):
+    handle: Optional[str] = Field(default=None, max_length=80)
+    note: Optional[str] = Field(default=None, max_length=120)
+    active: Optional[bool] = None
+
+
+def _clean_handle(raw: str) -> str:
+    handle = (raw or "").strip().lstrip("@").strip()
+    if not ACCOUNT_HANDLE_RE.match(handle):
+        raise HTTPException(
+            status_code=400,
+            detail="Handle: 1-64 letters, digits, '.', '_' or '-' (without spaces; a leading @ is fine)",
+        )
+    return handle
+
+
+def _account_row(r) -> dict:
+    return {
+        "id": r[0], "platform": r[1], "platform_name": rule_checks.PLATFORM_LIMITS.get(r[1], (0, 0, r[1]))[2],
+        "handle": r[2], "note": r[3], "active": bool(r[4]),
+        "created_at": r[5].isoformat() if r[5] else None,
+    }
+
+
+ACCOUNT_COLUMNS = "id, platform, handle, note, active, created_at"
+
+
+@app.get("/api/accounts")
+def list_accounts(request: Request):
+    user = current_user(request)
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                f"SELECT {ACCOUNT_COLUMNS} FROM platform_accounts WHERE user_id = %s "
+                "ORDER BY platform, lower(handle)",
+                (user["id"],),
+            )
+            rows = cur.fetchall()
+    return {
+        "accounts": [_account_row(r) for r in rows],
+        "platforms": [{"slug": k, "name": v[2]} for k, v in rule_checks.PLATFORM_LIMITS.items()],
+    }
+
+
+@app.post("/api/accounts")
+def create_account(payload: AccountCreate, request: Request):
+    user = current_user(request)
+    platform = payload.platform.strip().lower()
+    if platform not in rule_checks.PLATFORM_LIMITS:
+        raise HTTPException(status_code=400, detail=f"Unknown platform {platform!r}")
+    handle = _clean_handle(payload.handle)
+    note = (payload.note or "").strip() or None
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                f"""
+                INSERT INTO platform_accounts (id, user_id, platform, handle, note)
+                VALUES (%s, %s, %s, %s, %s)
+                ON CONFLICT DO NOTHING
+                RETURNING {ACCOUNT_COLUMNS}
+                """,
+                (str(uuid.uuid4()), user["id"], platform, handle, note),
+            )
+            row = cur.fetchone()
+            if not row:
+                raise HTTPException(status_code=409, detail=f"You already have @{handle} on this platform")
+        conn.commit()
+    return _account_row(row)
+
+
+@app.patch("/api/accounts/{account_id}")
+def update_account(account_id: str, payload: AccountUpdate, request: Request):
+    user = current_user(request)
+    sets, args = [], []
+    if payload.handle is not None:
+        sets.append("handle = %s"); args.append(_clean_handle(payload.handle))
+    if payload.note is not None:
+        sets.append("note = %s"); args.append(payload.note.strip() or None)
+    if payload.active is not None:
+        sets.append("active = %s"); args.append(payload.active)
+    if not sets:
+        raise HTTPException(status_code=400, detail="Nothing to change")
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            try:
+                cur.execute(
+                    f"UPDATE platform_accounts SET {', '.join(sets)} WHERE id = %s AND user_id = %s "
+                    f"RETURNING {ACCOUNT_COLUMNS}",
+                    (*args, account_id, user["id"]),
+                )
+            except psycopg.errors.UniqueViolation:
+                raise HTTPException(status_code=409, detail="You already have that handle on this platform")
+            row = cur.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Account not found")
+        conn.commit()
+    return _account_row(row)
+
+
+@app.delete("/api/accounts/{account_id}")
+def delete_account(account_id: str, request: Request):
+    # Part 2 adds clip_posts: an account with posts is deactivated instead (history stays intact).
+    user = current_user(request)
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "DELETE FROM platform_accounts WHERE id = %s AND user_id = %s",
+                (account_id, user["id"]),
+            )
+            if not cur.rowcount:
+                raise HTTPException(status_code=404, detail="Account not found")
+        conn.commit()
+    return {"ok": True}
 
 
 # Analyze form: "≈ 6 min for a 1 h 24 min video" from the caller's own finished jobs

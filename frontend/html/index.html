@@ -1282,6 +1282,19 @@ select::-ms-expand{display:none}
 .analyze-actions #analyzeButton{border-radius:999px;min-height:var(--hit);padding:0 22px}
 @media (max-width:760px){.layouts{grid-template-columns:repeat(2,minmax(0,1fr))}.grid-2{grid-template-columns:1fr}}
 @media (max-width:600px){.analyze-actions #analyzeButton{width:100%}.seg{display:flex}.seg button{flex:1 1 auto;padding:0 10px}}
+/* Posting accounts (P2 part 1, 128) */
+.accounts-admin .inset-list{margin-bottom:var(--sp-2)}
+.account-create{display:grid;grid-template-columns:.9fr 1.2fr 1.2fr auto;gap:var(--sp-1);align-items:end}
+.account-create .field{margin-top:0}
+.account-create button.primary{min-height:var(--hit);border-radius:999px;white-space:nowrap}
+.acct-row{display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:10px 12px 10px 14px;border-top:1px solid var(--hairline)}
+.acct-row:first-child{border-top:0}
+.acct-row.is-paused .acct-meta{opacity:.55}
+.acct-meta{flex:1;min-width:160px}
+.acct-handle{font-weight:600}
+.acct-meta small{display:block;color:var(--muted);font-size:12px}
+.acct-empty{padding:12px 14px;color:var(--muted);font-size:13px}
+@media (max-width:760px){.account-create{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -1509,6 +1522,18 @@ select::-ms-expand{display:none}
     <div class="sheet-search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg><input type="search" id="settingsSearch" placeholder="Search settings" autocomplete="off" aria-label="Search settings" aria-controls="settingsPanel"></div>
     <div class="sheet-body settings-body">
       <div class="disk-meter" id="diskMeter" aria-live="polite"></div>
+      <section class="inset-group accounts-admin" id="accountsAdmin" aria-labelledby="accountsTitle">
+        <h3 class="inset-title" id="accountsTitle">Posting accounts</h3>
+        <div class="inset-list" id="accountsList"></div>
+        <form class="account-create" id="accountCreateForm" novalidate>
+          <div class="field"><label for="newAccountPlatform">Platform</label><select id="newAccountPlatform"></select></div>
+          <div class="field"><label for="newAccountHandle">Handle</label><input id="newAccountHandle" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="65" placeholder="@yourclips"></div>
+          <div class="field"><label for="newAccountNote">Note <span class="field-opt">· optional</span></label><input id="newAccountNote" autocomplete="off" maxlength="120" placeholder="e.g. IME clips"></div>
+          <button class="primary" type="submit" id="accountCreateBtn">Add account</button>
+        </form>
+        <p class="hint users-hint">Your own accounts, used when you mark a clip as posted and for per-account monthly caps. Paused accounts aren't offered.</p>
+        <div class="account-msg" id="accountsMsg" role="status" aria-live="polite"></div>
+      </section>
       <section class="inset-group users-admin" id="usersAdmin" hidden aria-labelledby="usersTitle">
         <h3 class="inset-title" id="usersTitle">Users</h3>
         <div class="inset-list" id="usersList"></div>
@@ -3451,8 +3476,41 @@ document.addEventListener("click",e=>{
   const rs=e.target.closest("[data-user-reset]");
   if(rs){const f=document.querySelector(`[data-user-reset-form="${css(rs.dataset.userReset)}"]`),open=f.hidden;f.hidden=!open;rs.setAttribute("aria-expanded",String(open));if(open)f.querySelector("input").focus()}
 });
+// Posting accounts (P2 part 1): the user's own handles per platform; Pause/Resume, two-step Remove.
+function accountsMessage(text,ok){const m=$("accountsMsg");m.textContent=text||"";m.classList.toggle("is-ok",!!ok);m.classList.toggle("is-error",!!text&&!ok)}
+let accountsCache=[],accountPlatforms=[];
+async function loadAccounts(){
+  try{
+    const d=await api("/api/accounts");accountsCache=d.accounts||[];accountPlatforms=d.platforms||[];
+    const sel=$("newAccountPlatform"),keep=sel.value;
+    sel.innerHTML=accountPlatforms.map(p=>`<option value="${esc(p.slug)}">${esc(p.name)}</option>`).join("");if(keep)sel.value=keep;
+    $("accountsList").innerHTML=accountsCache.length?accountsCache.map(a=>`<div class="acct-row${a.active?"":" is-paused"}" data-account-row="${esc(a.id)}">
+        <span class="acct-meta"><span class="acct-handle">@${esc(a.handle)}</span>${a.active?"":`<span class="user-tag">Paused</span>`}<small>${esc(a.platform_name)}${a.note?" · "+esc(a.note):""}</small></span>
+        <span class="user-actions"><button class="secondary" type="button" data-account-active="${a.active?"false":"true"}" data-account-id="${esc(a.id)}">${a.active?"Pause":"Resume"}</button><button class="secondary" type="button" data-account-remove="${esc(a.id)}" aria-label="Remove @${esc(a.handle)}">Remove</button></span>
+      </div>`).join(""):`<div class="acct-empty">No posting accounts yet.</div>`;
+  }catch(err){accountsMessage(err.message)}
+}
+$("accountCreateForm").addEventListener("submit",async e=>{
+  e.preventDefault();
+  const platform=$("newAccountPlatform").value,handle=$("newAccountHandle").value.trim().replace(/^@/,""),note=$("newAccountNote").value.trim();
+  if(!handle){accountsMessage("Enter the account handle.");$("newAccountHandle").focus();return}
+  const btn=$("accountCreateBtn");setBusy(btn,true,"Adding…");accountsMessage("");
+  try{await api("/api/accounts",{method:"POST",body:JSON.stringify({platform,handle,note:note||null})});$("newAccountHandle").value="";$("newAccountNote").value="";await loadAccounts();accountsMessage(`Added @${handle}.`,true)}
+  catch(err){accountsMessage(err.message)}
+  finally{setBusy(btn,false)}
+});
+document.addEventListener("click",e=>{
+  const ac=e.target.closest("[data-account-active]");
+  if(ac){setBusy(ac,true);accountsMessage("");
+    api("/api/accounts/"+encodeURIComponent(ac.dataset.accountId),{method:"PATCH",body:JSON.stringify({active:ac.dataset.accountActive==="true"})}).then(loadAccounts).catch(err=>{setBusy(ac,false);accountsMessage(err.message)});return}
+  const rm=e.target.closest("[data-account-remove]");
+  if(rm){
+    if(!rm.classList.contains("is-confirm")){rm.classList.add("is-confirm");rm.textContent="Confirm remove";setTimeout(()=>{if(document.contains(rm)){rm.classList.remove("is-confirm");rm.textContent="Remove"}},4000);return}
+    setBusy(rm,true);api("/api/accounts/"+encodeURIComponent(rm.dataset.accountRemove),{method:"DELETE"}).then(()=>{accountsMessage("Account removed.",true);return loadAccounts()}).catch(err=>{setBusy(rm,false);accountsMessage(err.message)});
+  }
+});
 async function loadSettings(){
-  loadDiskMeter();loadUsers();
+  loadDiskMeter();loadUsers();loadAccounts();
   try{
     settingsCache=await api("/api/settings");
     $("settingsPanel").innerHTML=SETTINGS_GROUPS.map(([g,all])=>[g,all.filter(k=>settingsCache[k])]).filter(([,keys])=>keys.length).map(([g,keys])=>`
@@ -3479,6 +3537,7 @@ function updateSettingsDirty(){
 function filterSettings(){
   const q=($("settingsSearch")?.value||"").trim().toLowerCase();let any=false;
   document.querySelectorAll("[data-settings-group]").forEach(g=>{let shown=0;g.querySelectorAll("[data-setting-row]").forEach(r=>{const ok=!q||r.dataset.search.includes(q);r.hidden=!ok;if(ok)shown++});g.hidden=!shown;if(shown)any=true});
+  const pa=$("accountsAdmin");if(pa){const hit=!q||"posting accounts handles platforms tiktok instagram youtube facebook".includes(q);pa.hidden=!hit;if(hit&&q)any=true}
   const ua=$("usersAdmin");if(ua&&currentUser?.role==="admin"){const hit=!q||"users accounts members admins password".includes(q);ua.hidden=!hit;if(hit&&q)any=true}
   const nm=$("settingsNoMatch");nm.hidden=any||!q;nm.querySelector("span").textContent=q;
 }
