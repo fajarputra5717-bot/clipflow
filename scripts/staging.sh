@@ -13,18 +13,6 @@ make_env() {   # staging env = production env minus every outbound/billable inte
   # P1.5: staging admins get their OWN password (production's is never copied); kept across resets
   [ -n "$keep_pw" ] || keep_pw=$(head -c 18 /dev/urandom | base64 | tr -d '/+=' | head -c 20)
   printf 'STAGING_ADMIN_PASSWORD=%s\n' "$keep_pw" >> .env.staging
-  staging_origins
-}
-staging_origins() {  # writes from the :8080 UI: main's origin check compares Origin with Host, and nginx
-  # forwards Host without the port, so staging must list its own origins (production's + :8080, localhost)
-  local prod o out="http://localhost:8080"
-  prod=$(grep -m1 '^CORS_ALLOWED_ORIGINS=' "$PROD_ENV" | cut -d= -f2- | tr -d '"'"'" || true)
-  for o in ${prod//,/ }; do
-    o=${o%/}
-    if [[ "$o" =~ ^(https?://[^:/]+):[0-9]+$ ]]; then out="$out,${BASH_REMATCH[1]}:8080"; else out="$out,$o:8080"; fi
-  done
-  sed -i '/^CORS_ALLOWED_ORIGINS=/d' .env.staging
-  printf 'CORS_ALLOWED_ORIGINS=%s\n' "$(echo "$out" | tr ',' '\n' | awk '!seen[$0]++' | paste -sd,)" >> .env.staging
   printf 'TELEGRAM_BOT_TOKEN=\nTELEGRAM_CHAT_ID=\nSUBMAGIC_API_KEY=\nYOUTUBE_CLIENT_ID=\nYOUTUBE_CLIENT_SECRET=\nYOUTUBE_REFRESH_TOKEN=\nRUNWAY_API_KEY=\n' >> .env.staging
   chmod 600 .env.staging
 }
@@ -81,7 +69,6 @@ case "${1:-status}" in
   logs) "${DC[@]}" logs --tail=80 "${2:-worker}" ;;
   rebuild) "${DC[@]}" up -d --build "${2:-worker}" 2>&1 | tail -3 ;;
   admin) staging_admin ;;
-  origins) staging_origins; "${DC[@]}" up -d backend 2>&1 | tail -1 ;;
   psql) "${DC[@]}" exec postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"' ;;
-  *) echo "usage: $0 up|down|reset|status|logs [svc]|rebuild [svc]|admin|origins|psql"; exit 2 ;;
+  *) echo "usage: $0 up|down|reset|status|logs [svc]|rebuild [svc]|admin|psql"; exit 2 ;;
 esac
