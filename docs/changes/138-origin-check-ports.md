@@ -13,3 +13,7 @@
 input refused, scheme/host/suffix mismatches, IPv6, configured list); prod (session, wrong current password so
 nothing changes): Origin http://localhost and :80 → 400 (reached the handler), :8080 / https / evil → 403, no Origin
 → 400. Harness passed. Lane B can drop 3937439 after merging main.
+
+**Staging (lane-b 44ff213 = main f66cb90, no staging Origin patch, CORS list without :8080), user lane-a-origin via
+nginx :8080:** Origin http://localhost:8080 → reaches the handler (400 wrong current password); http://localhost,
+:80, https://…:8080, evil:8080 → 403; a real settings write from :8080 → 200.
