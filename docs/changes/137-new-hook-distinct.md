@@ -12,4 +12,6 @@
   409 "No new distinct moment found: …" (shown as is), never a duplicate.
 
 **Verified:** `tests.test_hook_ranges` OK (30 % boundary, 10 s starts, merge); harness passed; backend deployed
-(column present). 3 consecutive "Get another hook" clicks on a real job → staging (it rewrites clips), pending.
+(column present). **Staging (24ce3eb), real job:** 3 consecutive "Get another hook" clicks on one clip →
+429.0–463.3 s, 220.0–255.0 s, 308.3–344.1 s: each distinct (hook_ranges.conflict) from every range used before it;
+`used_hook_ranges` keeps the originals + the 3 new ones.

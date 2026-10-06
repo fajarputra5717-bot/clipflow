@@ -20,3 +20,13 @@ read-only: new columns + clip_post_views present, queue 200, unknown post 404; p
 views → Rp 180.000 (cap Rp 1.992.000), paid 168.000 vs expected 180.000 → "−Rp 12.000", IME 41k views 1 day after a
 W1 upload → claim_now with deadline 8 Oct 00:00 WIB, Fandra +9.000/24 h → wait ("about Rp 216.000 tomorrow").
 Real claim/paid writes → staging.
+
+**Staging write checks (2026-10-06, 24ce3eb, members qa-tmp-a/qa-tmp-b; covers 128–133): 35/35 pass.** Accounts
+(create, @ stripped, duplicate 409, bad platform 400, B's PATCH 404, lists scoped); a clip failing an Approve rule
+(IME hashtags) → posting 409 "Fix before posting"; with hashtags fixed: posts 1–2 eligible, post 3 on the same
+account → `eligible=false`, "Cap reached for @qa_a_tt on TikTok this month (2 of 2)"; duplicate link 409, http/
+wrong host 400; B can't read/patch/delete A's post or post A's clip (404); lifecycle (posted→paid 409, claim without
+views 400, paid needs amount, paid is final, posted can't be deleted, drop then delete ok); views stamped + history
+row; IME 41k inside W1 → claim_now; claimed at 42k → expected Rp 200.000; paid 190.000 → "−Rp 10.000"; account with
+posts → paused. Staging data changed for this: qa-tmp-a's job + one reassigned job tagged ime-roleplay, descriptions
+given the IME hashtags, a paused account, 3 posts.
