@@ -206,7 +206,7 @@ fixed once already.
 
 `WATERMARK_PATH` (`/app/assets/watermark.png`) is the baked-in
 fallback only. The real source of truth is `watermark_assets` table +
-`ACTIVE_WATERMARK_ID` app_setting, resolved fresh per render by
+the job owner's `ACTIVE_WATERMARK_ID` user setting (P1.5), resolved fresh per render by
 `resolve_watermark_path()` in worker.py — never read `WATERMARK_PATH`
 directly in new code, call the resolver.
 Per render use `job_watermark_path(job, candidate_id)` (092): a job's own (campaign) asset that can't be
@@ -310,31 +310,45 @@ dead). Read once per job/render where values must agree (e.g.
 *effective* value plus `source` (db/env/default); the UI saves only
 fields the user changed, because echoing values back would pin them in
 the DB above `.env`. An empty DB value means "unset" (falls through to
-env). `ENV_ONLY_KEYS` (`CLIPFLOW_API_KEY`, `CORS_ALLOWED_ORIGINS`,
+env). Per-user (P1.5, 123): `USER_SETTING_KEYS` resolve **user_settings → app_settings → env → default** for a
+user (`runtime_setting(key, user_id=…)` in main.py; the worker's `setting()` uses the job owner set by
+`run_as_owner()` in `main()`'s loop: every new claimed-task branch must go through it). `USER_ONLY_KEYS`
+(ACTIVE_WATERMARK_ID) have no global fallback. Members see/PUT only user keys; global keys are admin-only (403).
+`ENV_ONLY_KEYS` (`CLIPFLOW_API_KEY`, `CORS_ALLOWED_ORIGINS`,
 `DATABASE_URL`) are never read from the DB. Still env-only by design:
 `TELEGRAM_*`.
 
-## Auth + CORS (R-03)
+## Auth + CORS (P1.5, was R-03)
 
-Every `/api/*` request needs header `X-ClipFlow-Key` = env
-`CLIPFLOW_API_KEY` (env-only, never app_settings; empty = fail closed).
-Enforced by the `require_api_key` **middleware** in main.py (not a route
-dependency) so unknown `/api` paths get the same 401 as real ones.
-`/health` and `/` are open. `<img>`/`<video>`/download URLs can't send
-headers: the GET file routes matched by `MEDIA_PATH_RE` also accept
-`?mt=` from `GET /api/media-token` (HMAC of the API key, stable per
-12 h bucket, valid 12-24 h, read-only). **A new file-serving GET route
-must be added to `MEDIA_PATH_RE`** and its frontend URL wrapped in
-`mediaUrl()`; every other frontend call goes through `api()` or
-`authFetch()` (uploads). Never a bare `fetch()`. CORS origins come from env
-`CORS_ALLOWED_ORIGINS` (comma list, `*` dropped, no credentials). The
-CORS middleware must stay added *after* the auth middleware (outermost),
-or preflights get 401.
+Every `/api/*` request needs a principal; the `require_user` **middleware** in main.py (not a route dependency, so
+unknown `/api` paths also 401) puts `{id, username, role, via}` on `request.state.user`; read it with
+`current_user(request)` / `require_admin(request)`. Sources (`app/auth.py`): session cookie `clipflow_session`
+(HttpOnly, SameSite=Lax; DB row in `user_sessions`, token stored as sha256; disabled user = dead session) →
+`X-ClipFlow-Key` = env `CLIPFLOW_API_KEY` → the bootstrap admin (legacy, until the owner confirms removal) →
+`?mt=` per-user media token (`exp.user_id.sig`, GET/HEAD on `MEDIA_PATH_RE` only). Open: `/api/auth/login|logout`,
+`/health`, `/`. Passwords argon2id; login 429 after 5 fails/user or 20/IP per 15 min; no signup route.
+First run: `CLIPFLOW_ADMIN_USER/PASSWORD` (env-only, read only while `users` is empty). Cookie-authed writes
+with a foreign `Origin` → 403. **A new file-serving GET route must be added to `MEDIA_PATH_RE`** and its
+frontend URL wrapped in `mediaUrl()`; every other frontend call goes through `api()` or `authFetch()` (uploads),
+never a bare `fetch()` (exception: the login form + `ensureSession()`/`signOut()`). A 401 opens `#loginScreen`
+(`showLogin()`, `body.auth-locked`) and retries once. Account sheet (`#accountSheet`, username in the sidebar foot): change password (≥ 12) + Sign out. CORS origins from env `CORS_ALLOWED_ORIGINS` (comma list,
+`*` dropped, no credentials); the CORS middleware stays added *after* the auth middleware, or preflights get 401.
+
+## Ownership (P1.5) — every query is scoped by `user_id`
+
+Owned tables carry `user_id` NOT NULL (`jobs`, `watermark_assets`; candidates/versions via their job; **every new
+table from now on**). Rule: every SQL that reads or writes user data filters by the caller's id
+(`current_user(request)["id"]`); another user's row answers **404**, never 403/200. The middleware guard
+`_path_owned()` already enforces it for `/api/jobs/{id}[/candidates/{cid}]…` and `/api/assets/watermarks/{id}…`;
+lists and inserts do it in the handler. A new route family keyed by an owned id → add its regex to the guard.
+Admin is scoped like everyone except `/api/activity` (sees all, `owner` set). Campaigns are a shared catalogue
+(admin edits; P3 adds `created_by` + `visibility`); `source_videos` is a shared download cache.
+Writing tests (cross-user, settings, qa-tmp users) run on staging only (:8080/:8001), never production.
 
 ## Frontend shell (R-11/R-12/R-13, lane B 067-073; badge v2.1117)
 
 - **Navigation (106, P1 task 0):** the flow-preview **stepper** (`#flowNav`, `renderFlow()`, `FLOW_STEPS`) is the
-  top-level navigation: Analyze (`data-nav="current"`, the Import view), Review (`data-nav="queue"`, the job
+  top-level navigation (sticky under the toolbar, compact while it is collapsed via `body:has(.toolbar.is-collapsed)`, 121): Analyze (`data-nav="current"`, the Import view), Review (`data-nav="queue"`, the job
   list/detail, formerly "Publish"), Editor (`data-flow-editor`: opens the visible job's clip drawer; disabled
   until a job detail is open); Campaign/Auto-import/Track (P3) and Schedule/Publish (P2) are disabled with
   "Coming in Px" — never mock content (mapping: docs/roadmap.md). `#pageTitle` = the active step. Gear in the

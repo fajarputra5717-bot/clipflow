@@ -10,7 +10,7 @@ test("live app loads, lists jobs and opens one read-only", async ({ page }) => {
   const errors = [], blocked = [];
   page.on("pageerror", (e) => errors.push(e.message));
   page.on("dialog", (d) => { errors.push("dialog: " + d.message()); d.dismiss(); });
-  await page.addInitScript((k) => sessionStorage.setItem("clipflow_api_key_v1", k), process.env.CLIPFLOW_API_KEY || "");
+  await page.setExtraHTTPHeaders({ "X-ClipFlow-Key": process.env.CLIPFLOW_API_KEY || "" }); // legacy key = admin (P1.5)
   await page.route("**/api/**", (r) => (r.request().method() === "GET" ? r.continue() : (blocked.push(r.request().url()), r.abort())));
   await page.goto("/");
   await page.waitForResponse((r) => r.url().includes("/api/jobs?scope=current") && r.ok());

@@ -91,3 +91,7 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 117 · 2026-10-03 · Campaign default facecam layout (rules default_layout; IME = none), used unless you pick one · docs/campaigns, shared/campaigns.py, main.py, index.html
 118 · 2026-10-05 · Facecam must be a persistent (≥ 50 % of frames), steady box in a corner/edge; game faces no longer give a junk panel (Lane C) · worker.py
 119 · 2026-10-05 · Lows: one score per clip card; keyword picker skips safety-flagged, exclamation and religious words (stoplists) · index.html, worker.py, shared/languages.py
+120 · 2026-10-05 · P1.5 (1): users + DB sessions + login page; argon2, rate limit, per-user media token; CLIPFLOW_API_KEY = bootstrap admin · app/auth.py, main.py, index.html, shared/settings.py
+121 · 2026-10-05 · Account sheet (change password ≥ 12, sign out); stepper sticky + compact under the toolbar; selects styled like the mockup's inputs · index.html, app/auth.py
+122 · 2026-10-05 · P1.5 (2): user_id on jobs + watermark_assets (legacy → bootstrap admin), middleware ownership guard (404), scoped lists + activity; campaigns stay shared · main.py
+123 · 2026-10-06 · P1.5 (3): per-user settings (user → house default → env → default), global keys admin-only (403), per-user active watermark, worker resolves the job owner's · shared/settings.py, main.py, worker.py, index.html

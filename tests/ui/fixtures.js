@@ -3,7 +3,6 @@
 // Every request the app makes is recorded in `api.calls`; page errors fail the test.
 const base = require("@playwright/test");
 
-const KEY_STORAGE = "clipflow_api_key_v1"; // index.html sessionStorage key (R-03)
 const iso = (min = 0) => new Date(Date.now() - min * 60_000).toISOString();
 
 function job(over = {}) {
@@ -47,6 +46,7 @@ function newState() {
   done.candidates = [candidate(done.id, { id: "cand-a", ai_title: "First mock clip" }),
                      candidate(done.id, { id: "cand-b", clip_index: 1, ai_title: "Second mock clip" })];
   return {
+    user: { id: "u-admin", username: "admin", role: "admin" }, // P1.5: signed in unless a test clears it
     current: [], queue: [done], jobs: { [done.id]: done }, calls: [],
     campaigns: [{ slug: "ime-roleplay", name: "IME Roleplay", brief_pending: false, platforms: ["tiktok"], default_layout: "none",
       sources: [], source_note: "", hashtags: ["#imeroleplay"] }],
@@ -61,9 +61,16 @@ async function mockApi(page, api) {
     try { body = req.postDataJSON(); } catch { body = req.postData(); }
     api.calls.push({ method, path, search: url.search, body });
     const json = (data, status = 200) => route.fulfill({ status, contentType: "application/json", body: JSON.stringify(data) });
+    if (path === "/api/auth/login" && method === "POST") {
+      if (body?.password !== "correct horse") return json({ detail: "Wrong username or password" }, 401);
+      api.user = { id: "u-1", username: body.username, role: "member" };
+      return json({ user: api.user });
+    }
+    if (path === "/api/auth/logout") { api.user = null; return json({ ok: true }); }
+    if (method === "GET" && path === "/api/auth/me") return api.user ? json({ user: api.user, via: "session" }) : json({ detail: "Unauthorized" }, 401);
     if (method === "GET") {
       if (path === "/api/media-token") return json({ token: "mock-token", expires_at: iso(-720) });
-      if (path === "/api/settings") return json({});
+      if (path === "/api/settings") return json(api.settings || {});
       if (path === "/api/campaigns") return json(api.campaigns);
       if (path === "/api/activity") return json({ items: api.activity || [] }); // 090 island feed
       if (path === "/api/assets/watermarks") return json({ assets: [] });
@@ -89,7 +96,6 @@ const test = base.test.extend({
     page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
     page.on("console", (m) => { if (m.type() === "error" && !/Failed to load resource|404/.test(m.text())) errors.push("console: " + m.text()); });
     page.on("dialog", (d) => { errors.push("unexpected dialog: " + d.message()); d.dismiss(); });
-    await page.addInitScript((k) => { try { sessionStorage.setItem(k, "mock-key"); } catch {} }, KEY_STORAGE);
     await mockApi(page, api);
     await page.goto("/");
     await page.waitForFunction(() => document.readyState === "complete");
@@ -136,4 +142,4 @@ async function blockingProblems(page, probes) {
   }, probes);
 }
 
-module.exports = { test, expect: base.expect, job, candidate, nav, blockingProblems };
+module.exports = { test, expect: base.expect, job, candidate, nav, blockingProblems, mockApi, newState };

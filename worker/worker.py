@@ -1,3 +1,4 @@
+import contextvars
 import difflib
 import hashlib
 import json
@@ -134,7 +135,10 @@ def resolve_watermark_path(asset_id=None):
         except Exception as exc:
             log(f"Could not resolve job watermark asset {asset_id}: {exc}")
 
+    # P1.5: the job owner's active watermark (user-only setting), and only
+    # an asset that owner really owns.
     active_id = setting("ACTIVE_WATERMARK_ID")
+    owner = _job_owner.get()
 
     if active_id:
 
@@ -143,8 +147,9 @@ def resolve_watermark_path(asset_id=None):
             with db() as conn:
 
                 row = conn.execute(
-                    "SELECT path FROM watermark_assets WHERE id = %s",
-                    (active_id,),
+                    "SELECT path FROM watermark_assets WHERE id = %s"
+                    " AND (%s::text IS NULL OR user_id = %s)",
+                    (active_id, owner, owner),
                 ).fetchone()
 
             if row and row.get("path"):
@@ -472,24 +477,55 @@ def load_app_settings():
     return {row["key"]: row["value"] for row in rows}
 
 
+def load_user_settings(user_id):
+    with db() as conn:
+        rows = conn.execute(
+            "SELECT key, value FROM user_settings WHERE user_id = %s", (user_id,)
+        ).fetchall()
+    return {row["key"]: row["value"] for row in rows}
+
+
+# P1.5: owner of the job being processed, set by main() around each task
+# (run_as_owner). setting() resolves USER_SETTING_KEYS for that user:
+# user_settings → app_settings → env → DEFAULT_SETTINGS; global keys ignore it.
+_job_owner = contextvars.ContextVar("job_owner", default=None)
+
+
 # DB wins, then env, then DEFAULT_SETTINGS (shared/settings.py).
 # Cached 5 s, so a UI change lands within one cache window.
 _settings = RuntimeSettings(
     load_app_settings,
     log=lambda msg: log(msg),
+    user_loader=load_user_settings,
 )
 
 
 def setting(name, default=None):
-    return _settings.get(name, default)
+    return _settings.get(name, default, _job_owner.get())
 
 
 def setting_int(name, default=None):
-    return _settings.get_int(name, default)
+    return _settings.get_int(name, default, _job_owner.get())
 
 
 def setting_float(name, default=None):
-    return _settings.get_float(name, default)
+    return _settings.get_float(name, default, _job_owner.get())
+
+
+def run_as_owner(job_id, fn, arg):
+    """Run one claimed task with its job owner's user-level settings."""
+    owner = None
+    try:
+        with db() as conn:
+            row = conn.execute("SELECT user_id FROM jobs WHERE id = %s", (job_id,)).fetchone()
+        owner = row["user_id"] if row else None
+    except Exception as exc:
+        log(f"Could not read the owner of job {job_id}: {exc}")
+    token = _job_owner.set(owner)
+    try:
+        return fn(arg)
+    finally:
+        _job_owner.reset(token)
 
 
 # Every AI call goes through shared/ai/router.py (R-20).
@@ -7429,9 +7465,7 @@ def main():
 
             if task:
 
-                process_candidate_task(
-                    task
-                )
+                run_as_owner(task["job_id"], process_candidate_task, task)
 
                 continue
 
@@ -7441,9 +7475,7 @@ def main():
 
             if job:
 
-                process_analysis_job(
-                    job
-                )
+                run_as_owner(job["id"], process_analysis_job, job)
 
                 continue
 
@@ -7453,9 +7485,7 @@ def main():
 
             if submagic_task:
 
-                process_submagic_task(
-                    submagic_task
-                )
+                run_as_owner(submagic_task["job_id"], process_submagic_task, submagic_task)
 
                 continue
 
@@ -7465,9 +7495,7 @@ def main():
 
             if submagic_poll_row:
 
-                process_submagic_poll(
-                    submagic_poll_row
-                )
+                run_as_owner(submagic_poll_row["job_id"], process_submagic_poll, submagic_poll_row)
 
                 continue
 

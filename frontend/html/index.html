@@ -1166,10 +1166,65 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:va
 textarea{font-size:14px;line-height:1.5}
 .field label{font-size:13px;color:var(--muted)}
 @media (max-width:600px){.panel{padding:var(--sp-2)}}
+/* P1.5 login (flow-preview visual system: panel card, fill inputs, pill primary). Closed = hidden + no pointer events. */
+.login-layer{position:fixed;inset:0;z-index:2000;display:grid;place-items:center;padding:var(--sp-2);background:var(--bg);visibility:hidden;pointer-events:none;opacity:0;transition:opacity var(--dur-2) var(--ease-out)}
+body.auth-locked .login-layer{visibility:visible;pointer-events:auto;opacity:1}
+body.auth-locked #appShell,body.auth-locked #tabbar,body.auth-locked #island{visibility:hidden}
+.login-card{width:min(380px,100%);background:var(--panel);border-radius:24px;box-shadow:var(--shadow);padding:calc(var(--sp-2)*2) var(--sp-3)}
+.login-brand{display:flex;align-items:center;gap:10px;font-family:var(--font-display);font-size:17px;font-weight:700;margin-bottom:var(--sp-3)}
+.login-card h1{font-family:var(--font-display);font-size:24px;line-height:1.15;margin:0 0 4px}
+.login-card .login-sub{color:var(--muted);font-size:15px;margin:0 0 var(--sp-2)}
+.login-card input{width:100%;min-height:var(--hit)}
+.login-card button.primary{width:100%;min-height:var(--hit);margin-top:var(--sp-3);border-radius:999px}
+.login-error{min-height:20px;margin-top:var(--sp-1);color:var(--badge-failed-fg,#d70015);font-size:13px}
+.account-row{display:flex;align-items:center;gap:8px;padding:6px 10px;color:var(--muted);font-size:13px}
+.account-row .account-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text);font-weight:600}
+.account-row button{min-height:32px;padding:0 12px;border-radius:999px;font-size:13px}
+@media (prefers-reduced-motion:reduce){.login-layer{transition:none}}
+/* Stepper = top-level nav: sticks under the toolbar instead of sliding beneath it (cut-off titles, v2.1117).
+   Compacts (no sub-lines, smaller dots) once the toolbar has collapsed; driven by initToolbar's .is-collapsed. */
+.flow-card{position:sticky;top:56px;z-index:50;transition:padding var(--dur-2) var(--ease-out)}
+.flow-dot,.flow li+li::before{transition:width var(--dur-2) var(--ease-out),height var(--dur-2) var(--ease-out),top var(--dur-2) var(--ease-out),background var(--dur-2) var(--ease)}
+body:has(.toolbar.is-collapsed) .flow-card{padding-block:var(--sp-1) 2px}
+body:has(.toolbar.is-collapsed) .flow-dot{width:32px;height:32px}
+body:has(.toolbar.is-collapsed) .flow-dot svg{width:16px;height:16px}
+body:has(.toolbar.is-collapsed) .flow li+li::before{top:16px;right:calc(50% + 20px);left:calc(-50% + 20px)}
+body:has(.toolbar.is-collapsed) .flow-sub{display:none}
+@media (prefers-reduced-motion:reduce){.flow-card,.flow-dot,.flow li+li::before{transition:none}}
+/* Selects match the mockup's inputs: same box, own chevron (no native control chrome). */
+select,[data-theme] select{-webkit-appearance:none;appearance:none;padding-right:40px;cursor:pointer;text-overflow:ellipsis}
+/* after the background shorthands above (incl. [data-theme=dark] … :focus), so the chevron survives every state */
+select,select:focus,[data-theme] select,[data-theme] select:focus{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5 6 6.5l5-5' fill='none' stroke='%2386868b' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 15px center;background-size:12px 8px}
+select::-ms-expand{display:none}
+/* Account sheet (P1.5) */
+.account-row .account-name{background:transparent;border:0;padding:4px 6px;margin:-4px -6px;border-radius:8px;text-align:left;cursor:pointer;font:inherit;font-weight:600;color:var(--text);min-height:0;box-shadow:none}
+.account-row .account-name:hover{background:var(--fill)}
+.account-who{color:var(--muted);font-size:15px;margin:0 0 var(--sp-2)}
+.account-who b{color:var(--text)}
+.account-form h3{font-size:17px;margin:0 0 4px}
+.account-form .hint{color:var(--muted);font-size:13px;margin:0}
+.account-form button.primary{margin-top:var(--sp-2);border-radius:999px;min-height:var(--hit)}
+.account-msg{min-height:20px;margin-top:var(--sp-1);font-size:13px}
+.account-msg.is-error{color:var(--badge-failed-fg,#d70015)}
+.account-msg.is-ok{color:var(--badge-done-fg,#248a3d)}
+.account-signout{margin-top:var(--sp-3);padding-top:var(--sp-2);border-top:1px solid var(--line)}
+.account-signout button{border-radius:999px;min-height:var(--hit)}
 </style>
 <link rel="stylesheet" href="editor/editor.css"><!-- lane-b hook -->
 </head>
 <body>
+
+<div class="login-layer" id="loginScreen" role="dialog" aria-modal="true" aria-labelledby="loginTitle">
+  <form class="login-card" id="loginForm" autocomplete="on" novalidate>
+    <div class="login-brand"><img class="brand-mark" src="clipflow-mark.svg" alt="" width="28" height="28">ClipFlow</div>
+    <h1 id="loginTitle">Sign in</h1>
+    <p class="login-sub">Use the account your admin created for you.</p>
+    <div class="field"><label for="loginUser">Username</label><input id="loginUser" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" required></div>
+    <div class="field"><label for="loginPass">Password</label><input id="loginPass" name="password" type="password" autocomplete="current-password" required></div>
+    <div class="login-error" id="loginError" role="alert"></div>
+    <button class="primary" id="loginSubmit" type="submit">Sign in</button>
+  </form>
+</div>
 
 <div id="jobOverlay" class="job-overlay" aria-hidden="true">
   <div class="job-overlay-card">
@@ -1196,6 +1251,7 @@ textarea{font-size:14px;line-height:1.5}
     <button class="nav-item" type="button" data-nav="settings" aria-haspopup="dialog" aria-controls="settingsSheet"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg><span>Settings</span></button>
   </nav>
   <div class="sidebar-foot">
+    <div class="account-row" id="accountRow"><button type="button" class="account-name" id="accountName" data-account aria-haspopup="dialog" aria-controls="accountSheet" title="Account"></button><button type="button" data-signout>Sign out</button></div>
     <button class="nav-item theme-toggle" id="themeToggleSide" type="button" aria-label="Switch appearance"><span class="nav-icon-stack"><svg class="theme-icon-sun nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2.2M12 19.3v2.2M4.9 4.9l1.6 1.6M17.5 17.5l1.6 1.6M2.5 12h2.2M19.3 12h2.2M4.9 19.1l1.6-1.6M17.5 6.5l1.6-1.6"/></svg><svg class="theme-icon-moon nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg></span><span>Appearance</span><span class="nav-value" id="themeValue">Light</span></button>
   </div>
 </aside>
@@ -1348,6 +1404,26 @@ textarea{font-size:14px;line-height:1.5}
 </div>
 <nav class="tabbar" id="tabbar" aria-label="Main"><button class="tabbar-item" type="button" data-nav="current"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v10.5M8 10.5l4 4 4-4"/><path d="M4.5 15v2.5A2.5 2.5 0 0 0 7 20h10a2.5 2.5 0 0 0 2.5-2.5V15"/></svg><span>Analyze</span></button><button class="tabbar-item" type="button" data-nav="queue"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg><span>Review</span></button><button class="tabbar-item" type="button" data-nav="watermarks" aria-haspopup="dialog"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="3"/><path d="m3.5 15.5 4.5-4.5 4 4"/><path d="M14.5 16h3"/></svg><span>Watermarks</span></button><button class="tabbar-item" type="button" data-nav="settings" aria-haspopup="dialog"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg><span>Settings</span></button></nav>
 <!-- Sheets (068): Settings and Watermarks open as centred dialogs from the sidebar. Closed = visibility:hidden + pointer-events:none. -->
+<div class="sheet-layer" id="accountSheet" aria-hidden="true">
+  <div class="sheet-backdrop" data-sheet-close></div>
+  <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="accountSheetTitle">
+    <header class="sheet-head"><h2 id="accountSheetTitle">Account</h2><button class="sheet-close" type="button" data-sheet-close aria-label="Close account"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></header>
+    <div class="sheet-body">
+      <p class="account-who" id="accountWho"></p>
+      <form class="account-form" id="passwordForm" novalidate>
+        <h3>Change password</h3>
+        <p class="hint">At least 12 characters. Your other signed-in devices are signed out.</p>
+        <div class="field"><label for="pwCurrent">Current password</label><input id="pwCurrent" type="password" autocomplete="current-password"></div>
+        <div class="field"><label for="pwNew">New password</label><input id="pwNew" type="password" autocomplete="new-password" minlength="12"></div>
+        <div class="field"><label for="pwConfirm">Confirm new password</label><input id="pwConfirm" type="password" autocomplete="new-password" minlength="12"></div>
+        <div class="account-msg" id="pwMsg" role="status" aria-live="polite"></div>
+        <button class="primary" type="submit" id="pwSubmit">Change password</button>
+        <input type="text" name="username" autocomplete="username" id="pwUser" hidden>
+      </form>
+      <div class="account-signout"><button class="secondary" type="button" data-signout>Sign out</button></div>
+    </div>
+  </section>
+</div>
 <div class="sheet-layer" id="settingsSheet" aria-hidden="true">
   <div class="sheet-backdrop" data-sheet-close></div>
   <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="settingsSheetTitle">
@@ -1517,24 +1593,73 @@ let candidateActiveTasks={}; // candidateId -> {jobId,kind,actionLabel,status,pr
 const $=id=>document.getElementById(id);
 function esc(v){return v==null?"":String(v).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;")}
 function css(v){return CSS.escape(String(v))}
-// Auth (R-03): API key asked once per browser session, sent as X-ClipFlow-Key. A 401 means a
-// wrong/rotated key: ask again (one shared prompt for all concurrent calls) and retry once.
-const KEY_STORAGE="clipflow_api_key_v1";
-let keyPromptPending=null;
-function apiKey(){try{return sessionStorage.getItem(KEY_STORAGE)||""}catch{return ""}}
-function askApiKey(message){
-  if(!keyPromptPending)keyPromptPending=Promise.resolve().then(()=>{
-    const k=(window.prompt(message||"ClipFlow API key (CLIPFLOW_API_KEY in .env):")||"").trim();
-    try{if(k)sessionStorage.setItem(KEY_STORAGE,k);else sessionStorage.removeItem(KEY_STORAGE)}catch{}
-    return k;
-  }).finally(()=>{keyPromptPending=null});
-  return keyPromptPending;
+// Auth (P1.5): the browser signs in with a username + password; the backend sets an HttpOnly
+// session cookie that every same-origin fetch (and <img>/<video>) carries. A 401 shows the login
+// screen (one shared promise for all concurrent calls) and retries the call once after sign-in.
+let currentUser=null,loginPending=null;
+function showLogin(message){
+  if(!loginPending)loginPending=new Promise(resolve=>{
+    document.body.classList.add("auth-locked");
+    $("loginError").textContent=message||"";
+    ["appShell","tabbar","island"].forEach(id=>{const el=$(id);if(el)el.inert=true});
+    loginResolve=resolve;
+    requestAnimationFrame(()=>($("loginUser").value?$("loginPass"):$("loginUser")).focus({preventScroll:true}));
+  }).finally(()=>{loginPending=null});
+  return loginPending;
 }
-function authHeaders(){const k=apiKey();return k?{"X-ClipFlow-Key":k}:{}}
+let loginResolve=null;
+function setCurrentUser(u){
+  currentUser=u||null;$("accountName").textContent=u?u.username:"";$("pwUser").value=u?u.username:"";
+  $("accountWho").innerHTML=u?`Signed in as <b>${esc(u.username)}</b> · ${u.role==="admin"?"Admin":"Member"}`:"";
+}
+const PASSWORD_MIN=12;
+function pwMessage(text,ok){const m=$("pwMsg");m.textContent=text||"";m.classList.toggle("is-ok",!!ok);m.classList.toggle("is-error",!!text&&!ok)}
+$("passwordForm").addEventListener("submit",async e=>{
+  e.preventDefault();
+  const cur=$("pwCurrent").value,next=$("pwNew").value,conf=$("pwConfirm").value;
+  const bad=!cur?["Enter your current password.","pwCurrent"]:next.length<PASSWORD_MIN?[`New password must be at least ${PASSWORD_MIN} characters.`,"pwNew"]
+    :next!==conf?["The new passwords don't match.","pwConfirm"]:next===cur?["The new password must be different.","pwNew"]:null;
+  ["pwCurrent","pwNew","pwConfirm"].forEach(id=>$(id).removeAttribute("aria-invalid"));
+  if(bad){pwMessage(bad[0]);$(bad[1]).setAttribute("aria-invalid","true");$(bad[1]).focus();return}
+  const btn=$("pwSubmit");setBusy(btn,true,"Changing…");pwMessage("");
+  try{
+    await api("/api/auth/password",{method:"POST",body:JSON.stringify({current_password:cur,new_password:next})});
+    $("passwordForm").reset();$("pwUser").value=currentUser?.username||"";
+    pwMessage("Password changed. Other devices were signed out.",true);
+  }catch(err){pwMessage(err.message);if(/current/i.test(err.message)){$("pwCurrent").setAttribute("aria-invalid","true");$("pwCurrent").focus()}}
+  finally{setBusy(btn,false)}
+});
+$("loginForm").addEventListener("submit",async e=>{
+  e.preventDefault();
+  const btn=$("loginSubmit"),username=$("loginUser").value.trim(),password=$("loginPass").value;
+  if(!username||!password){$("loginError").textContent="Enter your username and password.";return}
+  setBusy(btn,true,"Signing in…");
+  try{
+    const r=await fetch(API+"/api/auth/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username,password})});
+    let d=null;try{d=await r.json()}catch{}
+    if(!r.ok){$("loginError").textContent=d?.detail||`Sign-in failed (HTTP ${r.status})`;$("loginPass").select();return}
+    const prev=currentUser;$("loginPass").value="";
+    if(prev&&prev.id!==d.user.id){location.reload();return} // another account: start clean
+    setCurrentUser(d.user);refreshMediaToken();
+    document.body.classList.remove("auth-locked");
+    ["appShell","tabbar","island"].forEach(id=>{const el=$(id);if(el)el.inert=false});
+    const done=loginResolve;loginResolve=null;done&&done(d.user);
+  }catch(err){$("loginError").textContent="Can't reach the server: "+err.message}
+  finally{setBusy(btn,false)}
+});
+async function ensureSession(){
+  const r=await fetch(API+"/api/auth/me");
+  if(r.ok){setCurrentUser((await r.json()).user);return}
+  await showLogin();
+}
+async function signOut(){
+  try{await fetch(API+"/api/auth/logout",{method:"POST"})}catch{}
+  location.reload();
+}
 async function authFetch(url,options={},retried=false){
-  if(!apiKey())await askApiKey();
-  const r=await fetch(API+url,{...options,headers:{...(options.headers||{}),...authHeaders()}});
-  if(r.status===401&&!retried){const k=await askApiKey("API key rejected. Enter the ClipFlow API key:");if(k)return authFetch(url,options,true)}
+  if(loginPending)await loginPending;
+  const r=await fetch(API+url,options);
+  if(r.status===401&&!retried&&!url.startsWith("/api/auth/")){await showLogin("Your session ended. Sign in again.");return authFetch(url,options,true)}
   return r;
 }
 function api(url,options={}){return authFetch(url,{...options,headers:{"Content-Type":"application/json",...(options.headers||{})}}).then(async r=>{let d=null;try{d=await r.json()}catch{}if(!r.ok)throw new Error(d?.detail||`HTTP ${r.status}`);return d})}
@@ -3073,6 +3198,13 @@ const SETTING_LABELS={WATERMARK_POSITION_Y:"Watermark height (% from top, new jo
   INSTAGRAM_ACCESS_TOKEN:"Access token",INSTAGRAM_BUSINESS_ACCOUNT_ID:"Business account ID",SUBMAGIC_API_KEY:"API key",SUBMAGIC_TEMPLATE:"Template",SUBMAGIC_MAGIC_ZOOMS:"Magic zooms",SUBMAGIC_MAGIC_BROLLS:"Magic B-rolls",
   HASHTAGS:"Hashtags",CAMPAIGN_NAME:"Campaign name"};
 const SETTING_SOURCE={db:"Saved",env:"From .env",default:"Default"};
+// P1.5: scope "user" = your own value (user → admin's house default → .env → default); "global" = all users,
+// admin-only (members receive only user-scope keys). Rows the API didn't return aren't rendered.
+const USER_SETTING_SOURCE={user:"Yours",db:"House default",env:"From .env",default:"Default"};
+function settingSourceText(s){
+  const src=(s.scope==="user"?USER_SETTING_SOURCE:SETTING_SOURCE)[s.source]||(s.configured?"Configured":"Not set");
+  return currentUser?.role==="admin"?`${src} · ${s.scope==="user"?"your jobs":"all users"}`:src;
+}
 const isSecretKey=k=>/KEY|TOKEN|SECRET|PASSWORD/i.test(k);
 const EYE='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.8"/></svg>';
 async function loadDiskMeter(){
@@ -3090,12 +3222,12 @@ async function loadSettings(){
   loadDiskMeter();
   try{
     settingsCache=await api("/api/settings");
-    $("settingsPanel").innerHTML=SETTINGS_GROUPS.map(([g,keys])=>`
+    $("settingsPanel").innerHTML=SETTINGS_GROUPS.map(([g,all])=>[g,all.filter(k=>settingsCache[k])]).filter(([,keys])=>keys.length).map(([g,keys])=>`
       <section class="inset-group" data-settings-group>
         <h3 class="inset-title">${esc(g)}</h3>
-        <div class="inset-list">${keys.map(k=>{const s=settingsCache[k]||{value:"",configured:false},sec=isSecretKey(k),id="set-"+k;
+        <div class="inset-list">${keys.map(k=>{const s=settingsCache[k],sec=isSecretKey(k),id="set-"+k;
           return `<div class="inset-row" data-setting-row data-search="${esc((SETTING_LABELS[k]||k)+" "+k+" "+g).toLowerCase()}">
-            <label class="row-label" for="${id}">${esc(SETTING_LABELS[k]||k)}<small><code>${esc(k)}</code> · ${esc(SETTING_SOURCE[s.source]||(s.configured?"Configured":"Not set"))}</small></label>
+            <label class="row-label" for="${id}">${esc(SETTING_LABELS[k]||k)}<small><code>${esc(k)}</code> · ${esc(settingSourceText(s))}</small></label>
             <span class="row-control"><input id="${id}" data-setting="${esc(k)}" type="${sec?"password":"text"}" value="${esc(s.value||"")}" placeholder="${s.configured?"Configured / masked":"Not set"}" autocomplete="off" spellcheck="false">${sec?`<button class="icon-btn reveal-btn" type="button" data-reveal="${id}" aria-label="Show ${esc(SETTING_LABELS[k]||k)}" aria-pressed="false">${EYE}</button>`:""}</span>
           </div>`}).join("")}</div>
       </section>`).join("");
@@ -3260,9 +3392,9 @@ $("jobOverlayClose").addEventListener("click",e=>{e.preventDefault();e.stopPropa
 
 window.addEventListener("load",async()=>{
   selectSplit(70);selectPlatform("youtube_shorts");overlayOpen=false;updateAnalyzeReady();updateJobIsland();syncPageTitle();syncNav();
-  // Key + media token first, so the first render already has working <img>/<video> URLs.
-  // Token is stable for 12 h and valid 12-24 h; refresh hourly.
-  await refreshMediaToken();setInterval(refreshMediaToken,60*60*1000);
+  // Session + media token first, so the first render already has working <img>/<video> URLs.
+  // Token is per user, stable for 12 h and valid 12-24 h; refresh hourly.
+  await ensureSession();await refreshMediaToken();setInterval(refreshMediaToken,60*60*1000);
   await loadSettings();await loadWatermarkAssets();await loadCampaigns();await loadCurrentJobs();await loadQueue();
 
   // Always start the lightweight running-job monitor, including when an
@@ -3388,6 +3520,8 @@ document.addEventListener("keydown",e=>{
 },true);
 document.addEventListener("click",e=>{
   if(e.target.closest("[data-sheet-close]"))return closeSheet();
+  if(e.target.closest("[data-account]")){pwMessage("");openSheet("accountSheet",e.target.closest("[data-account]"));closeSidebarDrawer(false);return}
+  if(e.target.closest("[data-signout]")){setBusy(e.target.closest("[data-signout]"),true);signOut();return}
   const nav=e.target.closest("[data-nav]");if(nav){
     const v=nav.dataset.nav;
     if(v==="settings"||v==="watermarks"){openSheet(v==="settings"?"settingsSheet":"watermarkSheet",nav);closeSidebarDrawer(false);return}

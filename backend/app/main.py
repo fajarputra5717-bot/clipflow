@@ -18,6 +18,9 @@ from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
+from starlette.concurrency import run_in_threadpool
+
+from app import auth
 
 from shared.ai import router as ai_router
 from shared import campaigns, descriptions, edit_spec as edit_specs, languages, rule_checks
@@ -26,6 +29,8 @@ from shared.fonts import normalize_caption_font
 from shared.settings import (
     DEFAULT_SETTINGS,
     SECRET_SETTING_KEYS,
+    USER_ONLY_KEYS,
+    USER_SETTING_KEYS,
     RuntimeSettings,
 )
 
@@ -50,18 +55,16 @@ app = FastAPI(
 
 
 # ============================================================
-# AUTH (R-03) — shared secret in X-ClipFlow-Key on every /api/*
-# request. /health and / stay open. The expected value is env-only
-# (CLIPFLOW_API_KEY), never app_settings: that table is served over
-# the API. Enforced as middleware rather than a route dependency so
-# unknown /api paths also get 401 (no route-existence leak).
-#
-# <img>/<video>/download links can't send headers, so the GET file
-# routes in MEDIA_PATH_RE also accept ?mt=<exp>.<hmac>, a read-only
-# media token from GET /api/media-token, HMAC'd with the API key.
-# Tokens are bucketed to MEDIA_TOKEN_WINDOW so media URLs stay stable
-# for hours (re-renders don't reload playing videos); every token is
-# valid for 12-24 h. Rotating CLIPFLOW_API_KEY revokes all of them.
+# AUTH (P1.5, replaces R-03's single key) — every /api/* request needs
+# a principal, resolved once by the middleware into request.state.user
+# ({id, username, role}); see app/auth.py:
+#   1. session cookie (browser login; HttpOnly, SameSite=Lax, DB row),
+#   2. X-ClipFlow-Key = env CLIPFLOW_API_KEY → the bootstrap admin
+#      (legacy scripts; kept until the owner confirms removal),
+#   3. ?mt= per-user media token, GET/HEAD on MEDIA_PATH_RE only.
+# Open: /api/auth/login, /api/auth/logout, /health, /. Middleware (not a
+# route dependency) so unknown /api paths also get 401. Cookie-authed
+# writes must come from an allowed Origin (CSRF belt to SameSite=Lax).
 # ============================================================
 
 API_KEY_HEADER = "X-ClipFlow-Key"
@@ -69,8 +72,6 @@ API_KEY_HEADER = "X-ClipFlow-Key"
 CLIPFLOW_API_KEY = os.getenv("CLIPFLOW_API_KEY", "").strip()
 
 MEDIA_TOKEN_PARAM = "mt"
-
-MEDIA_TOKEN_WINDOW = 12 * 3600
 
 MEDIA_PATH_RE = re.compile(
     r"^/api/("
@@ -80,79 +81,135 @@ MEDIA_PATH_RE = re.compile(
     r")$"
 )
 
-if not CLIPFLOW_API_KEY:
-    print(
-        "[backend] CLIPFLOW_API_KEY is not set: every /api/* "
-        "request will be rejected with 401 (fail closed)."
-    )
+OPEN_API_PATHS = {"/api/auth/login", "/api/auth/logout"}
+
+SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
+
+# Ownership guard (P1.5): every route under these prefixes names a row by id; the
+# middleware 404s unless the row belongs to the caller, so no handler can forget.
+JOB_PATH_RE = re.compile(r"^/api/jobs/([^/]+)(?:/candidates/([^/]+))?(?:/|$)")
+WATERMARK_PATH_RE = re.compile(r"^/api/assets/watermarks/([^/]+)(?:/|$)")
 
 
-def _media_signature(exp: int) -> str:
-    return hmac.new(
-        CLIPFLOW_API_KEY.encode(),
-        f"media:{exp}".encode(),
-        hashlib.sha256,
-    ).hexdigest()
-
-
-def issue_media_token() -> dict:
-    exp = (
-        int(time.time()) // MEDIA_TOKEN_WINDOW + 2
-    ) * MEDIA_TOKEN_WINDOW
-    return {
-        "token": f"{exp}.{_media_signature(exp)}",
-        "expires_at": exp,
-    }
-
-
-def _media_token_valid(token: str) -> bool:
-    exp_raw, _, sig = token.partition(".")
-    try:
-        exp = int(exp_raw)
-    except ValueError:
-        return False
-    if exp <= time.time():
-        return False
-    return secrets.compare_digest(sig, _media_signature(exp))
-
-
-def _request_authorized(request: Request) -> bool:
-    if not CLIPFLOW_API_KEY:
-        return False
-
-    supplied = request.headers.get(API_KEY_HEADER, "")
-    if supplied and secrets.compare_digest(
-        supplied.encode(), CLIPFLOW_API_KEY.encode()
-    ):
+def _path_owned(user: dict, path: str) -> bool:
+    m = JOB_PATH_RE.match(path)
+    w = WATERMARK_PATH_RE.match(path)
+    if not m and not w:
         return True
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            if m:
+                job_id, candidate_id = m.groups()
+                cur.execute("SELECT 1 FROM jobs WHERE id = %s AND user_id = %s", (job_id, user["id"]))
+                if not cur.fetchone():
+                    return False
+                if candidate_id:
+                    cur.execute(
+                        "SELECT 1 FROM clip_candidates WHERE id::text = %s AND job_id = %s",
+                        (candidate_id, job_id),
+                    )
+                    return bool(cur.fetchone())
+                return True
+            cur.execute(
+                "SELECT 1 FROM watermark_assets WHERE id::text = %s AND user_id = %s",
+                (w.group(1), user["id"]),
+            )
+            return bool(cur.fetchone())
 
-    token = request.query_params.get(MEDIA_TOKEN_PARAM, "")
-    return bool(
-        token
-        and request.method in ("GET", "HEAD")
-        and MEDIA_PATH_RE.match(request.url.path)
-        and _media_token_valid(token)
-    )
+
+def _resolve_principal(request: Request) -> Optional[dict]:
+    with get_db() as conn:
+        token = request.cookies.get(auth.SESSION_COOKIE, "")
+        if token:
+            user = auth.session_user(conn, token)
+            if user:
+                user["via"] = "session"
+                return user
+
+        supplied = request.headers.get(API_KEY_HEADER, "")
+        if (
+            supplied
+            and CLIPFLOW_API_KEY
+            and secrets.compare_digest(supplied.encode(), CLIPFLOW_API_KEY.encode())
+        ):
+            user = auth.bootstrap_admin(conn)
+            if user:
+                user["via"] = "api_key"
+                return user
+
+        mt = request.query_params.get(MEDIA_TOKEN_PARAM, "")
+        if (
+            mt
+            and request.method in ("GET", "HEAD")
+            and MEDIA_PATH_RE.match(request.url.path)
+        ):
+            uid = auth.media_token_user_id(conn, mt)
+            user = auth.active_user(conn, uid) if uid else None
+            if user:
+                user["via"] = "media_token"
+                return user
+    return None
+
+
+def _origin_allowed(request: Request) -> bool:
+    origin = request.headers.get("origin")
+    if not origin:
+        return True
+    origin = origin.rstrip("/")
+    host = request.headers.get("host", "")
+    if urlsplit(origin).netloc == host:
+        return True
+    return origin in cors_allowed_origins()
 
 
 @app.middleware("http")
-async def require_api_key(request: Request, call_next):
+async def require_user(request: Request, call_next):
     path = request.url.path
-    if (
-        (path == "/api" or path.startswith("/api/"))
-        and not _request_authorized(request)
-    ):
-        return JSONResponse(
-            {"detail": "Unauthorized"},
-            status_code=401,
-        )
+    request.state.user = None
+    if (path == "/api" or path.startswith("/api/")) and path not in OPEN_API_PATHS:
+        try:
+            user = await run_in_threadpool(_resolve_principal, request)
+        except Exception:
+            print("[auth] principal lookup failed:", traceback.format_exc())
+            user = None
+        if not user:
+            return JSONResponse({"detail": "Unauthorized"}, status_code=401)
+        if (
+            user["via"] == "session"
+            and request.method not in SAFE_METHODS
+            and not _origin_allowed(request)
+        ):
+            return JSONResponse({"detail": "Cross-origin request refused"}, status_code=403)
+        try:
+            owned = await run_in_threadpool(_path_owned, user, path)
+        except Exception:
+            print("[auth] ownership check failed:", traceback.format_exc())
+            owned = False
+        if not owned:
+            return JSONResponse({"detail": "Not found"}, status_code=404)
+        request.state.user = user
     return await call_next(request)
 
 
+def current_user(request: Request) -> dict:
+    user = getattr(request.state, "user", None)
+    if not user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    return user
+
+
+def require_admin(request: Request) -> dict:
+    user = current_user(request)
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admins only")
+    return user
+
+
 # CORS: explicit origin list from env CORS_ALLOWED_ORIGINS (comma
-# separated), never "*". No credentials: auth is a header, not a
-# cookie. Added AFTER the auth middleware so it wraps it: preflights
-# are answered here and 401s still carry CORS headers.
+# separated), never "*". No credentials: cross-origin callers use a
+# header token; the session cookie is same-origin only. Added AFTER the
+# auth middleware so it wraps it: preflights are answered here and 401s
+# still carry CORS headers.
 def cors_allowed_origins() -> list[str]:
     origins = [
         o.strip().rstrip("/")
@@ -276,6 +333,24 @@ def ensure_schema():
         # 109 (P1): content-safety pass {flags:[{rule, quote, reason}], checked_at,
         # provider, model, text_hash, dismissed}; warning only (worker writes it).
         "ALTER TABLE clip_candidates ADD COLUMN IF NOT EXISTS safety_check JSONB",
+        # P1.5: users, DB sessions, login failures, server secrets (app/auth.py).
+        *auth.SCHEMA,
+        # P1.5 ownership: every user-owned table carries user_id (candidates via their job).
+        # Legacy rows are assigned to the bootstrap admin at startup, then NOT NULL.
+        "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS user_id TEXT REFERENCES users(id)",
+        "CREATE INDEX IF NOT EXISTS idx_jobs_user ON jobs (user_id, created_at DESC)",
+        "ALTER TABLE watermark_assets ADD COLUMN IF NOT EXISTS user_id TEXT REFERENCES users(id)",
+        "CREATE INDEX IF NOT EXISTS idx_watermark_assets_user ON watermark_assets (user_id)",
+        # P1.5 part 3: per-user values for USER_SETTING_KEYS (shared/settings.py).
+        """
+        CREATE TABLE IF NOT EXISTS user_settings (
+            user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            key TEXT NOT NULL,
+            value TEXT,
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            PRIMARY KEY (user_id, key)
+        )
+        """,
     ]
 
     try:
@@ -298,6 +373,59 @@ def ensure_schema():
             "[backend] ensure_schema fatal error:",
             traceback.format_exc(),
         )
+
+    try:
+        with get_db() as conn:
+            admin_id = auth.ensure_bootstrap_admin(conn)
+            if admin_id:
+                assign_legacy_rows(conn, admin_id)
+    except Exception:
+        print("[auth] bootstrap admin failed:", traceback.format_exc())
+
+
+OWNED_TABLES = ("jobs", "watermark_assets")
+
+
+def assign_legacy_rows(conn, admin_id: str) -> None:
+    """P1.5 first run: rows from before accounts belong to the bootstrap admin."""
+    for table in OWNED_TABLES:
+        with conn.cursor() as cur:
+            cur.execute(f"UPDATE {table} SET user_id = %s WHERE user_id IS NULL", (admin_id,))
+            if cur.rowcount:
+                print(f"[auth] {cur.rowcount} legacy {table} rows assigned to the bootstrap admin")
+            cur.execute(f"ALTER TABLE {table} ALTER COLUMN user_id SET NOT NULL")
+        conn.commit()
+    # Part 3: user-only settings (they name an owned row) move from the global
+    # app_settings to the bootstrap admin, whose asset they point at.
+    with conn.cursor() as cur:
+        for key in USER_ONLY_KEYS:
+            cur.execute(
+                """
+                INSERT INTO user_settings (user_id, key, value)
+                SELECT %s, key, value FROM app_settings WHERE key = %s AND COALESCE(value, '') <> ''
+                ON CONFLICT (user_id, key) DO NOTHING
+                """,
+                (admin_id, key),
+            )
+            cur.execute("DELETE FROM app_settings WHERE key = %s", (key,))
+            if cur.rowcount:
+                print(f"[auth] global {key} moved to the bootstrap admin's user settings")
+    conn.commit()
+
+
+def set_user_setting(cur, user_id: str, key: str, value: Optional[str]) -> None:
+    """Empty/None = unset (falls back to the global value, or none for USER_ONLY_KEYS)."""
+    if value is None or str(value).strip() == "":
+        cur.execute("DELETE FROM user_settings WHERE user_id = %s AND key = %s", (user_id, key))
+        return
+    cur.execute(
+        """
+        INSERT INTO user_settings (user_id, key, value, updated_at)
+        VALUES (%s, %s, %s, NOW())
+        ON CONFLICT (user_id, key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()
+        """,
+        (user_id, key, str(value)),
+    )
 
 
 # ============================================================
@@ -651,18 +779,116 @@ def health():
 
 
 @app.get("/api/media-token")
-def media_token():
-    """Read-only token for <img>/<video> src URLs (see AUTH above)."""
-    return issue_media_token()
+def media_token(request: Request):
+    """Read-only per-user token for <img>/<video> src URLs (see AUTH above)."""
+    user = current_user(request)
+    with get_db() as conn:
+        return auth.issue_media_token(conn, user["id"])
+
+
+# ---------- accounts (P1.5) ----------
+
+class LoginRequest(BaseModel):
+    username: str = Field(max_length=64)
+    password: str = Field(max_length=256)
+
+
+class PasswordChange(BaseModel):
+    current_password: str = Field(max_length=256)
+    new_password: str = Field(max_length=256)
+
+
+def client_ip(request: Request) -> Optional[str]:
+    # nginx is the only way in from outside (backend binds 127.0.0.1 + the compose net).
+    fwd = request.headers.get("x-real-ip") or request.headers.get("x-forwarded-for", "")
+    ip = fwd.split(",")[0].strip() if fwd else ""
+    return ip or (request.client.host if request.client else None)
+
+
+def _set_session_cookie(request: Request, response: JSONResponse, token: str) -> None:
+    secure = (
+        request.headers.get("x-forwarded-proto", request.url.scheme) == "https"
+    )
+    response.set_cookie(
+        auth.SESSION_COOKIE,
+        token,
+        max_age=auth.SESSION_TTL_DAYS * 86400,
+        httponly=True,
+        samesite="lax",
+        secure=secure,
+        path="/",
+    )
+
+
+@app.post("/api/auth/login")
+def login(payload: LoginRequest, request: Request):
+    username = payload.username.strip().lower()
+    ip = client_ip(request)
+    with get_db() as conn:
+        if auth.login_blocked(conn, username, ip):
+            raise HTTPException(
+                status_code=429,
+                detail="Too many failed logins. Try again in 15 minutes.",
+                headers={"Retry-After": str(auth.LOGIN_WINDOW_MINUTES * 60)},
+            )
+        user = auth.authenticate(conn, username, payload.password)
+        if not user:
+            auth.record_login_failure(conn, username, ip)
+            conn.commit()
+            raise HTTPException(status_code=401, detail="Wrong username or password")
+        auth.clear_login_failures(conn, username)
+        token = auth.create_session(conn, user["id"], ip, request.headers.get("user-agent"))
+        conn.commit()
+    response = JSONResponse({"user": user})
+    _set_session_cookie(request, response, token)
+    return response
+
+
+@app.post("/api/auth/logout")
+def logout(request: Request):
+    token = request.cookies.get(auth.SESSION_COOKIE, "")
+    if token:
+        with get_db() as conn:
+            auth.delete_session(conn, token)
+            conn.commit()
+    response = JSONResponse({"ok": True})
+    response.delete_cookie(auth.SESSION_COOKIE, path="/")
+    return response
+
+
+@app.get("/api/auth/me")
+def auth_me(request: Request):
+    user = current_user(request)
+    return {"user": {k: user[k] for k in ("id", "username", "role")}, "via": user["via"]}
+
+
+@app.post("/api/auth/password")
+def change_password(payload: PasswordChange, request: Request):
+    user = current_user(request)
+    problem = auth.password_problem(payload.new_password)
+    if problem:
+        raise HTTPException(status_code=400, detail=problem)
+    with get_db() as conn:
+        if not auth.authenticate(conn, user["username"], payload.current_password):
+            raise HTTPException(status_code=400, detail="Current password is wrong")
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE users SET password_hash=%s, password_changed_at=NOW() WHERE id=%s",
+                (auth.hash_password(payload.new_password), user["id"]),
+            )
+        # Every other session of this user ends; this browser stays logged in.
+        auth.delete_user_sessions(conn, user["id"], keep_token=request.cookies.get(auth.SESSION_COOKIE))
+        conn.commit()
+    return {"ok": True}
 
 
 # ============================================================
 # CREATE JOB
 # ============================================================
 
-def percent_setting(key: str, fallback: float, lo: float, hi: float) -> float:
+def percent_setting(key: str, fallback: float, lo: float, hi: float, user_id: Optional[str] = None) -> float:
     try:
-        value = float(runtime_setting(key))
+        value = float(runtime_setting(key, user_id=user_id))
     except (TypeError, ValueError):
         value = fallback
     return max(lo, min(hi, value))
@@ -690,7 +916,8 @@ def get_disk_status():
 
 
 @app.post("/api/jobs")
-def create_job(req: ClipRequest):
+def create_job(req: ClipRequest, request: Request):
+    user = current_user(request)
 
     if req.platform not in SUPPORTED_PLATFORMS:
         raise HTTPException(
@@ -747,13 +974,13 @@ def create_job(req: ClipRequest):
     style = normalize_subtitle_style(
         req.subtitle_style
         if "subtitle_style" in sent
-        else {"style": runtime_setting("DEFAULT_SUBTITLE_STYLE")},
+        else {"style": runtime_setting("DEFAULT_SUBTITLE_STYLE", user_id=user["id"])},
         req.subtitle_font
         if "subtitle_font" in sent
-        else runtime_setting("DEFAULT_SUBTITLE_FONT"),
+        else runtime_setting("DEFAULT_SUBTITLE_FONT", user_id=user["id"]),
         req.subtitle_size
         if "subtitle_size" in sent
-        else _settings.get_int("DEFAULT_SUBTITLE_SIZE"),
+        else _settings.get_int("DEFAULT_SUBTITLE_SIZE", user_id=user["id"]),
         req.subtitle_animation,
     )
 
@@ -813,7 +1040,8 @@ def create_job(req: ClipRequest):
                         watermark_asset_id,
                         watermark_width,
                         watermark_opacity,
-                        watermark_failure
+                        watermark_failure,
+                        user_id
                     )
                     VALUES (
                         %s,
@@ -826,6 +1054,7 @@ def create_job(req: ClipRequest):
                         %s,
                         %s,
                         %s::jsonb,
+                        %s,
                         %s,
                         %s,
                         %s,
@@ -857,8 +1086,8 @@ def create_job(req: ClipRequest):
                         # worker never places it above 16 % anyway (078).
                         min(85.0, max(16.0, float(wm["position_y"])))
                         if wm.get("position_y") is not None
-                        else percent_setting("WATERMARK_POSITION_Y", 25.0, 16, 85),
-                        percent_setting("SUBTITLE_SEAM_GAP", 1.5, 0, 20),
+                        else percent_setting("WATERMARK_POSITION_Y", 25.0, 16, 85, user["id"]),
+                        percent_setting("SUBTITLE_SEAM_GAP", 1.5, 0, 20, user["id"]),
                         req.language,
                         req.language_fallback,
                         req.campaign,
@@ -866,6 +1095,7 @@ def create_job(req: ClipRequest):
                         wm.get("width"),
                         wm.get("opacity"),
                         wm.get("failure"),
+                        user["id"],
                     ),
                 )
 
@@ -924,22 +1154,27 @@ JOB_RUNNING = (
 
 
 @app.get("/api/activity")
-def list_activity():
+def list_activity(request: Request):
+    # P1.5: own tasks only; admin sees everyone's (rows of other users carry "owner").
+    user = current_user(request)
+    see_all = user["role"] == "admin"
     items = []
     with get_db() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """
                 SELECT j.id, j.status, j.progress, j.message,
-                       COALESCE(NULLIF(j.custom_title, ''), sv.title), j.updated_at
+                       COALESCE(NULLIF(j.custom_title, ''), sv.title), j.updated_at,
+                       NULLIF(u.username, %s)
                 FROM jobs j LEFT JOIN source_videos sv ON sv.id = j.source_video_id
-                WHERE j.status = ANY(%s)
+                JOIN users u ON u.id = j.user_id
+                WHERE j.status = ANY(%s) AND (%s OR j.user_id = %s)
                 ORDER BY j.created_at
                 """,
-                (list(JOB_RUNNING),),
+                (user["username"], list(JOB_RUNNING), see_all, user["id"]),
             )
-            for jid, status, progress, message, title, upd in cur.fetchall():
-                items.append({
+            for jid, status, progress, message, title, upd, owner in cur.fetchall():
+                items.append({"owner": owner,
                     "kind": "job", "id": str(jid), "job_id": str(jid), "candidate_id": None,
                     "stage": status, "percent": int(progress or 0), "label": message or status,
                     "title": title, "updated_at": upd.isoformat() if upd else None,
@@ -949,16 +1184,18 @@ def list_activity():
                 SELECT c.id, c.job_id, c.status, c.progress, c.message,
                        c.submagic_status,
                        COALESCE(NULLIF(c.manual_title, ''), NULLIF(c.title, ''), c.ai_title),
-                       c.updated_at
+                       c.updated_at, NULLIF(u.username, %s)
                 FROM clip_candidates c JOIN jobs j ON j.id = c.job_id
+                JOIN users u ON u.id = j.user_id
                 WHERE (c.status = ANY(%s) OR c.submagic_status = ANY(%s))
                   AND j.status IS DISTINCT FROM 'cancelled'
+                  AND (%s OR j.user_id = %s)
                 ORDER BY c.updated_at
                 """,
-                (list(CANDIDATE_BUSY), list(SUBMAGIC_BUSY)),
+                (user["username"], list(CANDIDATE_BUSY), list(SUBMAGIC_BUSY), see_all, user["id"]),
             )
-            for cid, jid, status, progress, message, sm, title, upd in cur.fetchall():
-                base = {"id": str(cid), "job_id": str(jid), "candidate_id": str(cid),
+            for cid, jid, status, progress, message, sm, title, upd, owner in cur.fetchall():
+                base = {"owner": owner, "id": str(cid), "job_id": str(jid), "candidate_id": str(cid),
                         "title": title, "updated_at": upd.isoformat() if upd else None}
                 if status in CANDIDATE_BUSY:
                     items.append({**base, "kind": "candidate", "stage": status,
@@ -973,8 +1210,10 @@ def list_activity():
 
 @app.get("/api/jobs")
 def list_jobs(
+    request: Request,
     scope: str = "current",
 ):
+    user = current_user(request)
 
     try:
 
@@ -1062,11 +1301,11 @@ def list_jobs(
                     FROM jobs j
                     LEFT JOIN source_videos sv
                         ON sv.id = j.source_video_id
-                    WHERE {status_filter}
+                    WHERE {status_filter} AND j.user_id = %s
                     ORDER BY j.created_at DESC
                     """
 
-                cur.execute(query)
+                cur.execute(query, (user["id"],))
 
                 rows = cur.fetchall()
 
@@ -1947,15 +2186,24 @@ def _load_app_settings() -> dict:
             return {row[0]: row[1] for row in cur.fetchall()}
 
 
+def _load_user_settings(user_id: str) -> dict:
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT key, value FROM user_settings WHERE user_id = %s", (user_id,))
+            return {row[0]: row[1] for row in cur.fetchall()}
+
+
 _settings = RuntimeSettings(
     _load_app_settings,
     log=lambda msg: print("[backend]", msg),
+    user_loader=_load_user_settings,
 )
 
 
 def runtime_setting(
     key: str,
     fallback: str | None = None,
+    user_id: str | None = None,
 ) -> str | None:
     """
     Same rule as the worker's setting(): app_settings (DB) wins,
@@ -1963,7 +2211,8 @@ def runtime_setting(
     /api/settings invalidates it. Env-only keys (CLIPFLOW_API_KEY)
     never come from the DB.
     """
-    return _settings.get(key, fallback)
+    # P1.5: pass user_id for USER_SETTING_KEYS (user → global → default).
+    return _settings.get(key, fallback, user_id)
 
 
 # Every AI call goes through shared/ai/router.py (R-20).
@@ -2190,7 +2439,10 @@ def campaign_watermark_snapshot(rules) -> dict:
             with conn.cursor() as cur:
                 if preset["asset_id"]:
                     cur.execute(
-                        "SELECT id FROM watermark_assets WHERE id::text = %s",
+                        # Campaigns are a shared, admin-managed catalogue (P1.5):
+                        # their watermark is an admin's asset, never a member's.
+                        "SELECT id FROM watermark_assets WHERE id::text = %s"
+                        " AND user_id IN (SELECT id FROM users WHERE role = 'admin')",
                         (str(preset["asset_id"]),),
                     )
                     row = cur.fetchone()
@@ -2199,6 +2451,7 @@ def campaign_watermark_snapshot(rules) -> dict:
                     cur.execute(
                         "SELECT id FROM watermark_assets WHERE lower(regexp_replace("
                         "filename, '\\.[^.]+$', '')) = lower(%s) "
+                        "AND user_id IN (SELECT id FROM users WHERE role = 'admin') "
                         "ORDER BY created_at DESC LIMIT 1",
                         (preset["asset_name"],),
                     )
@@ -2387,7 +2640,8 @@ def fix_subtitle_ai(job_id: str, candidate_id: str):
 @app.post(
     "/api/jobs/{job_id}/candidates/{candidate_id}/generate-description"
 )
-def generate_description(job_id: str, candidate_id: str):
+def generate_description(job_id: str, candidate_id: str, request: Request):
+    owner_id = current_user(request)["id"]
 
     try:
 
@@ -2423,7 +2677,7 @@ def generate_description(job_id: str, candidate_id: str):
         subtitle = (row[4] or row[5] or "")[:1500]
         platform = row[6] or "youtube_shorts"
 
-        hashtags = runtime_setting("HASHTAGS", "") or ""
+        hashtags = runtime_setting("HASHTAGS", "", user_id=owner_id) or ""
         campaign = runtime_setting("CAMPAIGN_NAME", "") or ""
 
         lang = job_language_of(job_id)
@@ -2827,11 +3081,12 @@ WATERMARK_UPLOAD_MAX_BYTES = 5 * 1024 * 1024
 
 
 @app.get("/api/assets/watermarks")
-def list_watermark_assets():
+def list_watermark_assets(request: Request):
+    user = current_user(request)
 
     try:
 
-        active_id = runtime_setting("ACTIVE_WATERMARK_ID") or ""
+        active_id = runtime_setting("ACTIVE_WATERMARK_ID", user_id=user["id"]) or ""
 
         with get_db() as conn:
             with conn.cursor() as cur:
@@ -2839,8 +3094,10 @@ def list_watermark_assets():
                     """
                     SELECT id, filename, width, height, created_at
                     FROM watermark_assets
+                    WHERE user_id = %s
                     ORDER BY created_at DESC
-                    """
+                    """,
+                    (user["id"],),
                 )
                 rows = cur.fetchall()
 
@@ -2864,7 +3121,8 @@ def list_watermark_assets():
 
 
 @app.post("/api/assets/watermarks")
-async def upload_watermark_asset(file: UploadFile = File(...)):
+async def upload_watermark_asset(request: Request, file: UploadFile = File(...)):
+    user = current_user(request)
 
     try:
 
@@ -2902,8 +3160,8 @@ async def upload_watermark_asset(file: UploadFile = File(...)):
                 cur.execute(
                     """
                     INSERT INTO watermark_assets
-                        (id, filename, path, width, height)
-                    VALUES (%s, %s, %s, %s, %s)
+                        (id, filename, path, width, height, user_id)
+                    VALUES (%s, %s, %s, %s, %s, %s)
                     """,
                     (
                         asset_id,
@@ -2911,6 +3169,7 @@ async def upload_watermark_asset(file: UploadFile = File(...)):
                         str(out_path.relative_to(DATA_ROOT)),
                         width,
                         height,
+                        user["id"],
                     ),
                 )
 
@@ -2918,21 +3177,13 @@ async def upload_watermark_asset(file: UploadFile = File(...)):
                 # — otherwise uploading would silently do nothing until
                 # the user also remembers to activate it.
                 cur.execute(
-                    "SELECT COUNT(*) FROM watermark_assets"
+                    "SELECT COUNT(*) FROM watermark_assets WHERE user_id = %s",
+                    (user["id"],),
                 )
                 count = cur.fetchone()[0]
 
                 if count == 1:
-                    cur.execute(
-                        """
-                        INSERT INTO app_settings (key, value, updated_at)
-                        VALUES ('ACTIVE_WATERMARK_ID', %s, NOW())
-                        ON CONFLICT (key) DO UPDATE SET
-                            value = EXCLUDED.value,
-                            updated_at = NOW()
-                        """,
-                        (asset_id,),
-                    )
+                    set_user_setting(cur, user["id"], "ACTIVE_WATERMARK_ID", asset_id)
 
             conn.commit()
 
@@ -2952,7 +3203,8 @@ async def upload_watermark_asset(file: UploadFile = File(...)):
 
 
 @app.post("/api/assets/watermarks/{asset_id}/activate")
-def activate_watermark_asset(asset_id: str):
+def activate_watermark_asset(asset_id: str, request: Request):
+    user = current_user(request)
 
     try:
 
@@ -2967,19 +3219,11 @@ def activate_watermark_asset(asset_id: str):
                         status_code=404, detail="Watermark asset not found"
                     )
 
-                cur.execute(
-                    """
-                    INSERT INTO app_settings (key, value, updated_at)
-                    VALUES ('ACTIVE_WATERMARK_ID', %s, NOW())
-                    ON CONFLICT (key) DO UPDATE SET
-                        value = EXCLUDED.value,
-                        updated_at = NOW()
-                    """,
-                    (asset_id,),
-                )
+                set_user_setting(cur, user["id"], "ACTIVE_WATERMARK_ID", asset_id)
 
             conn.commit()
 
+        _settings.invalidate()
         return {"status": "ok", "active_id": asset_id}
 
     except HTTPException:
@@ -2990,7 +3234,8 @@ def activate_watermark_asset(asset_id: str):
 
 
 @app.delete("/api/assets/watermarks/{asset_id}")
-def delete_watermark_asset(asset_id: str):
+def delete_watermark_asset(asset_id: str, request: Request):
+    user = current_user(request)
 
     try:
 
@@ -3012,20 +3257,13 @@ def delete_watermark_asset(asset_id: str):
                     (asset_id,),
                 )
 
-                active_id = runtime_setting("ACTIVE_WATERMARK_ID") or ""
+                active_id = runtime_setting("ACTIVE_WATERMARK_ID", user_id=user["id"]) or ""
                 if active_id == asset_id:
-                    cur.execute(
-                        """
-                        INSERT INTO app_settings (key, value, updated_at)
-                        VALUES ('ACTIVE_WATERMARK_ID', '', NOW())
-                        ON CONFLICT (key) DO UPDATE SET
-                            value = EXCLUDED.value,
-                            updated_at = NOW()
-                        """
-                    )
+                    set_user_setting(cur, user["id"], "ACTIVE_WATERMARK_ID", None)
 
             conn.commit()
 
+        _settings.invalidate()
         try:
             (DATA_ROOT / row[0]).unlink(missing_ok=True)
         except Exception:
@@ -3835,26 +4073,36 @@ def get_candidate_thumbnail(
 # ============================================================
 
 @app.get("/api/settings")
-def get_settings():
+def get_settings(request: Request):
+    # P1.5: members get only the user-level keys (their own effective
+    # values); admins get everything. scope = user|global tells the UI
+    # where a save goes (user_settings vs app_settings).
+    user = current_user(request)
+    is_admin = user["role"] == "admin"
     try:
-        # Effective value (DB -> env -> default), i.e. what the
-        # worker will actually use, plus where it came from.
+        # Effective value (user -> DB -> env -> default), i.e. what the
+        # worker will actually use for this user's jobs, plus its source.
         _settings.invalidate()
         result = {}
 
         for key in DEFAULT_SETTINGS:
-            value, source = _settings.resolve(key)
+            scope = "user" if key in USER_SETTING_KEYS else "global"
+            if scope == "global" and not is_admin:
+                continue
+            value, source = _settings.resolve(key, user_id=user["id"])
             if key in SECRET_SETTING_KEYS and value:
                 result[key] = {
                     "value": "••••••••",
                     "configured": True,
                     "source": source,
+                    "scope": scope,
                 }
             else:
                 result[key] = {
                     "value": value,
                     "configured": bool(value),
                     "source": source,
+                    "scope": scope,
                 }
 
         return result
@@ -3915,13 +4163,30 @@ def validate_hooks_windows(values: dict):
 
 
 @app.put("/api/settings")
-def update_settings(req: SettingsUpdate):
+def update_settings(req: SettingsUpdate, request: Request):
+    user = current_user(request)
     unknown = [k for k in req.values if k not in DEFAULT_SETTINGS]
     if unknown:
         raise HTTPException(
             status_code=400,
             detail=f"Unknown setting key(s): {unknown}",
         )
+    global_keys = [k for k in req.values if k not in USER_SETTING_KEYS]
+    if global_keys and user["role"] != "admin":
+        # P1.5: global settings (AI keys, Whisper, disk, …) are admin-only.
+        raise HTTPException(
+            status_code=403,
+            detail=f"Only an admin can change global settings: {global_keys}",
+        )
+    if "ACTIVE_WATERMARK_ID" in req.values and str(req.values["ACTIVE_WATERMARK_ID"] or "").strip():
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT 1 FROM watermark_assets WHERE id::text = %s AND user_id = %s",
+                    (str(req.values["ACTIVE_WATERMARK_ID"]).strip(), user["id"]),
+                )
+                if not cur.fetchone():
+                    raise HTTPException(status_code=404, detail="Watermark asset not found")
 
     validate_hooks_windows(req.values)
     validate_watermark_height(req.values)
@@ -3931,6 +4196,10 @@ def update_settings(req: SettingsUpdate):
             with conn.cursor() as cur:
                 for key, value in req.values.items():
                     if value == "••••••••":
+                        continue
+                    if key in USER_SETTING_KEYS:
+                        # The caller's own value (admin too); "" = back to the global default.
+                        set_user_setting(cur, user["id"], key, value)
                         continue
                     cur.execute(
                         """
