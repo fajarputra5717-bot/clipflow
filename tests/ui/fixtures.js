@@ -73,6 +73,15 @@ async function mockApi(page, api) {
       if (body?.current_password !== "temporary pass1") return json({ detail: "Current password is wrong" }, 400);
       api.mustChange = false; return json({ ok: true });
     }
+    if (path === "/api/publish-queue" && method === "GET") return json({ groups: api.publishGroups || [] });
+    if (path === "/api/posts" && method === "POST") {
+      const row = (api.publishGroups || []).flatMap((g) => g.rows).find((r) => r.candidate_id === body.candidate_id && r.platform === body.platform);
+      const acc = (api.accounts || []).find((a) => a.id === body.account_id);
+      const post = { id: "post-1", candidate_id: body.candidate_id, platform: body.platform, account_id: body.account_id, account_handle: acc?.handle,
+        status: body.status, url: body.url, posted_at: iso(0) };
+      if (row) row.post = post;
+      return json(post);
+    }
     if (path === "/api/accounts" && method === "GET") return json({ accounts: api.accounts || [], platforms: [
       { slug: "facebook", name: "Facebook Reels" }, { slug: "instagram", name: "Instagram Reels" }, { slug: "youtube", name: "YouTube Shorts" }, { slug: "tiktok", name: "TikTok" }] });
     if (path === "/api/accounts" && method === "POST") {

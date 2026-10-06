@@ -9,6 +9,8 @@ Money: paid_rp is whole Rupiah (IDR). Payout amounts are computed by Lane B's
 shared/payouts.py once it is merged (P3); nothing here does payout math.
 """
 
+import re as _re
+import unicodedata as _ud
 from urllib.parse import urlsplit
 
 STATUSES = ("planned", "posted", "claimed", "paid", "dropped")
@@ -81,3 +83,54 @@ def rp_problem(value) -> str | None:
     if v < 0 or v > 1_000_000_000:
         return "Amount must be between Rp 0 and Rp 1.000.000.000"
     return None
+
+
+# ---------- Publish queue (P2 part 3, 130) ----------
+
+
+# Caption (post text) and title limits per platform, characters. Lane B's research doc
+# (docs/research/publishing-apis.md) is the source when it lands; these are the
+# platforms' published maxima as of 2026-10.
+CAPTION_LIMITS = {"tiktok": 2200, "instagram": 2200, "youtube": 5000, "facebook": 2200, "threads": 500, "x": 280}
+TITLE_LIMITS = {"youtube": 100}
+
+# jobs.platform (Analyze form) → PLATFORM_LIMITS key, for clips without a campaign.
+JOB_PLATFORM = {"youtube_shorts": "youtube", "instagram_reels": "instagram", "tiktok": "tiktok"}
+
+
+def trim_caption(body: str, hashtags: list, limit: int) -> tuple[str, bool]:
+    """Caption = body, blank line, hashtags in their exact order. When it is too long,
+    the BODY is shortened (word boundary, "…"); hashtags are never cut or reordered.
+    Returns (caption, trimmed)."""
+    tags = " ".join(hashtags or [])
+    body = (body or "").strip()
+    sep = "\n\n" if body and tags else ""
+    full = f"{body}{sep}{tags}"
+    if len(full) <= limit:
+        return full, False
+    room = limit - len(tags) - len(sep) - 1  # 1 for "…"
+    if room <= 0:
+        return tags[:limit], True
+    cut = body[:room]
+    if " " in cut[room // 2:]:
+        cut = cut[: cut.rfind(" ")]
+    return f"{cut.rstrip(' ,.;:')}…{sep}{tags}", True
+
+
+def trim_title(title: str, platform: str) -> str:
+    limit = TITLE_LIMITS.get(platform)
+    title = (title or "").strip()
+    if limit and len(title) > limit:
+        return title[: limit - 1].rstrip() + "…"
+    return title
+
+
+def slug(text: str, max_len: int = 40) -> str:
+    t = _ud.normalize("NFKD", text or "").encode("ascii", "ignore").decode()
+    t = _re.sub(r"[^a-zA-Z0-9]+", "-", t).strip("-").lower()
+    return (t[:max_len].rstrip("-")) or "clip"
+
+
+def download_name(campaign: str | None, platform: str, title: str) -> str:
+    """campaign_platform_slug.mp4 (no campaign → "clip")."""
+    return f"{slug(campaign or 'clip', 30)}_{platform}_{slug(title)}.mp4"

@@ -1628,6 +1628,76 @@ def _complete_problem(post: dict) -> Optional[str]:
     return None
 
 
+# Publish step (P2 part 3, 130): one row per finished clip × allowed platform (campaign
+# platforms, else the job's Analyze platform), caption = body + campaign hashtags in exact
+# order, trimmed to the platform limit (hashtags never cut), plus that row's latest post.
+@app.get("/api/publish-queue")
+def publish_queue(request: Request):
+    user = current_user(request)
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT c.id, c.job_id, j.campaign, j.platform,
+                       COALESCE(NULLIF(c.manual_title, ''), NULLIF(c.title, ''), c.ai_title),
+                       c.description, c.duration_seconds, c.rendered_at, c.thumbnail_path,
+                       COALESCE(NULLIF(j.custom_title, ''), sv.title)
+                FROM clip_candidates c
+                JOIN jobs j ON j.id = c.job_id
+                LEFT JOIN source_videos sv ON sv.id = j.source_video_id
+                WHERE j.user_id = %s AND c.status = 'completed'
+                  AND COALESCE(c.final_path, '') <> '' AND j.status IS DISTINCT FROM 'cancelled'
+                ORDER BY c.rendered_at DESC NULLS LAST, c.updated_at DESC
+                LIMIT 300
+                """,
+                (user["id"],),
+            )
+            clips = cur.fetchall()
+            ids = [r[0] for r in clips]
+            posts = {}
+            if ids:
+                # Latest post per (clip, platform); a live one wins over a dropped one.
+                cur.execute(
+                    f"""
+                    SELECT DISTINCT ON (p.candidate_id, p.platform) {POST_COLUMNS}
+                    FROM {POST_FROM}
+                    WHERE p.user_id = %s AND p.candidate_id = ANY(%s)
+                    ORDER BY p.candidate_id, p.platform, (p.status = 'dropped'), p.created_at DESC
+                    """,
+                    (user["id"], ids),
+                )
+                for r in cur.fetchall():
+                    d = _post_row(r)
+                    posts[(d["candidate_id"], d["platform"])] = d
+    groups = {}
+    for cid, jid, camp, job_platform, title, desc, dur, rendered_at, thumb, job_title in clips:
+        rules = campaigns.get(camp) if camp else None
+        if rules:
+            plats = [p for p in campaigns.platforms(rules) if p in rule_checks.PLATFORM_LIMITS]
+            tags = campaigns.hashtags(rules)
+            body = campaigns.caption_body(desc) or (title or "")
+        else:
+            plats = [post_rules.JOB_PLATFORM.get(job_platform or "", "youtube")]
+            tags, body = [], (desc or title or "").strip()
+        g = groups.setdefault(camp or "", {
+            "campaign": camp, "campaign_name": campaigns.display_name(rules) if rules else "No campaign", "rows": [],
+        })
+        for plat in plats:
+            caption, trimmed = post_rules.trim_caption(body, tags, post_rules.CAPTION_LIMITS.get(plat, 2200))
+            g["rows"].append({
+                "candidate_id": cid, "job_id": jid, "job_title": job_title,
+                "title": post_rules.trim_title(title or "", plat), "caption": caption,
+                "caption_trimmed": trimmed, "hashtags": tags,
+                "platform": plat, "platform_name": rule_checks.PLATFORM_LIMITS[plat][2],
+                "duration": dur, "rendered_at": rendered_at.isoformat() if rendered_at else None,
+                "has_thumbnail": bool(thumb),
+                "filename": post_rules.download_name(camp, plat, title or ""),
+                "post": posts.get((cid, plat)),
+            })
+    order = sorted(groups.values(), key=lambda g: (g["campaign"] is None, g["campaign_name"].lower()))
+    return {"groups": order}
+
+
 @app.get("/api/posts")
 def list_posts(
     request: Request,
@@ -4622,6 +4692,7 @@ def _serve_candidate_file(
     primary_column: str,
     fallback_column: Optional[str] = None,
     media_type: str = "video/mp4",
+    download_name: Optional[str] = None,
 ):
 
     columns = [primary_column]
@@ -4683,6 +4754,9 @@ def _serve_candidate_file(
                 detail=f"File missing on disk: {path}",
             )
 
+        if download_name:
+            # Publish queue (130): Content-Disposition attachment, campaign_platform_slug.mp4.
+            return FileResponse(path, media_type=media_type, filename=download_name)
         return FileResponse(
             path,
             media_type=media_type,
@@ -4725,13 +4799,33 @@ def get_candidate_preview(
 def get_candidate_render(
     job_id: str,
     candidate_id: str,
+    download: Optional[str] = None,
 ):
+    # ?download=<platform> (Publish queue, 130): same file, saved as campaign_platform_slug.mp4.
+    name = None
+    if download:
+        if download not in rule_checks.PLATFORM_LIMITS:
+            raise HTTPException(status_code=400, detail="Unknown platform")
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT j.campaign, COALESCE(NULLIF(c.manual_title, ''), NULLIF(c.title, ''), c.ai_title)
+                    FROM clip_candidates c JOIN jobs j ON j.id = c.job_id WHERE c.id = %s AND c.job_id = %s
+                    """,
+                    (candidate_id, job_id),
+                )
+                row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Candidate not found")
+        name = post_rules.download_name(row[0], download, row[1] or "")
 
     return _serve_candidate_file(
         job_id,
         candidate_id,
         "final_path",
         fallback_column="render_path",
+        download_name=name,
     )
 
 

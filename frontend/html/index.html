@@ -1053,7 +1053,7 @@ img.topbar-logo-icon{background:none;padding:0;object-fit:cover}
   .version-wrap{display:none}
   body{padding-bottom:calc(64px + env(safe-area-inset-bottom))}
   .tabbar{
-    position:fixed;left:0;right:0;bottom:0;z-index:90;display:grid;grid-template-columns:repeat(4,1fr);
+    position:fixed;left:0;right:0;bottom:0;z-index:90;display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr); /* one row whatever the item count (130: +Publish) */
     padding:4px 4px calc(4px + env(safe-area-inset-bottom));
     background:var(--material);backdrop-filter:var(--material-blur);-webkit-backdrop-filter:var(--material-blur);
     border-top:1px solid var(--hairline);
@@ -1295,6 +1295,40 @@ select::-ms-expand{display:none}
 .acct-meta small{display:block;color:var(--muted);font-size:12px}
 .acct-empty{padding:12px 14px;color:var(--muted);font-size:13px}
 @media (max-width:760px){.account-create{grid-template-columns:1fr}}
+/* Publish step (P2 part 3, 130) = flow-preview step 7 "Publish queue" */
+.spacer{flex:1}
+.qgroup{margin-top:var(--sp-2)}
+.qgroup h3{font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin:0 0 4px}
+.qitem{border-top:1px solid var(--line);padding:10px 0}
+.qrow{display:grid;grid-template-columns:40px minmax(0,1fr) 140px 190px 110px;align-items:center;gap:var(--sp-2)}
+.qthumb{width:40px;height:56px;border-radius:8px;object-fit:cover;background:linear-gradient(160deg,#3a3a3c,#1d1d1f);display:block}
+.qn{min-width:0}
+.qn .qt{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.qn .qc{font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pchip{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600}
+.pchip svg{width:16px;height:16px;flex:none}
+.qwhen b{display:block;font-size:14px;font-weight:600}
+.qwhen small{display:block;color:var(--muted);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.qs{text-align:right}
+.qs .badge{font-size:12px;padding:3px 9px}
+.qactions{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 0 calc(40px + var(--sp-2))}
+.qactions .btn-sm,.qactions button,[data-theme="dark"] .qactions button{min-height:36px;padding:0 12px;border-radius:999px;font-size:13px;display:inline-flex;align-items:center;gap:6px;text-decoration:none;white-space:nowrap}
+.qactions a.btn-sm{background:var(--fill);color:var(--text);font-weight:600}
+.qactions a.btn-sm:hover{background:var(--fill2)}
+.qactions .is-copied{color:var(--badge-good-fg)}
+.qmark{display:flex;flex-wrap:wrap;gap:6px;align-items:flex-end;margin:8px 0 0 calc(40px + var(--sp-2));padding:12px;border-radius:14px;background:var(--panel2)}
+.qmark .field{margin:0;flex:1;min-width:160px}
+.qmark .field label{font-size:12px}
+.qmark button{min-height:var(--hit);border-radius:999px}
+.qmark .account-msg{flex-basis:100%;margin:0}
+.qnote{font-size:12px;color:var(--muted);margin:6px 0 0 calc(40px + var(--sp-2))}
+.publish-empty{padding:var(--sp-3) 0;color:var(--muted)}
+.publish-empty .plain{background:none;border:0;padding:0;min-height:0;color:var(--accent);font:inherit;font-weight:600;cursor:pointer}
+@media (max-width:760px){
+  .qrow{grid-template-columns:40px minmax(0,1fr) auto;row-gap:4px}
+  .qrow .qp{grid-column:2}.qrow .qwhen{grid-column:2/4}.qrow .qs{grid-column:3;grid-row:1}
+  .qactions,.qmark,.qnote{margin-left:0}
+}
 </style>
 </head>
 <body>
@@ -1456,6 +1490,13 @@ select::-ms-expand{display:none}
         <div id="queueJobs" class="view-section"></div>
         <div id="queueDetail" class="view-section hidden"></div>
       </section>
+      <section id="publishSection" class="view-section hidden" aria-labelledby="publishTitle">
+        <div class="panel publish-panel">
+          <div class="section-head"><div><div class="eyebrow">Step 7 · Publish</div><h2 id="publishTitle">Publish queue</h2><p class="muted small">Every platform is its own post with its own status. Download, copy, post it, then mark it posted.</p></div><span class="spacer"></span>
+            <div class="seg" role="group" aria-label="Filter platform" id="publishFilter"></div></div>
+          <div id="publishList" aria-live="polite"></div>
+        </div>
+      </section>
     </main>
   </div>
 </div>
@@ -1479,7 +1520,7 @@ select::-ms-expand{display:none}
   <button class="island-more" id="islandMore" type="button" hidden aria-label="Show all running jobs"></button>
   <span class="sr-only" id="islandLive" role="status" aria-live="polite"></span>
 </div>
-<nav class="tabbar" id="tabbar" aria-label="Main"><button class="tabbar-item" type="button" data-nav="current"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v10.5M8 10.5l4 4 4-4"/><path d="M4.5 15v2.5A2.5 2.5 0 0 0 7 20h10a2.5 2.5 0 0 0 2.5-2.5V15"/></svg><span>Analyze</span></button><button class="tabbar-item" type="button" data-nav="queue"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg><span>Review</span></button><button class="tabbar-item" type="button" data-nav="watermarks" aria-haspopup="dialog"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="3"/><path d="m3.5 15.5 4.5-4.5 4 4"/><path d="M14.5 16h3"/></svg><span>Watermarks</span></button><button class="tabbar-item" type="button" data-nav="settings" aria-haspopup="dialog"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg><span>Settings</span></button></nav>
+<nav class="tabbar" id="tabbar" aria-label="Main"><button class="tabbar-item" type="button" data-nav="current"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v10.5M8 10.5l4 4 4-4"/><path d="M4.5 15v2.5A2.5 2.5 0 0 0 7 20h10a2.5 2.5 0 0 0 2.5-2.5V15"/></svg><span>Analyze</span></button><button class="tabbar-item" type="button" data-nav="queue"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg><span>Review</span></button><button class="tabbar-item" type="button" data-nav="publish"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 3 10 14"/><path d="m21 3-7 18-4-7-7-4z"/></svg><span>Publish</span></button><button class="tabbar-item" type="button" data-nav="watermarks" aria-haspopup="dialog"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="3"/><path d="m3.5 15.5 4.5-4.5 4 4"/><path d="M14.5 16h3"/></svg><span>Watermarks</span></button><button class="tabbar-item" type="button" data-nav="settings" aria-haspopup="dialog"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg><span>Settings</span></button></nav>
 <!-- Sheets (068): Settings and Watermarks open as centred dialogs from the sidebar. Closed = visibility:hidden + pointer-events:none. -->
 <div class="sheet-layer" id="accountSheet" aria-hidden="true">
   <div class="sheet-backdrop" data-sheet-close></div>
@@ -1916,7 +1957,7 @@ async function renameJob(id){
   if(name===null)return;
   try{
     await api(`/api/jobs/${id}`,{method:"PATCH",body:JSON.stringify({custom_title:name.trim()||null})});
-    if(currentTab==="current")await loadCurrentJobs();else await loadQueue();
+    if(currentTab==="current")await loadCurrentJobs();else if(currentTab==="queue")await loadQueue();
   }catch(e){alert("Rename failed: "+e.message)}
 }
 function jobDisplayTitle(j){
@@ -3236,7 +3277,7 @@ async function refreshRunningJobs(){
 function startJobMonitor(){if(jobMonitorTimer)clearInterval(jobMonitorTimer);refreshRunningJobs();jobMonitorTimer=setInterval(refreshRunningJobs,POLL_INTERVAL)}
 function stopJobMonitor(){if(jobMonitorTimer){clearInterval(jobMonitorTimer);jobMonitorTimer=null}}
 
-function syncPageTitle(){const t=$("pageTitle");if(t)t.textContent=editorOpen()?"Editor":currentTab==="queue"?"Review":"Analyze"}
+function syncPageTitle(){const t=$("pageTitle");if(t)t.textContent=editorOpen()?"Editor":currentTab==="queue"?"Review":currentTab==="publish"?"Publish":"Analyze"}
 
 // Switching views while scrolled keeps the large title collapsed and puts the new section's top right
 // under the toolbar (instead of leaving it wherever the old view was scrolled to).
@@ -3244,11 +3285,14 @@ function freezeUnderHeader(){
   if(window.scrollY>TITLE_RANGE)window.scrollTo({top:TITLE_RANGE,behavior:scrollMode()});
 }
 
+const TAB_SECTIONS=[["current","currentSection"],["queue","queueSection"],["publish","publishSection"]];
 async function showTab(tab){
   freezeUnderHeader();
   if(tab===currentTab){
     if(tab==="current"){
       loadCurrentJobs();
+    }else if(tab==="publish"){
+      loadPublish();
     }else{
       loadQueue();
       await refreshRunningJobs();
@@ -3256,9 +3300,10 @@ async function showTab(tab){
     return;
   }
 
-  const forward=tab==="queue";
-  const prev=tab==="current"?$("queueSection"):$("currentSection");
-  const next=tab==="current"?$("currentSection"):$("queueSection");
+  // 130: three views in stepper order; the slide direction follows it.
+  const order=TAB_SECTIONS.map(t=>t[0]),forward=order.indexOf(tab)>order.indexOf(currentTab);
+  const sectionOf=t=>$((TAB_SECTIONS.find(x=>x[0]===t)||TAB_SECTIONS[0])[1]);
+  const prev=sectionOf(currentTab),next=sectionOf(tab);
 
   // Close the running-job overlay on tab switch, but the island itself
   // stays put — it's shown on both Import and Publish now.
@@ -3286,6 +3331,7 @@ async function showTab(tab){
   void next.offsetWidth;
   next.classList.add("switching-in");
 
+  if(tab==="publish"){loadPublish();return}
   if(tab==="current"){
     overlayOpen=false;
     updateJobIsland();
@@ -3476,6 +3522,89 @@ document.addEventListener("click",e=>{
   const rs=e.target.closest("[data-user-reset]");
   if(rs){const f=document.querySelector(`[data-user-reset-form="${css(rs.dataset.userReset)}"]`),open=f.hidden;f.hidden=!open;rs.setAttribute("aria-expanded",String(open));if(open)f.querySelector("input").focus()}
 });
+// ---- Publish step (P2 part 3, 130): /api/publish-queue rows (clip × platform) + clip_posts status ----
+const PLATFORM_ICON={youtube:'<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="4" opacity=".2"/><path d="M10 9v6l5-3z"/></svg>',
+  tiktok:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M14 4v10.5a3.5 3.5 0 1 1-3.5-3.5M14 4c.5 2.5 2.5 4 5 4"/></svg>',
+  instagram:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor"/></svg>',
+  facebook:'<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13.5 21v-7.5h2.6l.4-3h-3V8.6c0-.9.3-1.5 1.5-1.5h1.6V4.4A21 21 0 0 0 14.3 4C12 4 10.5 5.4 10.5 8v2.5H8v3h2.5V21z"/></svg>',
+  threads:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M17 8.5C16 5.5 13.8 4 11.5 4 7.5 4 5 7.2 5 12s2.5 8 6.5 8c3 0 5.5-1.7 5.5-4.5 0-4-6.5-4.5-6.5-1.5 0 1.3 1 2 2.3 2 2.2 0 3.2-2 3.2-5"/></svg>',
+  x:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M5 4l14 16M19 4 5 20"/></svg>'};
+const PLATFORM_SHORT={youtube:"YouTube",instagram:"Reels",tiktok:"TikTok",facebook:"Facebook",threads:"Threads",x:"X"};
+const POST_STATUS={ready:["Ready","idle"],planned:["Planned","idle"],posted:["Posted","completed"],claimed:["Claimed","attention"],paid:["Paid","completed"]};
+let publishGroups=[],publishFilter="all",publishOpen={};
+function publishRowKey(r){return r.candidate_id+":"+r.platform}
+function rowStatus(r){const s=r.post?.status;return !s||s==="dropped"?"ready":s}
+// Copy that works in iOS Safari: the Clipboard API is called synchronously inside the tap (no await before it);
+// older WebKit / insecure origins fall back to a selected off-screen textarea + execCommand("copy").
+function copyText(text){
+  const legacy=()=>{const ta=document.createElement("textarea");ta.value=text;ta.setAttribute("readonly","");
+    ta.style.cssText="position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;font-size:16px";document.body.appendChild(ta);
+    ta.focus({preventScroll:true});ta.select();ta.setSelectionRange(0,text.length);let ok=false;try{ok=document.execCommand("copy")}catch{}ta.remove();return ok};
+  if(navigator.clipboard&&window.isSecureContext){return navigator.clipboard.writeText(text).then(()=>true,()=>legacy())}
+  return Promise.resolve(legacy());
+}
+function flashCopied(btn,ok){const t=btn.dataset.label||btn.textContent;btn.dataset.label=t;btn.textContent=ok?"Copied":"Copy failed";btn.classList.toggle("is-copied",ok);setTimeout(()=>{btn.textContent=t;btn.classList.remove("is-copied")},motionMs(1500)||1200)}
+function fmtPostedAt(iso){if(!iso)return "";const d=new Date(iso);return d.toLocaleDateString(undefined,{day:"numeric",month:"short"})+" · "+d.toLocaleTimeString(undefined,{hour:"2-digit",minute:"2-digit"})}
+function publishRowHtml(r){
+  const st=rowStatus(r),[label,cls]=POST_STATUS[st]||POST_STATUS.ready,k=publishRowKey(r),open=publishOpen[k];
+  const base=`/api/jobs/${encodeURIComponent(r.job_id)}/candidates/${encodeURIComponent(r.candidate_id)}`;
+  const when=st==="ready"?`<b>Not posted</b><small>${esc(r.job_title||"")}</small>`
+    :`<b>${esc(fmtPostedAt(r.post.posted_at)||"—")}</b><small>${r.post.account_handle?"@"+esc(r.post.account_handle):""}${r.post.url?` · <a href="${esc(r.post.url)}" target="_blank" rel="noopener">open post</a>`:""}</small>`;
+  const accts=accountsCache.filter(a=>a.platform===r.platform&&a.active);
+  const form=!open?"":accts.length?`<form class="qmark" data-mark-form="${esc(k)}" novalidate>
+      <div class="field"><label for="acct-${esc(k)}">Account</label><select id="acct-${esc(k)}">${accts.map(a=>`<option value="${esc(a.id)}">@${esc(a.handle)}</option>`).join("")}</select></div>
+      <div class="field"><label for="url-${esc(k)}">Link to the post</label><input id="url-${esc(k)}" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://…"></div>
+      <button class="primary" type="submit">Save</button><button class="secondary" type="button" data-mark-cancel="${esc(k)}">Cancel</button>
+      <div class="account-msg" role="status" aria-live="polite"></div></form>`
+    :`<p class="qnote">No active ${esc(r.platform_name)} account yet. <button class="plain" type="button" data-nav="settings">Add one in Settings → Posting accounts</button></p>`;
+  return `<div class="qitem" data-publish-row="${esc(k)}" data-platform="${esc(r.platform)}">
+    <div class="qrow">
+      ${r.has_thumbnail?`<img class="qthumb" src="${esc(mediaUrl(base+"/thumbnail"))}" alt="" loading="lazy">`:`<span class="qthumb"></span>`}
+      <div class="qn"><div class="qt" title="${esc(r.title)}">${esc(r.title||"Untitled clip")}</div><div class="qc" title="${esc(r.caption)}">${esc(r.caption.replace(/\s+/g," "))}</div></div>
+      <div class="qp"><span class="pchip" title="${esc(r.platform_name)}">${PLATFORM_ICON[r.platform]||""}${esc(PLATFORM_SHORT[r.platform]||r.platform_name)}</span></div>
+      <div class="qwhen">${when}</div>
+      <div class="qs"><span class="badge ${cls}">${label}</span></div>
+    </div>
+    <div class="qactions">
+      <a class="btn-sm" href="${esc(mediaUrl(base+"/render")+(mediaUrl(base+"/render").includes("?")?"&":"?")+"download="+encodeURIComponent(r.platform))}" download="${esc(r.filename)}" data-download>Download</a>
+      <button class="secondary" type="button" data-copy-title="${esc(k)}">Copy title</button>
+      <button class="secondary" type="button" data-copy-caption="${esc(k)}">Copy caption</button>
+      ${st==="ready"?`<button class="secondary" type="button" data-mark-open="${esc(k)}" aria-expanded="${open?"true":"false"}">Mark posted</button>`:""}
+    </div>
+    ${r.caption_trimmed?`<p class="qnote">Caption shortened to fit ${esc(r.platform_name)}; hashtags kept in order.</p>`:""}
+    ${form}
+  </div>`;
+}
+function renderPublish(){
+  const rows=publishGroups.flatMap(g=>g.rows),plats=[...new Set(rows.map(r=>r.platform))];
+  if(publishFilter!=="all"&&!plats.includes(publishFilter))publishFilter="all";
+  $("publishFilter").innerHTML=plats.length>1?[["all","All"],...plats.map(p=>[p,PLATFORM_SHORT[p]||(rows.find(r=>r.platform===p)||{}).platform_name])].map(([id,n])=>`<button type="button" data-publish-filter="${esc(id)}" aria-pressed="${publishFilter===id}">${esc(n)}</button>`).join(""):"";
+  const html=publishGroups.map(g=>{const rs=g.rows.filter(r=>publishFilter==="all"||r.platform===publishFilter);
+    return rs.length?`<div class="qgroup"><h3>${esc(g.campaign_name)}</h3>${rs.map(publishRowHtml).join("")}</div>`:""}).join("");
+  $("publishList").innerHTML=html||`<div class="publish-empty">${rows.length?"No posts for this platform.":`No finished clips yet. Approve a clip in <button class="plain" type="button" data-nav="queue">Review</button>; it lands here once its final render is done.`}</div>`;
+}
+async function loadPublish(){
+  try{const [q]=await Promise.all([api("/api/publish-queue"),accountsCache.length?null:loadAccounts()]);publishGroups=q.groups||[];renderPublish()}
+  catch(err){$("publishList").innerHTML=`<div class="error-box">${esc(err.message)}</div>`}
+}
+function publishRow(k){for(const g of publishGroups)for(const r of g.rows)if(publishRowKey(r)===k)return r;return null}
+document.addEventListener("click",e=>{
+  const f=e.target.closest("[data-publish-filter]");if(f){publishFilter=f.dataset.publishFilter;return renderPublish()}
+  const ct=e.target.closest("[data-copy-title],[data-copy-caption]");
+  if(ct){const r=publishRow(ct.dataset.copyTitle||ct.dataset.copyCaption);if(!r)return;copyText(ct.dataset.copyTitle?r.title:r.caption).then(ok=>flashCopied(ct,ok));return}
+  const mo=e.target.closest("[data-mark-open]");if(mo){publishOpen[mo.dataset.markOpen]=true;renderPublish();document.querySelector(`[data-mark-form="${css(mo.dataset.markOpen)}"] input`)?.focus();return}
+  const mc=e.target.closest("[data-mark-cancel]");if(mc){delete publishOpen[mc.dataset.markCancel];renderPublish();return}
+});
+document.addEventListener("submit",async e=>{
+  const f=e.target.closest?.("[data-mark-form]");if(!f)return;
+  e.preventDefault();
+  const k=f.dataset.markForm,r=publishRow(k),msg=f.querySelector(".account-msg"),url=f.querySelector("input").value.trim(),account_id=f.querySelector("select").value;
+  if(!/^https:\/\//i.test(url)){msg.textContent="Paste the https:// link of the post.";msg.classList.add("is-error");f.querySelector("input").focus();return}
+  const btn=f.querySelector("button[type=submit]");setBusy(btn,true,"Saving…");
+  try{await api("/api/posts",{method:"POST",body:JSON.stringify({candidate_id:r.candidate_id,platform:r.platform,account_id,status:"posted",url})});delete publishOpen[k];await loadPublish()}
+  catch(err){setBusy(btn,false);msg.textContent=err.message;msg.classList.add("is-error")}
+});
+
 // Posting accounts (P2 part 1): the user's own handles per platform; Pause/Resume, two-step Remove.
 function accountsMessage(text,ok){const m=$("accountsMsg");m.textContent=text||"";m.classList.toggle("is-ok",!!ok);m.classList.toggle("is-error",!!text&&!ok)}
 let accountsCache=[],accountPlatforms=[];
@@ -3739,7 +3868,7 @@ let openSheetId=null,sheetOpener=null;
 function selectedNav(){return openSheetId==="settingsSheet"?"settings":openSheetId==="watermarkSheet"?"watermarks":currentTab}
 function syncNav(){
   const sel=selectedNav(),ind=$("navIndicator");
-  document.querySelectorAll("[data-nav]").forEach(b=>{if(b.dataset.nav===sel)b.setAttribute("aria-current",b.dataset.nav==="current"||b.dataset.nav==="queue"?"page":"true");else b.removeAttribute("aria-current")});
+  document.querySelectorAll("[data-nav]").forEach(b=>{if(b.dataset.nav===sel)b.setAttribute("aria-current",b.dataset.nav==="current"||b.dataset.nav==="queue"||b.dataset.nav==="publish"?"page":"true");else b.removeAttribute("aria-current")});
   const item=document.querySelector(`.side-nav [data-nav="${sel}"]`);
   if(ind&&item){ind.style.setProperty("--nav-y",item.offsetTop+"px");ind.style.height=item.offsetHeight+"px";ind.classList.add("ready")}
   else if(ind)ind.classList.remove("ready");
@@ -3760,14 +3889,14 @@ const FLOW_STEPS=[
   {id:"review",label:"Review",sub:"Clips + checks",icon:"eye",nav:"queue"},
   {id:"editor",label:"Editor",sub:"Captions, export",icon:"edit"},
   {id:"schedule",label:"Schedule",sub:"Prime time, your TZ",icon:"cal",phase:"P2"},
-  {id:"publish",label:"Publish",sub:"Per-platform queue",icon:"send",phase:"P2"},
+  {id:"publish",label:"Publish",sub:"Per-platform queue",icon:"send",nav:"publish"},
   {id:"track",label:"Track",sub:"Views → earnings",icon:"chart",phase:"P3"},
 ];
 function editorOpen(){return currentTab==="queue"&&!!document.querySelector("#queueDetail:not(.hidden) .candidate-card.editing")}
 function editorTarget(){return currentTab==="queue"?document.querySelector("#queueDetail:not(.hidden) .candidate-card"):null}
 function renderFlow(){
   const ol=$("flow");if(!ol)return;
-  const active=editorOpen()?"editor":currentTab==="queue"?"review":"analyze",idx=FLOW_STEPS.findIndex(s=>s.id===active);
+  const active=editorOpen()?"editor":currentTab==="queue"?"review":currentTab==="publish"?"publish":"analyze",idx=FLOW_STEPS.findIndex(s=>s.id===active);
   const canEdit=!!editorTarget();
   const html=FLOW_STEPS.map((s,i)=>{
     const off=!!s.phase||(s.id==="editor"&&!canEdit),sub=s.phase?`Coming in ${s.phase}`:s.id==="editor"&&!canEdit?"Open a clip in Review":s.sub;
@@ -3832,7 +3961,7 @@ document.addEventListener("click",e=>{
   }
   const rb=e.target.closest("#refreshView");if(rb){
     if(!REDUCED_MOTION.matches){rb.classList.remove("spinning");void rb.offsetWidth;rb.classList.add("spinning");setTimeout(()=>rb.classList.remove("spinning"),450)}
-    if(currentTab==="current")loadCurrentJobs();else{loadQueue();refreshRunningJobs()}
+    if(currentTab==="current")loadCurrentJobs();else if(currentTab==="publish")loadPublish();else{loadQueue();refreshRunningJobs()}
   }
 });
 window.addEventListener("resize",()=>requestAnimationFrame(syncNav),{passive:true});
