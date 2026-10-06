@@ -2276,7 +2276,11 @@ def list_jobs(
                         j.detected_language,
                         j.language_confidence,
                         j.effective_language,
-                        j.campaign
+                        j.campaign,
+                        -- 135: the card thumbnail = the first clip that has one
+                        (SELECT c.id FROM clip_candidates c
+                         WHERE c.job_id = j.id AND COALESCE(c.thumbnail_path, '') <> ''
+                         ORDER BY c.clip_index NULLS LAST, c.created_at LIMIT 1) AS thumb_candidate_id
                     FROM jobs j
                     LEFT JOIN source_videos sv
                         ON sv.id = j.source_video_id

@@ -24,3 +24,9 @@ test.describe("Job list", () => {
     await expect(app.locator("#candidate-cand-a")).toBeVisible();
   });
 });
+
+test("Review cards show the first clip's thumbnail from thumb_candidate_id (135)", async ({ app, api }) => {
+  api.queue = api.queue.map((j) => ({ ...j, thumb_candidate_id: "cand-a", candidates: undefined }));
+  await app.locator('[data-nav="queue"] >> visible=true').first().click();
+  await expect(app.locator('[data-queue-open="job-done"] .queue-thumb img')).toHaveAttribute("src", /\/api\/jobs\/job-done\/candidates\/cand-a\/thumbnail/);
+});

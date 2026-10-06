@@ -2209,7 +2209,8 @@ function syncCurrentJobs(jobs){
 function campaignTag(j){return j.campaign?`<span class="tag campaign-tag" title="Campaign">${esc(campaignName(j.campaign))}</span>`:""}
 function renderQueueJob(j,i=0){
   const p=pct(j.progress),s=j.status||"completed",busy=isBusy(s),done=isDone(p,s);
-  const c=j.candidates?.[0],thumb=c?mediaUrl(`${API}/api/jobs/${j.id}/candidates/${c.id}/thumbnail`):null;
+  // 135: the list API names the first clip with a thumbnail (it never sends candidates → cards were grey).
+  const tc=j.thumb_candidate_id||j.candidates?.[0]?.id,thumb=tc?mediaUrl(`${API}/api/jobs/${j.id}/candidates/${tc}/thumbnail`):null;
   return `<div class="panel queue-card" data-queue-open="${esc(j.id)}" style="--i:${i}">
     <div class="job-header">
       <div>

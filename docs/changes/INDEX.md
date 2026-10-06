@@ -106,3 +106,4 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 132 · 2026-10-06 · P2 (4): pre-post checks on Publish rows — red = Approve-blocking rules (409), amber = window/cap/length from shared/payouts.py; posting anyway records eligible=false + reason · shared/payouts.py, main.py, index.html
 133 · 2026-10-06 · P2 (5): claim advice per post (payouts.claim_advice), views history + 'as of', Mark claimed stores views + expected Rp, Mark paid shows the difference · main.py, index.html
 134 · 2026-10-06 · Bug: job titles 'AI-Generated Highlight' → YouTube title stored from yt-dlp metadata (+ backfill); short job id · worker.py, index.html
+135 · 2026-10-06 · Bug: Review cards' empty thumbnails → list API returns thumb_candidate_id (first clip with a thumbnail) · main.py, index.html
