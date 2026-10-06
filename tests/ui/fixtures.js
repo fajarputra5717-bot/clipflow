@@ -84,7 +84,7 @@ async function mockApi(page, api) {
       if (!api.telegram?.ready) return json({ detail: "Add your Telegram chat id in Account first" }, 409);
       return json({ id: "tg-1", status: "queued" });
     }
-    if (path === "/api/publish-queue" && method === "GET") return json({ groups: api.publishGroups || [] });
+    if (path === "/api/publish-queue" && method === "GET") return json({ groups: (api.publishGroups || []).map((g) => ({ ...g, cards: g.cards || publishCards(g.rows, api) })) });
     { const m = path.match(/^\/api\/posts\/([^/]+)$/);
       if (m && method === "PATCH") {
         const row = (api.publishGroups || []).flatMap((g) => g.rows).find((r) => r.post?.id === m[1]);
@@ -219,6 +219,22 @@ async function blockingProblems(page, probes) {
     }
     return out;
   }, probes);
+}
+
+// Mock of the server's per-clip cards (144): one per candidate in row order; summary = live posts / platforms,
+// expected_fmt from api.cardExpected[cid] (the real server formats it with payouts).
+function publishCards(rows, api) {
+  const out = [];
+  for (const r of rows || []) {
+    let c = out.find((x) => x.candidate_id === r.candidate_id);
+    if (!c) { c = { candidate_id: r.candidate_id, job_id: r.job_id, job_title: r.job_title, title: r.title, caption: r.caption,
+      has_thumbnail: r.has_thumbnail, filename: (r.campaign || "clip") + "_" + r.title.toLowerCase().replace(/[^a-z0-9]+/g, "-") + ".mp4",
+      platforms: [], summary: { posted: 0, total: 0, expected_fmt: (api.cardExpected || {})[r.candidate_id] || null },
+      last_send: (api.cardSends || {})[r.candidate_id] || null }; out.push(c); }
+    c.platforms.push(r.platform); c.summary.total++;
+    if (r.post && ["posted", "claimed", "paid"].includes(r.post.status)) c.summary.posted++;
+  }
+  return out;
 }
 
 module.exports = { test, expect: base.expect, job, candidate, nav, blockingProblems, mockApi, newState };

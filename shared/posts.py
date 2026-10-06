@@ -131,6 +131,15 @@ def slug(text: str, max_len: int = 40) -> str:
     return (t[:max_len].rstrip("-")) or "clip"
 
 
-def download_name(campaign: str | None, platform: str, title: str) -> str:
-    """campaign_platform_slug.mp4 (no campaign → "clip")."""
-    return f"{slug(campaign or 'clip', 30)}_{platform}_{slug(title)}.mp4"
+def download_name(campaign: str | None, platform: str | None, title: str) -> str:
+    """campaign_platform_slug.mp4 (no campaign → "clip"; no platform → campaign_slug.mp4, the clip card's download)."""
+    mid = f"_{platform}" if platform else ""
+    return f"{slug(campaign or 'clip', 30)}{mid}_{slug(title)}.mp4"
+
+
+def clip_platforms(rules, job_platform: str | None) -> list:
+    """Platforms a finished clip is posted to: the campaign's (known ones), else the job's Analyze platform."""
+    from shared import campaigns, rule_checks
+    if rules:
+        return [p for p in campaigns.platforms(rules) if p in rule_checks.PLATFORM_LIMITS]
+    return [JOB_PLATFORM.get(job_platform or "", "youtube")]

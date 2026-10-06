@@ -1358,6 +1358,49 @@ select::-ms-expand{display:none}
 .qnote.qsend.is-failed{color:var(--badge-bad-fg)}
 .qnote.qsend.is-sent{color:var(--badge-good-fg)}
 .account-telegram .token-form button{white-space:nowrap}
+/* Publish cards (144): one card per clip, platform chips = that platform's post status, panel per chip
+   (bottom sheet ≤ 600 px; only in the DOM while open). Chip colours reuse the --badge-* pairs. */
+.publish-filters{display:flex;flex-wrap:wrap;gap:var(--sp-1);justify-content:flex-end}
+.pcard{border-top:1px solid var(--line);padding:var(--sp-2) 0}
+.pcard-top{display:grid;grid-template-columns:56px minmax(0,1fr);gap:var(--sp-2);align-items:start}
+.pcard-thumb{width:56px;height:100px;border-radius:10px;object-fit:cover;background:linear-gradient(160deg,#3a3a3c,#1d1d1f);display:block}
+.pcard-body{min-width:0;display:flex;flex-direction:column;gap:2px}
+.pcard-body .qt{font-weight:600;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pcard-src{font-size:12px;color:var(--muted2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pcard-cap{font-size:13px;color:var(--muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.pcard-sum{font-size:13px;font-weight:600;margin-top:2px}
+.pcard .qactions,.pcard .qnote{margin-left:calc(56px + var(--sp-2))}
+.pstrip{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 0 calc(56px + var(--sp-2))}
+.pstat,[data-theme="dark"] .pstat{display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:0 12px;border-radius:999px;border:1px solid;font-size:13px;font-weight:600;white-space:nowrap;cursor:pointer;box-shadow:none;
+  background:var(--badge-idle-bg);border-color:var(--badge-idle-line);color:var(--badge-idle-fg);transition:transform var(--dur-1) var(--ease-out)}
+.pstat:active{transform:scale(var(--press))}
+.pstat svg{width:16px;height:16px;flex:none}
+.pstat .pstat-name{color:var(--text)}
+.pstat .pstat-views{font-weight:500;opacity:.85}
+.pstat .pstat-views::before,.pstat .pstat-st::before{content:"·";margin-right:6px;opacity:.6}
+.pstat.is-static{cursor:default;min-height:0;padding:2px 10px;font-size:12px}
+.pstat.is-static .pstat-st::before{display:none}
+.pstat[aria-expanded="true"]{outline:2px solid var(--accent);outline-offset:1px}
+.pstat.is-posted,.pstat.is-paid{background:var(--badge-good-bg);border-color:var(--badge-good-line);color:var(--badge-good-fg)}
+.pstat.is-claimed{background:var(--badge-run-bg);border-color:var(--badge-run-line);color:var(--badge-run-fg)}
+.pstat.is-warn{background:var(--badge-warn-bg);border-color:var(--badge-warn-line);color:var(--badge-warn-fg)}
+.pstat.is-block{background:var(--badge-bad-bg);border-color:var(--badge-bad-line);color:var(--badge-bad-fg)}
+.ppanel{margin:10px 0 0 calc(56px + var(--sp-2));padding:12px 14px;border-radius:16px;background:var(--panel2);border:1px solid var(--line);outline:none}
+.ppanel-head{display:flex;align-items:center;gap:8px}
+.ppanel-head .spacer{flex:1}
+.ppanel-close,[data-theme="dark"] .ppanel-close{min-height:36px;min-width:36px;padding:0;border-radius:999px;background:var(--fill);color:var(--text);border:0;box-shadow:none}
+.ppanel-when{margin:6px 0 0;font-size:13px;color:var(--muted)}
+.ppanel .qactions,.ppanel .qchecks,.ppanel .qmark,.ppanel .qnote,.ppanel .qpost{margin-left:0}
+.ppanel-scrim{display:none}
+@media (max-width:760px){.pcard .qactions,.pcard .qnote,.pstrip{margin-left:0}}
+@media (max-width:600px){
+  .ppanel{position:fixed;left:0;right:0;bottom:0;z-index:130;margin:0;max-height:min(80vh,640px);overflow:auto;border-radius:20px 20px 0 0;
+    padding:14px 16px calc(16px + env(safe-area-inset-bottom));background:var(--panel);box-shadow:0 -8px 30px rgba(0,0,0,.25);animation:ppanelUp var(--dur-3) var(--ease-out)}
+  .ppanel-scrim{display:block;position:fixed;inset:0;z-index:125;background:rgba(0,0,0,.32)}
+  .publish-filters{justify-content:flex-start}
+}
+@keyframes ppanelUp{from{transform:translateY(100%)}to{transform:none}}
+@media (prefers-reduced-motion:reduce){.ppanel{animation:none}}
 </style>
 <link rel="stylesheet" href="editor/editor.css"><!-- lane-b hook -->
 </head>
@@ -1529,8 +1572,8 @@ select::-ms-expand{display:none}
       </section>
       <section id="publishSection" class="view-section hidden" aria-labelledby="publishTitle">
         <div class="panel publish-panel">
-          <div class="section-head"><div><div class="eyebrow">Step 7 · Publish</div><h2 id="publishTitle">Publish queue</h2><p class="muted small">Every platform is its own post with its own status. Download, copy, post it, then mark it posted.</p></div><span class="spacer"></span>
-            <div class="seg" role="group" aria-label="Filter platform" id="publishFilter"></div></div>
+          <div class="section-head"><div><div class="eyebrow">Step 7 · Publish</div><h2 id="publishTitle">Publish queue</h2><p class="muted small">One card per clip. Each platform chip is its own post: tap it to copy its caption, mark it posted and track views.</p></div><span class="spacer"></span>
+            <div class="publish-filters" id="publishFilter"></div></div>
           <div id="publishList" aria-live="polite"></div>
         </div>
       </section>
@@ -1557,6 +1600,7 @@ select::-ms-expand{display:none}
   <button class="island-more" id="islandMore" type="button" hidden aria-label="Show all running jobs"></button>
   <span class="sr-only" id="islandLive" role="status" aria-live="polite"></span>
 </div>
+<div id="publishSheetHost"></div><!-- 144: the ≤ 600 px Publish panel (bottom sheet) lives here, outside the transformed .view-section; empty when closed -->
 <nav class="tabbar" id="tabbar" aria-label="Main"><button class="tabbar-item" type="button" data-nav="current"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v10.5M8 10.5l4 4 4-4"/><path d="M4.5 15v2.5A2.5 2.5 0 0 0 7 20h10a2.5 2.5 0 0 0 2.5-2.5V15"/></svg><span>Analyze</span></button><button class="tabbar-item" type="button" data-nav="queue"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg><span>Review</span></button><button class="tabbar-item" type="button" data-nav="publish"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 3 10 14"/><path d="m21 3-7 18-4-7-7-4z"/></svg><span>Publish</span></button><button class="tabbar-item" type="button" data-nav="watermarks" aria-haspopup="dialog"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="3"/><path d="m3.5 15.5 4.5-4.5 4 4"/><path d="M14.5 16h3"/></svg><span>Watermarks</span></button><button class="tabbar-item" type="button" data-nav="settings" aria-haspopup="dialog"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg><span>Settings</span></button></nav>
 <!-- Sheets (068): Settings and Watermarks open as centred dialogs from the sidebar. Closed = visibility:hidden + pointer-events:none. -->
 <div class="sheet-layer" id="accountSheet" aria-hidden="true">
@@ -1837,9 +1881,9 @@ document.addEventListener("click",e=>{
   if(e.target.closest("[data-telegram-test]")){const b=e.target.closest("[data-telegram-test]");setBusy(b,true,"Queued…");
     api("/api/telegram/test",{method:"POST"}).then(()=>{telegramMessage("Test queued: check Telegram in a few seconds.",true);refreshRunningJobs()}).catch(err=>telegramMessage(err.message)).finally(()=>setBusy(b,false));return}
   const sp=e.target.closest("[data-send-phone]");
-  if(sp){const r=publishRow(sp.dataset.sendPhone);if(!r)return;setBusy(sp,true,"Queued…");
-    api("/api/publish/send-to-phone",{method:"POST",body:JSON.stringify({candidate_id:r.candidate_id,platform:r.platform})})
-      .then(()=>{r.last_send={status:"queued",message:"Queued"};renderPublish();refreshRunningJobs()})
+  if(sp){const c=publishCard(sp.dataset.sendPhone);if(!c)return;setBusy(sp,true,"Queued…");
+    api("/api/publish/send-to-phone",{method:"POST",body:JSON.stringify({candidate_id:c.candidate_id})})
+      .then(()=>{c.last_send={status:"queued",message:"Queued"};renderPublish();refreshRunningJobs()})
       .catch(err=>{setBusy(sp,false);alert(err.message)});}
 });
 // API tokens (part 4): listed when the Account sheet opens; the plaintext is shown once after Create.
@@ -3408,6 +3452,7 @@ async function showTab(tab){
 
   currentTab=tab;
   syncPageTitle();syncNav();
+  if(tab!=="publish"&&$("publishSheetHost").firstChild){publishPanel={};$("publishSheetHost").innerHTML=""}
 
   prev.classList.remove("switching-in");
   prev.classList.add("switching-out");
@@ -3422,6 +3467,8 @@ async function showTab(tab){
   // Force a new animation frame so the entrance transition is always replayed.
   void next.offsetWidth;
   next.classList.add("switching-in");
+  // Always drop it (144: Publish returned early and kept the transform, which traps position:fixed sheets).
+  setTimeout(()=>next.classList.remove("switching-in"),400);
 
   if(tab==="publish"){loadPublish();return}
   if(tab==="current"){
@@ -3434,8 +3481,6 @@ async function showTab(tab){
     await refreshRunningJobs();
     updateJobIsland();
   }
-
-  setTimeout(()=>next.classList.remove("switching-in"),400);
 }
 
 let wmAssets=[],wmLastActive=null;const wmPendingDelete=new Map(); // id -> timer
@@ -3658,7 +3703,7 @@ document.addEventListener("click",e=>{
   const c=e.target.closest("[data-claim-cancel]");if(c){delete claimOpen[c.dataset.claimCancel];renderPublish()}
 });
 const POST_STATUS={ready:["Ready","idle"],planned:["Planned","idle"],posted:["Posted","completed"],claimed:["Claimed","attention"],paid:["Paid","completed"]};
-let publishGroups=[],publishFilter="all",publishOpen={};
+let publishGroups=[],publishFilter="left",publishCampaign="all",publishOpen={},publishPanel={}; // publishPanel: cid → open platform
 function publishRowKey(r){return r.candidate_id+":"+r.platform}
 function rowStatus(r){const s=r.post?.status;return !s||s==="dropped"?"ready":s}
 // Copy that works in iOS Safari: the Clipboard API is called synchronously inside the tap (no await before it);
@@ -3672,11 +3717,21 @@ function copyText(text){
 }
 function flashCopied(btn,ok){const t=btn.dataset.label||btn.textContent;btn.dataset.label=t;btn.textContent=ok?"Copied":"Copy failed";btn.classList.toggle("is-copied",ok);setTimeout(()=>{btn.textContent=t;btn.classList.remove("is-copied")},motionMs(1500)||1200)}
 function fmtPostedAt(iso){if(!iso)return "";const d=new Date(iso);return d.toLocaleDateString(undefined,{day:"numeric",month:"short"})+" · "+d.toLocaleTimeString(undefined,{hour:"2-digit",minute:"2-digit"})}
-function publishRowHtml(r){
-  const st=rowStatus(r),[label,cls]=POST_STATUS[st]||POST_STATUS.ready,k=publishRowKey(r),open=publishOpen[k];
-  const base=`/api/jobs/${encodeURIComponent(r.job_id)}/candidates/${encodeURIComponent(r.candidate_id)}`;
-  const when=st==="ready"?`<b>Not posted</b><small>${esc(r.job_title||"")}</small>`
-    :`<b>${esc(fmtPostedAt(r.post.posted_at)||"—")}</b><small>${r.post.account_handle?"@"+esc(r.post.account_handle):""}${r.post.url?` · <a href="${esc(r.post.url)}" target="_blank" rel="noopener">open post</a>`:""}</small>`;
+// One card per clip (144): shared actions + a platform strip; a chip opens that platform's panel
+// (bottom sheet ≤ 600 px). Panels are rendered only while open, so no hidden layer can catch taps.
+function chipState(r){
+  const st=rowStatus(r),p=r.post,checks=r.checks||[];
+  if(st==="ready"){if(checks.some(c=>c.level==="block"))return ["Blocked","is-block"];
+    if(checks.some(c=>c.level==="warn"&&!c.account_id))return ["Not eligible","is-warn"];return ["Ready","is-ready"]}
+  const label=st==="posted"?"Posted"+(p.account_handle?" @"+p.account_handle:""):(POST_STATUS[st]||POST_STATUS.ready)[0];
+  return [label,p.eligible===false?"is-warn":"is-"+st];
+}
+function chipHtml(r){
+  const [label,cls]=chipState(r),k=publishRowKey(r),open=publishPanel[r.candidate_id]===r.platform,v=r.post&&r.post.views!=null&&rowStatus(r)!=="ready";
+  return `<button type="button" class="pstat ${cls}" data-chip="${esc(k)}" aria-expanded="${open}" aria-controls="pp-${esc(r.candidate_id)}" title="${esc(r.platform_name)}">${PLATFORM_ICON[r.platform]||""}<span class="pstat-name">${esc(PLATFORM_SHORT[r.platform]||r.platform_name)}</span><span class="pstat-st">${esc(label)}</span>${v?`<span class="pstat-views">${fmtViews(r.post.views)} views</span>`:""}</button>`;
+}
+function publishPanelHtml(r){
+  const st=rowStatus(r),[label,cls]=chipState(r),k=publishRowKey(r),open=publishOpen[k];
   const accts=accountsCache.filter(a=>a.platform===r.platform&&a.active);
   const checks=r.checks||[],blocks=checks.filter(c=>c.level==="block");
   const rowWarns=checks.filter(c=>c.level==="warn"&&!c.account_id);
@@ -3688,26 +3743,42 @@ function publishRowHtml(r){
       <p class="qmark-warn" data-mark-warn ${markWarnings(r,accts[0]?.id).length?"":"hidden"}>${esc(markWarnText(r,accts[0]?.id))}</p>
       <div class="account-msg" role="status" aria-live="polite"></div></form>`
     :`<p class="qnote">No active ${esc(r.platform_name)} account yet. <button class="plain" type="button" data-nav="settings">Add one in Settings → Posting accounts</button></p>`;
-  return `<div class="qitem" data-publish-row="${esc(k)}" data-platform="${esc(r.platform)}">
-    <div class="qrow">
-      ${r.has_thumbnail?`<img class="qthumb" src="${esc(mediaUrl(base+"/thumbnail"))}" alt="" loading="lazy">`:`<span class="qthumb"></span>`}
-      <div class="qn"><div class="qt" title="${esc(r.title)}">${esc(r.title||"Untitled clip")}</div><div class="qc" title="${esc(r.caption)}">${esc(r.caption.replace(/\s+/g," "))}</div></div>
-      <div class="qp"><span class="pchip" title="${esc(r.platform_name)}">${PLATFORM_ICON[r.platform]||""}${esc(PLATFORM_SHORT[r.platform]||r.platform_name)}</span></div>
-      <div class="qwhen">${when}</div>
-      <div class="qs"><span class="badge ${cls}">${label}</span>${r.post&&r.post.eligible===false&&st!=="ready"?`<span class="badge not-eligible" title="${esc(r.post.ineligible_reason||"")}">Not eligible</span>`:""}</div>
-    </div>
+  const where=st==="ready"?"":`<p class="ppanel-when">${esc(fmtPostedAt(r.post.posted_at)||"")}${r.post.account_handle?" · @"+esc(r.post.account_handle):""}${r.post.url?` · <a href="${esc(r.post.url)}" target="_blank" rel="noopener">Open post</a>`:""}</p>`;
+  return `<div class="ppanel-scrim" data-panel-close></div>
+  <div class="ppanel" id="pp-${esc(r.candidate_id)}" data-publish-row="${esc(k)}" data-platform="${esc(r.platform)}" role="region" aria-label="${esc(r.platform_name)}" tabindex="-1">
+    <div class="ppanel-head"><span class="pchip">${PLATFORM_ICON[r.platform]||""}${esc(r.platform_name)}</span><span class="pstat ${cls} is-static"><span class="pstat-st">${esc(label)}</span></span><span class="spacer"></span><button type="button" class="ppanel-close" data-panel-close aria-label="Close">✕</button></div>
+    ${where}
     <div class="qactions">
-      <a class="btn-sm" href="${esc(mediaUrl(base+"/render")+(mediaUrl(base+"/render").includes("?")?"&":"?")+"download="+encodeURIComponent(r.platform))}" download="${esc(r.filename)}" data-download>Download</a>
-      <button class="secondary" type="button" data-copy-title="${esc(k)}">Copy title</button>
       <button class="secondary" type="button" data-copy-caption="${esc(k)}">Copy caption</button>
-      <button class="secondary" type="button" data-send-phone="${esc(k)}" ${r.last_send&&["queued","sending"].includes(r.last_send.status)?"disabled":""}>Send to phone</button>
       ${st==="ready"?`<button class="secondary" type="button" data-mark-open="${esc(k)}" aria-expanded="${open?"true":"false"}" ${blocks.length?`disabled title="Fix the red checks first (same rules as Approve)"`:""}>Mark posted</button>`:""}
     </div>
     ${blocks.length||rowWarns.length||(r.post&&r.post.eligible===false&&st!=="ready")?`<ul class="qchecks">${blocks.map(c=>`<li class="qcheck is-block">${esc(c.message)}</li>`).join("")}${st==="ready"?rowWarns.map(c=>`<li class="qcheck is-warn">${esc(c.message)}</li>`).join("")+checks.filter(c=>c.level==="warn"&&c.account_id).map(c=>`<li class="qcheck is-warn">${esc(c.message)}</li>`).join(""):""}${r.post&&r.post.eligible===false&&st!=="ready"?`<li class="qcheck is-warn">Not eligible: ${esc(r.post.ineligible_reason||"")}</li>`:""}</ul>`:""}
     ${r.caption_trimmed?`<p class="qnote">Caption shortened to fit ${esc(r.platform_name)}; hashtags kept in order.</p>`:""}
-    ${r.last_send?`<p class="qnote qsend is-${esc(r.last_send.status)}">${r.last_send.status==="sent"?`Sent to phone ${esc(fmtPostedAt(r.last_send.sent_at))}${r.last_send.mode&&r.last_send.mode!=="video"?" · "+esc(r.last_send.message||""):""}`:r.last_send.status==="failed"?`Send to phone failed: ${esc(r.last_send.error||"")}`:"Sending to your phone…"}</p>`:""}
     ${form}${postBlockHtml(r,k)}
   </div>`;
+}
+function publishCardHtml(c,rows){
+  const base=`/api/jobs/${encodeURIComponent(c.job_id)}/candidates/${encodeURIComponent(c.candidate_id)}`,dl=mediaUrl(base+"/render");
+  const s=c.summary||{},open=rows.find(r=>r.platform===publishPanel[c.candidate_id]),ls=c.last_send;
+  return `<article class="pcard" data-publish-card="${esc(c.candidate_id)}">
+    <div class="pcard-top">
+      ${c.has_thumbnail?`<img class="pcard-thumb" src="${esc(mediaUrl(base+"/thumbnail"))}" alt="" loading="lazy">`:`<span class="pcard-thumb"></span>`}
+      <div class="pcard-body">
+        <div class="qt" title="${esc(c.title)}">${esc(c.title||"Untitled clip")}</div>
+        ${c.job_title?`<div class="pcard-src" title="${esc(c.job_title)}">${esc(c.job_title)}</div>`:""}
+        <div class="pcard-cap" title="${esc(c.caption)}">${esc((c.caption||"").replace(/\s+/g," "))}</div>
+        <div class="pcard-sum">Posted on ${s.posted||0} of ${s.total||rows.length}${s.expected_fmt?` · ${esc(s.expected_fmt)} expected`:""}</div>
+      </div>
+    </div>
+    <div class="qactions">
+      <a class="btn-sm" href="${esc(dl+(dl.includes("?")?"&":"?")+"download=clip")}" download="${esc(c.filename)}" data-download>Download</a>
+      <button class="secondary" type="button" data-copy-title="${esc(c.candidate_id)}">Copy title</button>
+      <button class="secondary" type="button" data-send-phone="${esc(c.candidate_id)}" ${ls&&["queued","sending"].includes(ls.status)?"disabled":""}>Send to phone</button>
+    </div>
+    ${ls?`<p class="qnote qsend is-${esc(ls.status)}">${ls.status==="sent"?`Sent to phone ${esc(fmtPostedAt(ls.sent_at))}${ls.mode&&ls.mode!=="video"?" · "+esc(ls.message||""):""}`:ls.status==="failed"?`Send to phone failed: ${esc(ls.error||"")}`:"Sending to your phone…"}</p>`:""}
+    <div class="pstrip" role="group" aria-label="Platforms">${rows.map(chipHtml).join("")}</div>
+    ${open&&!PUBLISH_SHEET_MQ.matches?publishPanelHtml(open):""}
+  </article>`;
 }
 // What "Mark posted" will record as the not-eligible reason for this account (row warnings + its cap).
 function markWarnings(r,accountId){return (r.checks||[]).filter(c=>c.level==="warn"&&(!c.account_id||c.account_id===accountId))}
@@ -3717,26 +3788,48 @@ document.addEventListener("change",e=>{
   const r=publishRow(sel.dataset.markAccount),p=sel.closest("form").querySelector("[data-mark-warn]");
   p.textContent=markWarnText(r,sel.value);p.hidden=!p.textContent;
 });
+const PUBLISH_SHEET_MQ=matchMedia("(max-width:600px)");
+PUBLISH_SHEET_MQ.addEventListener?.("change",()=>{if(currentTab==="publish")renderPublish()});
+function openPanelRow(){const cid=Object.keys(publishPanel)[0];return cid?publishRow(cid+":"+publishPanel[cid]):null}
+function cardLeft(rows){return rows.some(r=>rowStatus(r)==="ready")}
 function renderPublish(){
-  const rows=publishGroups.flatMap(g=>g.rows),plats=[...new Set(rows.map(r=>r.platform))];
-  if(publishFilter!=="all"&&!plats.includes(publishFilter))publishFilter="all";
-  $("publishFilter").innerHTML=plats.length>1?[["all","All"],...plats.map(p=>[p,PLATFORM_SHORT[p]||(rows.find(r=>r.platform===p)||{}).platform_name])].map(([id,n])=>`<button type="button" data-publish-filter="${esc(id)}" aria-pressed="${publishFilter===id}">${esc(n)}</button>`).join(""):"";
-  const html=publishGroups.map(g=>{const rs=g.rows.filter(r=>publishFilter==="all"||r.platform===publishFilter);
-    return rs.length?`<div class="qgroup"><h3>${esc(g.campaign_name)}</h3>${rs.map(publishRowHtml).join("")}</div>`:""}).join("");
-  $("publishList").innerHTML=html||`<div class="publish-empty">${rows.length?"No posts for this platform.":`No finished clips yet. Approve a clip in <button class="plain" type="button" data-nav="queue">Review</button>; it lands here once its final render is done.`}</div>`;
+  const camps=publishGroups.map(g=>[g.campaign||"",g.campaign_name]);
+  if(publishCampaign!=="all"&&!camps.some(([id])=>id===publishCampaign))publishCampaign="all";
+  $("publishFilter").innerHTML=(camps.length>1?`<div class="seg" role="group" aria-label="Filter campaign">${[["all","All campaigns"],...camps].map(([id,n])=>`<button type="button" data-publish-campaign="${esc(id)}" aria-pressed="${publishCampaign===id}">${esc(n)}</button>`).join("")}</div>`:"")
+    +`<div class="seg" role="group" aria-label="Filter clips">${[["left","Left to post"],["all","All"]].map(([id,n])=>`<button type="button" data-publish-filter="${id}" aria-pressed="${publishFilter===id}">${n}</button>`).join("")}</div>`;
+  let total=0;
+  const html=publishGroups.filter(g=>publishCampaign==="all"||(g.campaign||"")===publishCampaign).map(g=>{
+    const cards=(g.cards||[]).map(c=>[c,g.rows.filter(r=>r.candidate_id===c.candidate_id)]).filter(([c,rs])=>{total++;return publishFilter==="all"||cardLeft(rs)||publishPanel[c.candidate_id]})  // an open card stays until closed;
+    return cards.length?`<div class="qgroup"><h3>${esc(g.campaign_name)}</h3>${cards.map(([c,rs])=>publishCardHtml(c,rs)).join("")}</div>`:""}).join("");
+  const sheetRow=PUBLISH_SHEET_MQ.matches?openPanelRow():null;
+  $("publishSheetHost").innerHTML=sheetRow?publishPanelHtml(sheetRow):"";
+  $("publishList").innerHTML=html||`<div class="publish-empty">${total?`Every clip here is posted on all its platforms. <button class="plain" type="button" data-publish-filter="all">Show all</button>`:`No finished clips yet. Approve a clip in <button class="plain" type="button" data-nav="queue">Review</button>; it lands here once its final render is done.`}</div>`;
 }
 async function loadPublish(){
   try{const [q]=await Promise.all([api("/api/publish-queue"),accountsCache.length?null:loadAccounts()]);publishGroups=q.groups||[];renderPublish()}
   catch(err){$("publishList").innerHTML=`<div class="error-box">${esc(err.message)}</div>`}
 }
 function publishRow(k){for(const g of publishGroups)for(const r of g.rows)if(publishRowKey(r)===k)return r;return null}
+function publishCard(cid){for(const g of publishGroups)for(const c of g.cards||[])if(c.candidate_id===cid)return c;return null}
 document.addEventListener("click",e=>{
   const f=e.target.closest("[data-publish-filter]");if(f){publishFilter=f.dataset.publishFilter;return renderPublish()}
-  const ct=e.target.closest("[data-copy-title],[data-copy-caption]");
-  if(ct){const r=publishRow(ct.dataset.copyTitle||ct.dataset.copyCaption);if(!r)return;copyText(ct.dataset.copyTitle?r.title:r.caption).then(ok=>flashCopied(ct,ok));return}
+  const fc=e.target.closest("[data-publish-campaign]");if(fc){publishCampaign=fc.dataset.publishCampaign;return renderPublish()}
+  const ch=e.target.closest("[data-chip]");
+  if(ch){const r=publishRow(ch.dataset.chip);if(!r)return;const cid=r.candidate_id;
+    if(publishPanel[cid]===r.platform)delete publishPanel[cid];else{publishPanel={[cid]:r.platform}}
+    renderPublish();if(publishPanel[cid])document.getElementById("pp-"+cid)?.focus({preventScroll:true});return}
+  if(e.target.closest("[data-panel-close]"))return closePublishPanel();
+  if(e.target.closest(".ppanel [data-nav]")){publishPanel={};$("publishSheetHost").innerHTML=""}  // e.g. → Settings: the sheet leaves first
+  const ct=e.target.closest("[data-copy-title]");
+  if(ct){const c=publishCard(ct.dataset.copyTitle);if(!c)return;copyText(c.title).then(ok=>flashCopied(ct,ok));return}
+  const cc=e.target.closest("[data-copy-caption]");
+  if(cc){const r=publishRow(cc.dataset.copyCaption);if(!r)return;copyText(r.caption).then(ok=>flashCopied(cc,ok));return}
   const mo=e.target.closest("[data-mark-open]");if(mo){publishOpen[mo.dataset.markOpen]=true;renderPublish();document.querySelector(`[data-mark-form="${css(mo.dataset.markOpen)}"] input`)?.focus();return}
   const mc=e.target.closest("[data-mark-cancel]");if(mc){delete publishOpen[mc.dataset.markCancel];renderPublish();return}
 });
+function closePublishPanel(){const cid=Object.keys(publishPanel)[0];if(!cid)return false;const plat=publishPanel[cid];publishPanel={};renderPublish();
+  document.querySelector(`[data-chip="${css(cid+":"+plat)}"]`)?.focus({preventScroll:true});return true}
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&document.querySelector(".ppanel")&&closePublishPanel())e.stopPropagation()});
 document.addEventListener("submit",async e=>{
   const f=e.target.closest?.("[data-mark-form]");if(!f)return;
   e.preventDefault();
@@ -4032,7 +4125,7 @@ const FLOW_STEPS=[
   {id:"review",label:"Review",sub:"Clips + checks",icon:"eye",nav:"queue"},
   {id:"editor",label:"Editor",sub:"Captions, export",icon:"edit"},
   {id:"schedule",label:"Schedule",sub:"Prime time, your TZ",icon:"cal",phase:"P2"},
-  {id:"publish",label:"Publish",sub:"Per-platform queue",icon:"send",nav:"publish"},
+  {id:"publish",label:"Publish",sub:"One card per clip",icon:"send",nav:"publish"},
   {id:"track",label:"Track",sub:"Views → earnings",icon:"chart",phase:"P3"},
 ];
 function editorOpen(){return currentTab==="queue"&&!!document.querySelector("#queueDetail:not(.hidden) .candidate-card.editing")}
