@@ -218,6 +218,49 @@ def put_cuts(job_id: str, candidate_id: str, body: CutsIn, user: dict = Depends(
     return _save_spec_key(job_id, candidate_id, user, "cuts", value)
 
 
+class FixLengthIn(BaseModel):
+    target: float
+
+
+def _keep(cuts, clip):
+    a, b = (cuts or {}).get("trim") or [0.0, clip]
+    keep = [[float(a), float(b)]]
+    for s, e in (cuts or {}).get("removed") or []:
+        nxt = []
+        for x, y in keep:
+            if e <= x or s >= y:
+                nxt.append([x, y])
+            else:
+                if s > x: nxt.append([x, s])
+                if e < y: nxt.append([e, y])
+        keep = nxt
+    return keep
+
+
+@editor.put("/fix-length")
+def fix_length(job_id: str, candidate_id: str, body: FixLengthIn, user: dict = Depends(get_current_user)):
+    """Review quick fix "Trim to N s": end the trim where the OUTPUT reaches N seconds (existing cuts kept)."""
+    core = _core()
+    with core.get_db() as conn, conn.cursor() as cur:
+        c = _load(cur, job_id, candidate_id, user)
+    clip = float(c["duration_seconds"] or ((c["end_time"] or 0) - (c["start_time"] or 0)))
+    target = float(body.target)
+    if target < 1 or not clip:
+        raise HTTPException(status_code=400, detail="target must be at least 1 second")
+    cuts = edit_specs.cuts_of(c["edit_spec"] if isinstance(c["edit_spec"], dict) else None) or {}
+    keep, acc, end = _keep(cuts, clip), 0.0, None
+    for a, b in keep:
+        if acc + (b - a) >= target:
+            end = a + (target - acc)
+            break
+        acc += b - a
+    if end is None:
+        return _state(c)                                   # already short enough: nothing to do
+    start = keep[0][0] if keep else 0.0
+    value = edit_specs.normalize_cuts({"trim": [start, round(end, 3)], "removed": cuts.get("removed") or []}, clip)
+    return _save_spec_key(job_id, candidate_id, user, "cuts", value)
+
+
 def environment():
     """Open (no auth, no secrets): which stack this is, for the STAGING banner on every screen."""
     return {"env": os.getenv("CLIPFLOW_ENV") or "production"}

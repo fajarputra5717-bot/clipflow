@@ -84,7 +84,7 @@
     const s = $("editorSection"), st = E.state, c = st.candidate;
     s.innerHTML = `
       <div class="ed-head">
-        <a class="ed-back" href="#" data-ed-back>← Review</a>
+        <a class="ed-back" href="#review/${esc(E.jid)}" data-ed-back>← Review</a>
         <div class="ed-eyebrow">Editor${st.job.title ? " · " + esc(st.job.title) : ""}</div>
         <h2 class="ed-title">${esc(c.title || "Untitled clip")}</h2>
         ${c.reason ? `<p class="ed-reason">${esc(c.reason)}</p>` : ""}
@@ -465,9 +465,8 @@
   document.addEventListener("click", (e) => {
     const t = e.target.closest("[data-ed-back],[data-ed-hook-on],[data-ed-hook-dur],[data-ed-render],[data-ed-play],[data-ed-tab],[data-ed-word],[data-ed-pause],[data-ed-mode],[data-ed-suggest],[data-ed-cuts-reset],[data-ed-trim],[data-ed-seekarea]");
     if (!t || !E.state && !t.matches("[data-ed-back]")) return;
-    if (t.matches("[data-ed-back]")) {
-      e.preventDefault(); close(true);
-      const q = document.querySelector('[data-nav="queue"]'); if (q) q.click();
+    if (t.matches("[data-ed-back]")) {                       // back to the Review page (step 4) for this job
+      e.preventDefault(); const jid = E.jid; close(false); location.hash = `#review/${encodeURIComponent(jid || "")}`;
       return;
     }
     if (t.matches("[data-ed-hook-on]")) {
