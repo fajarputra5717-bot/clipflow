@@ -334,7 +334,7 @@ key was removed in 127; there is no shared key) →
 `?mt=` per-user media token (`exp.user_id.sig`, GET/HEAD on `MEDIA_PATH_RE` only). Open: `/api/auth/login|logout`,
 `/health`, `/`. Passwords argon2id; login 429 after 5 fails/user or 20/IP per 15 min; no signup route.
 First run: `CLIPFLOW_ADMIN_USER/PASSWORD` (env-only, read only while `users` is empty). Cookie-authed writes
-with a foreign `Origin` → 403. **A new file-serving GET route must be added to `MEDIA_PATH_RE`** and its
+with a foreign `Origin` → 403 (scheme+host+port via `shared/origins.py`; nginx sends `X-Forwarded-Host $http_host`, 138). **A new file-serving GET route must be added to `MEDIA_PATH_RE`** and its
 frontend URL wrapped in `mediaUrl()`; every other frontend call goes through `api()` or `authFetch()` (uploads),
 never a bare `fetch()` (exception: the login form + `ensureSession()`/`signOut()`). A 401 opens `#loginScreen`
 (`showLogin()`, `body.auth-locked`) and retries once. Account sheet (`#accountSheet`, username in the sidebar foot): change password (≥ 12) + Sign out. Users (125): admins only

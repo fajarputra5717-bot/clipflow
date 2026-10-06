@@ -109,3 +109,4 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 135 · 2026-10-06 · Bug: Review cards' empty thumbnails → list API returns thumb_candidate_id (first clip with a thumbnail) · main.py, index.html
 136 · 2026-10-06 · Clips per video: per-user CLIPS_PER_JOB (default 4, 1–8, replaces CLIP_COUNT), jobs.clip_count snapshot, Analyze 'Clips 2/4/6', campaign default_clip_count; prompt changes only the count · settings, main.py, worker.py, index.html
 137 · 2026-10-06 · Bug: Get another hook returned used moments → per-job used_hook_ranges, server-side overlap check (>30 % / <10 s), 2 retries, 'No new distinct moment found' · main.py, shared/hook_ranges.py
+138 · 2026-10-06 · Origin check = scheme+host+port (X-Forwarded-Host $http_host from nginx), non-80 deployments work; configurable list unchanged · shared/origins.py, main.py, nginx
