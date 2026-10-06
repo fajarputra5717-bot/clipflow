@@ -148,3 +148,27 @@ body.is-staging #toolbar{top:22px}
 /* 5b: filler-word suggestions — pre-struck, dashed, not cut until accepted */
 .ed-word.filler-suggest{background:transparent;color:var(--badge-warn-fg);box-shadow:inset 0 0 0 1px var(--badge-warn-line);
   text-decoration:line-through dashed;text-decoration-thickness:1px;outline:1px dashed var(--badge-warn-line);outline-offset:-1px}
+/* Review filters (Campaign · Job · Status), source label, earn state, empty state */
+.rv-filters{display:flex;flex-wrap:wrap;align-items:flex-end;gap:var(--sp-2);margin-bottom:var(--sp-2);padding:12px 14px;
+  background:var(--panel);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow)}
+.rv-f{display:flex;flex-direction:column;gap:6px;min-width:0}
+.rv-f>span{font-size:12px;font-weight:600;color:var(--muted)}
+.rv-f select{min-height:40px;max-width:100%;min-width:180px}
+.rv-f-job{flex:1;min-width:200px}
+.rv-f-job select{width:100%}
+.rv-seg{display:inline-flex;padding:3px;border-radius:12px;background:var(--fill);gap:2px}
+.rv-seg button{min-height:34px;padding:0 14px;border:0;border-radius:9px;background:transparent;color:var(--text);font:500 13px var(--font-text);cursor:pointer}
+.rv-seg button[aria-pressed="true"]{background:var(--panel);font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.rv-camp-status{font-size:13px;font-weight:600;color:var(--text);margin:4px 0 0}
+.rv-src{font-size:11px;color:var(--muted);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rv-earn{margin-right:4px}
+.rv-clip.no-earn{opacity:.7}
+.rv-clip.no-earn .rv-frame{filter:grayscale(.6)}
+.rv-empty-state{padding:var(--sp-4) var(--sp-2);text-align:center}
+.rv-empty-title{font:600 17px var(--font-display);margin:0}
+@media (max-width:600px){
+  .rv-filters{gap:12px}
+  .rv-f,.rv-f-job{flex:1 1 100%}
+  .rv-f select{width:100%;min-width:0}
+  .rv-seg{display:flex}.rv-seg button{flex:1}
+}

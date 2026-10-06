@@ -268,10 +268,127 @@ def fix_length(job_id: str, candidate_id: str, body: FixLengthIn, user: dict = D
     return _save_spec_key(job_id, candidate_id, user, "cuts", value)
 
 
+# --------------------------------------------------------------------------- Review page (task 6 + filters)
+
+review = APIRouter(prefix="/api/review", tags=["review"])
+REVIEW_FILTER_KEY = "REVIEW_FILTER"        # per user, user_settings (not a settings-UI key)
+REVIEW_STATUSES = {"to_review": ("review",), "approved": ("render_queued", "rendering", "completed"), "all": None}
+READY_JOB_STATUSES = ("review", "completed", "partial_failure")
+
+
+def _review_filter(raw) -> dict:
+    import json
+    try:
+        f = json.loads(raw) if isinstance(raw, str) else (raw or {})
+    except ValueError:
+        f = {}
+    status = f.get("status") if f.get("status") in REVIEW_STATUSES else "to_review"
+    return {"campaign": str(f.get("campaign") or "all")[:80], "job": str(f.get("job") or "all")[:80], "status": status}
+
+
+@review.get("/filter")
+def get_review_filter(user: dict = Depends(get_current_user)):
+    core = _core()
+    with core.get_db() as conn, conn.cursor() as cur:
+        cur.execute("SELECT value FROM user_settings WHERE user_id = %s AND key = %s", (user["id"], REVIEW_FILTER_KEY))
+        row = cur.fetchone()
+    return _review_filter(row[0] if row else None)
+
+
+class ReviewFilterIn(BaseModel):
+    campaign: str = "all"
+    job: str = "all"
+    status: str = "to_review"
+
+
+@review.put("/filter")
+def put_review_filter(body: ReviewFilterIn, user: dict = Depends(get_current_user)):
+    import json
+    value = _review_filter(body.model_dump())
+    core = _core()
+    with core.get_db() as conn, conn.cursor() as cur:
+        core.set_user_setting(cur, user["id"], REVIEW_FILTER_KEY, json.dumps(value))
+        conn.commit()
+    return value
+
+
+@review.get("/clips")
+def review_clips(campaign: str = "all", job: str = "all", status: str = "to_review",
+                 user: dict = Depends(get_current_user)):
+    """Clips for the Review page across the caller's jobs (owner-scoped), filtered by campaign
+    ('all' | slug | 'none'), job ('all' | id) and status ('to_review' | 'approved' | 'all'); earnable clips
+    first by hook score, then the ones that can no longer earn."""
+    from datetime import datetime, timezone
+    from shared import campaigns, payouts, rule_checks
+    from shared.review_state import campaign_status, earn_state
+    core = _core()
+    now = datetime.now(timezone.utc)
+    where, params = owner_filter(user)
+    conds = [where, "j.status = ANY(%s)"]
+    params = [*params, list(READY_JOB_STATUSES)]
+    if campaign == "none":
+        conds.append("j.campaign IS NULL")
+    elif campaign != "all":
+        conds.append("j.campaign = %s"); params.append(campaign)
+    if job != "all":
+        conds.append("j.id::text = %s"); params.append(job)
+    statuses = REVIEW_STATUSES.get(status, REVIEW_STATUSES["to_review"])
+    if statuses:
+        conds.append("c.status = ANY(%s)"); params.append(list(statuses))
+    cols = ["id", "job_id", "clip_index", "status", "score", "title", "manual_title", "ai_title", "reason", "start_time",
+            "end_time", "duration_seconds", "edit_spec", "description", "render_warnings", "safety_check", "updated_at"]
+    with core.get_db() as conn, conn.cursor() as cur:
+        cur.execute(
+            f"""SELECT {", ".join("c." + k for k in cols)}, j.campaign, coalesce(j.custom_title, s.title), j.created_at, j.status
+                FROM clip_candidates c JOIN jobs j ON j.id = c.job_id
+                LEFT JOIN source_videos s ON s.id = j.source_video_id
+                WHERE {" AND ".join(conds)}""", params)
+        rows = cur.fetchall()
+        ids = [r[0] for r in rows]
+        posts = {}
+        if ids:
+            cur.execute("SELECT candidate_id, platform, status, posted_at FROM clip_posts WHERE candidate_id = ANY(%s) "
+                        "AND user_id = %s", (ids, user["id"]))
+            for cid, plat, st, at in cur.fetchall():
+                posts.setdefault(cid, []).append({"platform": plat, "status": st, "posted_at": at})
+    rules_cache, clips = {}, []
+    for r in rows:
+        c = dict(zip(cols, r))
+        slug, jtitle, jdate, jstatus = r[len(cols):]
+        if slug not in rules_cache:
+            rules = campaigns.get(slug) if slug else None
+            rules_cache[slug] = (rules, payouts.model_from_rules(rules) if rules else None)
+        rules, model = rules_cache[slug]
+        c["rule_checks"] = rule_checks.check(rules, c) if rules else []
+        c["earn"] = earn_state(rules, model, posts.get(c["id"], []), now) if rules else None
+        c.update(campaign=slug, job_title=jtitle or "Untitled video", job_date=jdate.isoformat() if jdate else None,
+                 job_status=jstatus, updated_at=c["updated_at"].isoformat() if c["updated_at"] else None,
+                 score=float(c["score"]) if c["score"] is not None else None)
+        for k in ("start_time", "end_time", "duration_seconds"):
+            c[k] = float(c[k]) if c[k] is not None else None
+        for k in ("description", "safety_check", "render_warnings"):
+            c.pop(k, None)
+        clips.append(c)
+    clips.sort(key=lambda c: (c["earn"] is not None, -(c["score"] if c["score"] is not None else -1), c["clip_index"] or 0))
+    to_review = sum(1 for c in clips if c["status"] == "review")
+    if job != "all":
+        jt = clips[0]["job_title"] if clips else None
+        header = {"kind": "job", "title": jt, "job": job}
+    elif campaign not in ("all", "none"):
+        rules = campaigns.get(campaign)
+        header = {"kind": "campaign", "title": campaigns.display_name(rules) if rules else campaign, "campaign": campaign,
+                  **({"status": campaign_status(rules, now)} if rules else {})}
+    else:
+        header = {"kind": campaign, "title": "Clips without a campaign" if campaign == "none" else "All clips"}
+    return {"header": {**header, "to_review": to_review}, "clips": clips,
+            "filter": {"campaign": campaign, "job": job, "status": status if status in REVIEW_STATUSES else "to_review"}}
+
+
 def environment():
     """Open (no auth, no secrets): which stack this is, for the STAGING banner on every screen."""
     return {"env": os.getenv("CLIPFLOW_ENV") or "production"}
 
 
 router.include_router(editor)
+router.include_router(review)
 router.add_api_route("/api/env", environment, methods=["GET"], tags=["meta"])

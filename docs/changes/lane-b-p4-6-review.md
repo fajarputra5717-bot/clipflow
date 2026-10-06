@@ -31,3 +31,22 @@ port-less Host) → staging-only fix in its own commit. Tests: `tests/test_rule_
 
 **For Lane A at merge:** point the stepper's Review step at `#review` (and remove the old queue detail with the
 drawer).
+
+## Filters (2026-10-07) — before the production merge; mock step-4 card design kept
+
+- Filter bar: Campaign (All campaigns / each / No campaign) · Job (All jobs / the campaign's jobs, "title · date") ·
+  Status (To review [default] / Approved / All). Remembered per user: `GET/PUT /api/review/filter` →
+  `user_settings` key `REVIEW_FILTER` (not a settings-UI key). `#review/<jobId>` presets the job (editor "← Review").
+- `GET /api/review/clips?campaign=&job=&status=` (owner-scoped by `jobs.user_id`, jobs in review/completed/
+  partial_failure): one list across jobs with `rule_checks`, `job_title`/`job_date` (source label), `earn`; earnable
+  clips first by hook score, then the ones that can no longer earn. Header: job (title) or campaign (name +
+  status "IME Roleplay · Week 2 · 6 days left" / "Open until the budget runs out" / "Ended") + "N to review".
+- `shared/review_state.py`: `campaign_status()` and `earn_state()` phrase payouts.py's windows/periods:
+  "Campaign ended" (period over) or "Week closed" (FixedThreshold: every post went up in a closed week, or unposted
+  and today is outside every week window). Badge on the card, card dimmed, sorted last.
+- Empty state per filter ("No IME Roleplay clips to review. Import a video on Analyze…").
+- Verified on staging (1280/390): IME all jobs = 7 to review, sorted 94/92/88/63/…, a staging-only test post
+  (`clip_posts.id = lane-b-test-weekclosed`, posted 30 Sep, admin) shows "Week closed" last; filter kept after reload;
+  job filter → job header, no source labels, URL #review/<job>; MotionKlip + Approved → empty state; 2 / 1 columns,
+  no overflow. Tests: `tests/test_review_state.py` (4), `tests/ui/specs/review.spec.js` rewritten (5 × 2);
+  UI suite on staging 121 passed; unit 116 OK.
