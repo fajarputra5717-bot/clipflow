@@ -1,6 +1,56 @@
-# P3 · Campaign screen + auto-import + Track (spec, 2026-10-07)
+# P2.5 · Schedule + P3 · Campaign screen + auto-import + Track (spec, 2026-10-07)
 
-Source: docs/roadmap.md (P3 row + "P3 · Campaign step spec", owner 2026-10-07). Starts after Lane C's P2 gate
+## P2.5 · Schedule (before P3; added 2026-10-07)
+
+Gap: P2 built Publish (mock step 7) but not Schedule (mock step 6, "Prime time, your TZ"). P2.5 builds it
+**without auto-posting**: the user still posts by hand, ClipFlow plans it and reminds them. Starts after Lane C's
+P2 gate PASS; P3 starts after the P2.5 gate. Same rules as below (one commit per part, change doc, staging write
+checks with lane-a-* users, `user_id` scoping, island-only progress).
+
+| # | Part | Effort | Depends on |
+|---|---|---|---|
+| S1 | Suggested posting times (per user, WIB) | S | — |
+| S2 | "Approve & schedule" → planned `clip_posts` | M | S1 |
+| S3 | Schedule view (by day, per platform) | M | S2 |
+| S4 | Telegram reminder at the planned time | M | S2, 141 send-to-phone |
+
+**S1 · Suggested times.** `POSTING_TIMES` in `USER_SETTING_KEYS` (user → app → default), JSON
+`{platform: ["HH:MM", …]}` in **WIB (Asia/Jakarta)**, defaults per platform in `DEFAULT_SETTINGS` (e.g. tiktok
+12:00/19:00/21:00, instagram 11:00/19:00, facebook 12:00/20:00, youtube 17:00/20:00; owner may adjust). Validated
+in a pure helper `shared/schedule.py` (`normalize_posting_times`, `next_slots(times, platform, after, taken)` →
+the next free slots, skipping ones already taken by this user on that account and slots outside the campaign's
+posting window via `payouts.window_for` / `window_problems`). Settings → Posting times editor (members edit
+their own). All times stored as TIMESTAMPTZ (UTC), shown in WIB.
+
+**S2 · Approve & schedule.** Review/Editor get "Approve & schedule" next to Approve: same approve gate (409 on
+blocking `rule_checks`), then a sheet with one row per campaign platform × account: suggested slot (from S1,
+editable date/time in WIB), account picker. Saving creates/updates `clip_posts` rows with `status='planned'`,
+`scheduled_for` (column already exists since 129), through `shared/posts.py` validation; pre-post amber checks
+(132) run against the planned time (e.g. outside window → warning, stored `eligible=false` + reason). Re-plan =
+PATCH `scheduled_for`; `dropped → planned` keeps working. The final render still runs as today; a post whose
+render is not done by its time is flagged in S3 and in the reminder. No new status; "scheduled" = planned +
+`scheduled_for` set.
+
+**S3 · Schedule view.** Stepper step 6 goes live (flow-preview "Schedule"): `GET /api/schedule?from&to` (own
+planned posts only, 404 rules as P1.5) grouped by WIB day, then per platform/account; list view default (mobile)
++ week calendar (desktop ≥ 1000 px). Each row: thumbnail, title, campaign, platform/account, time, render state,
+eligibility chip; actions: Reschedule (next free slot / pick), Send to phone now (141), Mark posted (→ Publish's
+existing posted flow with URL), Drop. Overdue planned posts (time passed, not posted) shown red at the top. Empty
+days show the free suggested slots. Matches the mockup's visual system; no progress UI outside the island.
+
+**S4 · Reminder.** The notifier (already per-user since 142) checks every minute for planned posts with
+`scheduled_for` ≤ now + `REMINDER_LEAD_MIN` (user setting, default 10) and no reminder sent yet
+(`clip_posts.reminded_at`, new column, set in the same transaction). It enqueues the send-to-phone package via
+the existing `telegram_sends` queue (141: video ≤ 50 MB or shrunk + caption/hashtags as 2nd message) plus a
+header line "⏰ Post now: <platform> @<account> · <time WIB> · <campaign>", to the user's OWN chat (no chat → no
+send, row flagged in S3). Missed reminders after a restart are sent once if < 1 h late, else only flagged. The
+09:00 digest (142) lists today's scheduled posts. Progress of the package in the island (activity kind telegram).
+**No auto-posting** (P5).
+
+**Gate:** Lane C P2.5 gate in docs/qa/ (cross-user 404 on schedule/plan routes, WIB/DST-free time handling,
+reminder sent once, posting-window warnings); any open High blocks P3.
+
+Source: docs/roadmap.md (P3 row + "P3 · Campaign step spec", owner 2026-10-07). Starts after Lane C's P2.5 gate
 PASS and the lane-b production merge (Review page + editor; see `docs/tasks/lane-b-merge-plan.md`). One commit per
 part, `docs/changes/` entry each, verified on the running stack (write checks on staging with lane-a-* users only),
 report after each part. Money: IDR first, every amount from `shared/payouts.py` (never computed in index.html).
