@@ -10,7 +10,6 @@ x-app-env: &app-env
   TZ: ${TZ:-Asia/Jakarta}
   PYTHONUNBUFFERED: "1"
   CLIPFLOW_ENV: staging
-  CLIPFLOW_SESSION_COOKIE: clipflow_staging_session   # production cookies (same host) are ignored here
   # never delete anything from staging sweeps (and /data is read-only anyway)
   ORPHAN_SWEEP_DRY_RUN: "true"
   RETENTION_DAYS_INTERMEDIATE: "36500"

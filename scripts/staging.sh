@@ -13,6 +13,8 @@ make_env() {   # staging env = production env minus every outbound/billable inte
   # P1.5: staging admins get their OWN password (production's is never copied); kept across resets
   [ -n "$keep_pw" ] || keep_pw=$(head -c 18 /dev/urandom | base64 | tr -d '/+=' | head -c 20)
   printf 'STAGING_ADMIN_PASSWORD=%s\n' "$keep_pw" >> .env.staging
+  # main 140: CLIPFLOW_ENV=staging → cookie clipflow_staging_session (+ the /api/env STAGING banner)
+  sed -i '/^CLIPFLOW_ENV=/d' .env.staging; printf 'CLIPFLOW_ENV=staging\n' >> .env.staging
   printf 'TELEGRAM_BOT_TOKEN=\nTELEGRAM_CHAT_ID=\nSUBMAGIC_API_KEY=\nYOUTUBE_CLIENT_ID=\nYOUTUBE_CLIENT_SECRET=\nYOUTUBE_REFRESH_TOKEN=\nRUNWAY_API_KEY=\n' >> .env.staging
   chmod 600 .env.staging
 }
