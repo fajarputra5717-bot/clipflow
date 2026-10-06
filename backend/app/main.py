@@ -15,6 +15,7 @@ from urllib.parse import urlsplit
 from typing import Any, Optional
 
 import psycopg
+import requests
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
@@ -441,6 +442,32 @@ def ensure_schema():
         # 137: every range this job's clips have had ([[start, end], …], incl. replaced ones) so "Get another
         # hook" never returns a used moment again.
         "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS used_hook_ranges JSONB",
+        # P2 part 6a (141): "Send to phone" queue, claimed by the worker (FOR UPDATE SKIP LOCKED like every queue).
+        # chat_id is snapshotted from the user's own Telegram chat at queue time.
+        """
+        CREATE TABLE IF NOT EXISTS telegram_sends (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            kind TEXT NOT NULL DEFAULT 'clip' CHECK (kind IN ('clip', 'test')),
+            candidate_id TEXT REFERENCES clip_candidates(id) ON DELETE CASCADE,
+            platform TEXT,
+            chat_id TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'queued' CHECK (status IN ('queued', 'sending', 'sent', 'failed')),
+            progress INT NOT NULL DEFAULT 0,
+            message TEXT,
+            error TEXT,
+            mode TEXT,
+            attempts INT NOT NULL DEFAULT 0,
+            retry_after TIMESTAMPTZ,
+            heartbeat_at TIMESTAMPTZ,
+            tmp_path TEXT,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            sent_at TIMESTAMPTZ
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS idx_telegram_sends_queue ON telegram_sends (status, created_at)",
+        "CREATE INDEX IF NOT EXISTS idx_telegram_sends_user ON telegram_sends (user_id, candidate_id, platform, created_at DESC)",
         "ALTER TABLE clip_posts ADD COLUMN IF NOT EXISTS expected_rp BIGINT",
         "CREATE INDEX IF NOT EXISTS idx_clip_posts_candidate ON clip_posts (candidate_id)",
         "CREATE UNIQUE INDEX IF NOT EXISTS uq_clip_posts_url ON clip_posts (user_id, url) WHERE url IS NOT NULL",
@@ -1724,6 +1751,20 @@ def publish_queue(request: Request):
             accounts = cur.fetchall()
             now = datetime.now(timezone.utc)
             usage = {c: _account_usage(cur, user["id"], c, now) for c in {r[2] for r in clips if r[2]}}
+            sends = {}
+            if ids:
+                cur.execute(
+                    """
+                    SELECT DISTINCT ON (candidate_id, platform) candidate_id, platform, status, message, error,
+                           mode, sent_at, updated_at
+                    FROM telegram_sends WHERE user_id = %s AND kind = 'clip' AND candidate_id = ANY(%s)
+                    ORDER BY candidate_id, platform, created_at DESC
+                    """,
+                    (user["id"], ids),
+                )
+                for r in cur.fetchall():
+                    sends[(r[0], r[1])] = {"status": r[2], "message": r[3], "error": r[4], "mode": r[5],
+                                           "sent_at": r[6].isoformat() if r[6] else None}
     groups = {}
     for (cid, jid, camp, job_platform, title, desc, dur, rendered_at, thumb, job_title,
          start_time, end_time, render_warnings, safety) in clips:
@@ -1765,7 +1806,7 @@ def publish_queue(request: Request):
                 "has_thumbnail": bool(thumb),
                 "filename": post_rules.download_name(camp, plat, title or ""),
                 "post": posts.get((cid, plat)),
-                "checks": checks, "account_usage": acct_usage,
+                "checks": checks, "account_usage": acct_usage, "last_send": sends.get((cid, plat)),
             })
     order = sorted(groups.values(), key=lambda g: (g["campaign"] is None, g["campaign_name"].lower()))
     return {"groups": order}
@@ -2121,6 +2162,146 @@ def delete_post(post_id: str, request: Request):
     return {"ok": True}
 
 
+# ============================================================
+# TELEGRAM "SEND TO PHONE" (P2 part 6a, 141) — one bot (env TELEGRAM_BOT_TOKEN),
+# each user's OWN chat (user_settings TELEGRAM_CHAT_ID; an admin without one falls
+# back to env TELEGRAM_CHAT_ID; a member never does). Sending is a worker queue.
+# ============================================================
+
+TELEGRAM_CHAT_RE = re.compile(r"^(-?\d{3,20}|@[A-Za-z0-9_]{5,32})$")
+_bot_name_cache: dict = {}
+
+
+def telegram_chat_for(cur, user: dict) -> tuple[Optional[str], str]:
+    """(chat_id, source user|env|none)."""
+    cur.execute("SELECT value FROM user_settings WHERE user_id = %s AND key = 'TELEGRAM_CHAT_ID'", (user["id"],))
+    row = cur.fetchone()
+    if row and (row[0] or "").strip():
+        return row[0].strip(), "user"
+    env_chat = (os.getenv("TELEGRAM_CHAT_ID") or "").strip()
+    if user["role"] == "admin" and env_chat:
+        return env_chat, "env"
+    return None, "none"
+
+
+def telegram_bot_name() -> Optional[str]:
+    """@username of the bot (getMe, cached 1 h); None when no token or Telegram is unreachable."""
+    token = (os.getenv("TELEGRAM_BOT_TOKEN") or "").strip()
+    if not token:
+        return None
+    hit = _bot_name_cache.get("v")
+    if hit and time.time() - hit[0] < 3600:
+        return hit[1]
+    try:
+        r = requests.get(f"https://api.telegram.org/bot{token}/getMe", timeout=5)
+        name = r.json().get("result", {}).get("username") if r.ok else None
+    except Exception:
+        name = None
+    _bot_name_cache["v"] = (time.time(), name)
+    return name
+
+
+class TelegramChat(BaseModel):
+    chat_id: str = Field(default="", max_length=40)
+
+
+@app.get("/api/telegram")
+def get_telegram(request: Request):
+    user = current_user(request)
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            chat, source = telegram_chat_for(cur, user)
+            cur.execute("SELECT value FROM user_settings WHERE user_id = %s AND key = 'TELEGRAM_CHAT_ID'", (user["id"],))
+            own = cur.fetchone()
+    bot = telegram_bot_name()
+    return {
+        "bot_configured": bool((os.getenv("TELEGRAM_BOT_TOKEN") or "").strip()),
+        "bot_username": bot,
+        "chat_id": (own[0] if own else "") or "",
+        "source": source,
+        "ready": bool(chat) and bool((os.getenv("TELEGRAM_BOT_TOKEN") or "").strip()),
+    }
+
+
+@app.put("/api/telegram")
+def put_telegram(payload: TelegramChat, request: Request):
+    user = current_user(request)
+    chat = payload.chat_id.strip()
+    if chat and not TELEGRAM_CHAT_RE.match(chat):
+        raise HTTPException(status_code=400, detail="Chat id: the number from @userinfobot (e.g. 123456789) or a @channel name")
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            set_user_setting(cur, user["id"], "TELEGRAM_CHAT_ID", chat or None)
+        conn.commit()
+    return get_telegram(request)
+
+
+def _queue_telegram(cur, user: dict, kind: str, candidate_id=None, platform=None) -> dict:
+    if not (os.getenv("TELEGRAM_BOT_TOKEN") or "").strip():
+        raise HTTPException(status_code=409, detail="Telegram isn't set up on this server (no bot token)")
+    chat, _ = telegram_chat_for(cur, user)
+    if not chat:
+        raise HTTPException(status_code=409, detail="Add your Telegram chat id in Account first")
+    sid = str(uuid.uuid4())
+    cur.execute(
+        """
+        INSERT INTO telegram_sends (id, user_id, kind, candidate_id, platform, chat_id, message)
+        VALUES (%s, %s, %s, %s, %s, %s, 'Queued')
+        """,
+        (sid, user["id"], kind, candidate_id, platform, chat),
+    )
+    return {"id": sid, "status": "queued"}
+
+
+@app.post("/api/telegram/test")
+def telegram_test(request: Request):
+    user = current_user(request)
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            out = _queue_telegram(cur, user, "test")
+        conn.commit()
+    return out
+
+
+class SendToPhone(BaseModel):
+    candidate_id: str = Field(max_length=64)
+    platform: str = Field(max_length=20)
+
+
+@app.post("/api/publish/send-to-phone")
+def send_to_phone(payload: SendToPhone, request: Request):
+    """Queue: the final mp4 + title + caption (this platform's) to the user's own Telegram chat."""
+    user = current_user(request)
+    if payload.platform not in rule_checks.PLATFORM_LIMITS:
+        raise HTTPException(status_code=400, detail="Unknown platform")
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT COALESCE(c.final_path, '') FROM clip_candidates c JOIN jobs j ON j.id = c.job_id
+                WHERE c.id = %s AND j.user_id = %s
+                """,
+                (payload.candidate_id, user["id"]),
+            )
+            row = cur.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Clip not found")
+            if not row[0]:
+                raise HTTPException(status_code=409, detail="This clip has no final render yet")
+            cur.execute(
+                """
+                SELECT 1 FROM telegram_sends WHERE user_id = %s AND candidate_id = %s AND platform = %s
+                  AND status IN ('queued', 'sending')
+                """,
+                (user["id"], payload.candidate_id, payload.platform),
+            )
+            if cur.fetchone():
+                raise HTTPException(status_code=409, detail="Already on its way to your phone")
+            out = _queue_telegram(cur, user, "clip", payload.candidate_id, payload.platform)
+        conn.commit()
+    return out
+
+
 # Analyze form: "≈ 6 min for a 1 h 24 min video" from the caller's own finished jobs
 # (P1.5 scope). Video length = end of the last transcript segment; processing =
 # started_at → review_ready_at (queue wait excluded). samples 0 = no history (UI hides it).
@@ -2208,6 +2389,25 @@ def list_activity(request: Request):
                     # "processing" once it runs (pre-P1 #4: no fake 50 %).
                     items.append({**base, "kind": "submagic", "stage": sm, "percent": None,
                                   "label": "Submagic: queued" if sm.startswith("queued") else "Submagic: processing"})
+            # 141: Telegram sends (island capsule while queued/sending)
+            cur.execute(
+                """
+                SELECT t.id, t.status, t.progress, t.message, t.candidate_id, c.job_id,
+                       COALESCE(NULLIF(c.manual_title, ''), NULLIF(c.title, ''), c.ai_title), t.updated_at,
+                       NULLIF(u.username, %s), t.kind
+                FROM telegram_sends t JOIN users u ON u.id = t.user_id
+                LEFT JOIN clip_candidates c ON c.id = t.candidate_id
+                WHERE t.status IN ('queued', 'sending') AND (%s OR t.user_id = %s)
+                ORDER BY t.created_at
+                """,
+                (user["username"], see_all, user["id"]),
+            )
+            for tid, st, prog, msg, cid, jid, title, upd, owner, kind in cur.fetchall():
+                items.append({"owner": owner, "kind": "telegram", "id": tid, "job_id": jid, "candidate_id": cid,
+                              "stage": st, "percent": int(prog or 0) if st == "sending" else None,
+                              "label": msg or ("Telegram: queued" if st == "queued" else "Sending to Telegram"),
+                              "title": title or ("Telegram test" if kind == "test" else "Clip"),
+                              "updated_at": upd.isoformat() if upd else None})
     return {"items": items}
 
 

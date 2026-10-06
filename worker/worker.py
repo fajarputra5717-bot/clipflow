@@ -1,5 +1,6 @@
 import contextvars
 import difflib
+from datetime import datetime, timedelta, timezone
 import hashlib
 import json
 import os
@@ -24,7 +25,7 @@ from faster_whisper import WhisperModel
 from psycopg.rows import dict_row
 
 from shared.ai import router as ai_router
-from shared import campaigns, descriptions, edit_spec as edit_specs, languages, retention
+from shared import campaigns, descriptions, edit_spec as edit_specs, languages, posts as post_rules, retention, rule_checks
 from shared.errors import FAILURE_TRANSIENT, failure_class
 from shared.fonts import caption_font_bold, normalize_caption_font
 from shared.settings import RuntimeSettings
@@ -521,6 +522,194 @@ def clips_per_job(value=None):
     except (TypeError, ValueError):
         n = 4
     return max(CLIPS_MIN, min(CLIPS_MAX, n))
+
+
+# ============================================================
+# SEND TO PHONE (P2 part 6a, 141): telegram_sends queue. One bot (env
+# TELEGRAM_BOT_TOKEN); chat_id is the user's own, snapshotted by the backend.
+# Message 1 = the final mp4 (≤ 50 MB Bot API limit, else re-encoded to fit,
+# else a text saying so) with a short caption; message 2 = the post caption
+# alone (title + text + campaign hashtags in order) so it's one long-press to copy.
+# ============================================================
+
+TELEGRAM_MAX_BYTES = 50 * 1024 * 1024
+TELEGRAM_TARGET_BYTES = 45 * 1024 * 1024
+TELEGRAM_MAX_ATTEMPTS = 3
+
+
+class TelegramError(Exception):
+    def __init__(self, message, transient):
+        super().__init__(message)
+        self.transient = transient
+
+
+def claim_telegram_send():
+    try:
+        return _claim_telegram_send()
+    except psycopg.errors.UndefinedTable:
+        return None  # backend hasn't migrated yet (fresh deploy)
+
+
+def _claim_telegram_send():
+    with db() as conn:
+        row = conn.execute(
+            """
+            UPDATE telegram_sends t SET status = 'sending', attempts = attempts + 1, progress = 5,
+                   message = 'Preparing', heartbeat_at = NOW(), updated_at = NOW()
+            WHERE t.id = (
+                SELECT id FROM telegram_sends
+                WHERE status = 'queued' AND (retry_after IS NULL OR retry_after <= NOW())
+                ORDER BY created_at LIMIT 1 FOR UPDATE SKIP LOCKED)
+            RETURNING t.*, (SELECT c.job_id FROM clip_candidates c WHERE c.id = t.candidate_id) AS job_id
+            """
+        ).fetchone()
+        conn.commit()
+    return row
+
+
+def requeue_telegram_sends():
+    """Startup: a send that was in flight when the worker died goes back to the queue."""
+    with db() as conn:
+        conn.execute(
+            "UPDATE telegram_sends SET status = 'queued', message = 'Queued (worker restarted)', updated_at = NOW() "
+            "WHERE status = 'sending'"
+        )
+        conn.commit()
+
+
+def update_telegram_send(send_id, **fields):
+    cols = ", ".join(f"{k} = %s" for k in fields)
+    with db() as conn:
+        conn.execute(f"UPDATE telegram_sends SET {cols}, heartbeat_at = NOW(), updated_at = NOW() WHERE id = %s",
+                     (*fields.values(), send_id))
+        conn.commit()
+
+
+def telegram_call(method, data=None, files=None, timeout=60):
+    token = (os.getenv("TELEGRAM_BOT_TOKEN") or "").strip()
+    if not token:
+        raise TelegramError("No TELEGRAM_BOT_TOKEN on the server", transient=False)
+    try:
+        r = _requests.post(f"https://api.telegram.org/bot{token}/{method}", data=data, files=files, timeout=timeout)
+    except _requests.RequestException as exc:
+        raise TelegramError(f"Telegram unreachable: {type(exc).__name__}", transient=True)
+    try:
+        body = r.json()
+    except ValueError:
+        body = {}
+    if r.ok and body.get("ok"):
+        return body.get("result")
+    desc = (body.get("description") or f"HTTP {r.status_code}")[:200]
+    if r.status_code == 429 or r.status_code >= 500:
+        raise TelegramError(f"Telegram busy: {desc}", transient=True)
+    if "chat not found" in desc.lower() or r.status_code == 403:
+        desc += " — open your bot in Telegram and press Start, then check the chat id in Account"
+    raise TelegramError(f"Telegram refused: {desc}", transient=False)
+
+
+def telegram_post_text(send):
+    """(title, caption, filename) for a clip send, same rules as the Publish queue (130)."""
+    with db() as conn:
+        c = conn.execute(
+            """
+            SELECT c.final_path, c.description, c.duration_seconds, j.campaign, j.platform AS job_platform,
+                   COALESCE(NULLIF(c.manual_title, ''), NULLIF(c.title, ''), c.ai_title) AS title
+            FROM clip_candidates c JOIN jobs j ON j.id = c.job_id WHERE c.id = %s
+            """,
+            (send["candidate_id"],),
+        ).fetchone()
+    if not c or not c["final_path"]:
+        raise TelegramError("The clip has no final render any more", transient=False)
+    plat = send["platform"]
+    rules = campaigns.get(c["campaign"]) if c["campaign"] else None
+    if rules:
+        tags, body = campaigns.hashtags(rules), campaigns.caption_body(c["description"]) or (c["title"] or "")
+    else:
+        tags, body = [], (c["description"] or c["title"] or "").strip()
+    caption, _ = post_rules.trim_caption(body, tags, post_rules.CAPTION_LIMITS.get(plat, 2200))
+    title = post_rules.trim_title(c["title"] or "", plat)
+    return c, title, caption, post_rules.download_name(c["campaign"], plat, c["title"] or "")
+
+
+def shrink_for_telegram(src, send_id, duration):
+    """Re-encode to ~45 MB (H.264 + AAC 96k) when the final is over 50 MB; None if it can't fit sensibly."""
+    dur = max(1.0, float(duration or 0))
+    v_kbps = int(TELEGRAM_TARGET_BYTES * 8 / dur / 1000) - 96
+    if v_kbps < 400:
+        return None
+    out_dir = DATA_ROOT / "telegram"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out = out_dir / f"{send_id}.mp4"  # named by the send id; deleted after sending
+    ensure_disk_space("telegram", need_mb=TELEGRAM_TARGET_BYTES / (1024 * 1024) * 2)
+    run_command(
+        ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-i", str(src),
+         "-c:v", "libx264", "-preset", "veryfast", "-b:v", f"{v_kbps}k", "-maxrate", f"{int(v_kbps * 1.2)}k",
+         "-bufsize", f"{v_kbps * 2}k", "-c:a", "aac", "-b:a", "96k", "-movflags", "+faststart", str(out)],
+        timeout=render_timeout_seconds(dur),
+    )
+    return out if out.exists() and out.stat().st_size <= TELEGRAM_MAX_BYTES else None
+
+
+def process_telegram_send(send):
+    sid, chat = send["id"], send["chat_id"]
+    tmp = None
+    try:
+        if send["kind"] == "test":
+            telegram_call("sendMessage", {"chat_id": chat, "text": "ClipFlow ✓ Send to phone will deliver your clips to this chat."})
+            update_telegram_send(sid, status="sent", progress=100, message="Test message sent", mode="text", sent_at=datetime.now(timezone.utc))
+            return
+        c, title, caption, filename = telegram_post_text(send)
+        src = Path(c["final_path"])
+        if not src.is_absolute():
+            src = DATA_ROOT / src
+        if not src.exists():
+            raise TelegramError("The final file is missing on disk", transient=False)
+        path, mode = src, "video"
+        if src.stat().st_size > TELEGRAM_MAX_BYTES:
+            update_telegram_send(sid, progress=15, message="Shrinking to fit Telegram's 50 MB")
+            tmp = shrink_for_telegram(src, sid, c["duration_seconds"])
+            if tmp:
+                path, mode = tmp, "reencoded"
+                update_telegram_send(sid, tmp_path=str(tmp.relative_to(DATA_ROOT)))
+            else:
+                path, mode = None, "too_big"
+        platform_name = rule_checks_platform_name(send["platform"])
+        head = f"{title}\n{platform_name} · {filename}"
+        if path:
+            update_telegram_send(sid, progress=40, message="Uploading to Telegram")
+            with open(path, "rb") as fh:
+                telegram_call("sendVideo", {"chat_id": chat, "caption": head[:1024], "supports_streaming": "true"},
+                              files={"video": (filename, fh, "video/mp4")}, timeout=600)
+            if mode == "reencoded":
+                telegram_call("sendMessage", {"chat_id": chat, "text": "Note: re-encoded to fit Telegram's 50 MB limit; download the original from ClipFlow → Publish for full quality."})
+        else:
+            telegram_call("sendMessage", {"chat_id": chat, "text": f"{head}\n\nThis clip is over Telegram's 50 MB limit and couldn't be shrunk without wrecking it: download it from ClipFlow → Publish."})
+        update_telegram_send(sid, progress=85, message="Sending the caption")
+        telegram_call("sendMessage", {"chat_id": chat, "text": caption[:4096] or title})
+        msg = {"video": "Sent to your phone", "reencoded": "Sent (re-encoded under 50 MB)", "too_big": "Too big for Telegram: caption + note sent"}[mode]
+        update_telegram_send(sid, status="sent", progress=100, message=msg, mode=mode, sent_at=datetime.now(timezone.utc), error=None)
+        log(f"Telegram send {sid}: {mode}")
+    except TelegramError as exc:
+        again = exc.transient and int(send["attempts"] or 0) < TELEGRAM_MAX_ATTEMPTS
+        update_telegram_send(sid, status="queued" if again else "failed", progress=0,
+                             message="Retrying soon" if again else "Failed", error=str(exc)[:300],
+                             retry_after=datetime.now(timezone.utc) + timedelta(minutes=2 * int(send["attempts"] or 1)) if again else None)
+        log(f"Telegram send {sid} {'retry' if again else 'failed'}: {exc}")
+    except JobCancelled:
+        raise
+    except Exception as exc:
+        update_telegram_send(sid, status="failed", progress=0, message="Failed", error=f"{type(exc).__name__}: {str(exc)[-250:]}")
+        log(f"Telegram send {sid} failed: {exc}")
+    finally:
+        if tmp:
+            try:
+                Path(tmp).unlink(missing_ok=True)
+            except Exception:
+                pass
+
+
+def rule_checks_platform_name(slug):
+    return rule_checks.PLATFORM_LIMITS.get(slug, (0, 0, slug))[2]
 
 
 def run_as_owner(job_id, fn, arg):
@@ -7504,6 +7693,10 @@ def main():
     # (was: reset_orphans(), which failed it outright).
     reclaim_stale(startup=True)
     try:
+        requeue_telegram_sends()
+    except psycopg.errors.UndefinedTable:
+        log("telegram_sends not created yet (backend migrates it); skipping requeue")
+    try:
         backfill_source_titles(limit=20)  # 134: titles for sources from before the fix
     except Exception as exc:
         log(f"Title backfill failed: {exc}")
@@ -7552,6 +7745,15 @@ def main():
 
                 run_as_owner(submagic_poll_row["job_id"], process_submagic_poll, submagic_poll_row)
 
+                continue
+
+            # 141: Send to phone (Telegram) — after renders and Submagic, before idling.
+            tg = claim_telegram_send()
+            if tg:
+                if tg.get("job_id"):
+                    run_as_owner(tg["job_id"], process_telegram_send, tg)
+                else:
+                    process_telegram_send(tg)
                 continue
 
             # Nothing queued: housekeeping (R-14/R-15), then idle.
