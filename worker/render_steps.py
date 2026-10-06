@@ -224,6 +224,45 @@ def cut_plan(candidate: dict, clip_duration: float, fps: Optional[float] = None)
     return None if not keep or keep == full else keep
 
 
+def burn_segments(segments, candidate: dict, clip_duration: float):
+    """Caption segments to BURN when the clip has cuts (QA 3597000/8f361a3 HIGH): words that are cut or
+    outside the trim are removed from their lines (a line spanning a cut used to keep its full text on
+    screen), each line's text is rebuilt from its remaining words, empty lines are dropped. Kept words
+    keep their SOURCE timings: the cut pass (apply_cuts) maps captions and video onto the output timeline
+    together, so karaoke stays in sync. A word counts as cut when more than half of it is removed.
+    Unchanged when there are no cuts. The editor timeline keeps the full word list (write_timeline gets
+    the unfiltered segments)."""
+    keep = cut_plan(candidate, clip_duration)
+    if not keep:
+        return segments
+
+    def kept_share(a, b):
+        if b <= a:
+            return 1.0 if any(x <= a < y for x, y in keep) else 0.0
+        return sum(max(0.0, min(b, y) - max(a, x)) for x, y in keep) / (b - a)
+
+    out = []
+    for seg in segments or []:
+        words = seg.get("words") or []
+        if not words:
+            mid = (float(seg.get("start", 0)) + float(seg.get("end", 0))) / 2
+            if kept_share(mid, mid) > 0:
+                out.append(seg)
+            continue
+        kept = [w for w in words if kept_share(float(w["start"]), float(w["end"])) > 0.5]
+        if not kept:
+            continue
+        if len(kept) == len(words):
+            out.append(seg)
+            continue
+        first_kept, last_kept = kept[0] is words[0], kept[-1] is words[-1]
+        out.append({**seg, "words": kept,
+                    "text": " ".join(str(w.get("word") or "").strip() for w in kept).strip(),
+                    "start": seg.get("start") if first_kept else kept[0]["start"],
+                    "end": seg.get("end") if last_kept else kept[-1]["end"]})
+    return out
+
+
 def _probe_fps(path) -> Optional[float]:
     import subprocess
     try:

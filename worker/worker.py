@@ -5318,6 +5318,7 @@ def create_preview(
     # 111 (P1): AI-picked keywords for this clip, before the first ASS is written.
     pick_keywords(candidate_id, job, candidate, clip_segments)
 
+    clip_segments, source_segments = render_steps.burn_segments(clip_segments, candidate, duration), clip_segments  # lane-b hook
     # R-16: one asset + one geometry for this render; make_ass()
     # returns the watermark rect cleared of the captions.
     wm_path = job_watermark_path(job, candidate_id)
@@ -5379,7 +5380,7 @@ def create_preview(
     # QA P0: previews sound like the final (same chain + verify, never fatal).
     normalize_loudness(preview_path, duration, candidate_id=candidate_id,
                        audio_bitrate="96k")
-    render_steps.write_timeline(preview_path, clip_segments, duration, candidate, PREVIEW_DIR, source_path=video_path, start=start, log=log)  # lane-b hook
+    render_steps.write_timeline(preview_path, source_segments, duration, candidate, PREVIEW_DIR, source_path=video_path, start=start, log=log)  # lane-b hook
 
     # A locked thumbnail (an AI option or a manual upload the user
     # explicitly picked via Apply changes) must survive preview
@@ -5779,6 +5780,7 @@ def render_final_candidate(
     if not job_burn_subtitles(job):
         subtitle_file = None
 
+    clip_segments, source_segments = render_steps.burn_segments(clip_segments, candidate, duration), clip_segments  # lane-b hook
     # R-16: one asset + one geometry for this render; make_ass()
     # returns the watermark rect cleared of the captions.
     wm_path = job_watermark_path(job, candidate_id)

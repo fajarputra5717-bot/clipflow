@@ -39,3 +39,17 @@ Live UI (1280): 14 struck words + 2 struck pauses from the saved spec, trim hand
 click word 12 (source 6.30 s) → video 3.85 s = mapped output time, chip highlighted, no errors.
 Tests: `tests/test_cuts.py` (9), 4 cut UI specs × 2 viewports; UI suite on staging 88 passed; unit OK.
 Also: STAGING strip offsets the sticky toolbar (22 px) on staging only.
+
+## Fix 2026-10-07 — cut words no longer stay on screen (QA 3597000 / 8f361a3, HIGH)
+
+Burning at source times and then cutting kept a caption LINE's full text when the line spanned a cut
+("FINALITY GAS AJA" / "GOALIN AJA AMAN" after cutting "gas aja goalin"). Now `render_steps.burn_segments()`
+(one `# lane-b hook` before make_ass() in preview AND final) removes cut and outside-trim words from the caption
+segments that get burned (a word is cut when > 50 % of it is removed), rebuilds each line's text from its kept
+words and drops empty lines. Kept words keep source timings and are mapped to output time by the cut pass
+(time-remap with the video), so karaoke stays intact. The editor timeline still gets the full word list.
+Verified on staging (clip 65dbd109, 3 mid-line cuts: "yang", the 2nd "gak", "5"): burned preview AND final ASS read
+"ITU MX", "GAK ADA INI MUNGKIN DAMAS", "KEPALAH PAS COIN TOH"; frames 0.15 s before/after each cut (preview) and
+after each cut (final) show the lines without the cut words and the karaoke highlight advancing across the cut
+("GAK ADA I|NI…" → "…MUNG|KIN"); final 33.79 s = 35 − cuts. `subtitle_segments` (stored) = what was burned, still in
+SOURCE time (QA Low #2, documented here). Tests: 3 new in tests/test_cuts.py; unit 112 OK.

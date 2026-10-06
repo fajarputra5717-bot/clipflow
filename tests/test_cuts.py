@@ -62,6 +62,33 @@ class Plan(unittest.TestCase):
         self.assertIn("Dialogue: 22,0:00:03.00,0:00:05.00,HookCard", body)
 
 
+class BurnSegments(unittest.TestCase):
+    SEGS = [{"start": 10.0, "end": 12.0, "text": "FINALITY GAS AJA", "words": [
+                {"word": "FINALITY", "start": 10.0, "end": 10.8}, {"word": "GAS", "start": 10.9, "end": 11.3},
+                {"word": "AJA", "start": 11.3, "end": 11.7}]},
+            {"start": 12.0, "end": 14.0, "text": "GOALIN AJA AMAN", "words": [
+                {"word": "GOALIN", "start": 12.0, "end": 12.5}, {"word": "AJA", "start": 12.5, "end": 12.9},
+                {"word": "AMAN", "start": 13.0, "end": 13.6}]},
+            {"start": 20.0, "end": 21.0, "text": "GONE", "words": [{"word": "GONE", "start": 20.0, "end": 21.0}]}]
+
+    def cand(self, cuts):
+        return {"id": "c", "edit_spec": {"cuts": cuts}}
+
+    def test_cut_words_leave_the_line_and_kept_words_keep_source_times(self):
+        out = rs.burn_segments(self.SEGS, self.cand({"trim": None, "removed": [[10.9, 12.9], [19.9, 21.1]]}), 35)
+        self.assertEqual([s["text"] for s in out], ["FINALITY", "AMAN"])   # "GAS AJA" + "GOALIN AJA" gone, "GONE" line dropped
+        self.assertEqual((out[0]["start"], out[0]["end"]), (10.0, 10.8))
+        self.assertEqual((out[1]["start"], out[1]["end"], out[1]["words"][0]["start"]), (13.0, 14.0, 13.0))
+
+    def test_trim_and_half_rule(self):
+        out = rs.burn_segments(self.SEGS, self.cand({"trim": [10.5, 30.0], "removed": []}), 35)
+        self.assertEqual(out[0]["text"], "GAS AJA")                        # FINALITY 10.0–10.8: 5/8 outside trim
+        self.assertEqual(len(out), 3)
+
+    def test_no_cuts_returns_input(self):
+        self.assertIs(rs.burn_segments(self.SEGS, {"id": "c", "edit_spec": {}}, 35), self.SEGS)
+
+
 class TimelineKeep(unittest.TestCase):
     def test_words_only_has_keep_none_and_version(self):
         d = tl.words_only([], 10)
