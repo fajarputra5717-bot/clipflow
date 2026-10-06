@@ -96,3 +96,4 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 122 · 2026-10-05 · P1.5 (2): user_id on jobs + watermark_assets (legacy → bootstrap admin), middleware ownership guard (404), scoped lists + activity; campaigns stay shared · main.py
 123 · 2026-10-06 · P1.5 (3): per-user settings (user → house default → env → default), global keys admin-only (403), per-user active watermark, worker resolves the job owner's · shared/settings.py, main.py, worker.py, index.html
 124 · 2026-10-06 · P1.5 (4): per-user API tokens (cf_…, sha256 only, Bearer or X-ClipFlow-Key), Account sheet create/copy-once/revoke; legacy key stays admin · app/auth.py, main.py, index.html
+125 · 2026-10-06 · P1.5 (5): admin Users in Settings (create w/ temp password, disable = sessions + tokens gone, role, reset → forced change), last-admin 409; legacy key kept until gate · app/auth.py, main.py, index.html

@@ -63,6 +63,9 @@ SCHEMA = [
     )
     """,
     "CREATE INDEX IF NOT EXISTS idx_user_sessions_user ON user_sessions (user_id)",
+    # Part 5: set by an admin create/reset (temp password); the session can only
+    # change its password until it is cleared by POST /api/auth/password.
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN NOT NULL DEFAULT FALSE",
     """
     CREATE TABLE IF NOT EXISTS login_failures (
         id BIGSERIAL PRIMARY KEY,
@@ -220,7 +223,7 @@ def session_user(conn, token: str) -> dict | None:
         cur.execute(
             """
             SELECT u.id, u.username, u.role,
-                   EXTRACT(EPOCH FROM NOW() - s.last_seen_at)
+                   EXTRACT(EPOCH FROM NOW() - s.last_seen_at), u.must_change_password
             FROM user_sessions s JOIN users u ON u.id = s.user_id
             WHERE s.token_hash = %s AND s.expires_at > NOW() AND u.active
             """,
@@ -240,7 +243,7 @@ def session_user(conn, token: str) -> dict | None:
                 (SESSION_TTL_DAYS, th),
             )
             conn.commit()
-    return {"id": row[0], "username": row[1], "role": row[2]}
+    return {"id": row[0], "username": row[1], "role": row[2], "must_change_password": bool(row[4])}
 
 
 def delete_session(conn, token: str) -> None:
@@ -291,7 +294,8 @@ def clear_login_failures(conn, username: str) -> None:
 def authenticate(conn, username: str, password: str) -> dict | None:
     with conn.cursor() as cur:
         cur.execute(
-            "SELECT id, username, role, password_hash, active FROM users WHERE username = %s",
+            "SELECT id, username, role, password_hash, active, must_change_password"
+            " FROM users WHERE username = %s",
             (username,),
         )
         row = cur.fetchone()
@@ -306,7 +310,7 @@ def authenticate(conn, username: str, password: str) -> dict | None:
                 "UPDATE users SET password_hash=%s WHERE id=%s",
                 (hash_password(password), row[0]),
             )
-    return {"id": row[0], "username": row[1], "role": row[2]}
+    return {"id": row[0], "username": row[1], "role": row[2], "must_change_password": bool(row[5])}
 
 
 # ---------- media tokens (per user) ----------
@@ -436,3 +440,52 @@ def api_token_user(conn, token: str) -> dict | None:
             cur.execute("UPDATE api_tokens SET last_used_at = NOW() WHERE token_hash = %s", (th,))
             conn.commit()
     return {"id": row[0], "username": row[1], "role": row[2]}
+
+
+# ---------- user admin (part 5) ----------
+
+import re as _re
+
+USERNAME_RE = _re.compile(USERNAME_RE_TEXT)
+
+
+def username_problem(username: str) -> str | None:
+    if not USERNAME_RE.match(username or ""):
+        return "Username: 2-32 characters, lower-case letters, digits, '.', '_' or '-', starting with a letter or digit"
+    return None
+
+
+def list_users(conn) -> list:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT u.id, u.username, u.role, u.active, u.created_at, u.must_change_password,
+                   (SELECT MAX(last_seen_at) FROM user_sessions s WHERE s.user_id = u.id),
+                   (SELECT COUNT(*) FROM jobs j WHERE j.user_id = u.id),
+                   (SELECT COUNT(*) FROM api_tokens t WHERE t.user_id = u.id)
+            FROM users u ORDER BY u.created_at
+            """
+        )
+        return [
+            {**public_user(r), "must_change_password": bool(r[5]),
+             "last_seen_at": r[6].isoformat() if r[6] else None,
+             "jobs": r[7], "tokens": r[8]}
+            for r in cur.fetchall()
+        ]
+
+
+def locked_user_and_admins(cur, user_id: str):
+    """Lock every active admin row (+ the target) so two concurrent changes can't
+    both remove 'the other' last admin. Returns (target row, active admin ids)."""
+    cur.execute("SELECT id FROM users WHERE role = 'admin' AND active ORDER BY id FOR UPDATE")
+    admins = [r[0] for r in cur.fetchall()]
+    cur.execute(
+        "SELECT id, username, role, active FROM users WHERE id = %s FOR UPDATE", (user_id,)
+    )
+    return cur.fetchone(), admins
+
+
+def end_user_access(cur, user_id: str, tokens: bool) -> None:
+    cur.execute("DELETE FROM user_sessions WHERE user_id = %s", (user_id,))
+    if tokens:
+        cur.execute("DELETE FROM api_tokens WHERE user_id = %s", (user_id,))

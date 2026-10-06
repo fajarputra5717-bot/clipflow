@@ -85,6 +85,10 @@ MEDIA_PATH_RE = re.compile(
 
 OPEN_API_PATHS = {"/api/auth/login", "/api/auth/logout"}
 
+# Part 5: a session whose password was set by an admin (create/reset) may only
+# do these until it picks its own password.
+PASSWORD_CHANGE_PATHS = {"/api/auth/me", "/api/auth/password"}
+
 SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 
 # Ownership guard (P1.5): every route under these prefixes names a row by id; the
@@ -191,6 +195,13 @@ async def require_user(request: Request, call_next):
             and not _origin_allowed(request)
         ):
             return JSONResponse({"detail": "Cross-origin request refused"}, status_code=403)
+        if user.get("must_change_password") and path not in PASSWORD_CHANGE_PATHS:
+            return JSONResponse(
+                {"detail": "Choose a new password first", "code": "password_change_required"},
+                status_code=403,
+            )
+        if (path == "/api/admin" or path.startswith("/api/admin/")) and user["role"] != "admin":
+            return JSONResponse({"detail": "Admins only"}, status_code=403)
         try:
             owned = await run_in_threadpool(_path_owned, user, path)
         except Exception:
@@ -853,7 +864,8 @@ def login(payload: LoginRequest, request: Request):
         auth.clear_login_failures(conn, username)
         token = auth.create_session(conn, user["id"], ip, request.headers.get("user-agent"))
         conn.commit()
-    response = JSONResponse({"user": user})
+    must_change = bool(user.pop("must_change_password", False))
+    response = JSONResponse({"user": user, "must_change_password": must_change})
     _set_session_cookie(request, response, token)
     return response
 
@@ -873,7 +885,11 @@ def logout(request: Request):
 @app.get("/api/auth/me")
 def auth_me(request: Request):
     user = current_user(request)
-    return {"user": {k: user[k] for k in ("id", "username", "role")}, "via": user["via"]}
+    return {
+        "user": {k: user[k] for k in ("id", "username", "role")},
+        "via": user["via"],
+        "must_change_password": bool(user.get("must_change_password")),
+    }
 
 
 # ---------- API tokens (part 4): per user, for scripts ----------
@@ -919,6 +935,122 @@ def revoke_token(token_id: str, request: Request):
     return {"ok": True}
 
 
+# ---------- user admin (part 5): admins only (middleware 403s /api/admin/* for members) ----------
+# No public signup: accounts exist only through POST /api/admin/users. A created or
+# reset account gets a temporary password and must choose its own at next login.
+# There is always at least one active admin (create can't, disable/demote can't remove it).
+
+class AdminUserCreate(BaseModel):
+    username: str = Field(max_length=64)
+    password: str = Field(max_length=256)
+    role: str = "member"
+
+
+class AdminUserUpdate(BaseModel):
+    active: Optional[bool] = None
+    role: Optional[str] = None
+
+
+class AdminPasswordReset(BaseModel):
+    password: str = Field(max_length=256)
+
+
+@app.get("/api/admin/users")
+def admin_list_users(request: Request):
+    require_admin(request)
+    with get_db() as conn:
+        return {"users": auth.list_users(conn)}
+
+
+@app.post("/api/admin/users")
+def admin_create_user(payload: AdminUserCreate, request: Request):
+    require_admin(request)
+    username = payload.username.strip().lower()
+    problem = (
+        auth.username_problem(username)
+        or auth.password_problem(payload.password)
+        or (None if payload.role in auth.ROLES else "Role must be admin or member")
+    )
+    if problem:
+        raise HTTPException(status_code=400, detail=problem)
+    uid = str(uuid.uuid4())
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO users (id, username, password_hash, role, active, must_change_password)
+                VALUES (%s, %s, %s, %s, TRUE, TRUE)
+                ON CONFLICT (username) DO NOTHING
+                RETURNING id
+                """,
+                (uid, username, auth.hash_password(payload.password), payload.role),
+            )
+            if not cur.fetchone():
+                raise HTTPException(status_code=409, detail=f"Username '{username}' is taken")
+        conn.commit()
+    print(f"[auth] user '{username}' ({payload.role}) created by an admin")
+    return {"id": uid, "username": username, "role": payload.role, "active": True,
+            "must_change_password": True}
+
+
+@app.patch("/api/admin/users/{user_id}")
+def admin_update_user(user_id: str, payload: AdminUserUpdate, request: Request):
+    me = require_admin(request)
+    if payload.role is not None and payload.role not in auth.ROLES:
+        raise HTTPException(status_code=400, detail="Role must be admin or member")
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            target, admins = auth.locked_user_and_admins(cur, user_id)
+            if not target:
+                raise HTTPException(status_code=404, detail="User not found")
+            _, username, role, active = target
+            new_role = payload.role if payload.role is not None else role
+            new_active = payload.active if payload.active is not None else active
+            if user_id in admins and (new_role != "admin" or not new_active) and len(admins) <= 1:
+                who = "yourself" if user_id == me["id"] else f"'{username}'"
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Can't disable or demote {who}: the last active admin. Make another admin first.",
+                )
+            cur.execute(
+                "UPDATE users SET role = %s, active = %s WHERE id = %s",
+                (new_role, new_active, user_id),
+            )
+            if active and not new_active:
+                # Disabling ends every session and deletes every API token.
+                auth.end_user_access(cur, user_id, tokens=True)
+        conn.commit()
+    print(f"[auth] user '{username}' updated by an admin: role={new_role} active={new_active}")
+    return {"id": user_id, "username": username, "role": new_role, "active": bool(new_active)}
+
+
+@app.post("/api/admin/users/{user_id}/reset-password")
+def admin_reset_password(user_id: str, payload: AdminPasswordReset, request: Request):
+    require_admin(request)
+    problem = auth.password_problem(payload.password)
+    if problem:
+        raise HTTPException(status_code=400, detail=problem)
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE users SET password_hash = %s, password_changed_at = NOW(),
+                                 must_change_password = TRUE
+                WHERE id = %s RETURNING username
+                """,
+                (auth.hash_password(payload.password), user_id),
+            )
+            row = cur.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="User not found")
+            # Signed out everywhere; API tokens are kept (revoke them separately, or disable).
+            auth.end_user_access(cur, user_id, tokens=False)
+            auth.clear_login_failures(conn, row[0])
+        conn.commit()
+    print(f"[auth] password of '{row[0]}' reset by an admin")
+    return {"ok": True, "must_change_password": True}
+
+
 @app.post("/api/auth/password")
 def change_password(payload: PasswordChange, request: Request):
     user = current_user(request)
@@ -930,7 +1062,8 @@ def change_password(payload: PasswordChange, request: Request):
             raise HTTPException(status_code=400, detail="Current password is wrong")
         with conn.cursor() as cur:
             cur.execute(
-                "UPDATE users SET password_hash=%s, password_changed_at=NOW() WHERE id=%s",
+                "UPDATE users SET password_hash=%s, password_changed_at=NOW(),"
+                " must_change_password=FALSE WHERE id=%s",
                 (auth.hash_password(payload.new_password), user["id"]),
             )
         # Every other session of this user ends; this browser stays logged in.

@@ -62,10 +62,32 @@ async function mockApi(page, api) {
     api.calls.push({ method, path, search: url.search, body });
     const json = (data, status = 200) => route.fulfill({ status, contentType: "application/json", body: JSON.stringify(data) });
     if (path === "/api/auth/login" && method === "POST") {
-      if (body?.password !== "correct horse") return json({ detail: "Wrong username or password" }, 401);
-      api.user = { id: "u-1", username: body.username, role: "member" };
-      return json({ user: api.user });
+      const temp = body?.password === "temporary pass1";
+      if (body?.password !== "correct horse" && !temp) return json({ detail: "Wrong username or password" }, 401);
+      api.user = { id: "u-1", username: body.username, role: "member" }; api.mustChange = temp;
+      return json({ user: api.user, must_change_password: temp });
     }
+    if (path === "/api/auth/password" && method === "POST" && api.mustChange !== undefined && !api.passwordRoute) {
+      if (body?.current_password !== "temporary pass1") return json({ detail: "Current password is wrong" }, 400);
+      api.mustChange = false; return json({ ok: true });
+    }
+    if (path === "/api/admin/users" && method === "GET") return json({ users: api.users || [] });
+    if (path === "/api/admin/users" && method === "POST") {
+      if ((api.users || []).some((u) => u.username === body.username)) return json({ detail: `Username '${body.username}' is taken` }, 409);
+      const u = { id: "u-" + body.username, username: body.username, role: body.role, active: true, must_change_password: true, created_at: iso(0), last_seen_at: null, jobs: 0, tokens: 0 };
+      api.users = [...(api.users || []), u]; return json(u);
+    }
+    { const m = path.match(/^\/api\/admin\/users\/([^/]+)(\/reset-password)?$/);
+      if (m) {
+        const u = (api.users || []).find((x) => x.id === m[1]);
+        if (!u) return json({ detail: "User not found" }, 404);
+        if (m[2]) { u.must_change_password = true; return json({ ok: true, must_change_password: true }); }
+        const admins = api.users.filter((x) => x.role === "admin" && x.active);
+        const role = body.role ?? u.role, active = body.active ?? u.active;
+        if (u.role === "admin" && u.active && (role !== "admin" || !active) && admins.length <= 1)
+          return json({ detail: "Can't disable or demote yourself: the last active admin. Make another admin first." }, 409);
+        Object.assign(u, { role, active }); return json(u);
+      } }
     if (path === "/api/auth/logout") { api.user = null; return json({ ok: true }); }
     if (path === "/api/auth/tokens" && method === "GET") return json({ tokens: api.tokens || [] });
     if (path === "/api/auth/tokens" && method === "POST") {
@@ -75,7 +97,7 @@ async function mockApi(page, api) {
     }
     { const m = path.match(/^\/api\/auth\/tokens\/([^/]+)$/);
       if (m && method === "DELETE") { api.tokens = (api.tokens || []).filter((t) => t.id !== m[1]); return json({ ok: true }); } }
-    if (method === "GET" && path === "/api/auth/me") return api.user ? json({ user: api.user, via: "session" }) : json({ detail: "Unauthorized" }, 401);
+    if (method === "GET" && path === "/api/auth/me") return api.user ? json({ user: api.user, via: "session", must_change_password: !!api.mustChange }) : json({ detail: "Unauthorized" }, 401);
     if (method === "GET") {
       if (path === "/api/media-token") return json({ token: "mock-token", expires_at: iso(-720) });
       if (path === "/api/settings") return json(api.settings || {});
