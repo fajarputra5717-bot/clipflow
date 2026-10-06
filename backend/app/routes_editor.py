@@ -307,6 +307,16 @@ def put_review_filter(body: ReviewFilterIn, user: dict = Depends(get_current_use
     value = _review_filter(body.model_dump())
     core = _core()
     with core.get_db() as conn, conn.cursor() as cur:
+        # QA 649ae25 Low 2: never store another user's job id or an unknown campaign (reads ignored them anyway)
+        if value["job"] != "all":
+            where, params = owner_filter(user)
+            cur.execute(f"SELECT 1 FROM jobs j WHERE j.id::text = %s AND {where}", [value["job"], *params])
+            if not cur.fetchone():
+                value["job"] = "all"
+        if value["campaign"] not in ("all", "none"):
+            from shared import campaigns
+            if not campaigns.get(value["campaign"]):
+                value["campaign"] = "all"
         core.set_user_setting(cur, user["id"], REVIEW_FILTER_KEY, json.dumps(value))
         conn.commit()
     return value

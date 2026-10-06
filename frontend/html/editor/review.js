@@ -232,14 +232,16 @@
       else if (kind === "rerender") await api(`${base}/regenerate-preview`, { method: "POST" });
       else await api(`${base}/fix-rule`, { method: "POST", body: JSON.stringify({ rule: kind }) });
       await refresh();
-    } catch (e) { setBusy(btn, false); alert("Fix failed: " + e.message); }
+    } catch (e) { alert("Fix failed: " + e.message); }
+    finally { if (btn.isConnected) setBusy(btn, false); }       // QA Low 3: never rely on the re-render
   }
   async function approve(btn) {
     setBusy(btn, true, "Approving…");
     try {
       await api(`/api/jobs/${enc(btn.dataset.rvJid)}/candidates/${enc(btn.dataset.rvApprove)}/approve`, { method: "POST" });
       await refresh();
-    } catch (e) { setBusy(btn, false); alert("Approve failed: " + e.message); }
+    } catch (e) { alert("Approve failed: " + e.message); }
+    finally { if (btn.isConnected) setBusy(btn, false); }
   }
 
   document.addEventListener("click", (e) => {

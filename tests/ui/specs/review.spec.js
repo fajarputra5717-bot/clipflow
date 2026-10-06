@@ -44,6 +44,8 @@ async function open(app, api, opts) {
 }
 
 test.describe("Review page", () => {
+  // QA 649ae25 Low 1: html{scroll-behavior:smooth} made clicks "not stable" on mobile; reduced motion = instant scroll
+  test.use({ reducedMotion: "reduce" });
   test("campaign + all jobs: one grid across jobs, campaign header, source labels, earn last", async ({ app, api }) => {
     await open(app, api);
     await expect(app.locator(".rv-eyebrow")).toHaveText("Step 4 · Review");
