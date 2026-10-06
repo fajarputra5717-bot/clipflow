@@ -1354,6 +1354,10 @@ select::-ms-expand{display:none}
 .qmoney{font-size:13px}
 .qmoney .diff-up{color:var(--badge-good-fg)}.qmoney .diff-down{color:var(--badge-bad-fg)}
 @media (max-width:760px){.qpost{margin-left:0}}
+/* Send to phone (141) */
+.qnote.qsend.is-failed{color:var(--badge-bad-fg)}
+.qnote.qsend.is-sent{color:var(--badge-good-fg)}
+.account-telegram .token-form button{white-space:nowrap}
 </style>
 <link rel="stylesheet" href="editor/editor.css"><!-- lane-b hook -->
 </head>
@@ -1571,6 +1575,16 @@ select::-ms-expand{display:none}
         <button class="primary" type="submit" id="pwSubmit">Change password</button>
         <input type="text" name="username" autocomplete="username" id="pwUser" hidden>
       </form>
+      <section class="account-tokens account-telegram" aria-labelledby="telegramTitle">
+        <h3 id="telegramTitle">Telegram</h3>
+        <p class="hint" id="telegramHint">Send to phone delivers clips to your own Telegram chat.</p>
+        <form class="token-form" id="telegramForm" novalidate>
+          <div class="field"><label for="telegramChat">Your chat id</label><input id="telegramChat" inputmode="numeric" autocomplete="off" spellcheck="false" maxlength="40" placeholder="e.g. 123456789"></div>
+          <button class="secondary" type="submit" id="telegramSave">Save</button>
+          <button class="secondary" type="button" id="telegramTest" data-telegram-test>Send test</button>
+        </form>
+        <div class="account-msg" id="telegramMsg" role="status" aria-live="polite"></div>
+      </section>
       <section class="account-tokens" aria-labelledby="tokensTitle">
         <h3 id="tokensTitle">API tokens</h3>
         <p class="hint">For scripts and automations. Send it as <code>Authorization: Bearer &lt;token&gt;</code>. A token acts as you; revoke it when it's no longer used.</p>
@@ -1803,6 +1817,31 @@ function setCurrentUser(u){
 }
 const PASSWORD_MIN=12;
 function pwMessage(text,ok){const m=$("pwMsg");m.textContent=text||"";m.classList.toggle("is-ok",!!ok);m.classList.toggle("is-error",!!text&&!ok)}
+// Telegram (P2 part 6a, 141): your own chat id; one bot for the server. Admins without one use the server's chat.
+function telegramMessage(text,ok){const m=$("telegramMsg");m.textContent=text||"";m.classList.toggle("is-ok",!!ok);m.classList.toggle("is-error",!!text&&!ok)}
+let telegramState=null;
+async function loadTelegram(){
+  try{telegramState=await api("/api/telegram");}catch(err){telegramMessage(err.message);return}
+  const t=telegramState,bot=t.bot_username?`@${t.bot_username}`:"the ClipFlow bot";
+  $("telegramChat").value=t.chat_id||"";
+  $("telegramHint").textContent=!t.bot_configured?"Telegram isn't set up on this server yet (no bot token).":
+    `1) Open ${bot} in Telegram and press Start. 2) Get your chat id from @userinfobot and paste it here.`+(t.source==="env"?" Until then, clips go to the server's chat.":"");
+  $("telegramTest").disabled=!t.ready;
+}
+$("telegramForm").addEventListener("submit",async e=>{
+  e.preventDefault();const b=$("telegramSave");setBusy(b,true,"Saving…");telegramMessage("");
+  try{telegramState=await api("/api/telegram",{method:"PUT",body:JSON.stringify({chat_id:$("telegramChat").value.trim()})});telegramMessage("Saved.",true);await loadTelegram()}
+  catch(err){telegramMessage(err.message)}finally{setBusy(b,false)}
+});
+document.addEventListener("click",e=>{
+  if(e.target.closest("[data-telegram-test]")){const b=e.target.closest("[data-telegram-test]");setBusy(b,true,"Queued…");
+    api("/api/telegram/test",{method:"POST"}).then(()=>{telegramMessage("Test queued: check Telegram in a few seconds.",true);refreshRunningJobs()}).catch(err=>telegramMessage(err.message)).finally(()=>setBusy(b,false));return}
+  const sp=e.target.closest("[data-send-phone]");
+  if(sp){const r=publishRow(sp.dataset.sendPhone);if(!r)return;setBusy(sp,true,"Queued…");
+    api("/api/publish/send-to-phone",{method:"POST",body:JSON.stringify({candidate_id:r.candidate_id,platform:r.platform})})
+      .then(()=>{r.last_send={status:"queued",message:"Queued"};renderPublish();refreshRunningJobs()})
+      .catch(err=>{setBusy(sp,false);alert(err.message)});}
+});
 // API tokens (part 4): listed when the Account sheet opens; the plaintext is shown once after Create.
 function fmtWhen(iso){if(!iso)return "never";const d=new Date(iso);return d.toLocaleDateString(undefined,{day:"numeric",month:"short",year:"numeric"})}
 function tokenMessage(text,ok){const m=$("tokenMsg");m.textContent=text||"";m.classList.toggle("is-ok",!!ok);m.classList.toggle("is-error",!!text&&!ok)}
@@ -3313,7 +3352,11 @@ async function refreshRunningJobs(){
     const [d,act]=await Promise.all([api("/api/jobs?scope=current"),wantActivity?api("/api/activity").catch(e=>{
       activityFails++;const wait=Math.min(60000,POLL_INTERVAL*2**activityFails);activityRetryAt=Date.now()+wait;
       console.warn(`/api/activity failed (${activityFails}x), keeping the last island state; retry in ${Math.round(wait/1000)} s:`,e);return null}):null]);
-    if(act){activityFails=0;activityRetryAt=0;activityTasks=(act.items||[]).filter(t=>t.kind!=="job")} // jobs come from the list above
+    if(act){activityFails=0;activityRetryAt=0;
+      const hadTg=activityTasks.some(t=>t.kind==="telegram");
+      activityTasks=(act.items||[]).filter(t=>t.kind!=="job"); // jobs come from the list above
+      if(hadTg&&!activityTasks.some(t=>t.kind==="telegram")&&currentTab==="publish")loadPublish(); // 141: show "Sent to phone"
+    }
     const next=Array.isArray(d)?d:(d?.jobs||d?.items||[]);
     const previousIds=new Set(runningJobs.map(j=>String(j.id)));
     runningJobs=next;
@@ -3657,10 +3700,12 @@ function publishRowHtml(r){
       <a class="btn-sm" href="${esc(mediaUrl(base+"/render")+(mediaUrl(base+"/render").includes("?")?"&":"?")+"download="+encodeURIComponent(r.platform))}" download="${esc(r.filename)}" data-download>Download</a>
       <button class="secondary" type="button" data-copy-title="${esc(k)}">Copy title</button>
       <button class="secondary" type="button" data-copy-caption="${esc(k)}">Copy caption</button>
+      <button class="secondary" type="button" data-send-phone="${esc(k)}" ${r.last_send&&["queued","sending"].includes(r.last_send.status)?"disabled":""}>Send to phone</button>
       ${st==="ready"?`<button class="secondary" type="button" data-mark-open="${esc(k)}" aria-expanded="${open?"true":"false"}" ${blocks.length?`disabled title="Fix the red checks first (same rules as Approve)"`:""}>Mark posted</button>`:""}
     </div>
     ${blocks.length||rowWarns.length||(r.post&&r.post.eligible===false&&st!=="ready")?`<ul class="qchecks">${blocks.map(c=>`<li class="qcheck is-block">${esc(c.message)}</li>`).join("")}${st==="ready"?rowWarns.map(c=>`<li class="qcheck is-warn">${esc(c.message)}</li>`).join("")+checks.filter(c=>c.level==="warn"&&c.account_id).map(c=>`<li class="qcheck is-warn">${esc(c.message)}</li>`).join(""):""}${r.post&&r.post.eligible===false&&st!=="ready"?`<li class="qcheck is-warn">Not eligible: ${esc(r.post.ineligible_reason||"")}</li>`:""}</ul>`:""}
     ${r.caption_trimmed?`<p class="qnote">Caption shortened to fit ${esc(r.platform_name)}; hashtags kept in order.</p>`:""}
+    ${r.last_send?`<p class="qnote qsend is-${esc(r.last_send.status)}">${r.last_send.status==="sent"?`Sent to phone ${esc(fmtPostedAt(r.last_send.sent_at))}${r.last_send.mode&&r.last_send.mode!=="video"?" · "+esc(r.last_send.message||""):""}`:r.last_send.status==="failed"?`Send to phone failed: ${esc(r.last_send.error||"")}`:"Sending to your phone…"}</p>`:""}
     ${form}${postBlockHtml(r,k)}
   </div>`;
 }
@@ -4041,7 +4086,7 @@ document.addEventListener("keydown",e=>{
 },true);
 document.addEventListener("click",e=>{
   if(e.target.closest("[data-sheet-close]"))return closeSheet();
-  if(e.target.closest("[data-account]")){pwMessage("");tokenMessage("");$("tokenNew").hidden=true;$("tokenValue").value="";openSheet("accountSheet",e.target.closest("[data-account]"));closeSidebarDrawer(false);loadTokens();return}
+  if(e.target.closest("[data-account]")){pwMessage("");tokenMessage("");telegramMessage("");loadTelegram();$("tokenNew").hidden=true;$("tokenValue").value="";openSheet("accountSheet",e.target.closest("[data-account]"));closeSidebarDrawer(false);loadTokens();return}
   const tc=e.target.closest("[data-token-copy]");
   if(tc){navigator.clipboard?.writeText($("tokenValue").value).then(()=>{tc.textContent="Copied";setTimeout(()=>{tc.textContent="Copy"},motionMs(1500)||1200)},()=>{$("tokenValue").select()});return}
   const tr=e.target.closest("[data-token-revoke]");

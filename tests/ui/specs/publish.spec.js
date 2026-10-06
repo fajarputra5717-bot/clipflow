@@ -134,3 +134,26 @@ test("claim advice, views as of, Mark claimed with views, Mark paid with the dif
   await expect(r.locator(".qmoney")).toContainText("Paid Rp 168.000 · expected Rp 180.000 · −Rp 12.000");
   expect(api.calls.filter((c) => c.method === "PATCH").at(-1).body).toEqual({ status: "paid", paid_rp: 168000 });
 });
+
+test("Telegram: chat id in Account, test send, Send to phone from a row with status (141)", async ({ app, api }) => {
+  if (test.info().project.name === "mobile") await app.click("[data-sidebar-toggle] >> visible=true");
+  await app.click("[data-account]");
+  await expect(app.locator("#telegramHint")).toContainText("@clipflow_bot");
+  await expect(app.locator("#telegramTest")).toBeDisabled();
+  await app.fill("#telegramChat", "not a chat");
+  await app.click("#telegramSave");
+  await expect(app.locator("#telegramMsg")).toContainText("Chat id");
+  await app.fill("#telegramChat", "123456789");
+  await app.click("#telegramSave");
+  await expect(app.locator("#telegramMsg")).toHaveText("Saved.");
+  await expect(app.locator("#telegramTest")).toBeEnabled();
+  await app.click("#telegramTest");
+  await expect(app.locator("#telegramMsg")).toContainText("Test queued");
+  await app.keyboard.press("Escape");
+  await openPublish(app, api);
+  const r = app.locator('[data-publish-row="cand-a:tiktok"]');
+  await r.locator("[data-send-phone]").click();
+  await expect(r.locator(".qsend")).toHaveText("Sending to your phone…");
+  await expect(r.locator("[data-send-phone]")).toBeDisabled();
+  expect(api.calls.find((c) => c.path === "/api/publish/send-to-phone").body).toEqual({ candidate_id: "cand-a", platform: "tiktok" });
+});

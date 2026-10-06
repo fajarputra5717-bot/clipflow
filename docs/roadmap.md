@@ -50,3 +50,8 @@ per-block with cap); "$ CPM + cap" only for a campaign that really is CPM. (No s
 
 Lane B modules not on main yet: `shared/payouts.py`, `brief_parser`, `source_watch` (P3), plus newer
 `lane-b` commits (silence trim off by default, research doc). Each is merged when its phase starts.
+
+**P3 · Campaign step spec (owner 2026-10-07):**
+1. Campaign detail page: brief verbatim; rules in plain language (payout in IDR via `shared/payouts.py`, e.g. "Rp 200.000 per post at 40.000 views, max 2 per platform account/month", "Rp 12.000 per full 3.000 views, max Rp 1.992.000"); platforms; hashtags in order; watermark preview; posting windows/weeks; content rules; open questions + admin answers; claim form link; budget/refill schedule; my totals (posted, claimed, paid).
+2. Status computed from the rules: Active / Ending soon (≤ 3 days) / Ended / Paused; current IME week with days left.
+3. Campaign-driven labels on Review, Editor and Publish: "Week closed", "Campaign ended", "Not eligible: <reason>"; ended campaigns' clips move to a collapsed "Expired" group (not the active queue); claim advice shows "Missed" + reason. Nothing is deleted.

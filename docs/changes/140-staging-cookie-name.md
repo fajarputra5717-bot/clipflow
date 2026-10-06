@@ -7,3 +7,5 @@ Staging must set `CLIPFLOW_ENV=staging` in `.env.staging` (Lane B: then drop you
 
 **Verified:** image import with/without the env → `clipflow_session` / `clipflow_staging_session`; prod login
 Set-Cookie `clipflow_session` (HttpOnly, SameSite=Lax) after deploy.
+
+**Staging (CLIPFLOW_ENV=staging):** login via :8080 sets `clipflow_staging_session`.

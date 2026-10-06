@@ -47,6 +47,14 @@ services:
       - ./docs/campaigns:/app/campaigns:ro   # campaign rules (081), re-read on change
     ports:
       - "127.0.0.1:8000:8000"   # debugging from the VM only; the UI goes through nginx
+    # 143: healthy only after ensure_schema() created every table (/health is 503 until then);
+    # worker + notifier wait for it, so a deploy can't start them against a half-migrated DB.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
     depends_on:
       postgres: { condition: service_healthy }
     logging: *logging
@@ -70,6 +78,7 @@ services:
       - ./docs/campaigns:/app/campaigns:ro   # campaign rules (081), re-read on change
     depends_on:
       postgres: { condition: service_healthy }
+      backend: { condition: service_healthy }   # 143: schema migrated first
     logging: *logging
 
   frontend:
@@ -95,7 +104,10 @@ services:
   # Outbound-only Telegram alerts (change 066). One-time on the host:
   #   mkdir -p /data/notifier && chown 10001:10001 /data/notifier && chmod 700 /data/notifier
   notifier:
-    build: ./notifier
+    build:
+      context: ./notifier
+      additional_contexts:
+        shared: ./shared                # 142: per-user digest uses shared/digest.py
     container_name: riftstorm-notifier
     restart: unless-stopped
     environment:
@@ -108,6 +120,7 @@ services:
     volumes:
       - /data:/data:ro                  # disk-free check only
       - /data/notifier:/data/notifier   # state.json (dedupe), the only writable path
+      - ./docs/campaigns:/app/campaigns:ro  # 142: campaign rules for the digest (weeks, payouts)
     read_only: true
     tmpfs: [/tmp]
     security_opt: ["no-new-privileges:true"]
@@ -115,6 +128,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      backend:
+        condition: service_healthy   # 143: reads tables the backend migrates
     logging: *logging
 
   # Optional automation. Start with: docker compose --profile n8n up -d

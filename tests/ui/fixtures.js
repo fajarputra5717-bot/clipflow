@@ -73,6 +73,17 @@ async function mockApi(page, api) {
       if (body?.current_password !== "temporary pass1") return json({ detail: "Current password is wrong" }, 400);
       api.mustChange = false; return json({ ok: true });
     }
+    if (path === "/api/telegram" && method === "GET") return json(api.telegram || { bot_configured: true, bot_username: "clipflow_bot", chat_id: "", source: "none", ready: false });
+    if (path === "/api/telegram" && method === "PUT") {
+      if (body.chat_id && !/^(-?\d{3,20}|@[A-Za-z0-9_]{5,32})$/.test(body.chat_id)) return json({ detail: "Chat id: the number from @userinfobot" }, 400);
+      api.telegram = { bot_configured: true, bot_username: "clipflow_bot", chat_id: body.chat_id, source: body.chat_id ? "user" : "none", ready: !!body.chat_id };
+      return json(api.telegram);
+    }
+    if (path === "/api/telegram/test" && method === "POST") return json({ id: "tg-test", status: "queued" });
+    if (path === "/api/publish/send-to-phone" && method === "POST") {
+      if (!api.telegram?.ready) return json({ detail: "Add your Telegram chat id in Account first" }, 409);
+      return json({ id: "tg-1", status: "queued" });
+    }
     if (path === "/api/publish-queue" && method === "GET") return json({ groups: api.publishGroups || [] });
     { const m = path.match(/^\/api\/posts\/([^/]+)$/);
       if (m && method === "PATCH") {
