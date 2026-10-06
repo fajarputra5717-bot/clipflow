@@ -26,11 +26,12 @@ cd "$APP_DIR"
 if [ ! -f .env ]; then
   VM_IP=$(hostname -I | awk '{print $1}')
   sed -e "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$(openssl rand -hex 24)|" \
-      -e "s|^CLIPFLOW_API_KEY=.*|CLIPFLOW_API_KEY=$(openssl rand -hex 32)|" \
+      -e "s|^CLIPFLOW_ADMIN_PASSWORD=.*|CLIPFLOW_ADMIN_PASSWORD=$(openssl rand -hex 12)|" \
       -e "s|__VM_IP__|${VM_IP}|" \
       .env.example > .env
   chmod 600 .env
-  echo ">> Created .env (secrets generated). Add GEMINI_API_KEY etc. now or later: nano $APP_DIR/.env"
+  echo ">> Created .env (secrets generated). First login: CLIPFLOW_ADMIN_USER / CLIPFLOW_ADMIN_PASSWORD in $APP_DIR/.env"
+  echo ">> Add GEMINI_API_KEY etc. now or later: nano $APP_DIR/.env"
 else
   echo ">> Keeping existing .env"
 fi

@@ -49,7 +49,9 @@ function newState() {
     user: { id: "u-admin", username: "admin", role: "admin" }, // P1.5: signed in unless a test clears it
     current: [], queue: [done], jobs: { [done.id]: done }, calls: [],
     campaigns: [{ slug: "ime-roleplay", name: "IME Roleplay", brief_pending: false, platforms: ["tiktok"], default_layout: "none",
-      sources: [], source_note: "", hashtags: ["#imeroleplay"] }],
+      sources: [], source_note: "", hashtags: ["#imeroleplay"] },
+      { slug: "windah", name: "Windah", brief_pending: false, platforms: ["tiktok"], default_layout: "auto", default_language: "id",
+        sources: [], source_note: "", hashtags: [] }],
   };
 }
 
@@ -71,6 +73,19 @@ async function mockApi(page, api) {
       if (body?.current_password !== "temporary pass1") return json({ detail: "Current password is wrong" }, 400);
       api.mustChange = false; return json({ ok: true });
     }
+    if (path === "/api/accounts" && method === "GET") return json({ accounts: api.accounts || [], platforms: [
+      { slug: "facebook", name: "Facebook Reels" }, { slug: "instagram", name: "Instagram Reels" }, { slug: "youtube", name: "YouTube Shorts" }, { slug: "tiktok", name: "TikTok" }] });
+    if (path === "/api/accounts" && method === "POST") {
+      if ((api.accounts || []).some((a) => a.platform === body.platform && a.handle.toLowerCase() === body.handle.toLowerCase())) return json({ detail: `You already have @${body.handle} on this platform` }, 409);
+      const a = { id: "acc-" + body.handle, platform: body.platform, platform_name: body.platform, handle: body.handle, note: body.note, active: true, created_at: iso(0) };
+      api.accounts = [...(api.accounts || []), a]; return json(a);
+    }
+    { const m = path.match(/^\/api\/accounts\/([^/]+)$/);
+      if (m) { const a = (api.accounts || []).find((x) => x.id === m[1]); if (!a) return json({ detail: "Account not found" }, 404);
+        if (method === "PATCH") { Object.assign(a, body); return json(a); }
+        if (method === "DELETE") {
+          if (a.posts) { a.active = false; return json({ ok: true, paused: true, detail: `Paused instead of removed: ${a.posts} posts use this account` }); }
+          api.accounts = api.accounts.filter((x) => x !== a); return json({ ok: true }); } } }
     if (path === "/api/admin/users" && method === "GET") return json({ users: api.users || [] });
     if (path === "/api/admin/users" && method === "POST") {
       if ((api.users || []).some((u) => u.username === body.username)) return json({ detail: `Username '${body.username}' is taken` }, 409);
@@ -102,6 +117,7 @@ async function mockApi(page, api) {
       if (path === "/api/media-token") return json({ token: "mock-token", expires_at: iso(-720) });
       if (path === "/api/settings") return json(api.settings || {});
       if (path === "/api/campaigns") return json(api.campaigns);
+      if (path === "/api/analysis-estimate") return json(api.estimate || { samples: 0 });
       if (path === "/api/activity") return json({ items: api.activity || [] }); // 090 island feed
       if (path === "/api/assets/watermarks") return json({ assets: [] });
       if (path === "/api/jobs") return json(url.searchParams.get("scope") === "queue" ? api.queue : api.current);

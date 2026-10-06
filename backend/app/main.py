@@ -5,6 +5,7 @@ import os
 import re
 import secrets
 import shutil
+import statistics
 import time
 import traceback
 import uuid
@@ -23,7 +24,7 @@ from starlette.concurrency import run_in_threadpool
 from app import auth
 
 from shared.ai import router as ai_router
-from shared import campaigns, descriptions, edit_spec as edit_specs, languages, rule_checks
+from shared import campaigns, descriptions, edit_spec as edit_specs, languages, posts as post_rules, rule_checks
 from shared.errors import AINotConfiguredError
 from shared.fonts import normalize_caption_font
 from shared.settings import (
@@ -60,9 +61,8 @@ app = FastAPI(
 # ({id, username, role}); see app/auth.py:
 #   1. session cookie (browser login; HttpOnly, SameSite=Lax, DB row),
 #   2. a per-user API token `cf_…` (part 4) in X-ClipFlow-Key or
-#      Authorization: Bearer (scripts; hashed in api_tokens),
-#      or X-ClipFlow-Key = env CLIPFLOW_API_KEY → the bootstrap admin
-#      (legacy scripts; kept until the owner confirms removal),
+#      Authorization: Bearer (scripts; hashed in api_tokens). The old
+#      shared CLIPFLOW_API_KEY is gone (127): any other value is 401,
 #   3. ?mt= per-user media token, GET/HEAD on MEDIA_PATH_RE only.
 # Open: /api/auth/login, /api/auth/logout, /health, /. Middleware (not a
 # route dependency) so unknown /api paths also get 401. Cookie-authed
@@ -70,8 +70,6 @@ app = FastAPI(
 # ============================================================
 
 API_KEY_HEADER = "X-ClipFlow-Key"
-
-CLIPFLOW_API_KEY = os.getenv("CLIPFLOW_API_KEY", "").strip()
 
 MEDIA_TOKEN_PARAM = "mt"
 
@@ -96,12 +94,16 @@ SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 # middleware 404s unless the row belongs to the caller, so no handler can forget.
 JOB_PATH_RE = re.compile(r"^/api/jobs/([^/]+)(?:/candidates/([^/]+))?(?:/|$)")
 WATERMARK_PATH_RE = re.compile(r"^/api/assets/watermarks/([^/]+)(?:/|$)")
+ACCOUNT_PATH_RE = re.compile(r"^/api/accounts/([^/]+)(?:/|$)")
+POST_PATH_RE = re.compile(r"^/api/posts/([^/]+)(?:/|$)")
 
 
 def _path_owned(user: dict, path: str) -> bool:
     m = JOB_PATH_RE.match(path)
     w = WATERMARK_PATH_RE.match(path)
-    if not m and not w:
+    a = ACCOUNT_PATH_RE.match(path)
+    po = POST_PATH_RE.match(path)
+    if not m and not w and not a and not po:
         return True
     with get_db() as conn:
         with conn.cursor() as cur:
@@ -117,6 +119,18 @@ def _path_owned(user: dict, path: str) -> bool:
                     )
                     return bool(cur.fetchone())
                 return True
+            if a:
+                cur.execute(
+                    "SELECT 1 FROM platform_accounts WHERE id = %s AND user_id = %s",
+                    (a.group(1), user["id"]),
+                )
+                return bool(cur.fetchone())
+            if po:
+                cur.execute(
+                    "SELECT 1 FROM clip_posts WHERE id = %s AND user_id = %s",
+                    (po.group(1), user["id"]),
+                )
+                return bool(cur.fetchone())
             cur.execute(
                 "SELECT 1 FROM watermark_assets WHERE id::text = %s AND user_id = %s",
                 (w.group(1), user["id"]),
@@ -137,21 +151,13 @@ def _resolve_principal(request: Request) -> Optional[dict]:
         bearer = request.headers.get("authorization", "")
         if bearer[:7].lower() == "bearer ":
             supplied = supplied or bearer[7:].strip()
-        if supplied.startswith(auth.API_TOKEN_PREFIX):
+        if supplied:
+            # Only per-user tokens; the shared CLIPFLOW_API_KEY was removed (127).
             user = auth.api_token_user(conn, supplied)
             if user:
                 user["via"] = "api_token"
                 return user
             return None
-        if (
-            supplied
-            and CLIPFLOW_API_KEY
-            and secrets.compare_digest(supplied.encode(), CLIPFLOW_API_KEY.encode())
-        ):
-            user = auth.bootstrap_admin(conn)
-            if user:
-                user["via"] = "api_key"
-                return user
 
         mt = request.query_params.get(MEDIA_TOKEN_PARAM, "")
         if (
@@ -364,6 +370,57 @@ def ensure_schema():
         "CREATE INDEX IF NOT EXISTS idx_jobs_user ON jobs (user_id, created_at DESC)",
         "ALTER TABLE watermark_assets ADD COLUMN IF NOT EXISTS user_id TEXT REFERENCES users(id)",
         "CREATE INDEX IF NOT EXISTS idx_watermark_assets_user ON watermark_assets (user_id)",
+        # P2 part 1 (128): the user's own posting accounts per platform (rule_checks.PLATFORM_LIMITS keys).
+        """
+        CREATE TABLE IF NOT EXISTS platform_accounts (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            platform TEXT NOT NULL,
+            handle TEXT NOT NULL,
+            note TEXT,
+            active BOOLEAN NOT NULL DEFAULT TRUE,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """,
+        "CREATE UNIQUE INDEX IF NOT EXISTS uq_platform_accounts ON platform_accounts (user_id, platform, lower(handle))",
+        # P2 part 2 (129): one row per clip per platform post (shared/posts.py rules). The contract the manual
+        # flow, the future auto-poster (source=auto, external_id, error) and the view tracker write to.
+        # candidate_id SET NULL + job/campaign/title snapshots keep post + money history if a job is deleted;
+        # account RESTRICT: an account with posts is paused, never deleted.
+        """
+        CREATE TABLE IF NOT EXISTS clip_posts (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            candidate_id TEXT REFERENCES clip_candidates(id) ON DELETE SET NULL,
+            job_id TEXT,
+            campaign TEXT,
+            title TEXT,
+            platform TEXT NOT NULL,
+            account_id TEXT REFERENCES platform_accounts(id) ON DELETE RESTRICT,
+            status TEXT NOT NULL DEFAULT 'planned'
+                CHECK (status IN ('planned','posted','claimed','paid','dropped')),
+            source TEXT NOT NULL DEFAULT 'manual' CHECK (source IN ('manual','auto')),
+            scheduled_for TIMESTAMPTZ,
+            posted_at TIMESTAMPTZ,
+            url TEXT,
+            external_id TEXT,
+            views BIGINT,
+            views_at TIMESTAMPTZ,
+            claimed_at TIMESTAMPTZ,
+            paid_at TIMESTAMPTZ,
+            paid_rp BIGINT,
+            note TEXT,
+            error TEXT,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS idx_clip_posts_user ON clip_posts (user_id, status, created_at DESC)",
+        "CREATE INDEX IF NOT EXISTS idx_clip_posts_candidate ON clip_posts (candidate_id)",
+        "CREATE UNIQUE INDEX IF NOT EXISTS uq_clip_posts_url ON clip_posts (user_id, url) WHERE url IS NOT NULL",
+        # A clip goes to one account once (re-post = drop the old row first).
+        "CREATE UNIQUE INDEX IF NOT EXISTS uq_clip_posts_account ON clip_posts (candidate_id, account_id) "
+        "WHERE account_id IS NOT NULL AND status <> 'dropped'",
         # P1.5 part 3: per-user values for USER_SETTING_KEYS (shared/settings.py).
         """
         CREATE TABLE IF NOT EXISTS user_settings (
@@ -895,12 +952,12 @@ def auth_me(request: Request):
 
 
 # ---------- API tokens (part 4): per user, for scripts ----------
-# Managed from a browser session (or the legacy admin key), never by a token
+# Managed from a signed-in browser session only, never by a token
 # itself, so a leaked token can't mint or list others.
 
 def _token_manager(request: Request) -> dict:
     user = current_user(request)
-    if user["via"] not in ("session", "api_key"):
+    if user["via"] != "session":
         raise HTTPException(status_code=403, detail="Manage API tokens from a signed-in browser")
     return user
 
@@ -1343,6 +1400,441 @@ JOB_RUNNING = (
     "queued", "reanalyze_queued", "processing", "downloading", "download", "transcribing",
     "transcription", "transcribed", "analyzing", "analysis",
 )
+
+
+# ============================================================
+# POSTING ACCOUNTS (P2 part 1, 128) — the caller's own accounts per
+# platform, used by "Mark posted" (clip_posts, part 2) and the per-account
+# monthly caps (part 4). Owned rows: the middleware guard 404s other users'.
+# ============================================================
+
+ACCOUNT_HANDLE_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
+
+
+class AccountCreate(BaseModel):
+    platform: str = Field(max_length=20)
+    handle: str = Field(max_length=80)
+    note: Optional[str] = Field(default=None, max_length=120)
+
+
+class AccountUpdate(BaseModel):
+    handle: Optional[str] = Field(default=None, max_length=80)
+    note: Optional[str] = Field(default=None, max_length=120)
+    active: Optional[bool] = None
+
+
+def _clean_handle(raw: str) -> str:
+    handle = (raw or "").strip().lstrip("@").strip()
+    if not ACCOUNT_HANDLE_RE.match(handle):
+        raise HTTPException(
+            status_code=400,
+            detail="Handle: 1-64 letters, digits, '.', '_' or '-' (without spaces; a leading @ is fine)",
+        )
+    return handle
+
+
+def _account_row(r) -> dict:
+    return {
+        "id": r[0], "platform": r[1], "platform_name": rule_checks.PLATFORM_LIMITS.get(r[1], (0, 0, r[1]))[2],
+        "handle": r[2], "note": r[3], "active": bool(r[4]),
+        "created_at": r[5].isoformat() if r[5] else None,
+    }
+
+
+ACCOUNT_COLUMNS = "id, platform, handle, note, active, created_at"
+
+
+@app.get("/api/accounts")
+def list_accounts(request: Request):
+    user = current_user(request)
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                f"SELECT {ACCOUNT_COLUMNS} FROM platform_accounts WHERE user_id = %s "
+                "ORDER BY platform, lower(handle)",
+                (user["id"],),
+            )
+            rows = cur.fetchall()
+    return {
+        "accounts": [_account_row(r) for r in rows],
+        "platforms": [{"slug": k, "name": v[2]} for k, v in rule_checks.PLATFORM_LIMITS.items()],
+    }
+
+
+@app.post("/api/accounts")
+def create_account(payload: AccountCreate, request: Request):
+    user = current_user(request)
+    platform = payload.platform.strip().lower()
+    if platform not in rule_checks.PLATFORM_LIMITS:
+        raise HTTPException(status_code=400, detail=f"Unknown platform {platform!r}")
+    handle = _clean_handle(payload.handle)
+    note = (payload.note or "").strip() or None
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                f"""
+                INSERT INTO platform_accounts (id, user_id, platform, handle, note)
+                VALUES (%s, %s, %s, %s, %s)
+                ON CONFLICT DO NOTHING
+                RETURNING {ACCOUNT_COLUMNS}
+                """,
+                (str(uuid.uuid4()), user["id"], platform, handle, note),
+            )
+            row = cur.fetchone()
+            if not row:
+                raise HTTPException(status_code=409, detail=f"You already have @{handle} on this platform")
+        conn.commit()
+    return _account_row(row)
+
+
+@app.patch("/api/accounts/{account_id}")
+def update_account(account_id: str, payload: AccountUpdate, request: Request):
+    user = current_user(request)
+    sets, args = [], []
+    if payload.handle is not None:
+        sets.append("handle = %s"); args.append(_clean_handle(payload.handle))
+    if payload.note is not None:
+        sets.append("note = %s"); args.append(payload.note.strip() or None)
+    if payload.active is not None:
+        sets.append("active = %s"); args.append(payload.active)
+    if not sets:
+        raise HTTPException(status_code=400, detail="Nothing to change")
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            try:
+                cur.execute(
+                    f"UPDATE platform_accounts SET {', '.join(sets)} WHERE id = %s AND user_id = %s "
+                    f"RETURNING {ACCOUNT_COLUMNS}",
+                    (*args, account_id, user["id"]),
+                )
+            except psycopg.errors.UniqueViolation:
+                raise HTTPException(status_code=409, detail="You already have that handle on this platform")
+            row = cur.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Account not found")
+        conn.commit()
+    return _account_row(row)
+
+
+@app.delete("/api/accounts/{account_id}")
+def delete_account(account_id: str, request: Request):
+    # An account with posts is paused instead of deleted, so post history keeps its account.
+    user = current_user(request)
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT COUNT(*) FROM clip_posts WHERE account_id = %s", (account_id,))
+            used = cur.fetchone()[0]
+            if used:
+                cur.execute(
+                    "UPDATE platform_accounts SET active = FALSE WHERE id = %s AND user_id = %s",
+                    (account_id, user["id"]),
+                )
+                conn.commit()
+                return {"ok": True, "paused": True,
+                        "detail": f"Paused instead of removed: {used} post{'s' if used != 1 else ''} use this account"}
+            cur.execute(
+                "DELETE FROM platform_accounts WHERE id = %s AND user_id = %s",
+                (account_id, user["id"]),
+            )
+            if not cur.rowcount:
+                raise HTTPException(status_code=404, detail="Account not found")
+        conn.commit()
+    return {"ok": True}
+
+
+# ============================================================
+# CLIP POSTS (P2 part 2, 129) — rules in shared/posts.py; owned rows
+# (POST_PATH_RE guard). Part 3's "Ready to post" and "Mark posted" write here.
+# ============================================================
+
+POST_COLUMNS = (
+    "p.id, p.candidate_id, p.job_id, p.campaign, p.title, p.platform, p.account_id, a.handle, p.status, "
+    "p.source, p.scheduled_for, p.posted_at, p.url, p.external_id, p.views, p.views_at, p.claimed_at, "
+    "p.paid_at, p.paid_rp, p.note, p.error, p.created_at, p.updated_at"
+)
+POST_FROM = "clip_posts p LEFT JOIN platform_accounts a ON a.id = p.account_id"
+
+
+def _post_row(r) -> dict:
+    keys = ("id", "candidate_id", "job_id", "campaign", "title", "platform", "account_id", "account_handle",
+            "status", "source", "scheduled_for", "posted_at", "url", "external_id", "views", "views_at",
+            "claimed_at", "paid_at", "paid_rp", "note", "error", "created_at", "updated_at")
+    d = dict(zip(keys, r))
+    for k in ("scheduled_for", "posted_at", "views_at", "claimed_at", "paid_at", "created_at", "updated_at"):
+        d[k] = d[k].isoformat() if d[k] else None
+    return d
+
+
+def _fetch_post(cur, post_id: str, user_id: str) -> dict:
+    cur.execute(f"SELECT {POST_COLUMNS} FROM {POST_FROM} WHERE p.id = %s AND p.user_id = %s", (post_id, user_id))
+    row = cur.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Post not found")
+    return _post_row(row)
+
+
+def _check_account(cur, user_id: str, account_id: Optional[str], platform: str) -> None:
+    if not account_id:
+        return
+    cur.execute(
+        "SELECT platform, active FROM platform_accounts WHERE id = %s AND user_id = %s",
+        (account_id, user_id),
+    )
+    row = cur.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Account not found")
+    if row[0] != platform:
+        raise HTTPException(status_code=400, detail="That account is on another platform")
+    if not row[1]:
+        raise HTTPException(status_code=400, detail="That account is paused")
+
+
+def _parse_ts(value, field: str):
+    if value in (None, ""):
+        return None
+    try:
+        ts = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"{field}: use an ISO date-time")
+    return ts if ts.tzinfo else ts.replace(tzinfo=timezone.utc)
+
+
+class PostCreate(BaseModel):
+    candidate_id: str = Field(max_length=64)
+    platform: str = Field(max_length=20)
+    account_id: Optional[str] = Field(default=None, max_length=64)
+    status: str = "planned"
+    url: Optional[str] = Field(default=None, max_length=500)
+    posted_at: Optional[str] = None
+    scheduled_for: Optional[str] = None
+    note: Optional[str] = Field(default=None, max_length=500)
+
+
+class PostUpdate(BaseModel):
+    status: Optional[str] = None
+    account_id: Optional[str] = Field(default=None, max_length=64)
+    url: Optional[str] = Field(default=None, max_length=500)
+    posted_at: Optional[str] = None
+    scheduled_for: Optional[str] = None
+    views: Optional[int] = Field(default=None, ge=0)
+    paid_rp: Optional[int] = None
+    external_id: Optional[str] = Field(default=None, max_length=200)
+    note: Optional[str] = Field(default=None, max_length=500)
+
+
+def _complete_problem(post: dict) -> Optional[str]:
+    missing = [f for f in post_rules.needs(post["status"]) if not post.get(f)]
+    if missing:
+        names = {"account_id": "the account", "url": "the post link", "posted_at": "when it was posted"}
+        return f"A {post['status']} post needs " + " and ".join(names[m] for m in missing)
+    return None
+
+
+@app.get("/api/posts")
+def list_posts(
+    request: Request,
+    status: Optional[str] = None,
+    campaign: Optional[str] = None,
+    candidate_id: Optional[str] = None,
+    job_id: Optional[str] = None,
+):
+    user = current_user(request)
+    where, args = ["p.user_id = %s"], [user["id"]]
+    for col, val in (("p.status", status), ("p.campaign", campaign), ("p.candidate_id", candidate_id), ("p.job_id", job_id)):
+        if val:
+            where.append(f"{col} = %s"); args.append(val)
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                f"SELECT {POST_COLUMNS} FROM {POST_FROM} WHERE {' AND '.join(where)} "
+                "ORDER BY p.created_at DESC LIMIT 500",
+                args,
+            )
+            return {"posts": [_post_row(r) for r in cur.fetchall()]}
+
+
+@app.post("/api/posts")
+def create_post(payload: PostCreate, request: Request):
+    user = current_user(request)
+    platform = payload.platform.strip().lower()
+    if platform not in rule_checks.PLATFORM_LIMITS:
+        raise HTTPException(status_code=400, detail=f"Unknown platform {platform!r}")
+    if payload.status not in ("planned", "posted"):
+        raise HTTPException(status_code=400, detail="A new post is planned or posted")
+    url = (payload.url or "").strip() or None
+    problem = post_rules.url_problem(platform, url)
+    if problem:
+        raise HTTPException(status_code=400, detail=problem)
+    posted_at = _parse_ts(payload.posted_at, "posted_at")
+    if payload.status == "posted" and not posted_at:
+        posted_at = datetime.now(timezone.utc)
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            # The clip must be the caller's (via its job) — another user's clip is 404.
+            cur.execute(
+                """
+                SELECT c.job_id, j.campaign,
+                       COALESCE(NULLIF(c.manual_title, ''), NULLIF(c.title, ''), c.ai_title)
+                FROM clip_candidates c JOIN jobs j ON j.id = c.job_id
+                WHERE c.id = %s AND j.user_id = %s
+                """,
+                (payload.candidate_id, user["id"]),
+            )
+            clip = cur.fetchone()
+            if not clip:
+                raise HTTPException(status_code=404, detail="Clip not found")
+            _check_account(cur, user["id"], payload.account_id, platform)
+            post = {"status": payload.status, "account_id": payload.account_id, "url": url, "posted_at": posted_at}
+            problem = _complete_problem(post)
+            if problem:
+                raise HTTPException(status_code=400, detail=problem)
+            pid = str(uuid.uuid4())
+            try:
+                cur.execute(
+                    """
+                    INSERT INTO clip_posts (id, user_id, candidate_id, job_id, campaign, title, platform, account_id,
+                                            status, scheduled_for, posted_at, url, note)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """,
+                    (pid, user["id"], payload.candidate_id, clip[0], clip[1], clip[2], platform,
+                     payload.account_id, payload.status, _parse_ts(payload.scheduled_for, "scheduled_for"),
+                     posted_at, url, (payload.note or "").strip() or None),
+                )
+            except psycopg.errors.UniqueViolation as exc:
+                raise HTTPException(
+                    status_code=409,
+                    detail="That link is already recorded" if "uq_clip_posts_url" in str(exc)
+                    else "This clip already has a post on that account (drop it first to re-post)",
+                )
+            post = _fetch_post(cur, pid, user["id"])
+        conn.commit()
+    return post
+
+
+@app.patch("/api/posts/{post_id}")
+def update_post(post_id: str, payload: PostUpdate, request: Request):
+    user = current_user(request)
+    sent = payload.model_fields_set
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT 1 FROM clip_posts WHERE id = %s AND user_id = %s FOR UPDATE", (post_id, user["id"]))
+            current = _fetch_post(cur, post_id, user["id"])
+            new = dict(current)
+            sets = {}
+            if "status" in sent and payload.status is not None:
+                problem = post_rules.transition_problem(current["status"], payload.status)
+                if problem:
+                    raise HTTPException(status_code=409, detail=problem)
+                if payload.status != current["status"]:
+                    sets["status"] = new["status"] = payload.status
+                    if payload.status == "posted" and not new["posted_at"] and "posted_at" not in sent:
+                        sets["posted_at"] = new["posted_at"] = datetime.now(timezone.utc)
+                    if payload.status == "claimed":
+                        sets["claimed_at"] = datetime.now(timezone.utc)
+                    if payload.status == "paid":
+                        sets["paid_at"] = datetime.now(timezone.utc)
+            if "account_id" in sent:
+                _check_account(cur, user["id"], payload.account_id, current["platform"])
+                sets["account_id"] = new["account_id"] = payload.account_id
+            if "url" in sent:
+                url = (payload.url or "").strip() or None
+                problem = post_rules.url_problem(current["platform"], url)
+                if problem:
+                    raise HTTPException(status_code=400, detail=problem)
+                sets["url"] = new["url"] = url
+            if "posted_at" in sent:
+                sets["posted_at"] = new["posted_at"] = _parse_ts(payload.posted_at, "posted_at")
+            if "scheduled_for" in sent:
+                sets["scheduled_for"] = _parse_ts(payload.scheduled_for, "scheduled_for")
+            if "views" in sent and payload.views is not None:
+                sets["views"] = payload.views
+                sets["views_at"] = datetime.now(timezone.utc)  # every views entry is stamped
+            if "paid_rp" in sent:
+                problem = post_rules.rp_problem(payload.paid_rp)
+                if problem:
+                    raise HTTPException(status_code=400, detail=problem)
+                sets["paid_rp"] = new["paid_rp"] = payload.paid_rp
+            if "external_id" in sent:
+                sets["external_id"] = (payload.external_id or "").strip() or None
+            if "note" in sent:
+                sets["note"] = (payload.note or "").strip() or None
+            problem = _complete_problem(new)
+            if problem:
+                raise HTTPException(status_code=400, detail=problem)
+            if new["status"] == "paid" and new.get("paid_rp") is None:
+                raise HTTPException(status_code=400, detail="A paid post needs the amount (paid_rp, Rupiah)")
+            if sets:
+                cols = ", ".join(f"{k} = %s" for k in sets)
+                try:
+                    cur.execute(
+                        f"UPDATE clip_posts SET {cols}, updated_at = NOW() WHERE id = %s AND user_id = %s",
+                        (*sets.values(), post_id, user["id"]),
+                    )
+                except psycopg.errors.UniqueViolation as exc:
+                    raise HTTPException(
+                        status_code=409,
+                        detail="That link is already recorded" if "uq_clip_posts_url" in str(exc)
+                        else "This clip already has a post on that account",
+                    )
+            post = _fetch_post(cur, post_id, user["id"])
+        conn.commit()
+    return post
+
+
+@app.delete("/api/posts/{post_id}")
+def delete_post(post_id: str, request: Request):
+    """Only planned or dropped rows can be deleted; anything posted is history (drop it instead)."""
+    user = current_user(request)
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "DELETE FROM clip_posts WHERE id = %s AND user_id = %s AND status IN ('planned', 'dropped') "
+                "RETURNING id",
+                (post_id, user["id"]),
+            )
+            if not cur.fetchone():
+                cur.execute("SELECT status FROM clip_posts WHERE id = %s AND user_id = %s", (post_id, user["id"]))
+                row = cur.fetchone()
+                if not row:
+                    raise HTTPException(status_code=404, detail="Post not found")
+                raise HTTPException(status_code=409, detail=f"A {row[0]} post is history: drop it instead of deleting")
+        conn.commit()
+    return {"ok": True}
+
+
+# Analyze form: "≈ 6 min for a 1 h 24 min video" from the caller's own finished jobs
+# (P1.5 scope). Video length = end of the last transcript segment; processing =
+# started_at → review_ready_at (queue wait excluded). samples 0 = no history (UI hides it).
+@app.get("/api/analysis-estimate")
+def analysis_estimate(request: Request):
+    user = current_user(request)
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT EXTRACT(EPOCH FROM review_ready_at - started_at),
+                       (transcript_segments -> -1 ->> 'end')::float
+                FROM jobs
+                WHERE user_id = %s AND review_ready_at IS NOT NULL AND started_at IS NOT NULL
+                  AND review_ready_at > started_at
+                  AND jsonb_typeof(transcript_segments) = 'array'
+                  AND jsonb_array_length(transcript_segments) > 0
+                ORDER BY review_ready_at DESC
+                LIMIT 20
+                """,
+                (user["id"],),
+            )
+            rows = [(float(p), float(v)) for p, v in cur.fetchall() if p and v and v >= 60]
+    if not rows:
+        return {"samples": 0}
+    rate = statistics.median(p / v for p, v in rows)
+    video = statistics.median(v for _, v in rows)
+    return {
+        "samples": len(rows),
+        "video_seconds": round(video),
+        "processing_seconds": round(rate * video),
+        "seconds_per_video_minute": round(rate * 60, 1),
+    }
 
 
 @app.get("/api/activity")
@@ -2400,7 +2892,7 @@ def runtime_setting(
     """
     Same rule as the worker's setting(): app_settings (DB) wins,
     then env, then fallback / DEFAULT_SETTINGS. 5 s cache; PUT
-    /api/settings invalidates it. Env-only keys (CLIPFLOW_API_KEY)
+    /api/settings invalidates it. Env-only keys (DATABASE_URL, CORS_ALLOWED_ORIGINS, admin bootstrap)
     never come from the DB.
     """
     # P1.5: pass user_id for USER_SETTING_KEYS (user → global → default).

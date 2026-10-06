@@ -27,8 +27,8 @@ tar xzf clipflow-rebuild.tar.gz
 sudo bash riftstorm/scripts/bootstrap.sh
 ```
 
-It installs to `/opt/clipflow`, generates the DB password and
-`CLIPFLOW_API_KEY`, prepares `/data`, makes the first git commit, builds the
+It installs to `/opt/clipflow`, generates the DB password and the first
+admin's password (`CLIPFLOW_ADMIN_USER` / `CLIPFLOW_ADMIN_PASSWORD` in `.env`), prepares `/data`, makes the first git commit, builds the
 images (the first build takes 10–20 min: torch + whisper) and starts everything.
 It ends by printing `{"status":"healthy"}` and the URL.
 

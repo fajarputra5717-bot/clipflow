@@ -4,8 +4,8 @@ P1.5 accounts: users, DB sessions, login rate limit, per-user media tokens.
 Principals (resolved once per request by main.py's auth middleware, stored on
 request.state.user = {"id", "username", "role"}):
   1. session cookie `clipflow_session` (browser; HttpOnly, SameSite=Lax),
-  2. header X-ClipFlow-Key = env CLIPFLOW_API_KEY → the bootstrap admin
-     (kept until the owner confirms its removal),
+  2. a per-user API token `cf_…` (X-ClipFlow-Key or Authorization: Bearer;
+     the shared CLIPFLOW_API_KEY admin key was removed in 127),
   3. ?mt= media token on MEDIA_PATH_RE GETs (signed per user, read-only).
 
 Only hashes are stored: argon2 for passwords, sha256 for session tokens.
@@ -183,20 +183,6 @@ def ensure_bootstrap_admin(conn) -> str | None:
     conn.commit()
     print(f"[auth] bootstrap admin '{username}' created from env")
     return uid
-
-
-def bootstrap_admin(conn) -> dict | None:
-    """The principal the legacy CLIPFLOW_API_KEY maps to (an active admin)."""
-    with conn.cursor() as cur:
-        cur.execute(
-            """
-            SELECT id, username, role FROM users
-            WHERE role='admin' AND active
-            ORDER BY bootstrap DESC, created_at LIMIT 1
-            """
-        )
-        row = cur.fetchone()
-    return {"id": row[0], "username": row[1], "role": row[2]} if row else None
 
 
 # ---------- sessions ----------

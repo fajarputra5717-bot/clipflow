@@ -1251,6 +1251,50 @@ select::-ms-expand{display:none}
 .temp-pass input{flex:1;min-width:0}
 .users-hint{color:var(--muted);font-size:12px;margin:var(--sp-1) 4px 0}
 @media (max-width:760px){.user-create{grid-template-columns:1fr}}
+/* Analyze step = flow-preview step 3 "New job options" (126). Same element ids/payload as before. */
+:root{--frame-bg:#1d1d1f;--frame-fg:#3a3a3c;--frame-hi:#8e8e93}
+:root[data-theme="dark"]{--frame-bg:#0e0e10;--frame-fg:#2c2c2e;--frame-hi:#636366}
+.section-head{display:flex;align-items:flex-end;gap:var(--sp-2);margin-bottom:var(--sp-2);flex-wrap:wrap}
+.section-head h2{font-size:24px;font-weight:700;margin:2px 0 0}
+.section-head p{margin:4px 0 0}
+.eyebrow{font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+.analyze-panel .small{font-size:13px}.analyze-panel .tiny{font-size:12px}
+.analyze-panel .field:not(div){display:block;font-size:13px;font-weight:600;color:var(--muted);margin:0 0 6px}
+.field-opt{font-weight:400}
+.form-row{margin-top:var(--sp-3)}
+.grid-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--sp-2)}
+.seg{display:inline-flex;padding:3px;border-radius:999px;background:var(--fill);gap:2px;flex-wrap:wrap}
+.seg button,[data-theme="dark"] .seg button{min-height:36px;background:transparent;color:var(--text);font-weight:500;padding:0 14px;border:0!important;border-radius:999px;box-shadow:none;transition:background var(--dur-2) var(--ease-out),box-shadow var(--dur-2) var(--ease-out)}
+.seg button:hover:not(:disabled):not([aria-pressed="true"]){background:var(--fill)}
+.seg button[aria-pressed="true"],[data-theme="dark"] .seg button[aria-pressed="true"]{background:var(--seg-thumb);box-shadow:0 1px 3px rgba(0,0,0,.12);font-weight:600}
+.seg-note{margin:6px 0 0}
+.from-campaign{display:inline-block;margin-left:6px;padding:0 7px;border-radius:999px;background:var(--badge-run-bg);color:var(--accent);font-size:11px;font-weight:600;letter-spacing:0;text-transform:none;vertical-align:1px}
+.layouts{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}
+.layout-opt,[data-theme="dark"] .layout-opt{display:flex;flex-direction:column;align-items:stretch;background:var(--panel2);color:var(--text);border:1px solid var(--line2)!important;border-radius:16px;padding:12px;gap:10px;font-weight:600;font-size:13px;min-height:0;text-align:center;box-shadow:none}
+.layout-opt[aria-pressed="true"],[data-theme="dark"] .layout-opt[aria-pressed="true"]{border-color:var(--accent)!important;box-shadow:inset 0 0 0 1px var(--accent);background:var(--badge-run-bg)}
+.layout-opt:disabled{opacity:.5;cursor:not-allowed}
+.layout-opt svg{width:64px;height:auto;margin:0 auto;display:block;border-radius:8px}
+.layout-opt small{display:block;font-weight:400;color:var(--muted);font-size:12px;line-height:1.3}
+.mini .bg{fill:var(--frame-bg)}.mini .p{fill:var(--frame-hi)}.mini .f{fill:var(--frame-fg)}.mini .a{fill:var(--accent)}.mini .ln{stroke:var(--frame-hi);stroke-width:1;fill:none}
+.facecam-opts{display:flex;gap:var(--sp-3);flex-wrap:wrap;margin-top:var(--sp-2)}
+.subtitle-defaults .plain,[data-theme="dark"] .subtitle-defaults .plain{background:none;border:0!important;padding:0;min-height:0;color:var(--accent);font:inherit;font-weight:600;box-shadow:none;cursor:pointer}
+.analyze-actions{display:flex;align-items:center;gap:var(--sp-2);flex-wrap:wrap}
+.analyze-actions #analyzeButton{border-radius:999px;min-height:var(--hit);padding:0 22px}
+@media (max-width:760px){.layouts{grid-template-columns:repeat(2,minmax(0,1fr))}.grid-2{grid-template-columns:1fr}}
+@media (max-width:600px){.analyze-actions #analyzeButton{width:100%}.seg{display:flex}.seg button{flex:1 1 auto;padding:0 10px}}
+/* Posting accounts (P2 part 1, 128) */
+.accounts-admin .inset-list{margin-bottom:var(--sp-2)}
+.account-create{display:grid;grid-template-columns:.9fr 1.2fr 1.2fr auto;gap:var(--sp-1);align-items:end}
+.account-create .field{margin-top:0}
+.account-create button.primary{min-height:var(--hit);border-radius:999px;white-space:nowrap}
+.acct-row{display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:10px 12px 10px 14px;border-top:1px solid var(--hairline)}
+.acct-row:first-child{border-top:0}
+.acct-row.is-paused .acct-meta{opacity:.55}
+.acct-meta{flex:1;min-width:160px}
+.acct-handle{font-weight:600}
+.acct-meta small{display:block;color:var(--muted);font-size:12px}
+.acct-empty{padding:12px 14px;color:var(--muted);font-size:13px}
+@media (max-width:760px){.account-create{grid-template-columns:1fr}}
 </style>
 <link rel="stylesheet" href="editor/editor.css"><!-- lane-b hook -->
 </head>
@@ -1345,81 +1389,62 @@ select::-ms-expand{display:none}
     <main>
       <nav class="panel flow-card" id="flowNav" aria-label="Workflow"><ol class="flow" id="flow"></ol></nav>
       <section id="currentSection" class="view-section">
-        <div class="panel">
-          <div class="job-header">
-            <div><h2>Import a new job</h2><div class="muted">Paste a YouTube link. AI finds the strongest hooks and cuts them into vertical clips.</div></div>
-          </div>
+        <div class="panel analyze-panel">
+          <div class="section-head"><div><div class="eyebrow">Step 3 · Analyze</div><h2>New job options</h2><p class="muted small">Paste a YouTube link. AI finds the strongest hooks and cuts them into vertical clips.</p></div></div>
 
-          <div class="field">
-            <label for="youtubeUrl">YouTube URL</label>
-            <div class="grid-url">
-              <input id="youtubeUrl" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://www.youtube.com/watch?v=…" aria-describedby="youtubeUrlHint">
-              <div class="analyze-wrap"><button class="primary" id="analyzeButton" type="button" disabled>Analyze</button></div>
-            </div>
-            <div class="url-hint" id="youtubeUrlHint">youtube.com, m./music.youtube.com or youtu.be · https only</div>
-            <div class="url-preview" id="urlPreview" hidden><img id="urlPreviewImg" alt="" width="160" height="90"><div class="url-preview-meta"><strong>YouTube video</strong><span id="urlPreviewId"></span></div></div>
-          </div>
+          <label class="field" for="youtubeUrl">Video</label>
+          <input id="youtubeUrl" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://www.youtube.com/watch?v=…" aria-describedby="youtubeUrlHint">
+          <div class="url-hint" id="youtubeUrlHint">youtube.com, m./music.youtube.com or youtu.be · https only</div>
+          <div class="url-preview" id="urlPreview" hidden><img id="urlPreviewImg" alt="" width="160" height="90"><div class="url-preview-meta"><strong>YouTube video</strong><span id="urlPreviewId"></span></div></div>
 
-          <div class="field">
-            <label for="jobCustomTitle">Job name <span class="muted">· optional, shown instead of the auto-generated title</span></label>
+          <div class="form-row">
+            <label class="field" for="jobCustomTitle">Job name <span class="field-opt">· optional, shown instead of the auto-generated title</span></label>
             <input id="jobCustomTitle" autocomplete="off" maxlength="120" placeholder="e.g. Q4 Launch — Creator Bootcamp">
           </div>
 
-          <div class="field">
-            <label for="jobCampaign">Campaign <span class="muted">· rules, watermark and hashtags for the clips</span></label>
-            <select id="jobCampaign" class="campaign-select"><option value="">None</option></select>
-            <div class="hint campaign-hint" id="campaignHint" hidden></div>
+          <div class="form-row grid-2">
+            <div>
+              <label class="field" for="jobCampaign">Campaign</label>
+              <select id="jobCampaign" class="campaign-select"><option value="">None (no rule checks)</option></select>
+              <div class="hint campaign-hint" id="campaignHint" hidden></div>
+            </div>
+            <div>
+              <span class="field" id="langLbl">Language <span class="from-campaign" id="langFromCampaign" hidden>from campaign</span></span>
+              <div class="seg" role="group" aria-labelledby="langLbl">
+                <button type="button" data-language="auto" aria-pressed="true">Auto-detect</button><button type="button" data-language="en" aria-pressed="false">English</button><button type="button" data-language="id" aria-pressed="false">Indonesian</button>
+              </div>
+              <p class="tiny muted seg-note" id="langNote"></p>
+            </div>
           </div>
 
-          <details class="import-options" id="importOptions">
-            <summary aria-expanded="false">Options <span class="muted" id="importOptionsSummary"></span><span class="chev" aria-hidden="true"></span></summary>
-            <div class="field">
-              <label>Face / content composition</label>
-              <div class="choice-grid">
-                <div class="choice" data-split="60" role="button" tabindex="0"><strong>60 : 40</strong><small>More creator · balanced content</small></div>
-                <div class="choice active" data-split="70" role="button" tabindex="0"><strong>70 : 30</strong><small>More content · creator face preserved</small></div>
-              </div>
+          <div class="form-row">
+            <span class="field" id="layoutLbl">Layout <span class="from-campaign" id="layoutFromCampaign" hidden>from campaign</span></span>
+            <div class="layouts" role="group" aria-labelledby="layoutLbl">
+              <button class="layout-opt" type="button" data-layout-card="facecam" aria-pressed="false"><svg class="mini" viewBox="0 0 45 80" aria-hidden="true" preserveAspectRatio="xMidYMid slice"><rect class="bg" width="45" height="80"/><rect class="f" x="0" y="0" width="45" height="56"/><path class="a" d="M8 44l8-14 8 14z" opacity=".8"/><rect class="bg" x="26" y="24" width="12" height="20" rx="2"/><rect class="bg" x="0" y="56" width="45" height="24"/><circle class="p" cx="22.5" cy="63" r="4"/><path class="p" d="M14.9 75.8q7.6-10.4 15.2 0z"/><line class="ln" x1="0" y1="56" x2="45" y2="56"/></svg><span>Gameplay + facecam<small>Cam panel at the bottom</small></span></button>
+              <button class="layout-opt" type="button" data-layout-card="full" aria-pressed="false"><svg class="mini" viewBox="0 0 45 80" aria-hidden="true" preserveAspectRatio="xMidYMid slice"><rect class="bg" width="45" height="80"/><rect class="f" x="0" y="0" width="45" height="80"/><path class="a" d="M7 58l11-20 11 20z" opacity=".8"/><rect class="bg" x="27" y="34" width="12" height="24" rx="2"/></svg><span>Full frame<small>No facecam · fills 9:16</small></span></button>
+              <button class="layout-opt" type="button" disabled aria-disabled="true"><svg class="mini" viewBox="0 0 45 80" aria-hidden="true" preserveAspectRatio="xMidYMid slice"><rect class="bg" width="45" height="80"/><circle class="p" cx="22.5" cy="34" r="7.5"/><path class="p" d="M8.25 58q14.25-19.5 28.5 0z"/><path class="ln" d="M6 14v-6h6M39 14v-6h-6M6 60v6h6M39 60v6h-6" stroke-width="1.5"/></svg><span>Speaker follow<small>Coming soon</small></span></button>
+              <button class="layout-opt" type="button" disabled aria-disabled="true"><svg class="mini" viewBox="0 0 45 80" aria-hidden="true" preserveAspectRatio="xMidYMid slice"><rect class="bg" width="45" height="80"/><rect class="f" x="0" y="0" width="45" height="40"/><circle class="p" cx="22.5" cy="14" r="5.5"/><path class="p" d="M12.05 31.6q10.45-14.3 20.9 0z"/><circle class="p" cx="22.5" cy="54" r="5.5"/><path class="p" d="M12.05 71.6q10.45-14.3 20.9 0z"/><line class="ln" x1="0" y1="40" x2="45" y2="40"/></svg><span>Two-speaker stacked<small>Coming soon</small></span></button>
+              <button class="layout-opt" type="button" disabled aria-disabled="true"><svg class="mini" viewBox="0 0 45 80" aria-hidden="true" preserveAspectRatio="xMidYMid slice"><rect class="bg" width="45" height="80"/><rect class="f" x="-6" y="0" width="57" height="80" opacity=".6"/><circle class="p" cx="10" cy="14" r="9" opacity=".18"/><circle class="p" cx="36" cy="66" r="10" opacity=".18"/><rect class="bg" x="0" y="27" width="45" height="26"/><circle class="p" cx="14" cy="36" r="3.2"/><path class="p" d="M7.92 46.24q6.08-8.32 12.16 0z"/><circle class="p" cx="31" cy="36" r="3.2"/><path class="p" d="M24.92 46.24q6.08-8.32 12.16 0z"/></svg><span>Wide + blur<small>Coming soon</small></span></button>
             </div>
+            <div class="facecam-opts" id="facecamOpts">
+              <div><span class="field" id="splitLbl">Game : cam</span>
+                <div class="seg" role="group" aria-labelledby="splitLbl"><button type="button" data-split="60" aria-pressed="false">60 : 40</button><button type="button" data-split="70" aria-pressed="true">70 : 30</button></div></div>
+              <div><span class="field" id="camLbl">Cam position</span>
+                <div class="seg" role="group" aria-labelledby="camLbl"><button type="button" data-layout="auto" aria-pressed="true">Auto</button><button type="button" data-layout="left" aria-pressed="false">Left</button><button type="button" data-layout="right" aria-pressed="false">Right</button></div></div>
+            </div>
+          </div>
 
-            <div class="field">
-              <label>Facecam position <span class="muted">· helps face detection before analysis runs</span></label>
-              <div class="choice-grid facecam-grid">
-                <div class="choice active" data-layout="auto" role="button" tabindex="0"><strong>Auto</strong><small>Detect automatically</small></div>
-                <div class="choice" data-layout="left" role="button" tabindex="0"><strong>Left</strong><small>Facecam is on the left</small></div>
-                <div class="choice" data-layout="right" role="button" tabindex="0"><strong>Right</strong><small>Facecam is on the right</small></div>
-                <div class="choice" data-layout="none" role="button" tabindex="0"><strong>No facecam</strong><small>Full-frame gameplay</small></div>
-              </div>
-            </div>
+          <div class="form-row">
+            <span class="field" id="platformLbl">Output platform</span>
+            <div class="seg" role="group" aria-labelledby="platformLbl"><button type="button" data-platform="youtube_shorts" aria-pressed="true">YouTube Shorts</button><button type="button" data-platform="instagram_reels" aria-pressed="false">Reels</button><button type="button" data-platform="tiktok" aria-pressed="false">TikTok</button></div>
+          </div>
 
-            <div class="field">
-              <label>Language <span class="muted">· transcription, titles and AI text</span></label>
-              <div class="choice-grid layout-grid">
-                <div class="choice active" data-language="auto" role="button" tabindex="0"><strong>Auto</strong><small>Detect from the audio</small></div>
-                <div class="choice" data-language="en" role="button" tabindex="0"><strong>English</strong><small>Spoken in English</small></div>
-                <div class="choice" data-language="id" role="button" tabindex="0"><strong>Indonesian</strong><small>Bahasa Indonesia</small></div>
-              </div>
-            </div>
+          <p class="form-row small muted subtitle-defaults" id="subtitleDefaults">Subtitles: <span id="subtitleDefaultsText">your defaults</span> · <button class="plain" type="button" data-nav="settings">Change in Settings</button></p>
 
-            <div class="field">
-              <label>Output platform</label>
-              <div class="choice-grid platform-grid">
-                <div class="choice active" data-platform="youtube_shorts" role="button" tabindex="0">
-                  <div class="platform-head"><span class="platform-icon shorts"><svg viewBox="0 0 24 24"><path fill="white" d="M9 4.7v14.6a1 1 0 0 0 1.55.83l8.9-7.3a1.05 1.05 0 0 0 0-1.66l-8.9-7.3A1 1 0 0 0 9 4.7Z"/></svg></span><strong>YouTube Shorts</strong></div><small>9:16 · recommended</small>
-                </div>
-                <div class="choice" data-platform="instagram_reels" role="button" tabindex="0">
-                  <div class="platform-head"><span class="platform-icon reels"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="5" stroke="white" stroke-width="2" fill="none"/><circle cx="12" cy="12" r="3" fill="white"/></svg></span><strong>Instagram Reels</strong></div><small>9:16 · ready for publishing</small>
-                </div>
-                <div class="choice" data-platform="tiktok" role="button" tabindex="0">
-                  <div class="platform-head"><span class="platform-icon tiktok"><svg viewBox="0 0 24 24"><path fill="white" d="M14 4v9.1a3.3 3.3 0 1 1-2.3-3.15V7.1a6 6 0 1 0 5.2 5.95V8.2c1.15.9 2.5 1.45 4.1 1.55V7.1A5.8 5.8 0 0 1 14 4Z"/></svg></span><strong>TikTok</strong></div><small>9:16 · ready for publishing</small>
-                </div>
-              </div>
-            </div>
-
-            <div class="status-box">
-              <div class="status-title">Subtitle defaults</div>
-              <div class="muted">ALL CAPS · bold white · heavy outline + subtle shadow · positioned higher to protect the creator face.</div>
-            </div>
-          </details>
+          <div class="form-row analyze-actions">
+            <button class="primary" id="analyzeButton" type="button" disabled>Start analysis</button>
+            <span class="muted small" id="analyzeEstimate" hidden></span>
+          </div>
           <div id="createStatus" class="status-box" role="status" hidden></div>
         </div>
         <div class="jobs-section" id="jobsSection">
@@ -1498,6 +1523,18 @@ select::-ms-expand{display:none}
     <div class="sheet-search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg><input type="search" id="settingsSearch" placeholder="Search settings" autocomplete="off" aria-label="Search settings" aria-controls="settingsPanel"></div>
     <div class="sheet-body settings-body">
       <div class="disk-meter" id="diskMeter" aria-live="polite"></div>
+      <section class="inset-group accounts-admin" id="accountsAdmin" aria-labelledby="accountsTitle">
+        <h3 class="inset-title" id="accountsTitle">Posting accounts</h3>
+        <div class="inset-list" id="accountsList"></div>
+        <form class="account-create" id="accountCreateForm" novalidate>
+          <div class="field"><label for="newAccountPlatform">Platform</label><select id="newAccountPlatform"></select></div>
+          <div class="field"><label for="newAccountHandle">Handle</label><input id="newAccountHandle" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="65" placeholder="@yourclips"></div>
+          <div class="field"><label for="newAccountNote">Note <span class="field-opt">· optional</span></label><input id="newAccountNote" autocomplete="off" maxlength="120" placeholder="e.g. IME clips"></div>
+          <button class="primary" type="submit" id="accountCreateBtn">Add account</button>
+        </form>
+        <p class="hint users-hint">Your own accounts, used when you mark a clip as posted and for per-account monthly caps. Paused accounts aren't offered.</p>
+        <div class="account-msg" id="accountsMsg" role="status" aria-live="polite"></div>
+      </section>
       <section class="inset-group users-admin" id="usersAdmin" hidden aria-labelledby="usersTitle">
         <h3 class="inset-title" id="usersTitle">Users</h3>
         <div class="inset-list" id="usersList"></div>
@@ -1889,22 +1926,33 @@ function jobDisplayTitle(j){
   return j.custom_title||j.source_title||fallback||"AI-Generated Highlight";
 }
 
-function selectSplit(v){selectedSplit=Number(v);document.querySelectorAll("[data-split]").forEach(x=>x.classList.toggle("active",Number(x.dataset.split)===selectedSplit));updateImportOptionsSummary()}
-function selectPlatform(v){selectedPlatform=v;document.querySelectorAll("[data-platform]").forEach(x=>x.classList.toggle("active",x.dataset.platform===selectedPlatform));updateImportOptionsSummary()}
-let layoutTouched=false; // 117: an explicit layout pick wins over the campaign default
-function selectLayout(v,auto){if(!auto)layoutTouched=true;selectedLayout=v;document.querySelectorAll("[data-layout]").forEach(x=>x.classList.toggle("active",x.dataset.layout===selectedLayout));updateImportOptionsSummary()}
+// Analyze step (126, flow-preview step 3): segmented controls are <button aria-pressed>; the layout cards
+// map onto the same jobs.layout values: "Gameplay + facecam" = auto|left|right (cam position seg + ratio),
+// "Full frame" = none. The POST /api/jobs payload is unchanged.
+function setPressed(attr,val){document.querySelectorAll(`[data-${attr}]`).forEach(x=>{const on=x.dataset[attr.replace(/-(\w)/g,(_,c)=>c.toUpperCase())]===String(val);x.classList.toggle("active",on);x.setAttribute("aria-pressed",String(on))})}
+function selectSplit(v){selectedSplit=Number(v);setPressed("split",selectedSplit)}
+function selectPlatform(v){selectedPlatform=v;setPressed("platform",selectedPlatform)}
+let layoutTouched=false,lastCamLayout="auto",layoutFromCampaign=false; // 117: an explicit pick wins over the campaign default
+function selectLayout(v,auto){
+  if(!auto){layoutTouched=true;layoutFromCampaign=false}
+  selectedLayout=v;if(v!=="none")lastCamLayout=v;
+  setPressed("layout",v);setPressed("layout-card",v==="none"?"full":"facecam");
+  const fo=$("facecamOpts");if(fo)fo.hidden=v==="none";
+  const t=$("layoutFromCampaign");if(t)t.hidden=!layoutFromCampaign;
+}
 // 081: campaigns come from docs/campaigns/*.rules.json via GET /api/campaigns.
 let campaignsCache=[],queueCampaignFilter="";
 function campaignName(slug){const c=campaignsCache.find(x=>x.slug===slug);return c?c.name:slug}
 async function loadCampaigns(){
   try{campaignsCache=await api("/api/campaigns")||[]}catch(e){campaignsCache=[];console.error(e)}
   const sel=$("jobCampaign");if(!sel)return;const keep=sel.value;
-  sel.innerHTML=`<option value="">None</option>`+campaignsCache.map(c=>`<option value="${esc(c.slug)}">${esc(c.name)}${c.brief_pending?" (brief pending)":""}</option>`).join("");
+  sel.innerHTML=`<option value="">None (no rule checks)</option>`+campaignsCache.map(c=>`<option value="${esc(c.slug)}">${esc(c.name)}${c.brief_pending?" (brief pending)":""}</option>`).join("");
   sel.value=campaignsCache.some(c=>c.slug===keep)?keep:"";updateCampaignHint();
 }
 function updateCampaignHint(){
   const c=campaignsCache.find(x=>x.slug===$("jobCampaign")?.value),h=$("campaignHint");if(!h)return;
-  if(!layoutTouched)selectLayout(c?.default_layout||"auto",true); // 117: campaign default unless you picked one
+  if(!layoutTouched){layoutFromCampaign=!!c&&!!c.default_layout&&c.default_layout!=="auto";selectLayout(c?.default_layout||"auto",true)} // 117: campaign default unless you picked one
+  if(!languageTouched){languageFromCampaign=!!c?.default_language;selectLanguage(c?.default_language||"auto",true)} // 126: same for the language
   if(!c){h.hidden=true;h.textContent="";return}
   const src=c.sources.length?`Source: ${c.sources.join(", ")}`:(c.source_note?`Source: ${c.source_note}`:"Source: any");
   h.textContent=`${src} · ${c.platforms.length} platforms${c.brief_pending?" · brief pending":""}`;h.hidden=false;
@@ -1914,8 +1962,15 @@ function updateCampaignHint(){
 // language_fallback, which the worker uses when Auto-detect confidence is below 0.6.
 const LANG_NAMES={en:"English",id:"Indonesian"},LAST_LANG_KEY="clipflow_last_language";
 function lastExplicitLanguage(){try{const v=localStorage.getItem(LAST_LANG_KEY);return LANG_NAMES[v]?v:null}catch{return null}}
-function selectLanguage(v){selectedLanguage=LANG_NAMES[v]?v:"auto";if(selectedLanguage!=="auto"){try{localStorage.setItem(LAST_LANG_KEY,selectedLanguage)}catch{}}
-  document.querySelectorAll("[data-language]").forEach(x=>x.classList.toggle("active",x.dataset.language===selectedLanguage));updateImportOptionsSummary()}
+let languageTouched=false,languageFromCampaign=false;
+// auto = set by a campaign default: not remembered as the user's explicit choice (language_fallback).
+function selectLanguage(v,auto){selectedLanguage=LANG_NAMES[v]?v:"auto";
+  if(!auto){languageTouched=true;languageFromCampaign=false;if(selectedLanguage!=="auto"){try{localStorage.setItem(LAST_LANG_KEY,selectedLanguage)}catch{}}}
+  setPressed("language",selectedLanguage);
+  const fb=lastExplicitLanguage(),note=$("langNote");
+  if(note)note.textContent=selectedLanguage==="auto"?`Detected from the audio${fb?`; if unsure, ${LANG_NAMES[fb]} (your last choice)`:""}.`
+    :selectedLanguage==="en"?"Transcribe and write hooks in English.":"Transcribe in Indonesian; hooks and captions stay Indonesian.";
+  const t=$("langFromCampaign");if(t)t.hidden=!languageFromCampaign}
 // "Language: Auto → Indonesian · detected id (0.93)"; legacy jobs (no language) were Indonesian.
 function jobLanguageLine(j){
   const used=j.effective_language||(LANG_NAMES[j.language]?j.language:null);
@@ -1924,11 +1979,21 @@ function jobLanguageLine(j){
   if(j.language==="auto")return used?`Language: Auto → ${LANG_NAMES[used]}${det}${used!==j.detected_language?" · fallback":""}`:"Language: Auto (detected during transcription)";
   return `Language: ${LANG_NAMES[j.language]}`;
 }
-function updateImportOptionsSummary(){
-  const el=$("importOptionsSummary");if(!el)return;
-  const lay={auto:"Auto facecam",left:"Facecam left",right:"Facecam right",none:"No facecam"}[selectedLayout]||"Auto facecam";
-  const lang=selectedLanguage==="auto"?"Auto language":LANG_NAMES[selectedLanguage];
-  el.textContent=`${selectedSplit} : ${100-selectedSplit} · ${lay} · ${lang} · ${platformLabel(selectedPlatform)}`;
+// "Subtitles: Bold · Montserrat Black · 72 px · karaoke" from the user's DEFAULT_SUBTITLE_* (P1.5 user keys);
+// the Import form never sends style/font/size, so the backend applies exactly these.
+function updateSubtitleDefaultsLine(){
+  const el=$("subtitleDefaultsText");if(!el)return;const v=k=>(settingsCache[k]||{}).value;
+  const st=v("DEFAULT_SUBTITLE_STYLE"),style=(SUBTITLE_STYLES.find(([id])=>id===st)||[])[1]||st;
+  el.textContent=[style,v("DEFAULT_SUBTITLE_FONT"),v("DEFAULT_SUBTITLE_SIZE")?v("DEFAULT_SUBTITLE_SIZE")+" px":"","karaoke"].filter(Boolean).join(" · ");
+}
+function fmtVideoLength(sec){const m=Math.round(sec/60),h=Math.floor(m/60);return h?`${h} h${m%60?` ${m%60} min`:""}`:`${m} min`}
+async function loadAnalyzeEstimate(){
+  const el=$("analyzeEstimate");if(!el)return;
+  try{const d=await api("/api/analysis-estimate");
+    if(!d?.samples){el.hidden=true;return}
+    el.textContent=`≈ ${Math.max(1,Math.round(d.processing_seconds/60))} min for a ${fmtVideoLength(d.video_seconds)} video`;
+    el.title=`Median of your last ${d.samples} job${d.samples===1?"":"s"}: ~${d.seconds_per_video_minute} s per minute of video`;el.hidden=false;
+  }catch{el.hidden=true}
 }
 // Same rules as the backend's validate_youtube_url() (063): https only, exact host allowlist, no
 // userinfo/odd port, no whitespace/control chars, no leading "-". On top of that the link must
@@ -3320,6 +3385,7 @@ const SETTINGS_GROUPS=[
   ["TikTok",["TIKTOK_CLIENT_KEY","TIKTOK_CLIENT_SECRET","TIKTOK_ACCESS_TOKEN"]],
   ["Instagram",["INSTAGRAM_ACCESS_TOKEN","INSTAGRAM_BUSINESS_ACCOUNT_ID"]],
   ["Submagic",["SUBMAGIC_API_KEY","SUBMAGIC_TEMPLATE","SUBMAGIC_MAGIC_ZOOMS","SUBMAGIC_MAGIC_BROLLS"]],
+  ["Subtitle defaults",["DEFAULT_SUBTITLE_STYLE","DEFAULT_SUBTITLE_FONT","DEFAULT_SUBTITLE_SIZE"]],
   ["Publishing",["HASHTAGS","CAMPAIGN_NAME"]],
   ["Storage",["DISK_SPACE_MIN_MB","RETENTION_DAYS_INTERMEDIATE","ORPHAN_SWEEP_DRY_RUN"]]
 ];
@@ -3328,7 +3394,8 @@ const SETTING_LABELS={WATERMARK_POSITION_Y:"Watermark height (% from top, new jo
   CLIP_COUNT:"Clips per video",CLIP_TARGET_DURATION:"Target length (s)",CLIP_MIN_DURATION:"Minimum length (s)",CLIP_MAX_DURATION:"Maximum length (s)",PREVIEW_WIDTH:"Preview width (px)",WATERMARK_WIDTH:"Watermark width (px)",WATERMARK_OPACITY:"Watermark opacity",
   YOUTUBE_CLIENT_ID:"Client ID",YOUTUBE_CLIENT_SECRET:"Client secret",YOUTUBE_REFRESH_TOKEN:"Refresh token",TIKTOK_CLIENT_KEY:"Client key",TIKTOK_CLIENT_SECRET:"Client secret",TIKTOK_ACCESS_TOKEN:"Access token",
   INSTAGRAM_ACCESS_TOKEN:"Access token",INSTAGRAM_BUSINESS_ACCOUNT_ID:"Business account ID",SUBMAGIC_API_KEY:"API key",SUBMAGIC_TEMPLATE:"Template",SUBMAGIC_MAGIC_ZOOMS:"Magic zooms",SUBMAGIC_MAGIC_BROLLS:"Magic B-rolls",
-  HASHTAGS:"Hashtags",CAMPAIGN_NAME:"Campaign name"};
+  HASHTAGS:"Hashtags",CAMPAIGN_NAME:"Campaign name",
+  DEFAULT_SUBTITLE_STYLE:"Style (new jobs)",DEFAULT_SUBTITLE_FONT:"Font (new jobs)",DEFAULT_SUBTITLE_SIZE:"Size (new jobs)"};
 const SETTING_SOURCE={db:"Saved",env:"From .env",default:"Default"};
 // P1.5: scope "user" = your own value (user → admin's house default → .env → default); "global" = all users,
 // admin-only (members receive only user-scope keys). Rows the API didn't return aren't rendered.
@@ -3411,8 +3478,41 @@ document.addEventListener("click",e=>{
   const rs=e.target.closest("[data-user-reset]");
   if(rs){const f=document.querySelector(`[data-user-reset-form="${css(rs.dataset.userReset)}"]`),open=f.hidden;f.hidden=!open;rs.setAttribute("aria-expanded",String(open));if(open)f.querySelector("input").focus()}
 });
+// Posting accounts (P2 part 1): the user's own handles per platform; Pause/Resume, two-step Remove.
+function accountsMessage(text,ok){const m=$("accountsMsg");m.textContent=text||"";m.classList.toggle("is-ok",!!ok);m.classList.toggle("is-error",!!text&&!ok)}
+let accountsCache=[],accountPlatforms=[];
+async function loadAccounts(){
+  try{
+    const d=await api("/api/accounts");accountsCache=d.accounts||[];accountPlatforms=d.platforms||[];
+    const sel=$("newAccountPlatform"),keep=sel.value;
+    sel.innerHTML=accountPlatforms.map(p=>`<option value="${esc(p.slug)}">${esc(p.name)}</option>`).join("");if(keep)sel.value=keep;
+    $("accountsList").innerHTML=accountsCache.length?accountsCache.map(a=>`<div class="acct-row${a.active?"":" is-paused"}" data-account-row="${esc(a.id)}">
+        <span class="acct-meta"><span class="acct-handle">@${esc(a.handle)}</span>${a.active?"":`<span class="user-tag">Paused</span>`}<small>${esc(a.platform_name)}${a.note?" · "+esc(a.note):""}</small></span>
+        <span class="user-actions"><button class="secondary" type="button" data-account-active="${a.active?"false":"true"}" data-account-id="${esc(a.id)}">${a.active?"Pause":"Resume"}</button><button class="secondary" type="button" data-account-remove="${esc(a.id)}" aria-label="Remove @${esc(a.handle)}">Remove</button></span>
+      </div>`).join(""):`<div class="acct-empty">No posting accounts yet.</div>`;
+  }catch(err){accountsMessage(err.message)}
+}
+$("accountCreateForm").addEventListener("submit",async e=>{
+  e.preventDefault();
+  const platform=$("newAccountPlatform").value,handle=$("newAccountHandle").value.trim().replace(/^@/,""),note=$("newAccountNote").value.trim();
+  if(!handle){accountsMessage("Enter the account handle.");$("newAccountHandle").focus();return}
+  const btn=$("accountCreateBtn");setBusy(btn,true,"Adding…");accountsMessage("");
+  try{await api("/api/accounts",{method:"POST",body:JSON.stringify({platform,handle,note:note||null})});$("newAccountHandle").value="";$("newAccountNote").value="";await loadAccounts();accountsMessage(`Added @${handle}.`,true)}
+  catch(err){accountsMessage(err.message)}
+  finally{setBusy(btn,false)}
+});
+document.addEventListener("click",e=>{
+  const ac=e.target.closest("[data-account-active]");
+  if(ac){setBusy(ac,true);accountsMessage("");
+    api("/api/accounts/"+encodeURIComponent(ac.dataset.accountId),{method:"PATCH",body:JSON.stringify({active:ac.dataset.accountActive==="true"})}).then(loadAccounts).catch(err=>{setBusy(ac,false);accountsMessage(err.message)});return}
+  const rm=e.target.closest("[data-account-remove]");
+  if(rm){
+    if(!rm.classList.contains("is-confirm")){rm.classList.add("is-confirm");rm.textContent="Confirm remove";setTimeout(()=>{if(document.contains(rm)){rm.classList.remove("is-confirm");rm.textContent="Remove"}},4000);return}
+    setBusy(rm,true);api("/api/accounts/"+encodeURIComponent(rm.dataset.accountRemove),{method:"DELETE"}).then(d=>{accountsMessage(d?.paused?d.detail:"Account removed.",true);return loadAccounts()}).catch(err=>{setBusy(rm,false);accountsMessage(err.message)});
+  }
+});
 async function loadSettings(){
-  loadDiskMeter();loadUsers();
+  loadDiskMeter();loadUsers();loadAccounts();
   try{
     settingsCache=await api("/api/settings");
     $("settingsPanel").innerHTML=SETTINGS_GROUPS.map(([g,all])=>[g,all.filter(k=>settingsCache[k])]).filter(([,keys])=>keys.length).map(([g,keys])=>`
@@ -3424,7 +3524,7 @@ async function loadSettings(){
             <span class="row-control"><input id="${id}" data-setting="${esc(k)}" type="${sec?"password":"text"}" value="${esc(s.value||"")}" placeholder="${s.configured?"Configured / masked":"Not set"}" autocomplete="off" spellcheck="false">${sec?`<button class="icon-btn reveal-btn" type="button" data-reveal="${id}" aria-label="Show ${esc(SETTING_LABELS[k]||k)}" aria-pressed="false">${EYE}</button>`:""}</span>
           </div>`}).join("")}</div>
       </section>`).join("");
-    filterSettings();updateSettingsDirty();
+    filterSettings();updateSettingsDirty();updateSubtitleDefaultsLine();
   }catch(e){$("settingsPanel").innerHTML=`<div class="error-box">${esc(e.message)}</div>`}
 }
 // Send only fields the user changed: the form shows effective values (DB → env → default), and
@@ -3439,6 +3539,7 @@ function updateSettingsDirty(){
 function filterSettings(){
   const q=($("settingsSearch")?.value||"").trim().toLowerCase();let any=false;
   document.querySelectorAll("[data-settings-group]").forEach(g=>{let shown=0;g.querySelectorAll("[data-setting-row]").forEach(r=>{const ok=!q||r.dataset.search.includes(q);r.hidden=!ok;if(ok)shown++});g.hidden=!shown;if(shown)any=true});
+  const pa=$("accountsAdmin");if(pa){const hit=!q||"posting accounts handles platforms tiktok instagram youtube facebook".includes(q);pa.hidden=!hit;if(hit&&q)any=true}
   const ua=$("usersAdmin");if(ua&&currentUser?.role==="admin"){const hit=!q||"users accounts members admins password".includes(q);ua.hidden=!hit;if(hit&&q)any=true}
   const nm=$("settingsNoMatch");nm.hidden=any||!q;nm.querySelector("span").textContent=q;
 }
@@ -3473,6 +3574,7 @@ document.addEventListener("click",e=>{
   const sp=e.target.closest("[data-split]");if(sp)return selectSplit(sp.dataset.split);
   const pl=e.target.closest("[data-platform]");if(pl)return selectPlatform(pl.dataset.platform);
   const lo=e.target.closest("[data-layout]");if(lo)return selectLayout(lo.dataset.layout);
+  const lc=e.target.closest("[data-layout-card]");if(lc)return selectLayout(lc.dataset.layoutCard==="full"?"none":lastCamLayout);
   const lg=e.target.closest("[data-language]");if(lg)return selectLanguage(lg.dataset.language);
   if(e.target.closest("#analyzeButton"))return createJob();
   const ce=e.target.closest("[data-edit]");if(ce)return toggleCandidateEdit(ce.dataset.edit);
@@ -3585,11 +3687,11 @@ $("youtubeUrl").addEventListener("input",updateAnalyzeReady);
 $("jobOverlayClose").addEventListener("click",e=>{e.preventDefault();e.stopPropagation();closeJobOverlay()});
 
 window.addEventListener("load",async()=>{
-  selectSplit(70);selectPlatform("youtube_shorts");overlayOpen=false;updateAnalyzeReady();updateJobIsland();syncPageTitle();syncNav();
+  selectSplit(70);selectPlatform("youtube_shorts");selectLayout("auto",true);selectLanguage("auto",true);overlayOpen=false;updateAnalyzeReady();updateJobIsland();syncPageTitle();syncNav();
   // Session + media token first, so the first render already has working <img>/<video> URLs.
   // Token is per user, stable for 12 h and valid 12-24 h; refresh hourly.
   await ensureSession();await refreshMediaToken();setInterval(refreshMediaToken,60*60*1000);
-  await loadSettings();await loadWatermarkAssets();await loadCampaigns();await loadCurrentJobs();await loadQueue();
+  await loadSettings();await loadWatermarkAssets();await loadCampaigns();await loadCurrentJobs();await loadQueue();loadAnalyzeEstimate();
 
   // Always start the lightweight running-job monitor, including when an
   // active job was restored from localStorage. Previously the restored-job

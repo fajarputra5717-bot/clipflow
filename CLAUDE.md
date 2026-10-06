@@ -314,7 +314,7 @@ env). Per-user (P1.5, 123): `USER_SETTING_KEYS` resolve **user_settings → app_
 user (`runtime_setting(key, user_id=…)` in main.py; the worker's `setting()` uses the job owner set by
 `run_as_owner()` in `main()`'s loop: every new claimed-task branch must go through it). `USER_ONLY_KEYS`
 (ACTIVE_WATERMARK_ID) have no global fallback. Members see/PUT only user keys; global keys are admin-only (403).
-`ENV_ONLY_KEYS` (`CLIPFLOW_API_KEY`, `CORS_ALLOWED_ORIGINS`,
+`ENV_ONLY_KEYS` (`CLIPFLOW_ADMIN_USER/PASSWORD`, `CORS_ALLOWED_ORIGINS`,
 `DATABASE_URL`) are never read from the DB. Still env-only by design:
 `TELEGRAM_*`.
 
@@ -325,8 +325,8 @@ unknown `/api` paths also 401) puts `{id, username, role, via}` on `request.stat
 `current_user(request)` / `require_admin(request)`. Sources (`app/auth.py`): session cookie `clipflow_session`
 (HttpOnly, SameSite=Lax; DB row in `user_sessions`, token stored as sha256; disabled user = dead session) →
 per-user API token `cf_…` (`X-ClipFlow-Key` or `Authorization: Bearer`; `api_tokens` stores sha256 only;
-managed in the Account sheet, never by a token; 124) → `X-ClipFlow-Key` = env `CLIPFLOW_API_KEY` → the bootstrap
-admin (legacy, until the owner confirms removal) →
+managed in the Account sheet from a session only, never by a token; 124) → (the shared `CLIPFLOW_API_KEY` admin
+key was removed in 127; there is no shared key) →
 `?mt=` per-user media token (`exp.user_id.sig`, GET/HEAD on `MEDIA_PATH_RE` only). Open: `/api/auth/login|logout`,
 `/health`, `/`. Passwords argon2id; login 429 after 5 fails/user or 20/IP per 15 min; no signup route.
 First run: `CLIPFLOW_ADMIN_USER/PASSWORD` (env-only, read only while `users` is empty). Cookie-authed writes
@@ -336,19 +336,27 @@ never a bare `fetch()` (exception: the login form + `ensureSession()`/`signOut()
 (`showLogin()`, `body.auth-locked`) and retries once. Account sheet (`#accountSheet`, username in the sidebar foot): change password (≥ 12) + Sign out. Users (125): admins only
 (`/api/admin/*`, middleware 403 for members; Settings → Users); create/reset set `must_change_password` (session limited to
 `/api/auth/me|password` until changed; `#forceForm` in the login layer); disable deletes sessions + API tokens; never
-leave zero active admins (409, rows locked). `CLIPFLOW_API_KEY` stays until the P1.5 gate passes on staging + owner OK. CORS origins from env `CORS_ALLOWED_ORIGINS` (comma list,
+leave zero active admins (409, rows locked). CORS origins from env `CORS_ALLOWED_ORIGINS` (comma list,
 `*` dropped, no credentials); the CORS middleware stays added *after* the auth middleware, or preflights get 401.
 
 ## Ownership (P1.5) — every query is scoped by `user_id`
 
-Owned tables carry `user_id` NOT NULL (`jobs`, `watermark_assets`; candidates/versions via their job; **every new
-table from now on**). Rule: every SQL that reads or writes user data filters by the caller's id
+Owned tables carry `user_id` NOT NULL (`jobs`, `watermark_assets`, `platform_accounts` (128), `clip_posts` (129); candidates/versions via
+their job; **every new table from now on**). Rule: every SQL that reads or writes user data filters by the caller's id
 (`current_user(request)["id"]`); another user's row answers **404**, never 403/200. The middleware guard
-`_path_owned()` already enforces it for `/api/jobs/{id}[/candidates/{cid}]…` and `/api/assets/watermarks/{id}…`;
+`_path_owned()` already enforces it for `/api/jobs/{id}[/candidates/{cid}]…`, `/api/assets/watermarks/{id}…` and
+`/api/accounts/{id}…`, `/api/posts/{id}…`;
 lists and inserts do it in the handler. A new route family keyed by an owned id → add its regex to the guard.
 Admin is scoped like everyone except `/api/activity` (sees all, `owner` set). Campaigns are a shared catalogue
 (admin edits; P3 adds `created_by` + `visibility`); `source_videos` is a shared download cache.
 Writing tests (cross-user, settings, qa-tmp users) run on staging only (:8080/:8001), never production.
+
+## Posts (P2, 129)
+
+`clip_posts` = one row per clip per platform post; every writer (manual UI now, auto-poster/view tracker later)
+validates through `shared/posts.py` (status lifecycle, required fields, URL host per platform, paid_rp whole IDR).
+Posted rows are history: never deleted (drop them); an account with posts is paused, never deleted. Payout amounts
+come only from Lane B's `shared/payouts.py` (P3), never hand-rolled.
 
 ## Frontend shell (R-11/R-12/R-13, lane B 067-073; badge v2.1117)
 
@@ -367,9 +375,11 @@ Writing tests (cross-user, settings, qa-tmp users) run on staging only (:8080/:8
   (`body.sidebar-open`) over `#sidebarScrim`. Toggles are
   `[data-sidebar-toggle]`; hidden sidebar gets `inert`. **Every closed
   overlay layer must be `visibility:hidden; pointer-events:none`**:
-  a stray layer once made the whole app unclickable. Import options
-  (split/facecam/platform) live in `<details id="importOptions">`;
-  `updateImportOptionsSummary()` runs from the `select*()` fns.
+  a stray layer once made the whole app unclickable. Analyze step (126) = flow-preview
+  step 3: segmented `<button aria-pressed>` controls + layout cards (`data-layout-card` facecam|full → `jobs.layout`
+  auto/left/right | none; 3 disabled "Coming soon" cards, P4); campaign `default_layout`/`default_language` pre-fill
+  with a "from campaign" tag unless touched; estimate from `GET /api/analysis-estimate` (own jobs; hidden without
+  history). POST /api/jobs payload unchanged (analyze.spec pins it).
 - **Toolbar (072, replaces the tabs pill):** sticky `#toolbar` with ONE title
   element `#pageTitle` ("Analyze"/"Review"/"Editor", `syncPageTitle()`). `initToolbar()`
   is the **only** scroll driver: rAF, passive, maps `scrollY/TITLE_RANGE(48)` →
@@ -463,7 +473,7 @@ Writing tests (cross-user, settings, qa-tmp users) run on staging only (:8080/:8
 
 `tests/ui/run.sh` (Playwright, mocked `/api` from `tests/ui/fixtures.js`, never creates jobs; desktop 1280 +
 mobile 390). Run it before committing frontend changes; add a spec for new UI. Live read-only mode:
-`CLIPFLOW_UI_LIVE=1 CLIPFLOW_API_KEY=… tests/ui/run.sh specs/live.spec.js`.
+`CLIPFLOW_UI_LIVE=1 CLIPFLOW_API_TOKEN=cf_… tests/ui/run.sh specs/live.spec.js`.
 
 ## Token discipline (always)
 - Never read main.py / worker.py / index.html whole. `grep -n` the function, then read only ~60 lines around it.
