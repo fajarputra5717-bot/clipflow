@@ -36,3 +36,11 @@ captions untouched). UI on :8080 at 1280/390: no errors, no overflow. Tests: `te
 index.html, route `#editor/<jid>/<cid>`; API in `backend/app/routes_editor.py` (every route
 `Depends(get_current_user)` + `owner_filter`); render additions in `worker/render_steps.py` called from
 one-line `# lane-b hook`s. Hook title card = `edit_spec.hook_title`, burned via the caption ASS."
+
+## Update 2026-10-06 — P1.5 merged (fixes QA a67d58c #1, merge blocker)
+
+Routes moved under the job path: `GET /api/jobs/{jid}/candidates/{cid}/editor` and
+`PUT …/editor/hook-title`, so main's ownership middleware (`JOB_PATH_RE`) guards them; `get_current_user`
+now IS main's `current_user(request)`; SQL also scopes by `jobs.user_id` (owner only, admins included,
+same as main). Verified on staging with real sessions: admin GET/PUT 200, a member on the admin's clip
+GET/PUT **404**, no session 401, wrong job id 404. UI suite on staging: 50 passed.

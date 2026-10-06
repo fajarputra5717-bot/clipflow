@@ -10,6 +10,7 @@
   const RENDERING = ["preview_queued", "preview_rendering", "render_queued", "rendering"];
   const TABS = [["captions", "Captions"], ["effects", "Effects"], ["audio", "Audio"], ["watermark", "Watermark"], ["export", "Export"]];
   const READY_TABS = new Set(["captions"]);   // the rest arrive with P4 tasks 3–5
+  const edUrl = (jid, cid) => `/api/jobs/${encodeURIComponent(jid)}/candidates/${encodeURIComponent(cid)}/editor`;
   const reduced = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const E = { jid: null, cid: null, state: null, hook: null, saveT: 0, pollT: 0, hidden: [], tab: "captions", busy: false };
 
@@ -49,7 +50,7 @@
     window.scrollTo({ top: 0, behavior: "auto" });
     s.innerHTML = `<div class="panel ed-loading" aria-busy="true">Loading the editor…</div>`;
     try {
-      E.state = await api(`/api/editor/candidates/${encodeURIComponent(cid)}`);
+      E.state = await api(edUrl(jid, cid));
       E.hook = { ...E.state.hook_title };
       render();
       if (RENDERING.includes(E.state.candidate.status)) watchRender();
@@ -197,7 +198,7 @@
     clearTimeout(E.saveT);
     const body = { on: E.hook.on, text: E.hook.text || "", duration: Number(E.hook.duration) };
     try {
-      E.state = await api(`/api/editor/candidates/${encodeURIComponent(E.cid)}/hook-title`, { method: "PUT", body: JSON.stringify(body) });
+      E.state = await api(edUrl(E.jid, E.cid) + "/hook-title", { method: "PUT", body: JSON.stringify(body) });
       E.dirty = true;
       paintState();
     } catch (e) { paintState("Not saved: " + e.message); throw e; }
@@ -226,7 +227,7 @@
     clearInterval(E.pollT);
     E.pollT = setInterval(async () => {
       try {
-        const st = await api(`/api/editor/candidates/${encodeURIComponent(E.cid)}`);
+        const st = await api(edUrl(E.jid, E.cid));
         if (!E.cid) return;
         E.state.candidate = st.candidate;
         if (RENDERING.includes(st.candidate.status)) return paintState();

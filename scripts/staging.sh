@@ -7,7 +7,12 @@ PROD_ENV=/opt/clipflow/.env
 DC=(docker compose -p clipflow-staging -f docker-compose.staging.yml --env-file .env.staging)
 
 make_env() {   # staging env = production env minus every outbound/billable integration (never printed)
-  grep -vE '^(TELEGRAM_|SUBMAGIC_API_KEY|YOUTUBE_|RUNWAY_API_KEY)' "$PROD_ENV" > .env.staging
+  local keep_pw=""
+  [ -f .env.staging ] && keep_pw=$(grep -m1 '^STAGING_ADMIN_PASSWORD=' .env.staging | cut -d= -f2- || true)
+  grep -vE '^(TELEGRAM_|SUBMAGIC_API_KEY|YOUTUBE_|RUNWAY_API_KEY|CLIPFLOW_ADMIN_PASSWORD|STAGING_ADMIN_)' "$PROD_ENV" > .env.staging
+  # P1.5: staging admins get their OWN password (production's is never copied); kept across resets
+  [ -n "$keep_pw" ] || keep_pw=$(head -c 18 /dev/urandom | base64 | tr -d '/+=' | head -c 20)
+  printf 'STAGING_ADMIN_PASSWORD=%s\n' "$keep_pw" >> .env.staging
   printf 'TELEGRAM_BOT_TOKEN=\nTELEGRAM_CHAT_ID=\nSUBMAGIC_API_KEY=\nYOUTUBE_CLIENT_ID=\nYOUTUBE_CLIENT_SECRET=\nYOUTUBE_REFRESH_TOKEN=\nRUNWAY_API_KEY=\n' >> .env.staging
   chmod 600 .env.staging
 }
@@ -33,6 +38,20 @@ UPDATE clip_candidates SET submagic_status='failed'
 DELETE FROM app_settings WHERE key IN ('ORPHAN_SWEEP_DRY_RUN','RETENTION_DAYS_INTERMEDIATE');
 SQL
   up
+  staging_admin
+}
+staging_admin() {   # every admin account on staging → STAGING_ADMIN_PASSWORD; their sessions dropped
+  "${DC[@]}" exec -T backend python - <<'PY2'
+import os, psycopg
+from app import auth
+pw = os.environ["STAGING_ADMIN_PASSWORD"]
+with psycopg.connect(os.environ["DATABASE_URL"]) as conn, conn.cursor() as cur:
+    cur.execute("UPDATE users SET password_hash = %s WHERE role = 'admin' RETURNING username", (auth.hash_password(pw),))
+    names = [r[0] for r in cur.fetchall()]
+    cur.execute("DELETE FROM user_sessions WHERE user_id IN (SELECT id FROM users WHERE role = 'admin')")
+    conn.commit()
+print("staging admin login set for:", ", ".join(names) or "(no admin user)")
+PY2
 }
 up() { "${DC[@]}" up -d --build 2>&1 | tail -3; status; }
 status() { "${DC[@]}" ps --format '{{.Service}}\t{{.Status}}'; echo "UI http://localhost:8080  API http://127.0.0.1:8001/health"; }
@@ -45,6 +64,7 @@ case "${1:-status}" in
   status) status ;;
   logs) "${DC[@]}" logs --tail=80 "${2:-worker}" ;;
   rebuild) "${DC[@]}" up -d --build "${2:-worker}" 2>&1 | tail -3 ;;
+  admin) staging_admin ;;
   psql) "${DC[@]}" exec postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"' ;;
-  *) echo "usage: $0 up|down|reset|status|logs [svc]|rebuild [svc]|psql"; exit 2 ;;
+  *) echo "usage: $0 up|down|reset|status|logs [svc]|rebuild [svc]|admin|psql"; exit 2 ;;
 esac

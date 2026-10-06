@@ -1,4 +1,4 @@
-// Editor page (lane B, P4 task 1: hook title card). Mock mode: /api/editor/* answered here.
+// Editor page (lane B, P4 task 1: hook title card). Mock mode: /api/jobs/{j}/candidates/{c}/editor answered here.
 const { test, expect } = require("../fixtures");
 
 function editorState(over = {}) {
@@ -14,7 +14,7 @@ function editorState(over = {}) {
 
 async function mockEditor(page, api) {
   api.editor = editorState();
-  await page.route("**/api/editor/candidates/**", async (route) => {
+  await page.route(/\/api\/jobs\/[^/]+\/candidates\/[^/]+\/editor/, async (route) => {
     const req = route.request();
     if (req.method() === "PUT") {
       const body = req.postDataJSON();

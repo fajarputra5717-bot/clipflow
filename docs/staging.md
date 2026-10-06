@@ -13,6 +13,8 @@ and Postgres volume (`clipflow-staging_staging_pg`). **Production (`riftstorm-*`
 | Media | /data (rw) | /data **read-only** at /data + **/data-staging** (rw, `DATA_ROOT`) |
 | Worker | all CPUs | **2 CPUs** (`cpus: 2`), `restart: "no"` everywhere |
 
+Merged with main at least daily, so staging always runs **main + the editor work**.
+
 ## Commands
 
 ```bash
@@ -22,11 +24,20 @@ scripts/staging.sh down      # stop (keeps the DB volume)
 scripts/staging.sh status    # containers + URLs
 scripts/staging.sh logs worker          # last 80 lines (backend|worker|frontend|postgres)
 scripts/staging.sh rebuild worker       # after changing worker/ or shared/
+scripts/staging.sh admin        # re-apply the staging admin password
 scripts/staging.sh psql
 ```
 
-Frontend changes need no rebuild (directory mount); hard-refresh :8080. The API key is production's
-(`.env.staging` is generated from `/opt/clipflow/.env`, gitignored, mode 600).
+Frontend changes need no rebuild (directory mount); hard-refresh :8080.
+
+## Login (P1.5)
+
+Staging restores production's users, but **every admin account gets a staging-only password**: user
+`admin`, password = `STAGING_ADMIN_PASSWORD` in `/opt/clipflow-lane-b/.env.staging` (root-only, mode 600,
+gitignored; generated once and kept across resets). Production's `CLIPFLOW_ADMIN_PASSWORD` is never
+copied; admin sessions are dropped on reset. `scripts/staging.sh admin` re-applies it.
+Members keep their production passwords; QA can add staging-only members in the staging DB.
+`CLIPFLOW_API_KEY` (same as production) still works as an admin token for scripts.
 
 ## What the reset does
 
