@@ -24,6 +24,9 @@ docs/tasks/          original task specs
 Rebuild/restart one service: `docker compose build worker && docker compose up -d worker`.
 Import-test every rebuilt image BEFORE `up` (no job running): `docker compose run --rm --no-deps -T --entrypoint python
 worker -c "import worker"` / `backend -c "import app.main"` (134: a load-time NameError crash-looped the prod worker).
+Schema first (143): only the backend migrates (`ensure_schema()`); `/health` is 503 until it finished, compose's backend
+healthcheck uses it, and worker + notifier `depends_on: backend: service_healthy`. New tables are created there, never
+by the worker; a new service that reads app tables gets the same depends_on.
 Frontend changes need no rebuild (directory bind mount); hard-refresh the browser.
 Logs: `docker compose logs -f --tail=200 worker`.
 DB shell: `docker compose exec postgres psql -U clipflow -d clipflow`.

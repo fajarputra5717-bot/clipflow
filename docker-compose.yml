@@ -47,6 +47,14 @@ services:
       - ./docs/campaigns:/app/campaigns:ro   # campaign rules (081), re-read on change
     ports:
       - "127.0.0.1:8000:8000"   # debugging from the VM only; the UI goes through nginx
+    # 143: healthy only after ensure_schema() created every table (/health is 503 until then);
+    # worker + notifier wait for it, so a deploy can't start them against a half-migrated DB.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
     depends_on:
       postgres: { condition: service_healthy }
     logging: *logging
@@ -70,6 +78,7 @@ services:
       - ./docs/campaigns:/app/campaigns:ro   # campaign rules (081), re-read on change
     depends_on:
       postgres: { condition: service_healthy }
+      backend: { condition: service_healthy }   # 143: schema migrated first
     logging: *logging
 
   frontend:
@@ -119,6 +128,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      backend:
+        condition: service_healthy   # 143: reads tables the backend migrates
     logging: *logging
 
   # Optional automation. Start with: docker compose --profile n8n up -d

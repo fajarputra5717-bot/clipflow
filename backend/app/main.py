@@ -273,6 +273,11 @@ def get_db():
     return psycopg.connect(DATABASE_URL)
 
 
+# 143: /health answers 503 until ensure_schema() has run without a fatal error, so compose's
+# healthcheck holds the worker/notifier (depends_on: service_healthy) until every table exists.
+SCHEMA_READY = False
+
+
 @app.on_event("startup")
 def ensure_schema():
     """
@@ -514,6 +519,17 @@ def ensure_schema():
                 assign_legacy_rows(conn, admin_id)
     except Exception:
         print("[auth] bootstrap admin failed:", traceback.format_exc())
+
+    global SCHEMA_READY
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                # The newest table must exist: proof the statement list got through.
+                cur.execute("SELECT to_regclass('public.telegram_sends') IS NOT NULL")
+                SCHEMA_READY = bool(cur.fetchone()[0])
+    except Exception:
+        print("[backend] schema readiness check failed:", traceback.format_exc())
+    print(f"[backend] schema ready: {SCHEMA_READY}")
 
 
 OWNED_TABLES = ("jobs", "watermark_assets")
@@ -890,6 +906,9 @@ def root():
 
 @app.get("/health")
 def health():
+
+    if not SCHEMA_READY:
+        return JSONResponse({"status": "migrating"}, status_code=503)
 
     try:
 
