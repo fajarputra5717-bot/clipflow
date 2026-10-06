@@ -5,7 +5,7 @@
 //
 // Run (staging):  QA_MULTIUSER=1 CLIPFLOW_API_BASE=http://localhost:8001 \
 //   QA_USER_A=… QA_PASS_A=… QA_USER_B=… QA_PASS_B=… npx playwright test specs/qa-multiuser.spec.js --project=desktop
-// Optional (adjust once P1.5's API is final): QA_LOGIN_PATH (default /api/auth/login), QA_LOGIN_BODY ('user'|'username').
+// Optional: QA_ADMIN_TOKEN (staging admin cf_ token; QA_ADMIN_KEY = legacy key before 127), only to read the current global value; QA_LOGIN_PATH (default /api/auth/login), QA_LOGIN_BODY ('user'|'username').
 // Precondition: A owns ≥ 1 job with ≥ 1 candidate that has a preview + thumbnail, and ≥ 1 watermark asset.
 const { test, expect, request } = require("@playwright/test");
 
@@ -118,9 +118,18 @@ test.describe("P1.5 cross-user isolation (HIGH)", () => {
     expect(JSON.stringify(b)).not.toMatch(/sk-ant-|AIza[0-9A-Za-z_-]{20,}/);
     // A member must not change global (admin-only) keys: 403 or 404, never 200. The attempt re-sends the CURRENT
     // value, so even if the guard is missing nothing changes (incident 2026-10-05: "tiny" was written to production).
-    const cur = (b?.settings || b)?.WHISPER_MODEL;
-    const current = (cur && typeof cur === "object" ? cur.value : cur) || (a?.settings || a)?.WHISPER_MODEL?.value;
-    test.skip(!current, "can't read the current WHISPER_MODEL; refusing to send a value that could change it");
+    // Members can't read global keys any more (P1.5 part 3), so read the CURRENT value as admin (QA_ADMIN_KEY =
+    // the legacy X-ClipFlow-Key, staging only) and re-send exactly that: even a missing guard changes nothing.
+    let current;
+    const admHeaders = process.env.QA_ADMIN_TOKEN ? { Authorization: `Bearer ${process.env.QA_ADMIN_TOKEN}` }
+      : process.env.QA_ADMIN_KEY ? { "X-ClipFlow-Key": process.env.QA_ADMIN_KEY } : null;  // legacy key removed in 127
+    if (admHeaders) {
+      const adm = await request.newContext({ baseURL: BASE, extraHTTPHeaders: admHeaders });
+      const g = await json(await adm.get("/api/settings"));
+      const v = (g?.settings || g)?.WHISPER_MODEL;
+      current = v && typeof v === "object" ? v.value : v;
+    }
+    test.skip(!current, "set QA_ADMIN_TOKEN (staging admin cf_ token) to read the current WHISPER_MODEL safely");
     const s = (await B.put("/api/settings", { data: { values: { WHISPER_MODEL: String(current) } } })).status();
     expect([403, 404], `B PUT global WHISPER_MODEL → ${s}`).toContain(s);
     expect(a, "A /api/settings").toBeTruthy();
