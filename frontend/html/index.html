@@ -3055,7 +3055,7 @@ async function getHook(jid,cid){
   setBusy(b,true,"Finding hook…")
   setCandidateActiveTask(jid,cid,{actionLabel:"Finding new hook (AI)",status:"queued",progress:0});
   try{await api(`/api/jobs/${jid}/candidates/${cid}/new-hook`,{method:"POST"});watchCandidate(jid,cid)}
-  catch(e){setBusy(b,false);clearCandidateActiveTask(cid);alert("Get another hook failed: "+e.message)}
+  catch(e){setBusy(b,false);clearCandidateActiveTask(cid);alert(/^No new distinct moment/.test(e.message)?e.message:"Get another hook failed: "+e.message)}
 }
 async function fixSubtitleAI(jid,cid){
   const b=document.querySelector(`[data-fix-subtitle="${css(jid)}"][data-cid="${css(cid)}"]`);

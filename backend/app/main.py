@@ -24,7 +24,7 @@ from starlette.concurrency import run_in_threadpool
 from app import auth
 
 from shared.ai import router as ai_router
-from shared import campaigns, descriptions, edit_spec as edit_specs, languages, payouts, posts as post_rules, rule_checks
+from shared import campaigns, descriptions, edit_spec as edit_specs, hook_ranges, languages, payouts, posts as post_rules, rule_checks
 from shared.errors import AINotConfiguredError
 from shared.fonts import normalize_caption_font
 from shared.settings import (
@@ -433,6 +433,9 @@ def ensure_schema():
         "ALTER TABLE clip_posts ADD COLUMN IF NOT EXISTS claimed_views BIGINT",
         # 136: clips per video, snapshotted at creation (form → campaign → owner's CLIPS_PER_JOB); NULL = legacy.
         "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS clip_count INT",
+        # 137: every range this job's clips have had ([[start, end], …], incl. replaced ones) so "Get another
+        # hook" never returns a used moment again.
+        "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS used_hook_ranges JSONB",
         "ALTER TABLE clip_posts ADD COLUMN IF NOT EXISTS expected_rp BIGINT",
         "CREATE INDEX IF NOT EXISTS idx_clip_posts_candidate ON clip_posts (candidate_id)",
         "CREATE UNIQUE INDEX IF NOT EXISTS uq_clip_posts_url ON clip_posts (user_id, url) WHERE url IS NOT NULL",
@@ -3240,7 +3243,7 @@ def new_hook(
 
                 cur.execute(
                     """
-                    SELECT transcript_segments
+                    SELECT transcript_segments, used_hook_ranges
                     FROM jobs
                     WHERE id = %s
                     """,
@@ -3279,49 +3282,67 @@ def new_hook(
                 detail="No transcript available for this job",
             )
 
+        # 137: was the first 15 000 chars only (long videos kept getting early moments).
+        try:
+            max_chars = int(runtime_setting("HOOKS_FULL_TRANSCRIPT_MAX_CHARS") or 15000)
+        except (TypeError, ValueError):
+            max_chars = 15000
         transcript_with_times = "\n".join(
             f"[{seg.get('start', 0):.1f}-{seg.get('end', 0):.1f}] "
             f"{seg.get('text', '')}"
             for seg in segments
-        )[:15000]
+        )[:max_chars]
 
-        avoid_ranges = "\n".join(
-            f"- {float(r[1]):.1f}s to {float(r[2]):.1f}s"
-            for r in existing_ranges
-            if r[1] is not None and r[2] is not None
+        # 137: used = every range this job's clips have ever had (replaced ones from used_hook_ranges)
+        # + the current clips. The answer is validated (hook_ranges.too_close) and retried up to 2x.
+        used = hook_ranges.merge(
+            job_row[1] or [],
+            *[(r[1], r[2]) for r in existing_ranges if r[1] is not None and r[2] is not None],
         )
 
         clip_duration = runtime_setting(
             "CLIP_TARGET_DURATION"
         )
+        lang_name = languages.name(job_language_of(job_id))
 
-        prompt = (
-            f"Below is a timestamped transcript of a video. "
-            f"Select ONE new, distinct highlight moment that "
-            f"would make an engaging short-form clip, "
-            f"approximately {clip_duration} seconds long. "
-            f"Do NOT select a moment overlapping these "
-            f"already-used ranges:\n{avoid_ranges or '(none yet)'}\n\n"
-            f"Respond ONLY with JSON: an object with 'start' "
-            f"and 'end' (numbers, in seconds), 'title' "
-            f"(short, engaging, in {languages.name(job_language_of(job_id))}), "
-            f"and 'reason' (short string).\n\n"
-            f"Transcript:\n{transcript_with_times}"
-        )
-
-        data, ai_meta = ai_generate_json(
-            prompt, NEW_HOOK_SCHEMA, task="new_hook", max_tokens=8000,
-            with_meta=True,
-        )
-
-        new_start = float(data["start"])
-        new_end = float(data["end"])
-
-        if new_end <= new_start:
-
+        data = ai_meta = None
+        rejected = []
+        for attempt in range(3):
+            avoid = used + [list(r) for r in rejected]
+            avoid_ranges = "\n".join(f"- {s_:.1f}s to {e_:.1f}s" for s_, e_ in sorted(avoid))
+            prompt = (
+                f"Below is a timestamped transcript of a video. "
+                f"Select ONE new, distinct highlight moment that "
+                f"would make an engaging short-form clip, "
+                f"approximately {clip_duration} seconds long. "
+                f"These ranges are already used, do not pick these "
+                f"(nor anything overlapping or starting within 10 s of them):\n"
+                f"{avoid_ranges or '(none yet)'}\n\n"
+                f"Respond ONLY with JSON: an object with 'start' "
+                f"and 'end' (numbers, in seconds), 'title' "
+                f"(short, engaging, in {lang_name}), "
+                f"and 'reason' (short string).\n\n"
+                f"Transcript:\n{transcript_with_times}"
+            )
+            data, ai_meta = ai_generate_json(
+                prompt, NEW_HOOK_SCHEMA, task="new_hook", max_tokens=8000,
+                with_meta=True,
+            )
+            new_start = float(data["start"])
+            new_end = float(data["end"])
+            if new_end <= new_start:
+                rejected.append((new_start, new_start + 1))
+                continue
+            hit = hook_ranges.conflict((new_start, new_end), avoid)
+            if not hit:
+                break
+            print(f"[new-hook] job {job_id}: {new_start:.1f}-{new_end:.1f} too close to "
+                  f"{hit[0]:.1f}-{hit[1]:.1f} (attempt {attempt + 1}/3)")
+            rejected.append((new_start, new_end))
+        else:
             raise HTTPException(
-                status_code=502,
-                detail="AI returned an invalid time range",
+                status_code=409,
+                detail="No new distinct moment found: every pick overlapped a clip this job already had.",
             )
 
         with get_db() as conn:
@@ -3367,6 +3388,12 @@ def new_hook(
                 )
 
                 row = cur.fetchone()
+
+                # 137: remember the replaced range and the new one for every later click.
+                cur.execute(
+                    "UPDATE jobs SET used_hook_ranges = %s::jsonb WHERE id = %s",
+                    (json_param(hook_ranges.merge(used, (new_start, new_end))), job_id),
+                )
 
                 if not row:
 
