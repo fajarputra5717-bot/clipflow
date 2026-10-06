@@ -1338,6 +1338,22 @@ select::-ms-expand{display:none}
 .qmark .qmark-warn{flex-basis:100%;margin:0;font-size:12px;color:var(--badge-warn-fg)}
 .badge.not-eligible{margin-left:4px;background:var(--badge-warn-bg);border-color:var(--badge-warn-line);color:var(--badge-warn-fg)}
 @media (max-width:760px){.qchecks{margin-left:0}}
+/* Claim advice + views + claim/paid (P2 part 5, 133). Money strings come formatted from the API (payouts.py). */
+.qpost{margin:8px 0 0 calc(40px + var(--sp-2));display:flex;flex-direction:column;gap:6px}
+.qadvice{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px;font-size:13px}
+.qadvice .badge{font-size:12px;padding:2px 9px}
+.qadvice .qadvice-msg{color:var(--text)}
+.qadvice small{color:var(--muted);font-size:12px}
+.qviews{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:13px;color:var(--muted)}
+.qviews b{color:var(--text)}
+.qviews form,.qclaim{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.qviews input,.qclaim input{width:150px;min-height:36px;padding:6px 12px}
+.qviews button,.qclaim button{min-height:36px;padding:0 12px;border-radius:999px;font-size:13px}
+.qclaim{padding:10px 12px;border-radius:14px;background:var(--panel2)}
+.qclaim .hint{flex-basis:100%;margin:0;font-size:12px;color:var(--muted)}
+.qmoney{font-size:13px}
+.qmoney .diff-up{color:var(--badge-good-fg)}.qmoney .diff-down{color:var(--badge-bad-fg)}
+@media (max-width:760px){.qpost{margin-left:0}}
 </style>
 <link rel="stylesheet" href="editor/editor.css"><!-- lane-b hook -->
 </head>
@@ -1477,9 +1493,16 @@ select::-ms-expand{display:none}
             </div>
           </div>
 
-          <div class="form-row">
-            <span class="field" id="platformLbl">Output platform</span>
-            <div class="seg" role="group" aria-labelledby="platformLbl"><button type="button" data-platform="youtube_shorts" aria-pressed="true">YouTube Shorts</button><button type="button" data-platform="instagram_reels" aria-pressed="false">Reels</button><button type="button" data-platform="tiktok" aria-pressed="false">TikTok</button></div>
+          <div class="form-row grid-2">
+            <div>
+              <span class="field" id="platformLbl">Output platform</span>
+              <div class="seg" role="group" aria-labelledby="platformLbl"><button type="button" data-platform="youtube_shorts" aria-pressed="true">YouTube Shorts</button><button type="button" data-platform="instagram_reels" aria-pressed="false">Reels</button><button type="button" data-platform="tiktok" aria-pressed="false">TikTok</button></div>
+            </div>
+            <div>
+              <span class="field" id="clipsLbl">Clips <span class="from-campaign" id="clipsFromCampaign" hidden>from campaign</span></span>
+              <div class="seg" role="group" aria-labelledby="clipsLbl"><button type="button" data-clips="2" aria-pressed="false">2</button><button type="button" data-clips="4" aria-pressed="true">4</button><button type="button" data-clips="6" aria-pressed="false">6</button></div>
+              <p class="tiny muted seg-note" id="clipsNote"></p>
+            </div>
           </div>
 
           <p class="form-row small muted subtitle-defaults" id="subtitleDefaults">Subtitles: <span id="subtitleDefaultsText">your defaults</span> · <button class="plain" type="button" data-nav="settings">Change in Settings</button></p>
@@ -1970,6 +1993,8 @@ async function renameJob(id){
     if(currentTab==="current")await loadCurrentJobs();else if(currentTab==="queue")await loadQueue();
   }catch(e){alert("Rename failed: "+e.message)}
 }
+// 134: short id (first 8 chars) shown small; the full id stays in the title attribute.
+function shortId(id){return "#"+String(id||"").slice(0,8)}
 function jobDisplayTitle(j){
   const c=(j.candidates||[])[0];
   const fallback=c?(c.manual_title||c.title||c.generated_title||hookTitle(c.subtitle_override||c.subtitle_text)):"";
@@ -2003,6 +2028,7 @@ function updateCampaignHint(){
   const c=campaignsCache.find(x=>x.slug===$("jobCampaign")?.value),h=$("campaignHint");if(!h)return;
   if(!layoutTouched){layoutFromCampaign=!!c&&!!c.default_layout&&c.default_layout!=="auto";selectLayout(c?.default_layout||"auto",true)} // 117: campaign default unless you picked one
   if(!languageTouched){languageFromCampaign=!!c?.default_language;selectLanguage(c?.default_language||"auto",true)} // 126: same for the language
+  if(!clipsTouched){clipsFromCampaign=!!c?.default_clip_count;selectClips(c?.default_clip_count||defaultClips(),true)} // 136
   if(!c){h.hidden=true;h.textContent="";return}
   const src=c.sources.length?`Source: ${c.sources.join(", ")}`:(c.source_note?`Source: ${c.source_note}`:"Source: any");
   h.textContent=`${src} · ${c.platforms.length} platforms${c.brief_pending?" · brief pending":""}`;h.hidden=false;
@@ -2012,6 +2038,17 @@ function updateCampaignHint(){
 // language_fallback, which the worker uses when Auto-detect confidence is below 0.6.
 const LANG_NAMES={en:"English",id:"Indonesian"},LAST_LANG_KEY="clipflow_last_language";
 function lastExplicitLanguage(){try{const v=localStorage.getItem(LAST_LANG_KEY);return LANG_NAMES[v]?v:null}catch{return null}}
+// 136: clips per video. Pre-selected from the campaign's default_clip_count, else your CLIPS_PER_JOB setting
+// (Settings → Clips & rendering, 1–8); an explicit pick wins. A setting outside 2/4/6 shows no button pressed and
+// is sent as is.
+let clipsTouched=false,clipsFromCampaign=false,selectedClips=null;
+function defaultClips(){const n=parseInt((settingsCache.CLIPS_PER_JOB||{}).value,10);return n>=1&&n<=8?n:4}
+function selectClips(n,auto){
+  if(!auto){clipsTouched=true;clipsFromCampaign=false}
+  selectedClips=Math.max(1,Math.min(8,Number(n)||defaultClips()));setPressed("clips",selectedClips);
+  const t=$("clipsFromCampaign");if(t)t.hidden=!clipsFromCampaign;
+  const note=$("clipsNote");if(note)note.textContent=clipsTouched?"":`Your default: ${defaultClips()} (Settings)`;
+}
 let languageTouched=false,languageFromCampaign=false;
 // auto = set by a campaign default: not remembered as the user's explicit choice (language_fallback).
 function selectLanguage(v,auto){selectedLanguage=LANG_NAMES[v]?v:"auto";
@@ -2094,7 +2131,7 @@ async function createJob(){
       // subtitle style/font/size omitted: the backend fills them from the DEFAULT_SUBTITLE_* settings
       youtube_url:url,custom_title:customTitle||null,layout:selectedLayout,platform:selectedPlatform,split_ratio:selectedSplit,
       subtitle_animation:"karaoke",
-      language:selectedLanguage,language_fallback:lastExplicitLanguage(),
+      language:selectedLanguage,language_fallback:lastExplicitLanguage(),clip_count:selectedClips||defaultClips(),
       campaign:$("jobCampaign").value||null
     })});
     const id=j.job_id||j.id;if(!id)throw new Error("Backend did not return a job ID.");
@@ -2192,12 +2229,13 @@ function syncCurrentJobs(jobs){
 function campaignTag(j){return j.campaign?`<span class="tag campaign-tag" title="Campaign">${esc(campaignName(j.campaign))}</span>`:""}
 function renderQueueJob(j,i=0){
   const p=pct(j.progress),s=j.status||"completed",busy=isBusy(s),done=isDone(p,s);
-  const c=j.candidates?.[0],thumb=c?mediaUrl(`${API}/api/jobs/${j.id}/candidates/${c.id}/thumbnail`):null;
+  // 135: the list API names the first clip with a thumbnail (it never sends candidates → cards were grey).
+  const tc=j.thumb_candidate_id||j.candidates?.[0]?.id,thumb=tc?mediaUrl(`${API}/api/jobs/${j.id}/candidates/${tc}/thumbnail`):null;
   return `<div class="panel queue-card" data-queue-open="${esc(j.id)}" style="--i:${i}">
     <div class="job-header">
       <div>
         <div class="job-title-row"><h3>${esc(jobDisplayTitle(j))}</h3><button class="rename-btn" data-rename="${esc(j.id)}" type="button" aria-label="Rename job" title="Rename job">${PENCIL_ICON}</button></div>
-        <div class="job-id">${esc(j.id)}</div>
+        <div class="job-id" title="${esc(j.id)}">${esc(shortId(j.id))}</div>
       </div>
       <div class="job-header-side">
         ${campaignTag(j)}${platformIcon(j.platform,"sm")}
@@ -2789,7 +2827,7 @@ function renderDetail(j){
   const candidates=j.candidates||[];
   return `<div class="panel detail-head">
     <div class="job-header">
-      <div><h2>${esc(jobDisplayTitle(j))}</h2><div class="job-id">${esc(j.id)}</div><div class="detail-meta"><span class="tag">${esc(stageLabel(j.status))}</span><span class="tag">${platformIcon(j.platform,"sm")}${esc(platformLabel(j.platform))}</span><span class="tag">${esc(String(j.split_ratio||70))}:${esc(String(100-Number(j.split_ratio||70)))}</span><span class="tag">${esc(jobLanguageLine(j).replace(/^Language: /,""))}</span></div></div>
+      <div><h2>${esc(jobDisplayTitle(j))}</h2><div class="job-id" title="${esc(j.id)}">${esc(shortId(j.id))}</div><div class="detail-meta"><span class="tag">${esc(stageLabel(j.status))}</span><span class="tag">${platformIcon(j.platform,"sm")}${esc(platformLabel(j.platform))}</span><span class="tag">${esc(String(j.split_ratio||70))}:${esc(String(100-Number(j.split_ratio||70)))}</span><span class="tag">${esc(jobLanguageLine(j).replace(/^Language: /,""))}</span></div></div>
       <div class="actions" style="margin-top:0">${isCancellable(j.status)?`<button class="secondary cancel-job-btn" data-cancel-job="${esc(j.id)}" type="button">Cancel job</button>`:""}${j.status==="failed"?`<button class="secondary cancel-job-btn" data-retry-job="${esc(j.id)}" type="button">Retry job</button>`:""}<button class="secondary" data-back-queue type="button">Back</button></div>
     </div>
     <div class="muted" style="margin-top:7px">${esc(j.youtube_url||"")}</div>
@@ -3019,7 +3057,7 @@ async function getHook(jid,cid){
   setBusy(b,true,"Finding hook…")
   setCandidateActiveTask(jid,cid,{actionLabel:"Finding new hook (AI)",status:"queued",progress:0});
   try{await api(`/api/jobs/${jid}/candidates/${cid}/new-hook`,{method:"POST"});watchCandidate(jid,cid)}
-  catch(e){setBusy(b,false);clearCandidateActiveTask(cid);alert("Get another hook failed: "+e.message)}
+  catch(e){setBusy(b,false);clearCandidateActiveTask(cid);alert(/^No new distinct moment/.test(e.message)?e.message:"Get another hook failed: "+e.message)}
 }
 async function fixSubtitleAI(jid,cid){
   const b=document.querySelector(`[data-fix-subtitle="${css(jid)}"][data-cid="${css(cid)}"]`);
@@ -3435,7 +3473,7 @@ document.addEventListener("change",e=>{
 const SETTINGS_GROUPS=[
   ["AI & transcription",["GEMINI_API_KEY","GEMINI_ANALYSIS_MODEL","GEMINI_MAX_ATTEMPTS","WHISPER_MODEL","WHISPER_LANGUAGE","RUNWAY_API_KEY","RUNWAY_MODEL"]],
   ["Face detection",["FACE_DETECTION_SAMPLE_COUNT","FACE_CONFIDENCE_THRESHOLD","FACE_ZOOM_RATIO"]],
-  ["Clips & rendering",["CLIP_COUNT","CLIP_TARGET_DURATION","CLIP_MIN_DURATION","CLIP_MAX_DURATION","PREVIEW_WIDTH","WATERMARK_WIDTH","WATERMARK_OPACITY","WATERMARK_POSITION_Y","SUBTITLE_SEAM_GAP","FULLFRAME_CAPTION_Y"]],
+  ["Clips & rendering",["CLIPS_PER_JOB","CLIP_TARGET_DURATION","CLIP_MIN_DURATION","CLIP_MAX_DURATION","PREVIEW_WIDTH","WATERMARK_WIDTH","WATERMARK_OPACITY","WATERMARK_POSITION_Y","SUBTITLE_SEAM_GAP","FULLFRAME_CAPTION_Y"]],
   ["YouTube",["YOUTUBE_CLIENT_ID","YOUTUBE_CLIENT_SECRET","YOUTUBE_REFRESH_TOKEN"]],
   ["TikTok",["TIKTOK_CLIENT_KEY","TIKTOK_CLIENT_SECRET","TIKTOK_ACCESS_TOKEN"]],
   ["Instagram",["INSTAGRAM_ACCESS_TOKEN","INSTAGRAM_BUSINESS_ACCOUNT_ID"]],
@@ -3446,7 +3484,7 @@ const SETTINGS_GROUPS=[
 ];
 const SETTING_LABELS={WATERMARK_POSITION_Y:"Watermark height (% from top, new jobs)",SUBTITLE_SEAM_GAP:"Caption gap above facecam (%, new jobs)",FULLFRAME_CAPTION_Y:"Caption height, no-facecam clips (% from top)",DISK_SPACE_MIN_MB:"Disk reserve (MB)",RETENTION_DAYS_INTERMEDIATE:"Keep downloads (days)",ORPHAN_SWEEP_DRY_RUN:"Orphan sweep dry run",GEMINI_API_KEY:"Gemini API key",GEMINI_ANALYSIS_MODEL:"Gemini model",GEMINI_MAX_ATTEMPTS:"Gemini attempts",WHISPER_MODEL:"Whisper model",WHISPER_LANGUAGE:"Fallback language",RUNWAY_API_KEY:"Runway API key",RUNWAY_MODEL:"Runway model",
   FACE_DETECTION_SAMPLE_COUNT:"Frames sampled",FACE_CONFIDENCE_THRESHOLD:"Confidence threshold",FACE_ZOOM_RATIO:"Facecam zoom",
-  CLIP_COUNT:"Clips per video",CLIP_TARGET_DURATION:"Target length (s)",CLIP_MIN_DURATION:"Minimum length (s)",CLIP_MAX_DURATION:"Maximum length (s)",PREVIEW_WIDTH:"Preview width (px)",WATERMARK_WIDTH:"Watermark width (px)",WATERMARK_OPACITY:"Watermark opacity",
+  CLIPS_PER_JOB:"Clips per video (1–8, new jobs)",CLIP_TARGET_DURATION:"Target length (s)",CLIP_MIN_DURATION:"Minimum length (s)",CLIP_MAX_DURATION:"Maximum length (s)",PREVIEW_WIDTH:"Preview width (px)",WATERMARK_WIDTH:"Watermark width (px)",WATERMARK_OPACITY:"Watermark opacity",
   YOUTUBE_CLIENT_ID:"Client ID",YOUTUBE_CLIENT_SECRET:"Client secret",YOUTUBE_REFRESH_TOKEN:"Refresh token",TIKTOK_CLIENT_KEY:"Client key",TIKTOK_CLIENT_SECRET:"Client secret",TIKTOK_ACCESS_TOKEN:"Access token",
   INSTAGRAM_ACCESS_TOKEN:"Access token",INSTAGRAM_BUSINESS_ACCOUNT_ID:"Business account ID",SUBMAGIC_API_KEY:"API key",SUBMAGIC_TEMPLATE:"Template",SUBMAGIC_MAGIC_ZOOMS:"Magic zooms",SUBMAGIC_MAGIC_BROLLS:"Magic B-rolls",
   HASHTAGS:"Hashtags",CAMPAIGN_NAME:"Campaign name",
@@ -3541,6 +3579,41 @@ const PLATFORM_ICON={youtube:'<svg viewBox="0 0 24 24" fill="currentColor" aria-
   threads:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M17 8.5C16 5.5 13.8 4 11.5 4 7.5 4 5 7.2 5 12s2.5 8 6.5 8c3 0 5.5-1.7 5.5-4.5 0-4-6.5-4.5-6.5-1.5 0 1.3 1 2 2.3 2 2.2 0 3.2-2 3.2-5"/></svg>',
   x:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M5 4l14 16M19 4 5 20"/></svg>'};
 const PLATFORM_SHORT={youtube:"YouTube",instagram:"Reels",tiktok:"TikTok",facebook:"Facebook",threads:"Threads",x:"X"};
+const ADVICE_BADGE={claim_now:["Claim now","completed"],wait:["Wait","idle"],missed:["Missed","failed"],claimed:["Claimed","attention"],unknown:["Check brief","idle"]};
+let claimOpen={};
+function fmtViews(n){return n==null?"—":Number(n).toLocaleString("id-ID")}
+function postBlockHtml(r,k){
+  const p=r.post,st=rowStatus(r);if(st==="ready"||st==="planned")return "";
+  const a=p.advice,[al,ac]=a?(ADVICE_BADGE[a.action]||ADVICE_BADGE.unknown):[];
+  const adv=a&&st==="posted"?`<div class="qadvice"><span class="badge ${ac}">${al}</span><span class="qadvice-msg">${esc(a.message)}</span>${a.deadline?`<small>claim by ${esc(fmtPostedAt(a.deadline))}</small>`:""}</div>`:"";
+  const views=`<div class="qviews">Views <b>${fmtViews(p.views)}</b>${p.views_at?` <span>as of ${esc(fmtPostedAt(p.views_at))}</span>`:" <span>not entered yet</span>"}
+    <form data-views-form="${esc(p.id)}" novalidate><input type="number" min="0" step="1" inputmode="numeric" aria-label="Current views" placeholder="Current views"><button class="secondary" type="submit">Save views</button></form></div>`;
+  let money="";
+  if(st==="claimed")money=`<div class="qmoney">Claimed at ${fmtViews(p.claimed_views)} views · expected <b>${esc(p.expected_fmt||"Rp ?")}</b></div>`;
+  if(st==="paid")money=`<div class="qmoney">Paid <b>${esc(p.paid_fmt)}</b>${p.expected_fmt?` · expected ${esc(p.expected_fmt)}`:""}${p.paid_diff_fmt?` · <span class="${p.paid_diff_fmt.startsWith("+")?"diff-up":"diff-down"}">${esc(p.paid_diff_fmt)}</span>`:""}</div>`;
+  const open=claimOpen[p.id];
+  const act=st==="posted"?(open?`<form class="qclaim" data-claim-form="${esc(p.id)}" novalidate><input type="number" min="0" step="1" inputmode="numeric" value="${p.views??""}" aria-label="Views at claim time"><button class="primary" type="submit">Claim</button><button class="secondary" type="button" data-claim-cancel="${esc(p.id)}">Cancel</button><p class="hint">Claims pay on the views you submit (Fandra) and are made once per post. Enter the views shown when you submit the claim form.</p><div class="account-msg" role="status"></div></form>`:`<div><button class="secondary" type="button" data-claim-open="${esc(p.id)}">Mark claimed</button></div>`)
+    :st==="claimed"?(open?`<form class="qclaim" data-paid-form="${esc(p.id)}" novalidate><span>Rp</span><input type="number" min="0" step="1" inputmode="numeric" value="${p.expected_rp??""}" aria-label="Amount received (Rp)"><button class="primary" type="submit">Save</button><button class="secondary" type="button" data-claim-cancel="${esc(p.id)}">Cancel</button><p class="hint">Enter what you actually received; any difference from the expected ${esc(p.expected_fmt||"amount")} is shown.</p><div class="account-msg" role="status"></div></form>`:`<div><button class="secondary" type="button" data-claim-open="${esc(p.id)}">Mark paid</button></div>`):"";
+  return `<div class="qpost">${adv}${views}${money}${act}</div>`;
+}
+async function patchPost(id,body,form){
+  const btn=form?.querySelector("button[type=submit]"),msg=form?.querySelector(".account-msg");if(btn)setBusy(btn,true);
+  try{await api("/api/posts/"+encodeURIComponent(id),{method:"PATCH",body:JSON.stringify(body)});delete claimOpen[id];await loadPublish()}
+  catch(err){if(btn)setBusy(btn,false);if(msg){msg.textContent=err.message;msg.classList.add("is-error")}else alert(err.message)}
+}
+document.addEventListener("submit",e=>{
+  const vf=e.target.closest?.("[data-views-form]"),cf=e.target.closest?.("[data-claim-form]"),pf=e.target.closest?.("[data-paid-form]");
+  if(!vf&&!cf&&!pf)return;e.preventDefault();
+  const f=vf||cf||pf,v=f.querySelector("input").value.trim(),n=Number(v);
+  if(v===""||!Number.isInteger(n)||n<0){f.querySelector("input").focus();f.querySelector("input").setAttribute("aria-invalid","true");return}
+  if(vf)return patchPost(vf.dataset.viewsForm,{views:n},vf);
+  if(cf)return patchPost(cf.dataset.claimForm,{status:"claimed",views:n},cf);
+  return patchPost(pf.dataset.paidForm,{status:"paid",paid_rp:n},pf);
+});
+document.addEventListener("click",e=>{
+  const o=e.target.closest("[data-claim-open]");if(o){claimOpen[o.dataset.claimOpen]=true;renderPublish();return}
+  const c=e.target.closest("[data-claim-cancel]");if(c){delete claimOpen[c.dataset.claimCancel];renderPublish()}
+});
 const POST_STATUS={ready:["Ready","idle"],planned:["Planned","idle"],posted:["Posted","completed"],claimed:["Claimed","attention"],paid:["Paid","completed"]};
 let publishGroups=[],publishFilter="all",publishOpen={};
 function publishRowKey(r){return r.candidate_id+":"+r.platform}
@@ -3588,7 +3661,7 @@ function publishRowHtml(r){
     </div>
     ${blocks.length||rowWarns.length||(r.post&&r.post.eligible===false&&st!=="ready")?`<ul class="qchecks">${blocks.map(c=>`<li class="qcheck is-block">${esc(c.message)}</li>`).join("")}${st==="ready"?rowWarns.map(c=>`<li class="qcheck is-warn">${esc(c.message)}</li>`).join("")+checks.filter(c=>c.level==="warn"&&c.account_id).map(c=>`<li class="qcheck is-warn">${esc(c.message)}</li>`).join(""):""}${r.post&&r.post.eligible===false&&st!=="ready"?`<li class="qcheck is-warn">Not eligible: ${esc(r.post.ineligible_reason||"")}</li>`:""}</ul>`:""}
     ${r.caption_trimmed?`<p class="qnote">Caption shortened to fit ${esc(r.platform_name)}; hashtags kept in order.</p>`:""}
-    ${form}
+    ${form}${postBlockHtml(r,k)}
   </div>`;
 }
 // What "Mark posted" will record as the not-eligible reason for this account (row warnings + its cap).
@@ -3675,7 +3748,7 @@ async function loadSettings(){
             <span class="row-control"><input id="${id}" data-setting="${esc(k)}" type="${sec?"password":"text"}" value="${esc(s.value||"")}" placeholder="${s.configured?"Configured / masked":"Not set"}" autocomplete="off" spellcheck="false">${sec?`<button class="icon-btn reveal-btn" type="button" data-reveal="${id}" aria-label="Show ${esc(SETTING_LABELS[k]||k)}" aria-pressed="false">${EYE}</button>`:""}</span>
           </div>`}).join("")}</div>
       </section>`).join("");
-    filterSettings();updateSettingsDirty();updateSubtitleDefaultsLine();
+    filterSettings();updateSettingsDirty();updateSubtitleDefaultsLine();if(!clipsTouched)updateCampaignHint();
   }catch(e){$("settingsPanel").innerHTML=`<div class="error-box">${esc(e.message)}</div>`}
 }
 // Send only fields the user changed: the form shows effective values (DB → env → default), and
@@ -3727,6 +3800,7 @@ document.addEventListener("click",e=>{
   const lo=e.target.closest("[data-layout]");if(lo)return selectLayout(lo.dataset.layout);
   const lc=e.target.closest("[data-layout-card]");if(lc)return selectLayout(lc.dataset.layoutCard==="full"?"none":lastCamLayout);
   const lg=e.target.closest("[data-language]");if(lg)return selectLanguage(lg.dataset.language);
+  const cl=e.target.closest("[data-clips]");if(cl)return selectClips(cl.dataset.clips);
   if(e.target.closest("#analyzeButton"))return createJob();
   const ce=e.target.closest("[data-edit]");if(ce)return toggleCandidateEdit(ce.dataset.edit);
   const et=e.target.closest("[data-edit-tab]");if(et)return switchEditTab(et.dataset.cid,et.dataset.editTab);

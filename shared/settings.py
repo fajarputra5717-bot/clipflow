@@ -33,7 +33,7 @@ DEFAULT_SETTINGS = {
     # medium int8 on CPU ≈ the old openai-whisper base speed.
     "WHISPER_MODEL": "medium",
     "WHISPER_LANGUAGE": "id",
-    "CLIP_COUNT": "2",
+    "CLIPS_PER_JOB": "4",  # 136: per user, 1–8; snapshotted on jobs.clip_count (replaces CLIP_COUNT)
     "CLIP_TARGET_DURATION": "35",
     "CLIP_MIN_DURATION": "20",
     "CLIP_MAX_DURATION": "55",
@@ -135,6 +135,7 @@ ENV_ONLY_KEYS = {
 # precedence for these: user → app_settings (admin's house default) → env →
 # DEFAULT_SETTINGS. Everything else is global and admin-only to change.
 USER_SETTING_KEYS = {
+    "CLIPS_PER_JOB",
     "DEFAULT_SUBTITLE_STYLE",
     "DEFAULT_SUBTITLE_FONT",
     "DEFAULT_SUBTITLE_SIZE",

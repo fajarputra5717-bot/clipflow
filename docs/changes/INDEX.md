@@ -104,3 +104,8 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 130 · 2026-10-06 · P2 (3): Publish step = flow-preview step 7: publish queue (clip × platform), download campaign_platform_slug.mp4, copy title/caption (iOS-safe), Mark posted → clip_posts, statuses; tab bar 5 items · main.py, shared/posts.py, index.html
 131 · 2026-10-06 · Lane B shared/payouts.py (+ tests) merged to main (payout models, claim advice, IDR) · shared/payouts.py, tests/test_payouts.py
 132 · 2026-10-06 · P2 (4): pre-post checks on Publish rows — red = Approve-blocking rules (409), amber = window/cap/length from shared/payouts.py; posting anyway records eligible=false + reason · shared/payouts.py, main.py, index.html
+133 · 2026-10-06 · P2 (5): claim advice per post (payouts.claim_advice), views history + 'as of', Mark claimed stores views + expected Rp, Mark paid shows the difference · main.py, index.html
+134 · 2026-10-06 · Bug: job titles 'AI-Generated Highlight' → YouTube title stored from yt-dlp metadata (+ backfill); short job id · worker.py, index.html
+135 · 2026-10-06 · Bug: Review cards' empty thumbnails → list API returns thumb_candidate_id (first clip with a thumbnail) · main.py, index.html
+136 · 2026-10-06 · Clips per video: per-user CLIPS_PER_JOB (default 4, 1–8, replaces CLIP_COUNT), jobs.clip_count snapshot, Analyze 'Clips 2/4/6', campaign default_clip_count; prompt changes only the count · settings, main.py, worker.py, index.html
+137 · 2026-10-06 · Bug: Get another hook returned used moments → per-job used_hook_ranges, server-side overlap check (>30 % / <10 s), 2 retries, 'No new distinct moment found' · main.py, shared/hook_ranges.py

@@ -290,7 +290,9 @@ it on any new hook-producing path (pass `with_meta=True`).
 Hook input (077): `select_hooks()` sends the WHOLE timed transcript (no cut) up to
 `HOOKS_FULL_TRANSCRIPT_MAX_CHARS`; above it, 30-min windows (+2 min overlap) → `dedupe_hooks()` → one
 ranking call returning candidate ids. Providers return `(data, model, usage)`; router `meta["usage"]`.
-Keep prompt construction in `build_hooks_prompt()` so the eval and production send identical text.
+Keep prompt construction in `build_hooks_prompt()` so the eval and production send identical text. Clips per
+video (136): `jobs.clip_count` (form → campaign `default_clip_count` → user `CLIPS_PER_JOB`, 1–8), read by
+`clips_per_job()`; only the count varies in the prompt. Before `up` of a rebuilt worker, import-test the image.
 
 ## Runtime settings
 
@@ -341,7 +343,7 @@ leave zero active admins (409, rows locked). CORS origins from env `CORS_ALLOWED
 
 ## Ownership (P1.5) — every query is scoped by `user_id`
 
-Owned tables carry `user_id` NOT NULL (`jobs`, `watermark_assets`, `platform_accounts` (128), `clip_posts` (129); candidates/versions via
+Owned tables carry `user_id` NOT NULL (`jobs`, `watermark_assets`, `platform_accounts` (128), `clip_posts` (129), `clip_post_views` (133); candidates/versions via
 their job; **every new table from now on**). Rule: every SQL that reads or writes user data filters by the caller's id
 (`current_user(request)["id"]`); another user's row answers **404**, never 403/200. The middleware guard
 `_path_owned()` already enforces it for `/api/jobs/{id}[/candidates/{cid}]…`, `/api/assets/watermarks/{id}…` and
@@ -361,7 +363,9 @@ hashtags in order, trimmed by `posts.trim_caption`, never cutting tags); downloa
 (server-side filename). Copy buttons go through `copyText()` (sync Clipboard API in the tap + execCommand fallback). Pre-post
 checks (132): red = `rule_checks` blocking failures (same as Approve; posting → 409); amber = `payouts.window_problems`
 / `cap_problem` / platform length; posting with warnings stores `eligible=false` + `ineligible_reason` (computed
-server-side). Windows, caps and payout math live ONLY in `shared/payouts.py` (Lane B module, 131). Payout amounts
+server-side). Windows, caps and payout math live ONLY in `shared/payouts.py` (Lane B module, 131). Claims (133):
+advice = `payouts.claim_advice` per post (views history `clip_post_views` gives the 24 h growth); claimed stores
+`claimed_views` + `expected_rp`; amounts reach the UI pre-formatted (`*_fmt`), never computed in index.html. Payout amounts
 come only from Lane B's `shared/payouts.py` (P3), never hand-rolled.
 
 ## Frontend shell (R-11/R-12/R-13, lane B 067-073; badge v2.1117)
