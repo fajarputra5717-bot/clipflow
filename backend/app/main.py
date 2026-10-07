@@ -25,7 +25,7 @@ from starlette.concurrency import run_in_threadpool
 from app import auth
 
 from shared.ai import router as ai_router
-from shared import campaigns, descriptions, edit_spec as edit_specs, hook_ranges, languages, origins, payouts, post_advice, posts as post_rules, rule_checks, schedule
+from shared import campaign_status, campaigns, descriptions, edit_spec as edit_specs, hook_ranges, languages, origins, payouts, post_advice, posts as post_rules, rule_checks, schedule
 from shared.errors import AINotConfiguredError
 from shared.fonts import normalize_caption_font
 from shared.settings import (
@@ -4032,9 +4032,12 @@ def with_campaign_hashtags(text: str, rules) -> str:
 
 # ---------- Campaigns (P3 part 1, 157): the `campaigns` table via shared/campaigns.py ----------
 # Members see shared campaigns + their own private ones (another's private one = 404); admins see all and edit.
-def _campaign_out(rules: dict, user: dict) -> dict:
+def _campaign_out(rules: dict, user: dict, now: Optional[datetime] = None) -> dict:
+    now = now or datetime.now(timezone.utc)
     return {**campaigns.summary(rules), "visibility": rules.get("visibility", "shared"), "paused": bool(rules.get("paused")),
-            "mine": rules.get("created_by") == user["id"], "can_edit": user["role"] == "admin"}
+            "mine": rules.get("created_by") == user["id"], "can_edit": user["role"] == "admin",
+            # 158: Active / Ending soon / Ended / Paused + the open week (shared/campaign_status.py, one source)
+            "status": campaign_status.status(rules, now), "week": campaign_status.current_week(rules, now)}
 
 
 def _visible_campaign(slug: str, user: dict) -> dict:
