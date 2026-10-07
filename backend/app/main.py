@@ -3868,6 +3868,13 @@ def new_hook(
                         hook_provider = %s,
                         manual_title = NULL,
                         subtitle_override = NULL,
+                        -- 160 (Lane B report): edit_spec keys in the OLD clip's time don't carry over to the
+                        -- new moment (cuts, keyword words, zoom markers, silence ranges, the hook card's text);
+                        -- style choices (caption preset/position, keyword colour, on/off switches) stay.
+                        edit_spec = NULLIF(
+                            (COALESCE(edit_spec, '{}'::jsonb) - 'cuts' - 'keywords')
+                                #- '{zoom,markers}' #- '{audio,silence_ranges}' #- '{hook_title,text}',
+                            '{}'::jsonb),
                         -- 110: the new-hook prompt has no score (no prompt change);
                         -- clear the old hook's so the UI shows no stale estimate.
                         score = NULL,
