@@ -46,6 +46,8 @@ def status(rules, now: datetime) -> dict:
     last = last_posting_day(rules)
     left = (last - today).days + 1 if last else None
     detail = review_state.campaign_status(rules, now)["text"]
+    if detail == "Open until the budget runs out" and "budget" not in str((rules.get("period") or {}).get("until") or ""):
+        detail = "No end date set"   # the rules don't say the budget ends it (e.g. a pilot with TBD period)
     if rules.get("paused"):
         code = "paused"
     elif last and today > last:

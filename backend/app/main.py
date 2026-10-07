@@ -25,7 +25,7 @@ from starlette.concurrency import run_in_threadpool
 from app import auth
 
 from shared.ai import router as ai_router
-from shared import campaign_status, campaigns, descriptions, edit_spec as edit_specs, hook_ranges, languages, origins, payouts, post_advice, posts as post_rules, rule_checks, schedule
+from shared import campaign_status, campaign_view, campaigns, descriptions, edit_spec as edit_specs, hook_ranges, languages, origins, payouts, post_advice, posts as post_rules, rule_checks, schedule
 from shared.errors import AINotConfiguredError
 from shared.fonts import normalize_caption_font
 from shared.settings import (
@@ -79,6 +79,7 @@ MEDIA_PATH_RE = re.compile(
     r"jobs/[^/]+/candidates/[^/]+/"
     r"(preview|render|thumbnail|thumbnail-options/\d+)"
     r"|assets/watermarks/[^/]+/file"
+    r"|campaigns/[^/]+/watermark"   # 161: the campaign's watermark preview (detail page)
     r")$"
 )
 
@@ -4126,7 +4127,27 @@ def get_campaign(slug: str, request: Request):
         {"brief_text": None, "created_at": None, "updated_at": None}
     clean = {k: v for k, v in rules.items() if k not in ("slug", "brief_pending", "visibility", "created_by", "paused")}
     now = datetime.now(timezone.utc)
-    return {**_campaign_out(rules, user, now, _campaign_stats(user["id"], now)), **meta, "rules": clean}
+    # 161: the detail page's sections in plain language (shared/campaign_view.py; money via payouts only)
+    return {**_campaign_out(rules, user, now, _campaign_stats(user["id"], now)), **meta, "rules": clean,
+            "view": campaign_view.build(rules, now)}
+
+
+@app.get("/api/campaigns/{slug}/watermark")
+def get_campaign_watermark(slug: str, request: Request):
+    """161: the campaign's watermark asset for everyone who can see the campaign (the asset row is the admin's
+    own upload; campaigns are shared, so their mark is too). No asset / missing file → 404."""
+    rules = _visible_campaign(slug, current_user(request))
+    wm = campaigns.watermark(rules) or {}
+    if not wm.get("asset_id"):
+        raise HTTPException(status_code=404, detail="This campaign has no watermark asset")
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT path FROM watermark_assets WHERE id::text = %s", (str(wm["asset_id"]),))
+            row = cur.fetchone()
+    path = DATA_ROOT / row[0] if row else None
+    if not path or not path.exists():
+        raise HTTPException(status_code=404, detail="Watermark file missing")
+    return FileResponse(path, media_type="image/png")
 
 
 class CampaignUpdate(BaseModel):

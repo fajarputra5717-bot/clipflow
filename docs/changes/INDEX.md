@@ -132,3 +132,4 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 158 · 2026-10-07 · P3 part 2: campaign status engine (Active / Ending soon ≤ 3 d / Ended past the last posting day / Paused) + current week, on every campaign in the API · shared/campaign_status.py, main.py
 159 · 2026-10-07 · P3 part 3: Campaign step live — cards with status, payouts.describe() sentence, my posted/claimed/paid, budget text, my monthly-cap meter · index.html, main.py, payouts
 160 · 2026-10-07 · Fix: Get another hook clears the old moment's time-based edit_spec keys (cuts, keywords, zoom markers, silence ranges, hook card text), styles kept (Lane B report) · main.py
+161 · 2026-10-07 · P3 part 5: campaign detail page — shared/campaign_view.py (plain-language payout, weeks, questions, budget, claim), campaign watermark preview route, admin Pause/Resume · campaign_view.py, main.py, index.html
