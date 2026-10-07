@@ -1295,6 +1295,36 @@ select::-ms-expand{display:none}
 .acct-meta small{display:block;color:var(--muted);font-size:12px}
 .acct-empty{padding:12px 14px;color:var(--muted);font-size:13px}
 @media (max-width:760px){.account-create{grid-template-columns:1fr}}
+/* Schedule view (P2.5 S3, 147): list by WIB day (default, phones) + week calendar (desktop ≥ 1000 px) */
+.sched-viewseg{display:none}
+@media (min-width:1000px){.sched-viewseg{display:inline-flex}}
+.sday{margin-top:var(--sp-2)}
+.sday h3{font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin:0 0 4px;display:flex;gap:8px;align-items:baseline}
+.sday h3 .is-today{color:var(--accent)}
+.sday.is-overdue h3{color:var(--badge-bad-fg)}
+.srow{border-top:1px solid var(--line);padding:10px 0}
+.srow-top{display:grid;grid-template-columns:40px minmax(0,1fr) auto;gap:var(--sp-2);align-items:center}
+.srow.is-overdue .stime{color:var(--badge-bad-fg)}
+.srow .qn .qc{white-space:normal}
+.stime{font-weight:700;font-size:15px;font-variant-numeric:tabular-nums;text-align:right}
+.stime small{display:block;font-weight:500;font-size:12px;color:var(--muted)}
+.schips{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 0 calc(40px + var(--sp-2))}
+.schips .badge{font-size:12px;padding:3px 9px}
+.srow .qactions{margin-left:calc(40px + var(--sp-2))}
+.srow .qmark{margin-left:calc(40px + var(--sp-2))}
+.sfree{font-size:13px;color:var(--muted);padding:8px 0;border-top:1px solid var(--line)}
+@media (max-width:760px){.schips,.srow .qactions,.srow .qmark{margin-left:0}}
+.sweek{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px;margin-top:var(--sp-2)}
+.sweek-day{min-height:180px;border-radius:14px;background:var(--panel2);border:1px solid var(--line);padding:8px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.sweek-day h4{margin:0 0 2px;font-size:12px;font-weight:600;color:var(--muted)}
+.sweek-day.is-today{border-color:var(--accent)}
+.sweek-day.is-today h4{color:var(--accent)}
+.sweek-post,[data-theme="dark"] .sweek-post{display:flex;flex-direction:column;align-items:flex-start;gap:1px;padding:6px 8px;border-radius:10px;border:1px solid var(--badge-idle-line);background:var(--panel);color:var(--text);text-align:left;font-size:12px;min-height:0;box-shadow:none;width:100%}
+.sweek-post b{font-variant-numeric:tabular-nums;display:inline-flex;align-items:center;gap:4px}
+.sweek-post b svg{width:13px;height:13px}
+.sweek-post span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;color:var(--muted)}
+.sweek-post.is-warn{border-color:var(--badge-warn-line)}
+.sweek-free{font-size:11px;color:var(--muted2)}
 /* Approve & schedule sheet (P2.5 S2, 146): one row per platform; times in WIB */
 .plan-intro{margin:0 0 var(--sp-2);font-size:13px;color:var(--muted)}
 .plan-row{border-top:1px solid var(--hairline);padding:12px 0}
@@ -1603,6 +1633,14 @@ select::-ms-expand{display:none}
       <section id="queueSection" class="view-section hidden">
         <div id="queueJobs" class="view-section"></div>
         <div id="queueDetail" class="view-section hidden"></div>
+      </section>
+      <section id="scheduleSection" class="view-section hidden" aria-labelledby="scheduleTitle">
+        <div class="panel publish-panel">
+          <div class="section-head"><div><div class="eyebrow">Step 6 · Schedule</div><h2 id="scheduleTitle">Schedule</h2><p class="muted small">Planned posts by day, in WIB. ClipFlow reminds you on Telegram at the planned time; you post them yourself.</p></div><span class="spacer"></span>
+            <div class="publish-filters"><div class="seg" role="group" aria-label="Week"><button type="button" data-sched-week="-1" aria-label="Previous week">‹</button><button type="button" data-sched-week="0" id="schedWeekLabel">This week</button><button type="button" data-sched-week="1" aria-label="Next week">›</button></div>
+              <div class="seg sched-viewseg" role="group" aria-label="View"><button type="button" data-sched-view="list" aria-pressed="true">List</button><button type="button" data-sched-view="week" aria-pressed="false">Week</button></div></div></div>
+          <div id="scheduleList" aria-live="polite"></div>
+        </div>
       </section>
       <section id="publishSection" class="view-section hidden" aria-labelledby="publishTitle">
         <div class="panel publish-panel">
@@ -3341,6 +3379,7 @@ async function saveSchedule(){
     closeSheet();planState=null;
     if(d.approved){setCandidateActiveTask(jid,cid,{actionLabel:"Rendering final",status:"render_queued",progress:0});watchCandidate(jid,cid)}
     else if(currentTab==="publish")loadPublish();
+    if(currentTab==="schedule")loadSchedule();
   }catch(err){st.textContent=err.message;st.classList.add("is-error")}finally{setBusy(b,false);if(planState)syncScheduleSave()}
 }
 async function rate(jid,cid,n){
@@ -3552,7 +3591,7 @@ async function refreshRunningJobs(){
 function startJobMonitor(){if(jobMonitorTimer)clearInterval(jobMonitorTimer);refreshRunningJobs();jobMonitorTimer=setInterval(refreshRunningJobs,POLL_INTERVAL)}
 function stopJobMonitor(){if(jobMonitorTimer){clearInterval(jobMonitorTimer);jobMonitorTimer=null}}
 
-function syncPageTitle(){const t=$("pageTitle");if(t)t.textContent=editorOpen()?"Editor":currentTab==="queue"?"Review":currentTab==="publish"?"Publish":"Analyze"}
+function syncPageTitle(){const t=$("pageTitle");if(t)t.textContent=editorOpen()?"Editor":currentTab==="queue"?"Review":currentTab==="publish"?"Publish":currentTab==="schedule"?"Schedule":"Analyze"}
 
 // Switching views while scrolled keeps the large title collapsed and puts the new section's top right
 // under the toolbar (instead of leaving it wherever the old view was scrolled to).
@@ -3560,7 +3599,7 @@ function freezeUnderHeader(){
   if(window.scrollY>TITLE_RANGE)window.scrollTo({top:TITLE_RANGE,behavior:scrollMode()});
 }
 
-const TAB_SECTIONS=[["current","currentSection"],["queue","queueSection"],["publish","publishSection"]];
+const TAB_SECTIONS=[["current","currentSection"],["queue","queueSection"],["schedule","scheduleSection"],["publish","publishSection"]];
 async function showTab(tab){
   freezeUnderHeader();
   if(tab===currentTab){
@@ -3568,6 +3607,8 @@ async function showTab(tab){
       loadCurrentJobs();
     }else if(tab==="publish"){
       loadPublish();
+    }else if(tab==="schedule"){
+      loadSchedule();
     }else{
       loadQueue();
       await refreshRunningJobs();
@@ -3610,6 +3651,7 @@ async function showTab(tab){
   setTimeout(()=>next.classList.remove("switching-in"),400);
 
   if(tab==="publish"){loadPublish();return}
+  if(tab==="schedule"){loadSchedule();return}
   if(tab==="current"){
     overlayOpen=false;
     updateJobIsland();
@@ -3980,6 +4022,87 @@ document.addEventListener("submit",async e=>{
   catch(err){setBusy(btn,false);msg.textContent=err.message;msg.classList.add("is-error")}
 });
 
+// ---- Schedule view (P2.5 S3, 147): GET /api/schedule = own planned posts by WIB day + overdue on top.
+// Actions per row: Reschedule (the Approve & schedule sheet), Send to phone (141, that platform's caption),
+// Mark posted (PATCH planned → posted with the link), Drop (two-step). Week calendar on desktop ≥ 1000 px.
+let scheduleData=null,scheduleWeek=0,scheduleView="list",schedMarkOpen={};
+const SCHED_WIDE=matchMedia("(min-width:1000px)");
+SCHED_WIDE.addEventListener?.("change",()=>{if(currentTab==="schedule")renderScheduleView()});
+function wibDay(iso){return new Date(iso).toLocaleDateString("en-GB",{timeZone:"Asia/Jakarta",weekday:"short",day:"numeric",month:"short"}).replace(",","")}
+function wibDateKey(d){return new Date(d.getTime()+WIB_MS).toISOString().slice(0,10)}
+function weekStartIso(offset){const now=new Date(),wib=new Date(now.getTime()+WIB_MS),dow=(wib.getUTCDay()+6)%7;
+  const monday=Date.UTC(wib.getUTCFullYear(),wib.getUTCMonth(),wib.getUTCDate()-dow+7*offset)-WIB_MS;return new Date(monday).toISOString()}
+async function loadSchedule(){
+  const from=weekStartIso(scheduleWeek),to=new Date(new Date(from).getTime()+7*864e5).toISOString();
+  try{scheduleData=await api(`/api/schedule?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);renderScheduleView()}
+  catch(err){$("scheduleList").innerHTML=`<div class="error-box">${esc(err.message)}</div>`}
+}
+function schedRowHtml(p){
+  const base=`/api/jobs/${encodeURIComponent(p.job_id)}/candidates/${encodeURIComponent(p.candidate_id)}`,open=schedMarkOpen[p.id];
+  const rs=p.render||{},rcls=rs.state==="ready"?"completed":rs.state==="rendering"?"idle":"failed";
+  const renderLate=rs.state!=="ready"&&(p.overdue||new Date(p.scheduled_for)-Date.now()<3600e3);
+  return `<div class="srow${p.overdue?" is-overdue":""}" data-sched-row="${esc(p.id)}">
+    <div class="srow-top">
+      ${p.has_thumbnail?`<img class="qthumb" src="${esc(mediaUrl(base+"/thumbnail"))}" alt="" loading="lazy">`:`<span class="qthumb"></span>`}
+      <div class="qn"><div class="qt" title="${esc(p.title)}">${esc(p.title||"Untitled clip")}</div><div class="qc"><span class="pchip">${PLATFORM_ICON[p.platform]||""}${esc(PLATFORM_SHORT[p.platform]||p.platform_name)}</span>${p.account_handle?" · @"+esc(p.account_handle):""}${p.campaign_name?" · "+esc(p.campaign_name):""}</div></div>
+      <div class="stime">${esc(fmtWib(p.scheduled_for,false).replace(" WIB",""))}<small>${p.overdue?esc(wibDay(p.scheduled_for))+" · overdue":"WIB"}</small></div>
+    </div>
+    <div class="schips">${p.overdue?`<span class="badge failed">Overdue</span>`:""}<span class="badge ${renderLate&&rs.state!=="ready"?"failed":rcls}" data-render-state="${esc(rs.state||"")}">${esc(rs.label||"")}</span>${p.eligible===false?`<span class="badge not-eligible" title="${esc(p.ineligible_reason||"")}">Not eligible: ${esc(p.ineligible_reason||"")}</span>`:""}${schedSent[p.id]?`<span class="badge idle">Sent to phone</span>`:""}</div>
+    <div class="qactions">
+      <button class="secondary" type="button" data-sched-replan="${esc(p.id)}">Reschedule</button>
+      <button class="secondary" type="button" data-sched-send="${esc(p.id)}" ${rs.state==="ready"?"":"disabled title=\"The final isn't rendered yet\""}>Send to phone</button>
+      <button class="secondary" type="button" data-sched-mark="${esc(p.id)}" aria-expanded="${open?"true":"false"}">Mark posted</button>
+      <button class="secondary" type="button" data-sched-drop="${esc(p.id)}">Drop</button>
+    </div>
+    ${open?`<form class="qmark" data-sched-mark-form="${esc(p.id)}" novalidate><div class="field"><label for="surl-${esc(p.id)}">Link to the post${p.account_handle?" on @"+esc(p.account_handle):""}</label><input id="surl-${esc(p.id)}" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://…"></div>
+      <button class="primary" type="submit">Save</button><button class="secondary" type="button" data-sched-mark="${esc(p.id)}">Cancel</button><div class="account-msg" role="status" aria-live="polite"></div></form>`:""}
+  </div>`;
+}
+let schedSent={};
+function freeSlotsText(){const t=scheduleData.posting_times||{};return Object.entries(t).filter(([,v])=>v.length).map(([k,v])=>`${PLATFORM_SHORT[k]||k} ${v.join(" · ")}`).join("  ·  ")}
+function renderScheduleView(){
+  if(!scheduleData)return;
+  const d=scheduleData,today=wibDateKey(new Date()),wide=SCHED_WIDE.matches,view=wide?scheduleView:"list",free=freeSlotsText();
+  $("schedWeekLabel").textContent=scheduleWeek===0?"This week":scheduleWeek===1?"Next week":scheduleWeek===-1?"Last week":wibDay(d.from)+" –";
+  document.querySelectorAll("[data-sched-view]").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.schedView===view)));
+  const over=d.overdue.length?`<div class="sday is-overdue"><h3>Overdue · ${d.overdue.length}</h3>${d.overdue.map(schedRowHtml).join("")}</div>`:"";
+  const total=d.overdue.length+d.days.reduce((a,x)=>a+x.posts.length,0);
+  let body;
+  if(view==="week"){
+    body=`<div class="sweek">${d.days.map(day=>`<div class="sweek-day${day.date===today?" is-today":""}"><h4>${esc(wibDay(day.date+"T12:00:00+07:00"))}</h4>
+      ${day.posts.map(p=>`<button type="button" class="sweek-post${p.eligible===false?" is-warn":""}" data-sched-open="${esc(p.id)}"><b>${PLATFORM_ICON[p.platform]||""}${esc(fmtWib(p.scheduled_for,false).replace(" WIB",""))}</b><span>${esc(p.title||"")}</span></button>`).join("")||(day.date>=today&&free?`<span class="sweek-free">Free</span>`:"")}</div>`).join("")}</div>`;
+  }else{
+    body=d.days.map(day=>`<div class="sday"><h3>${esc(wibDay(day.date+"T12:00:00+07:00"))}${day.date===today?` <span class="is-today">Today</span>`:""}</h3>
+      ${day.posts.length?day.posts.map(schedRowHtml).join(""):`<div class="sfree">${day.date<today?"Nothing planned":free?`Free: ${esc(free)} WIB`:"Nothing planned. Add times in Settings → Posting times."}</div>`}</div>`).join("");
+  }
+  $("scheduleList").innerHTML=over+(total?"":`<p class="publish-empty">Nothing planned this week. Use <b>Approve &amp; schedule</b> on a clip in <button class="plain" type="button" data-nav="queue">Review</button>.</p>`)+body;
+}
+function schedPost(id){if(!scheduleData)return null;for(const p of scheduleData.overdue)if(p.id===id)return p;for(const d of scheduleData.days)for(const p of d.posts)if(p.id===id)return p;return null}
+document.addEventListener("click",async e=>{
+  const w=e.target.closest("[data-sched-week]");if(w){const n=+w.dataset.schedWeek;scheduleWeek=n===0?0:scheduleWeek+n;return loadSchedule()}
+  const v=e.target.closest("[data-sched-view]");if(v){scheduleView=v.dataset.schedView;return renderScheduleView()}
+  const o=e.target.closest("[data-sched-open]");
+  if(o){scheduleView="list";renderScheduleView();const row=document.querySelector(`[data-sched-row="${css(o.dataset.schedOpen)}"]`);row?.scrollIntoView({behavior:scrollMode(),block:"center"});row?.querySelector("button")?.focus({preventScroll:true});return}
+  const rp=e.target.closest("[data-sched-replan]");if(rp){const p=schedPost(rp.dataset.schedReplan);if(p)openSchedule(p.job_id,p.candidate_id,rp);return}
+  const mk=e.target.closest("[data-sched-mark]");
+  if(mk){const id=mk.dataset.schedMark;if(schedMarkOpen[id])delete schedMarkOpen[id];else schedMarkOpen[id]=true;renderScheduleView();document.querySelector(`[data-sched-mark-form="${css(id)}"] input`)?.focus();return}
+  const sd=e.target.closest("[data-sched-send]");
+  if(sd){const p=schedPost(sd.dataset.schedSend);if(!p)return;setBusy(sd,true,"Queued…");
+    try{await api("/api/publish/send-to-phone",{method:"POST",body:JSON.stringify({candidate_id:p.candidate_id,platform:p.platform})});schedSent[p.id]=true;renderScheduleView();refreshRunningJobs()}
+    catch(err){setBusy(sd,false);alert(err.message)}return}
+  const dr=e.target.closest("[data-sched-drop]");
+  if(dr){if(!dr.classList.contains("is-confirm")){dr.classList.add("is-confirm");dr.textContent="Confirm drop";setTimeout(()=>{if(document.contains(dr)){dr.classList.remove("is-confirm");dr.textContent="Drop"}},4000);return}
+    setBusy(dr,true);try{await api("/api/posts/"+encodeURIComponent(dr.dataset.schedDrop),{method:"PATCH",body:JSON.stringify({status:"dropped"})});await loadSchedule()}catch(err){setBusy(dr,false);alert(err.message)}}
+});
+document.addEventListener("submit",async e=>{
+  const f=e.target.closest?.("[data-sched-mark-form]");if(!f)return;e.preventDefault();
+  const id=f.dataset.schedMarkForm,url=f.querySelector("input").value.trim(),msg=f.querySelector(".account-msg");
+  if(!/^https:\/\//i.test(url)){msg.textContent="Paste the https:// link of the post.";msg.classList.add("is-error");f.querySelector("input").focus();return}
+  const btn=f.querySelector("button[type=submit]");setBusy(btn,true,"Saving…");
+  try{await api("/api/posts/"+encodeURIComponent(id),{method:"PATCH",body:JSON.stringify({status:"posted",url})});delete schedMarkOpen[id];await loadSchedule()}
+  catch(err){setBusy(btn,false);msg.textContent=err.message;msg.classList.add("is-error")}
+});
+
 // Posting accounts (P2 part 1): the user's own handles per platform; Pause/Resume, two-step Remove.
 function accountsMessage(text,ok){const m=$("accountsMsg");m.textContent=text||"";m.classList.toggle("is-ok",!!ok);m.classList.toggle("is-error",!!text&&!ok)}
 let accountsCache=[],accountPlatforms=[];
@@ -4280,7 +4403,7 @@ let openSheetId=null,sheetOpener=null;
 function selectedNav(){return openSheetId==="settingsSheet"?"settings":openSheetId==="watermarkSheet"?"watermarks":currentTab}
 function syncNav(){
   const sel=selectedNav(),ind=$("navIndicator");
-  document.querySelectorAll("[data-nav]").forEach(b=>{if(b.dataset.nav===sel)b.setAttribute("aria-current",b.dataset.nav==="current"||b.dataset.nav==="queue"||b.dataset.nav==="publish"?"page":"true");else b.removeAttribute("aria-current")});
+  document.querySelectorAll("[data-nav]").forEach(b=>{if(b.dataset.nav===sel)b.setAttribute("aria-current",b.dataset.nav==="current"||b.dataset.nav==="queue"||b.dataset.nav==="publish"||b.dataset.nav==="schedule"?"page":"true");else b.removeAttribute("aria-current")});
   const item=document.querySelector(`.side-nav [data-nav="${sel}"]`);
   if(ind&&item){ind.style.setProperty("--nav-y",item.offsetTop+"px");ind.style.height=item.offsetHeight+"px";ind.classList.add("ready")}
   else if(ind)ind.classList.remove("ready");
@@ -4300,7 +4423,7 @@ const FLOW_STEPS=[
   {id:"analyze",label:"Analyze",sub:"Import a video",icon:"spark",nav:"current"},
   {id:"review",label:"Review",sub:"Clips + checks",icon:"eye",nav:"queue"},
   {id:"editor",label:"Editor",sub:"Captions, export",icon:"edit"},
-  {id:"schedule",label:"Schedule",sub:"Prime time, your TZ",icon:"cal",phase:"P2"},
+  {id:"schedule",label:"Schedule",sub:"Planned posts, WIB",icon:"cal",nav:"schedule"},
   {id:"publish",label:"Publish",sub:"One card per clip",icon:"send",nav:"publish"},
   {id:"track",label:"Track",sub:"Views → earnings",icon:"chart",phase:"P3"},
 ];
@@ -4308,7 +4431,7 @@ function editorOpen(){return currentTab==="queue"&&!!document.querySelector("#qu
 function editorTarget(){return currentTab==="queue"?document.querySelector("#queueDetail:not(.hidden) .candidate-card"):null}
 function renderFlow(){
   const ol=$("flow");if(!ol)return;
-  const active=editorOpen()?"editor":currentTab==="queue"?"review":currentTab==="publish"?"publish":"analyze",idx=FLOW_STEPS.findIndex(s=>s.id===active);
+  const active=editorOpen()?"editor":currentTab==="queue"?"review":currentTab==="publish"?"publish":currentTab==="schedule"?"schedule":"analyze",idx=FLOW_STEPS.findIndex(s=>s.id===active);
   const canEdit=!!editorTarget();
   const html=FLOW_STEPS.map((s,i)=>{
     const off=!!s.phase||(s.id==="editor"&&!canEdit),sub=s.phase?`Coming in ${s.phase}`:s.id==="editor"&&!canEdit?"Open a clip in Review":s.sub;
@@ -4373,7 +4496,7 @@ document.addEventListener("click",e=>{
   }
   const rb=e.target.closest("#refreshView");if(rb){
     if(!REDUCED_MOTION.matches){rb.classList.remove("spinning");void rb.offsetWidth;rb.classList.add("spinning");setTimeout(()=>rb.classList.remove("spinning"),450)}
-    if(currentTab==="current")loadCurrentJobs();else if(currentTab==="publish")loadPublish();else{loadQueue();refreshRunningJobs()}
+    if(currentTab==="current")loadCurrentJobs();else if(currentTab==="publish")loadPublish();else if(currentTab==="schedule")loadSchedule();else{loadQueue();refreshRunningJobs()}
   }
 });
 window.addEventListener("resize",()=>requestAnimationFrame(syncNav),{passive:true});

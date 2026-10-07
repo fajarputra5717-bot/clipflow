@@ -383,14 +383,15 @@ Schedule (P2.5, 145): `POSTING_TIMES` user setting = `{platform: ["HH:MM"]}` in 
 campaign windows via `payouts.window_problems`). Times are stored TIMESTAMPTZ (UTC), shown in WIB (fixed +7).
 "Scheduled" = `clip_posts.status='planned'` + `scheduled_for` (no new status). Approve & schedule (146):
 `POST …/candidates/{cid}/schedule` = Approve gate + `_queue_final_render()` (the one approve path) + planned rows with
-`_eligibility_for()` at the planned time; re-plan via PATCH re-checks. Mark posted on a planned row PATCHes it.
+`_eligibility_for()` at the planned time; re-plan via PATCH re-checks. Mark posted on a planned row PATCHes it. Schedule step (147): `GET /api/schedule` (own planned rows by WIB day + overdue),
+`#scheduleSection` in `TAB_SECTIONS` stepper order; its render fn is `renderScheduleView()` (`renderSchedule()` = the sheet).
 
 ## Frontend shell (R-11/R-12/R-13, lane B 067-073; badge v2.1117)
 
 - **Navigation (106, P1 task 0):** the flow-preview **stepper** (`#flowNav`, `renderFlow()`, `FLOW_STEPS`) is the
   top-level navigation (sticky under the toolbar, compact while it is collapsed via `body:has(.toolbar.is-collapsed)`, 121): Analyze (`data-nav="current"`, the Import view), Review (`data-nav="queue"`, the job
   list/detail, formerly "Publish"), Publish (`data-nav="publish"`, 130), Editor (`data-flow-editor`: opens the visible job's clip drawer; disabled
-  until a job detail is open); Campaign/Auto-import/Track (P3) and Schedule/Publish (P2) are disabled with
+  until a job detail is open); Campaign/Auto-import/Track (P3) and Track (P3) is disabled with
   "Coming in Px" — never mock content (mapping: docs/roadmap.md). `#pageTitle` = the active step. Gear in the
   toolbar (`data-nav="settings"`). `syncNav()` repaints the stepper.
 - **Layout:** `.app-shell` grid = left `<aside id="sidebar">` (tools only since 106:

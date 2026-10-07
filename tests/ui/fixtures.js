@@ -88,7 +88,15 @@ async function mockApi(page, api) {
     { const m = path.match(/^\/api\/posts\/([^/]+)$/);
       if (m && method === "PATCH") {
         const row = (api.publishGroups || []).flatMap((g) => g.rows).find((r) => r.post?.id === m[1]);
+        if (!row && api.schedule) {   // P2.5 S3: a planned row in the Schedule view; posted/dropped leave it
+          const all = [api.schedule.overdue, ...api.schedule.days.map((d) => d.posts)];
+          const list = all.find((l) => l.some((x) => x.id === m[1]));
+          if (list) { const i = list.findIndex((x) => x.id === m[1]); const x = list[i];
+            if (["posted", "dropped"].includes(body.status)) list.splice(i, 1);
+            return json({ ...x, ...body }); }
+        }
         if (!row) return json({ detail: "Post not found" }, 404);
+        if (body.status === "posted") Object.assign(row.post, { status: "posted", url: body.url, account_id: body.account_id || row.post.account_id, posted_at: iso(0) });
         const p = row.post;
         if (body.views != null) { p.views = body.views; p.views_at = iso(0); }
         if (body.status === "claimed") { p.status = "claimed"; p.claimed_views = p.views; p.expected_rp = 12000 * Math.floor(Math.min(p.views, 500000) / 3000); p.expected_fmt = "Rp " + p.expected_rp.toLocaleString("id-ID"); }
@@ -145,6 +153,7 @@ async function mockApi(page, api) {
     }
     { const m = path.match(/^\/api\/auth\/tokens\/([^/]+)$/);
       if (m && method === "DELETE") { api.tokens = (api.tokens || []).filter((t) => t.id !== m[1]); return json({ ok: true }); } }
+    if (path === "/api/schedule" && method === "GET") return json(api.schedule || { overdue: [], days: [], posting_times: {} });   // P2.5 S3
     { const m = path.match(/^\/api\/jobs\/([^/]+)\/candidates\/([^/]+)\/(schedule-plan|schedule)$/);   // P2.5 S2 mocks
       if (m && m[3] === "schedule-plan" && method === "GET") return json(api.schedulePlan);
       if (m && m[3] === "schedule" && method === "POST") {

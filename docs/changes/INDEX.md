@@ -118,3 +118,4 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 144 · 2026-10-07 · P2 fix: Publish = one card per clip, per-platform status chips + panel (bottom sheet on mobile), campaign / left-to-post filters; card send = video + every caption · index.html, main.py, worker.py, shared
 145 · 2026-10-07 · P2.5 S1: POSTING_TIMES per-user setting (WIB, owner defaults), shared/schedule.py (normalize, next_slots with campaign windows), Settings → Posting times editor · settings, main.py, index.html
 146 · 2026-10-07 · P2.5 S2: Approve & schedule sheet (per platform: account, WIB suggested slots, live eligibility), GET schedule-plan / POST schedule (approve gate + planned clip_posts), re-plan re-checks · main.py, index.html
+147 · 2026-10-07 · P2.5 S3: Schedule step live — GET /api/schedule (own planned posts by WIB day, overdue on top), list + desktop week calendar, Reschedule / Send to phone / Mark posted / Drop · main.py, index.html

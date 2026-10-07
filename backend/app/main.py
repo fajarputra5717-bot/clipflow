@@ -16,7 +16,7 @@ from typing import Any, Optional
 
 import psycopg
 import requests
-from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+from fastapi import FastAPI, File, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
@@ -2023,6 +2023,75 @@ def schedule_clip(job_id: str, candidate_id: str, payload: SchedulePlan, request
             posts = [_fetch_post(cur, i, user["id"]) for i in ids]
         conn.commit()
     return {"approved": approved, "posts": posts}
+
+
+# ---------- Schedule view (P2.5 S3, 147) ----------
+# The caller's own planned posts with a time, grouped by WIB day (Mon–Sun week by default), plus every overdue
+# one (time passed, still planned) on top. Each row carries what the view needs to act without another call:
+# clip/job ids, title, campaign, platform/account, render state of the clip's final, eligibility.
+def _render_state(status: Optional[str], final_path: Optional[str], progress) -> dict:
+    if final_path and status == "completed":
+        return {"state": "ready", "label": "Final ready"}
+    if status in ("render_queued", "rendering"):
+        return {"state": "rendering", "label": "Final rendering" + (f" {int(progress)}%" if status == "rendering" and progress else ""),
+                "percent": int(progress or 0) if status == "rendering" else None}
+    if status == "failed":
+        return {"state": "failed", "label": "Final render failed"}
+    if status is None:
+        return {"state": "missing", "label": "Clip deleted"}
+    return {"state": "not_approved", "label": "Not approved yet"}
+
+
+def _week_start(now: datetime) -> datetime:
+    d = now.astimezone(schedule.WIB)
+    return datetime.combine(d.date() - timedelta(days=d.weekday()), datetime.min.time(), schedule.WIB)
+
+
+@app.get("/api/schedule")
+def get_schedule(request: Request, start: Optional[str] = Query(default=None, alias="from"),
+                 end: Optional[str] = Query(default=None, alias="to")):
+    user = current_user(request)
+    now = datetime.now(timezone.utc)
+    t0 = _parse_ts(start, "from") or _week_start(now)
+    t1 = _parse_ts(end, "to") or (t0 + timedelta(days=7))
+    if not t0 < t1 <= t0 + timedelta(days=42):
+        raise HTTPException(status_code=400, detail="from/to: up to 6 weeks, from before to")
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                f"""
+                SELECT {POST_COLUMNS}, c.status, COALESCE(c.final_path, ''), c.progress, c.thumbnail_path IS NOT NULL,
+                       COALESCE(NULLIF(c.manual_title, ''), NULLIF(c.title, ''), c.ai_title)
+                FROM {POST_FROM} LEFT JOIN clip_candidates c ON c.id = p.candidate_id
+                WHERE p.user_id = %s AND p.status = 'planned' AND p.scheduled_for IS NOT NULL
+                  AND ((p.scheduled_for >= %s AND p.scheduled_for < %s) OR p.scheduled_for < %s)
+                ORDER BY p.scheduled_for, p.platform
+                """,
+                (user["id"], t0, t1, now),
+            )
+            rows = cur.fetchall()
+    n = len(POST_COLUMNS.split(","))
+    overdue, days = [], {}
+    for r in rows:
+        d = _post_row(r[:n])
+        cstatus, final, progress, has_thumb, ctitle = r[n:]
+        rules = campaigns.get(d["campaign"]) if d["campaign"] else None
+        d.update({"title": ctitle or d["title"], "has_thumbnail": bool(has_thumb),
+                  "platform_name": rule_checks.PLATFORM_LIMITS.get(d["platform"], (0, 0, d["platform"]))[2],
+                  "campaign_name": campaigns.display_name(rules) if rules else None,
+                  "render": _render_state(cstatus, final, progress)})
+        when = datetime.fromisoformat(d["scheduled_for"])
+        d["overdue"] = when < now
+        if d["overdue"]:
+            overdue.append(d)   # shown once, at the top (not again in its day)
+        elif t0 <= when < t1:
+            days.setdefault(when.astimezone(schedule.WIB).date().isoformat(), []).append(d)
+    first = t0.astimezone(schedule.WIB).date()
+    span = (t1.astimezone(schedule.WIB).date() - first).days or 1
+    out_days = [{"date": (first + timedelta(days=i)).isoformat(), "posts": days.get((first + timedelta(days=i)).isoformat(), [])}
+                for i in range(span)]
+    return {"from": t0.isoformat(), "to": t1.isoformat(), "now": now.isoformat(),
+            "posting_times": _posting_times(user["id"]), "overdue": overdue, "days": out_days}
 
 
 # ---------- pre-post checks (P2 part 4, 131) ----------
