@@ -19,6 +19,9 @@ Keys so far:
   cuts: {trim: [a, b] | null, removed: [[s, e], ...]}   P4 task 3 (lane B): clip-relative SOURCE
            seconds. trim = the kept window (null = whole clip); removed = cut words/pauses inside it.
            Applied after the render (render_steps.apply_cuts), so burned captions are cut with the video.
+  zoom: {on, intensity, markers: [s, ...]}   P4 task 4 (lane B): punch-ins at SOURCE seconds; intensity
+           0–100 (peak scale 1.0–1.30, default 50 = 1.15). Rendered inside render_vertical before the
+           watermark/captions (render_steps.zoom_stage), so text never zooms.
 
 PATCH semantics (main.py update_candidate): top-level keys are merged into
 the stored spec; a key sent as null is removed.
@@ -136,6 +139,8 @@ def normalize_patch(patch, styles, animations):
             value = normalize_hook_title(value)
         elif key == "cuts":
             value = normalize_cuts(value)
+        elif key == "zoom":
+            value = normalize_zoom(value)
         else:
             raise ValueError(f"unknown edit_spec key: {key!r}")
         if value is None:
@@ -250,3 +255,51 @@ def cuts_of(spec):
     """The stored cuts dict, or None."""
     c = (spec or {}).get("cuts") if isinstance(spec, dict) else None
     return c if isinstance(c, dict) and (c.get("trim") or c.get("removed")) else None
+
+
+# ---- zoom punch-ins (P4 task 4, lane B)
+
+ZOOM_MAX_MARKERS = 40
+ZOOM_DEFAULT_INTENSITY = 50
+
+
+def normalize_zoom(value, clip_duration=None):
+    """{on, intensity, markers} (markers sorted, de-duplicated to 0.05 s, inside the clip) or None."""
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        raise ValueError("zoom must be an object")
+    try:
+        intensity = int(round(float(value.get("intensity", ZOOM_DEFAULT_INTENSITY))))
+    except (TypeError, ValueError):
+        raise ValueError("zoom.intensity must be a number 0–100")
+    if not 0 <= intensity <= 100:
+        raise ValueError("zoom.intensity must be 0–100")
+    raw = value.get("markers") or []
+    if not isinstance(raw, list) or len(raw) > ZOOM_MAX_MARKERS:
+        raise ValueError(f"zoom.markers must be a list of at most {ZOOM_MAX_MARKERS} times")
+    marks = []
+    for m in raw:
+        try:
+            t = round(float(m), 2)
+        except (TypeError, ValueError):
+            raise ValueError("zoom.markers must be seconds")
+        if t < 0 or (clip_duration is not None and t >= float(clip_duration)):
+            continue
+        if not marks or abs(t - marks[-1]) >= 0.05:
+            marks.append(t)
+    marks = sorted(set(marks))
+    on = bool(value.get("on", True))
+    if not marks and intensity == ZOOM_DEFAULT_INTENSITY and on:
+        return None
+    return {"on": on, "intensity": intensity, "markers": marks}
+
+
+def zoom_of(spec):
+    z = (spec or {}).get("zoom") if isinstance(spec, dict) else None
+    return z if isinstance(z, dict) else None
+
+
+def zoom_peak(intensity):
+    """0–100 → peak scale 1.0–1.30 (50 → 1.15, the retention engine's default)."""
+    return 1.0 + 0.30 * max(0, min(100, int(intensity))) / 100

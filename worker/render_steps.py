@@ -1,5 +1,5 @@
-"""Editor render steps (lane B, roadmap P4). Called from worker.py through one-line hooks marked
-`# lane-b hook`; everything else lives here so worker.py stays Lane A's.
+"""Editor render steps (lane B, roadmap P4). Called from worker.py's create_preview/render_final_candidate
+through one-line calls; everything else lives here.
 
 Hook title card (editor task 1): edit_spec.hook_title = {on, text, duration}. A white rounded card
 with the hook text over the first 2/2.5/3 s, popping in with a small spring and fading out. It is
@@ -292,6 +292,47 @@ def apply_cuts(path, candidate: dict, clip_duration: float, *, preset, crf, run,
     out = sum(b - a for a, b in keep)
     log(f"Cuts: {len(keep)} segments, {clip_duration:.1f} s -> {out:.1f} s")
     return out
+
+
+# --------------------------------------------------------------------------- zoom (task 4)
+
+_render_ctx: dict = {}
+
+
+def begin_render(candidate: dict, clip_duration: float, output_path=None) -> None:
+    """Hook right before render_vertical() in preview + final: what zoom_stage() may use. Bound to the
+    OUTPUT FILE of that render and one-shot: if render_vertical fails before zoom_stage runs (e.g.
+    ensure_disk_space), the leftover context can never apply to another render (QA 8cf6088 Low: a clean
+    plate writes a different path)."""
+    _render_ctx.clear()
+    _render_ctx.update(candidate=candidate, duration=float(clip_duration),
+                       output=str(output_path) if output_path is not None else None)
+
+
+def zoom_stage(filters: list, last: str, width: int, height: int, output_path=None, log=print) -> str:
+    """Hook inside render_vertical() right after the layout: append the punch-in zoom (retention.py,
+    smooth per-frame scale + fixed crop) to the filter graph BEFORE the watermark and captions, so text
+    never zooms. Times are clip-relative source seconds (render_vertical input-seeks to the clip start),
+    the same basis as the editor markers; cuts happen after the render. Returns the new last label."""
+    from shared import retention
+    ctx = dict(_render_ctx)
+    _render_ctx.clear()
+    cand = ctx.get("candidate")
+    if not cand or ctx.get("output") is None or output_path is None or ctx["output"] != str(output_path):
+        return last                                   # not the render begin_render() announced
+    z = edit_specs.zoom_of(cand.get("edit_spec"))
+    if not z or not z.get("on", True) or not z.get("markers"):
+        return last
+    peak = edit_specs.zoom_peak(z.get("intensity", edit_specs.ZOOM_DEFAULT_INTENSITY))
+    if peak <= 1.0:
+        return last
+    wins = retention.plan_zoom_windows(z["markers"], ctx["duration"])
+    zf = retention.zoom_filter(wins, width=width, height=height, peak=peak)
+    if not zf:
+        return last
+    filters.append(f"[{last}]{zf}[zoomed];")
+    log(f"Zoom: {len(wins)} punch-in(s), peak {peak:.2f}, canvas {width}x{height}")
+    return "zoomed"
 
 
 # --------------------------------------------------------------------------- timeline (task 2)

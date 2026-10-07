@@ -9,6 +9,7 @@ function editorState(over = {}) {
                  updated_at: "2026-10-05T10:00:00+00:00", edit_spec: {} },
     hook_title: { on: false, text: "", duration: 2.5, default_text: "First mock clip", durations: [2, 2.5, 3], max_chars: 80 },
     cuts: { trim: null, removed: [], output_seconds: 6, suggest_min_gap: 0.6, pad: 0.12 },
+    zoom: { on: true, intensity: 50, markers: [], max_markers: 40 },
     ...over,
   };
 }
@@ -25,12 +26,13 @@ async function mockEditor(page, api, timeline = TIMELINE) {
   api.editor = editorState();
   await page.route(/\/api\/jobs\/[^/]+\/candidates\/[^/]+\/editor\/timeline/, (route) =>
     route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(timeline) }));
-  await page.route(/\/api\/jobs\/[^/]+\/candidates\/[^/]+\/editor(\/hook-title|\/cuts)?(\?.*)?$/, async (route) => {
+  await page.route(/\/api\/jobs\/[^/]+\/candidates\/[^/]+\/editor(\/hook-title|\/cuts|\/zoom)?(\?.*)?$/, async (route) => {
     const req = route.request();
     if (req.method() === "PUT") {
       const body = req.postDataJSON(), path = new URL(req.url()).pathname;
       api.calls.push({ method: "PUT", path, body });
       if (path.endsWith("/cuts")) api.editor.cuts = { ...api.editor.cuts, trim: body.trim, removed: body.removed };
+      else if (path.endsWith("/zoom")) api.editor.zoom = { ...api.editor.zoom, ...body };
       else api.editor.hook_title = { ...api.editor.hook_title, ...body };
     }
     return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(api.editor) });
@@ -151,6 +153,36 @@ test.describe("Editor filler suggestions", () => {
     await app.locator('[data-ed-mode="cut"]').click();
     await app.locator('[data-ed-word="4"]').click();
     await expect.poll(() => lastCuts(api), { timeout: 4000 }).toEqual({ trim: null, removed: [[4, 4.5]] });
+  });
+});
+
+test.describe("Editor zoom punch-ins", () => {
+  const lastZoom = (api) => api.calls.filter((c) => c.method === "PUT" && c.path.endsWith("/zoom")).at(-1)?.body;
+
+  test("zoom mode: click the timeline to add a punch-in, click the ◆ to remove it", async ({ app, api }) => {
+    await mockEditor(app, api);
+    await app.evaluate(() => { location.hash = "#editor/job-done/cand-a"; });
+    await app.locator('[data-ed-mode="zoom"]').click();
+    const inner = app.locator("#edTlInner");
+    const box = await inner.boundingBox();
+    await app.locator("#edTlScroll").evaluate((s) => { s.scrollLeft = 0; });
+    await inner.click({ position: { x: 200, y: 50 } });                 // 2.0 s at 100 px/s
+    await expect(app.locator("[data-ed-zoom-mark]")).toHaveCount(1);
+    await expect.poll(() => lastZoom(api), { timeout: 4000 }).toEqual({ on: true, intensity: 50, markers: [2] });
+    await app.locator("[data-ed-zoom-mark]").first().click();
+    await expect(app.locator("[data-ed-zoom-mark]")).toHaveCount(0);
+    await expect.poll(() => lastZoom(api), { timeout: 4000 }).toEqual({ on: true, intensity: 50, markers: [] });
+    expect(box.width).toBeGreaterThan(0);
+  });
+
+  test("Z toggles zoom mode; a click on a word in zoom mode adds a marker instead of seeking", async ({ app, api }) => {
+    await mockEditor(app, api);
+    await app.evaluate(() => { location.hash = "#editor/job-done/cand-a"; });
+    await app.keyboard.press("z");
+    await expect(app.locator('[data-ed-mode="zoom"]')).toHaveAttribute("aria-pressed", "true");
+    await app.locator('[data-ed-word="2"]').click();                     // "hitam" 3.0–3.5
+    await expect(app.locator("[data-ed-zoom-mark]")).toHaveCount(1);
+    await expect.poll(() => lastZoom(api)?.markers?.[0], { timeout: 4000 }).toBeGreaterThan(2.9);
   });
 });
 

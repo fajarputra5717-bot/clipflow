@@ -15,6 +15,7 @@ Routes (all under /api, so the auth middleware applies):
   PUT /api/jobs/{jid}/candidates/{cid}/editor/hook-title   {on, text, duration} → edit_spec.hook_title
   GET /api/jobs/{jid}/candidates/{cid}/editor/timeline     waveform peaks + word chips (task 2)
   PUT /api/jobs/{jid}/candidates/{cid}/editor/cuts         {trim, removed} → edit_spec.cuts (task 3)
+  PUT /api/jobs/{jid}/candidates/{cid}/editor/zoom         {on, intensity, markers} → edit_spec.zoom (task 4)
 Rendering stays on the existing POST /api/jobs/{jid}/candidates/{cid}/regenerate-preview (island
 progress via /api/activity, version history).
 """
@@ -92,6 +93,8 @@ def _state(c: dict) -> dict:
             "edit_spec": spec,
         },
         "cuts": _cuts_state(spec, duration),
+        "zoom": {**{"on": True, "intensity": edit_specs.ZOOM_DEFAULT_INTENSITY, "markers": []},
+                 **(edit_specs.zoom_of(spec) or {}), "max_markers": edit_specs.ZOOM_MAX_MARKERS},
         "hook_title": {
             "on": bool(ht.get("on", False)), "text": ht.get("text", ""),
             "duration": ht.get("duration", edit_specs.HOOK_TITLE_DEFAULT_DURATION),
@@ -223,6 +226,26 @@ def put_cuts(job_id: str, candidate_id: str, body: CutsIn, user: dict = Depends(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     return _save_spec_key(job_id, candidate_id, user, "cuts", value)
+
+
+class ZoomIn(BaseModel):
+    on: bool = True
+    intensity: float = edit_specs.ZOOM_DEFAULT_INTENSITY
+    markers: list[float] = []
+
+
+@editor.put("/zoom")
+def put_zoom(job_id: str, candidate_id: str, body: ZoomIn, user: dict = Depends(get_current_user)):
+    """Punch-in markers (clip-relative source seconds) + on/intensity (P4 task 4/5)."""
+    core = _core()
+    with core.get_db() as conn, conn.cursor() as cur:
+        c = _load(cur, job_id, candidate_id, user)
+    duration = c["duration_seconds"] or ((c["end_time"] or 0) - (c["start_time"] or 0))
+    try:
+        value = edit_specs.normalize_zoom(body.model_dump(), duration)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return _save_spec_key(job_id, candidate_id, user, "zoom", value)
 
 
 class FixLengthIn(BaseModel):
