@@ -1,6 +1,6 @@
 // P2.5 S2 (146): "Approve & schedule" next to Approve → sheet with one row per platform (account, suggested WIB
 // slots, editable time), live not-eligible notes (dry_run), Save → POST …/schedule {posts, approve} → final render.
-const { test, expect, nav } = require("../fixtures");
+const { test, expect, nav, classicQueue } = require("../fixtures");
 test.use({ reducedMotion: "reduce" });
 
 const at = (d, hm) => new Date(`${d}T${hm}:00+07:00`).toISOString();
@@ -15,7 +15,7 @@ function plan(api, over = {}) {
   ], ...over };
 }
 async function openSheet(app) {
-  await nav(app, "queue");
+  await classicQueue(app);
   await app.locator('[data-queue-open="job-done"]').click();
   const cand = app.locator("#candidate-cand-a");
   await cand.locator("[data-edit]").first().click();

@@ -1,4 +1,4 @@
-# P4 task 1 — Hook title card + Editor page shell (lane B) — number assigned by Lane A at merge
+# 151 · P4 task 1 — Hook title card + Editor page shell (lane B)
 
 **What:** `edit_spec.hook_title = {on, text, duration}` (text "" = clip title; 2 / 2.5 / 3 s). A white
 rounded card with the hook text over the first seconds: spring pop-in + fade, shadow, ≤ 3 lines,

@@ -1,4 +1,4 @@
-# Brief parser (lane B, task 5) — number assigned by Lane A at merge
+# 150 · Brief parser (lane B, task 5)
 
 New `shared/brief_parser.py`: `parse_brief(text, today=, slug=)` / `parse_brief_file(<slug>.md)` →
 rules dict in the docs/campaigns schema + `unsure: [{field, why}]`. Deterministic (patterns for

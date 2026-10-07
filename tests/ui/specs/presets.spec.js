@@ -1,4 +1,4 @@
-const { test, expect, nav } = require("../fixtures");
+const { test, expect, nav, classicQueue } = require("../fixtures");
 
 // The edit drawer is tall (P1 presets): clicking its tabs makes Playwright scroll, and the app's
 // html{scroll-behavior:smooth} turns that into an animated scroll that never settles under suite load.
@@ -9,7 +9,7 @@ test.use({ reducedMotion: "reduce" });
 // preset (edit_spec.caption) and leaves the job-level style alone.
 test.describe("Caption presets", () => {
   test("picking a card sets the selects and Apply sends edit_spec.caption, job style unchanged", async ({ app, api }) => {
-    await nav(app, "queue");
+    await classicQueue(app);
     await app.locator('[data-queue-open="job-done"]').click();
     const cand = app.locator("#candidate-cand-a");
     await cand.locator("[data-edit]").first().click();

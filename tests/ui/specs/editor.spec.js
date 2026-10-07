@@ -157,7 +157,7 @@ test.describe("Editor filler suggestions", () => {
 test.describe("Editor page", () => {
   test("Open editor from Review shows the editor as its own view", async ({ app, api }) => {
     await mockEditor(app, api);
-    await app.locator('[data-nav="queue"]:visible').first().click();
+    await app.evaluate(async () => { await window.showTab("queue"); });   // the old panel's "Open editor" (All edits path)
     await app.locator('[data-queue-open="job-done"]').click();
     await app.locator('#candidate-cand-a [data-open-editor]').click();
     await expect(app.locator("#editorSection")).toBeVisible();

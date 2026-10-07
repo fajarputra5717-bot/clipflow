@@ -1470,7 +1470,7 @@ select::-ms-expand{display:none}
 @keyframes ppanelUp{from{transform:translateY(100%)}to{transform:none}}
 @media (prefers-reduced-motion:reduce){.ppanel{animation:none}}
 </style>
-<link rel="stylesheet" href="editor/editor.css"><!-- lane-b hook -->
+<link rel="stylesheet" href="editor/editor.css"><!-- Editor + Review pages (149) -->
 </head>
 <body>
 
@@ -2542,7 +2542,7 @@ function renderCandidate(c,jid,platform,job={}){
       <div class="candidate-top-actions">
         <span class="badge ${badgeClass(c.status)}">${esc(stageLabel(c.status||"candidate"))}</span>
         <button class="secondary preview-edit" data-edit="${esc(c.id)}" type="button" aria-expanded="${document.getElementById("candidate-"+c.id)?.classList.contains("editing")?"true":"false"}">${document.getElementById("candidate-"+c.id)?.classList.contains("editing")?"Close edit":"Edit"}</button>
-        <a class="secondary btn-link" href="#editor/${esc(jid)}/${esc(c.id)}" data-open-editor>Open editor</a><!-- lane-b hook -->
+        <a class="secondary btn-link" href="#editor/${esc(jid)}/${esc(c.id)}" data-open-editor>Open editor</a>
       </div>
     </div>
     ${clipReasonHtml(c)}
@@ -4444,12 +4444,18 @@ const FLOW_STEPS=[
   {id:"publish",label:"Publish",sub:"One card per clip",icon:"send",nav:"publish"},
   {id:"track",label:"Track",sub:"Views → earnings",icon:"chart",phase:"P3"},
 ];
-function editorOpen(){return currentTab==="queue"&&!!document.querySelector("#queueDetail:not(.hidden) .candidate-card.editing")}
+// Lane-b merge (149): the Editor page (#editor/<job>/<clip>, editor/editor.js) is the Editor step; the old drawer
+// stays reachable from a Review card's "All edits" until P4 gives each drawer feature a home in the page.
+let lastEditorClip=null;
+function editorPageOpen(){return /^#editor\//.test(location.hash)}
+function drawerOpen(){return currentTab==="queue"&&!!document.querySelector("#queueDetail:not(.hidden) .candidate-card.editing")}
+function editorOpen(){return editorPageOpen()||drawerOpen()}
+window.addEventListener("hashchange",()=>{const m=location.hash.match(/^#editor\/([^/]+)\/([^/?#]+)/);if(m)lastEditorClip=[m[1],m[2]];syncNav()});
 function editorTarget(){return currentTab==="queue"?document.querySelector("#queueDetail:not(.hidden) .candidate-card"):null}
 function renderFlow(){
   const ol=$("flow");if(!ol)return;
   const active=editorOpen()?"editor":currentTab==="queue"?"review":currentTab==="publish"?"publish":currentTab==="schedule"?"schedule":"analyze",idx=FLOW_STEPS.findIndex(s=>s.id===active);
-  const canEdit=!!editorTarget();
+  const canEdit=!!editorTarget()||!!lastEditorClip||editorPageOpen();
   const html=FLOW_STEPS.map((s,i)=>{
     const off=!!s.phase||(s.id==="editor"&&!canEdit),sub=s.phase?`Coming in ${s.phase}`:s.id==="editor"&&!canEdit?"Open a clip in Review":s.sub;
     const attrs=s.nav?`data-nav="${s.nav}"`:s.id==="editor"?"data-flow-editor":"";
@@ -4460,7 +4466,16 @@ function renderFlow(){
   if(ol.dataset.html!==html){ol.dataset.html=html;ol.innerHTML=html;
     const a=ol.querySelector("li.active");if(a&&window.matchMedia("(max-width:600px)").matches)a.scrollIntoView({behavior:scrollMode(),block:"nearest",inline:"center"})}
 }
+async function openClassicEdit(jid,cid){
+  window.clipflowReview?.close();history.replaceState(null,"",location.pathname+location.search);
+  if(currentTab!=="queue")await showTab("queue");
+  await openQueueJob(jid);
+  if(!document.querySelector(`#candidate-${css(cid)}.editing`))toggleCandidateEdit(cid);
+  document.getElementById("candidate-"+cid)?.scrollIntoView({behavior:scrollMode(),block:"start"});syncNav();
+}
+document.addEventListener("click",e=>{const c=e.target.closest("[data-rv-classic]");if(c){e.preventDefault();openClassicEdit(c.dataset.rvClassic,c.dataset.cid)}});
 function openFlowEditor(){
+  if(!drawerOpen()&&!editorTarget()&&lastEditorClip){location.hash=`#editor/${lastEditorClip[0]}/${lastEditorClip[1]}`;return}
   const open=document.querySelector("#queueDetail:not(.hidden) .candidate-card.editing"),card=open||editorTarget();if(!card)return;
   if(!open)toggleCandidateEdit(card.id.replace(/^candidate-/,""));
   card.scrollIntoView({behavior:scrollMode(),block:"start"});
@@ -4509,7 +4524,10 @@ document.addEventListener("click",e=>{
   const nav=e.target.closest("[data-nav]");if(nav){
     const v=nav.dataset.nav;
     if(v==="settings"||v==="watermarks"){openSheet(v==="settings"?"settingsSheet":"watermarkSheet",nav);closeSidebarDrawer(false);return}
-    closeSheet(false);closeSidebarDrawer(false);showTab(v);
+    closeSheet(false);closeSidebarDrawer(false);
+    if(/^#(review|editor)/.test(location.hash))history.replaceState(null,"",location.pathname+location.search);
+    if(v==="queue"&&window.clipflowReview){window.clipflowReview.open();return}   // 149: Review = the Review page
+    showTab(v);
   }
   const rb=e.target.closest("#refreshView");if(rb){
     if(!REDUCED_MOTION.matches){rb.classList.remove("spinning");void rb.offsetWidth;rb.classList.add("spinning");setTimeout(()=>rb.classList.remove("spinning"),450)}
@@ -4519,7 +4537,7 @@ document.addEventListener("click",e=>{
 window.addEventListener("resize",()=>requestAnimationFrame(syncNav),{passive:true});
 
 </script>
-<script src="editor/editor.js" defer></script><!-- lane-b hook -->
-<script src="editor/review.js" defer></script><!-- lane-b hook -->
+<script src="editor/editor.js" defer></script>
+<script src="editor/review.js" defer></script><!-- Review (#review) + Editor (#editor/<job>/<clip>) pages, 149 -->
 </body>
 </html>

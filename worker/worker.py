@@ -30,7 +30,7 @@ from shared import campaigns, descriptions, edit_spec as edit_specs, languages, 
 from shared.errors import FAILURE_TRANSIENT, failure_class
 from shared.fonts import caption_font_bold, normalize_caption_font
 from shared.settings import RuntimeSettings
-import render_steps  # lane-b hook
+import render_steps
 
 
 # ============================================================
@@ -5486,7 +5486,7 @@ def create_preview(
     # 111 (P1): AI-picked keywords for this clip, before the first ASS is written.
     pick_keywords(candidate_id, job, candidate, clip_segments)
 
-    clip_segments, source_segments = render_steps.burn_segments(clip_segments, candidate, duration), clip_segments  # lane-b hook
+    clip_segments, source_segments = render_steps.burn_segments(clip_segments, candidate, duration), clip_segments
     # R-16: one asset + one geometry for this render; make_ass()
     # returns the watermark rect cleared of the captions.
     wm_path = job_watermark_path(job, candidate_id)
@@ -5526,7 +5526,7 @@ def create_preview(
         )
     )
 
-    subtitle_file = render_steps.add_title_card(subtitle_file, candidate, size=(preview_width, preview_height), clip_duration=duration, avoid=watermark_rect, out_dir=SUBTITLE_DIR, log=log)  # lane-b hook
+    subtitle_file = render_steps.add_title_card(subtitle_file, candidate, size=(preview_width, preview_height), clip_duration=duration, avoid=watermark_rect, out_dir=SUBTITLE_DIR, log=log)
     render_vertical(
         video_path,
         preview_path,
@@ -5544,11 +5544,11 @@ def create_preview(
         watermark_center_y=wm_center_y,
     )
 
-    render_steps.apply_cuts(preview_path, candidate, duration, preset=setting("FFMPEG_PREVIEW_PRESET"), crf=setting("FFMPEG_PREVIEW_CRF"), run=run_command, timeout=render_timeout_seconds(duration), log=log)  # lane-b hook
+    render_steps.apply_cuts(preview_path, candidate, duration, preset=setting("FFMPEG_PREVIEW_PRESET"), crf=setting("FFMPEG_PREVIEW_CRF"), run=run_command, timeout=render_timeout_seconds(duration), log=log)
     # QA P0: previews sound like the final (same chain + verify, never fatal).
     normalize_loudness(preview_path, duration, candidate_id=candidate_id,
                        audio_bitrate="96k")
-    render_steps.write_timeline(preview_path, source_segments, duration, candidate, PREVIEW_DIR, source_path=video_path, start=start, log=log)  # lane-b hook
+    render_steps.write_timeline(preview_path, source_segments, duration, candidate, PREVIEW_DIR, source_path=video_path, start=start, log=log)
 
     # A locked thumbnail (an AI option or a manual upload the user
     # explicitly picked via Apply changes) must survive preview
@@ -5948,7 +5948,7 @@ def render_final_candidate(
     if not job_burn_subtitles(job):
         subtitle_file = None
 
-    clip_segments, source_segments = render_steps.burn_segments(clip_segments, candidate, duration), clip_segments  # lane-b hook
+    clip_segments, source_segments = render_steps.burn_segments(clip_segments, candidate, duration), clip_segments
     # R-16: one asset + one geometry for this render; make_ass()
     # returns the watermark rect cleared of the captions.
     wm_path = job_watermark_path(job, candidate_id)
@@ -5995,7 +5995,7 @@ def render_final_candidate(
         )
     )
 
-    subtitle_file = render_steps.add_title_card(subtitle_file, candidate, size=(FINAL_WIDTH, FINAL_HEIGHT), clip_duration=duration, avoid=watermark_rect, out_dir=SUBTITLE_DIR, log=log)  # lane-b hook
+    subtitle_file = render_steps.add_title_card(subtitle_file, candidate, size=(FINAL_WIDTH, FINAL_HEIGHT), clip_duration=duration, avoid=watermark_rect, out_dir=SUBTITLE_DIR, log=log)
     render_vertical(
         video_path,
         output_path,
@@ -6012,7 +6012,7 @@ def render_final_candidate(
         watermark_center_y=wm_center_y,
     )
 
-    render_steps.apply_cuts(output_path, candidate, duration, preset=setting("FFMPEG_PRESET"), crf=setting("FFMPEG_CRF"), run=run_command, timeout=render_timeout_seconds(duration), log=log)  # lane-b hook
+    render_steps.apply_cuts(output_path, candidate, duration, preset=setting("FFMPEG_PRESET"), crf=setting("FFMPEG_CRF"), run=run_command, timeout=render_timeout_seconds(duration), log=log)
     # QA #2: loudness last (after every audio step of the render).
     update_candidate(candidate_id, progress=90, message="Normalising loudness")
     normalize_loudness(output_path, duration, candidate_id=candidate_id)

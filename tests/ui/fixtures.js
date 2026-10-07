@@ -215,6 +215,11 @@ async function nav(page, name) {
   await page.locator(`[data-nav="${name}"]:visible`).first().click();
 }
 
+// 149: the stepper's Review opens the Review page; the old job list + drawer ("All edits") is opened directly.
+async function classicQueue(page) {
+  await page.evaluate(async () => { window.clipflowReview?.close(); history.replaceState(null, "", location.pathname); await window.showTab("queue"); });
+}
+
 // The "nothing is clickable" regression (CLAUDE.md: every closed overlay layer must be
 // visibility:hidden + pointer-events:none). Returns the problems found (empty = fine):
 // 1) a closed layer that would still catch clicks, 2) a probe control covered by something else.
@@ -263,4 +268,4 @@ function publishCards(rows, api) {
   return out;
 }
 
-module.exports = { test, expect: base.expect, job, candidate, nav, blockingProblems, mockApi, newState };
+module.exports = { test, expect: base.expect, job, candidate, nav, blockingProblems, mockApi, newState, classicQueue };

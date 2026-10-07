@@ -1,7 +1,8 @@
-const { test, expect } = require("../fixtures");
+const { test, expect, classicQueue } = require("../fixtures");
 
 // UI shell (P1 task 0): the flow-preview stepper is the top-level navigation.
 test.describe("UI shell stepper", () => {
+  test.use({ reducedMotion: "reduce" });
   test("8 steps; unbuilt ones disabled with their phase; Analyze → Review → Editor; gear opens Settings", async ({ app }) => {
     const steps = app.locator("#flow li");
     await expect(steps).toHaveCount(8);
@@ -14,8 +15,11 @@ test.describe("UI shell stepper", () => {
     }
     const editor = app.locator("#flow [data-flow-editor]");
     await expect(editor).toBeDisabled();
-    await app.locator('#flow [data-nav="queue"]').click();
+    await app.locator('#flow [data-nav="queue"]').click();               // 149: Review = the Review page
+    await expect(app.locator("#reviewSection")).toBeVisible();
     await expect(app.locator("#pageTitle")).toHaveText("Review");
+    await expect(app.locator("#flow li.active .flow-label")).toHaveText("Review");
+    await classicQueue(app);                                           // the old panel ("All edits" path)
     await app.locator('[data-queue-open="job-done"]').click();
     await expect(app.locator("#candidate-cand-a")).toBeVisible();
     await expect(editor).toBeEnabled();

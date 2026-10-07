@@ -1,10 +1,10 @@
-const { test, expect, nav } = require("../fixtures");
+const { test, expect, nav, classicQueue } = require("../fixtures");
 
 // 111 (P1): keyword highlight — tap a caption word to toggle it, pick a colour, Apply sends edit_spec.
 test.use({ reducedMotion: "reduce" });
 test.describe("Keyword highlight", () => {
   test("toggle a word in the strip, choose green, Apply sends keywords + keyword_color", async ({ app, api }) => {
-    await nav(app, "queue");
+    await classicQueue(app);
     await app.locator('[data-queue-open="job-done"]').click();
     const cand = app.locator("#candidate-cand-a");
     await cand.locator("[data-edit]").first().click();
@@ -25,7 +25,7 @@ test.describe("Keyword highlight", () => {
 // 112 (P1): per-clip caption position.
 test.describe("Caption position", () => {
   test("custom position sends edit_spec.caption_y; back to Auto sends null", async ({ app, api }) => {
-    await nav(app, "queue");
+    await classicQueue(app);
     await app.locator('[data-queue-open="job-done"]').click();
     const cand = app.locator("#candidate-cand-a");
     await cand.locator("[data-edit]").first().click();

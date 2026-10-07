@@ -1,4 +1,4 @@
-const { test, expect, job, nav } = require("../fixtures");
+const { test, expect, job, nav, classicQueue } = require("../fixtures");
 
 test.describe("Job list", () => {
   test("Import list shows running jobs and patches cards in place", async ({ app, api }) => {
@@ -15,7 +15,7 @@ test.describe("Job list", () => {
   });
 
   test("Review list renders history and opens a job", async ({ app }) => {
-    await nav(app, "queue");
+    await classicQueue(app);
     await expect(app.locator("#pageTitle")).toHaveText("Review");
     const row = app.locator('[data-queue-open="job-done"]');
     await expect(row).toBeVisible();

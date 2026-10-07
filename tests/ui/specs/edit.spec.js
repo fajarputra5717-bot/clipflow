@@ -1,4 +1,4 @@
-const { test, expect, nav, blockingProblems } = require("../fixtures");
+const { test, expect, nav, blockingProblems, classicQueue } = require("../fixtures");
 
 // The edit drawer is tall (P1 presets): clicking its tabs makes Playwright scroll, and the app's
 // html{scroll-behavior:smooth} turns that into an animated scroll that never settles under suite load.
@@ -7,7 +7,7 @@ test.use({ reducedMotion: "reduce" });
 
 test.describe("Edit panel", () => {
   test("opens, switches tab, closes, and leaves the page clickable", async ({ app }) => {
-    await nav(app, "queue");
+    await classicQueue(app);
     await app.locator('[data-queue-open="job-done"]').click();
     const cand = app.locator("#candidate-cand-a"), toggle = cand.locator("[data-edit]").first();
     await expect(toggle).toHaveAttribute("aria-expanded", "false");

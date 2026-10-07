@@ -1,4 +1,4 @@
-# P4 task 2 — Editor timeline: waveform + word chips, click to seek, playhead (lane B)
+# 152 · P4 task 2 — Editor timeline: waveform + word chips, click to seek, playhead (lane B)
 
 - `shared/timeline.py`: word list from `subtitle_segments` (clip-relative = the preview's own timeline),
   pauses ≥ 0.3 s, waveform peaks (50/s, max |sample| per 20 ms, dB-scaled −48…0 dBFS → 0…1). Cached as

@@ -102,3 +102,34 @@ test.describe("Review page", () => {
     expect(await app.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(0);
   });
 });
+
+// 149 (lane-b production merge): the stepper's Review opens this page, "All edits" opens the old panel for that
+// clip (caption styles, thumbnails, … until they move into the Editor), the Editor page lights the Editor step.
+test.describe("Review/Editor navigation (149)", () => {
+  test.use({ reducedMotion: "reduce" });
+  test("stepper Review → page; All edits → old panel; Open editor → Editor step; Editor step reopens it", async ({ app, api }) => {
+    await mockReview(app, api);
+    await app.locator('#flow [data-nav="queue"]').click();
+    await expect(app.locator("#rvFilters select").first()).toBeVisible();
+    await expect(app.locator("#queueSection")).toBeHidden();
+    await expect(app.locator('[data-approve-schedule="job-a"][data-cid="c94"]')).toHaveText("Approve & schedule");
+    await expect(app.locator('[data-approve-schedule][data-cid="c63"]')).toHaveCount(0);       // blocked clip: no schedule
+    await app.locator(".rv-open").first().click();
+    await expect(app.locator("#flow li.active .flow-label")).toHaveText("Editor");
+    await expect(app.locator("#pageTitle")).toHaveText("Editor");
+    await app.locator('#flow [data-nav="current"]').click();
+    await expect(app.locator("#pageTitle")).toHaveText("Analyze");
+    expect(await app.evaluate(() => location.hash)).toBe("");
+    const ed = app.locator("#flow [data-flow-editor]");
+    await expect(ed).toBeEnabled();                                   // remembers the last clip
+    await ed.click();
+    await expect.poll(() => app.evaluate(() => location.hash)).toBe("#editor/job-a/c94");
+    await app.locator('#flow [data-nav="queue"]').click();
+    await expect(app.locator("#rvFilters select").first()).toBeVisible();
+    api.jobs["job-a"] = { ...api.jobs["job-done"], id: "job-a", candidates: [{ ...api.jobs["job-done"].candidates[0], id: "c94" }] };
+    await app.locator('[data-rv-classic="job-a"][data-cid="c94"]').click();
+    await expect(app.locator("#reviewSection")).toBeHidden();
+    await expect(app.locator("#candidate-c94")).toHaveClass(/editing/);
+    await expect(app.locator("#flow li.active .flow-label")).toHaveText("Editor");
+  });
+});

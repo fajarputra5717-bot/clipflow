@@ -1,4 +1,4 @@
-const { test, expect, nav } = require("../fixtures");
+const { test, expect, nav, classicQueue } = require("../fixtures");
 
 // 109 (P1): campaign rule chips + "Fix N rules to approve" gate; content check is a warning only.
 test.use({ reducedMotion: "reduce" });
@@ -10,7 +10,7 @@ test.describe("Campaign rule chips", () => {
       { id: "hashtags", ok: false, blocking: true, label: "Hashtags missing or out of order", detail: "Ends with: #a #b", fix: "hashtags" },
       { id: "safety", ok: false, blocking: false, label: "Content check: 1 possible issue", detail: "[no_sara] “x”: y", fix: "dismiss" },
     ];
-    await nav(app, "queue");
+    await classicQueue(app);
     await app.locator('[data-queue-open="job-done"]').click();
     const card = app.locator("#candidate-cand-a");
     await expect(card.locator(".rule-chip")).toHaveCount(3);
@@ -29,7 +29,7 @@ test.describe("Campaign rule chips", () => {
 test.describe("Outdated final chip", () => {
   test("render warning final_outdated shows 'Final outdated · re-render'", async ({ app, api }) => {
     api.jobs["job-done"].candidates[0].render_warnings = [{ code: "final_outdated", message: "Final outdated · re-render" }];
-    await nav(app, "queue");
+    await classicQueue(app);
     await app.locator('[data-queue-open="job-done"]').click();
     await expect(app.locator("#candidate-cand-a .render-warn")).toContainText("Final outdated · re-render");
   });
