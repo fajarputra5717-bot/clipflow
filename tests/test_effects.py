@@ -25,6 +25,9 @@ class Spec(unittest.TestCase):
         self.assertEqual(es.normalize_audio({"silence_trim": True, "silence_ranges": [[1, 1.5], [3, 2]]})["silence_ranges"], [[1.0, 1.5]])
         with self.assertRaises(ValueError):
             es.normalize_audio({"silence_ranges": [["a", 1]]})
+        # QA 2e3d583 Low: clamped to the clip like cuts
+        clamped = es.normalize_audio({"silence_trim": True, "silence_ranges": [[20, 9999], [-1, 2], [40, 50]]}, 35)
+        self.assertEqual(clamped["silence_ranges"], [[0.0, 2.0], [20.0, 35.0]])
         self.assertEqual(set(es.normalize_patch({"progress": {"on": True}, "audio": {"compress": True}}, {}, {})[0]), {"progress", "audio"})
 
 

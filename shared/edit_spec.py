@@ -337,8 +337,9 @@ def progress_of(spec):
     return p if isinstance(p, dict) and p.get("on") else None
 
 
-def normalize_audio(value):
-    """{compress, silence_trim, silence_ranges} or None (all off)."""
+def normalize_audio(value, clip_duration=None):
+    """{compress, silence_trim, silence_ranges} or None (all off). Ranges are clamped to the clip like cuts
+    (0 … clip_duration when known), sorted; empty or inverted ones are dropped (QA 2e3d583 Low)."""
     if value is None:
         return None
     if not isinstance(value, dict):
@@ -349,8 +350,12 @@ def normalize_audio(value):
             s, e = (round(float(x), 3) for x in r)
         except (TypeError, ValueError):
             raise ValueError("audio.silence_ranges entries must be [start, end]")
+        s = max(0.0, s)
+        if clip_duration:
+            e = min(round(float(clip_duration), 3), e)
         if e > s:
             ranges.append([s, e])
+    ranges.sort()
     out = {"compress": bool(value.get("compress", False)), "silence_trim": bool(value.get("silence_trim", False)),
            "silence_ranges": ranges[:CUTS_MAX_RANGES]}
     return out if (out["compress"] or out["silence_trim"] or out["silence_ranges"]) else None

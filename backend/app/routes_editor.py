@@ -317,8 +317,12 @@ class AudioIn(BaseModel):
 def put_audio(job_id: str, candidate_id: str, body: AudioIn, user: dict = Depends(get_current_user)):
     """Audio tab (P4 task 5): light compression + the Remove-silences toggle state. The pause cuts themselves
     live in edit_spec.cuts (PUT …/cuts); loudness is always on and not editable here."""
+    core = _core()
+    with core.get_db() as conn, conn.cursor() as cur:
+        c = _load(cur, job_id, candidate_id, user)
+    duration = c["duration_seconds"] or ((c["end_time"] or 0) - (c["start_time"] or 0))
     try:
-        value = edit_specs.normalize_audio(body.model_dump())
+        value = edit_specs.normalize_audio(body.model_dump(), duration)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     return _save_spec_key(job_id, candidate_id, user, "audio", value)
