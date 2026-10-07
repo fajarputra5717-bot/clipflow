@@ -8,7 +8,7 @@ test.describe("UI shell stepper", () => {
     await expect(steps).toHaveCount(8);
     await expect(app.locator("#flow li.active .flow-label")).toHaveText("Analyze");
     await expect(app.locator("#pageTitle")).toHaveText("Analyze");
-    for (const [label, phase] of [["Campaign", "P3"], ["Auto-import", "P3"], ["Track", "P3"]]) {
+    for (const [label, phase] of [["Auto-import", "P3"], ["Track", "P3"]]) {
       const li = app.locator("#flow li", { has: app.locator(".flow-label", { hasText: new RegExp(`^${label}$`) }) });
       await expect(li.locator("button")).toBeDisabled();
       await expect(li.locator(".flow-sub")).toHaveText(`Coming in ${phase}`);

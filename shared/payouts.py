@@ -460,3 +460,31 @@ def cap_problem(model: Model, used_this_month: int, handle: str, platform_name: 
         return {"code": "account_cap",
                 "message": f"Cap reached for @{handle} on {platform_name} this month ({used_this_month} of {cap})"}
     return None
+
+
+# --------------------------------------------------------------------------- plain-language payout (Lane A, P3 part 3)
+# One sentence per model for the Campaign step cards and detail page (159). The UI never builds payout wording.
+
+def _views(n: int) -> str:
+    return f"{int(n):,}".replace(",", ".")
+
+
+def describe(model: Model) -> str:
+    """'Rp 200.000 per post at 40.000 views, max 2 per platform account/month' / 'Rp 12.000 per full 3.000 views,
+    max Rp 1.992.000' / '$1.50 per 1.000 views (~Rp 24.750), max $300.00' / 'Payout not set yet'."""
+    if isinstance(model, FixedThreshold):
+        s = f"{format_with_idr(model.amount, model.currency)} per post at {_views(model.min_views)} views"
+        if model.max_eligible_per_account_month:
+            s += f", max {model.max_eligible_per_account_month} per platform account/month"
+        return s
+    if isinstance(model, PerBlock):
+        s = f"{format_with_idr(model.per_block, model.currency)} per full {_views(model.block_views)} views"
+        if model.max_counted_views:
+            s += f", max {format_with_idr(payout_for(model, model.max_counted_views), model.currency)}"
+        return s
+    if isinstance(model, Cpm):
+        s = f"{format_with_idr(model.rate_per_1000, model.currency)} per 1.000 views"
+        if model.max_payout is not None:
+            s += f", max {format_money(model.max_payout, model.currency)}"
+        return s
+    return "Payout not set yet"

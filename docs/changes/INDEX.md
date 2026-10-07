@@ -130,3 +130,4 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 156 · 2026-10-07 · (lane B) P4 task 4: zoom punch-ins (timeline markers, rendered via retention.py) · editor.js, render_steps.py
 157 · 2026-10-07 · P3 part 1: campaigns table (seeded once from docs/campaigns), shared/campaigns.py DB loader (5 s cache, file fallback), GET list/detail, admin PUT, paused blocks new jobs · main.py, shared, worker, notifier
 158 · 2026-10-07 · P3 part 2: campaign status engine (Active / Ending soon ≤ 3 d / Ended past the last posting day / Paused) + current week, on every campaign in the API · shared/campaign_status.py, main.py
+159 · 2026-10-07 · P3 part 3: Campaign step live — cards with status, payouts.describe() sentence, my posted/claimed/paid, budget text, my monthly-cap meter · index.html, main.py, payouts

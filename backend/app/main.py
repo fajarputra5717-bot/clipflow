@@ -4032,12 +4032,63 @@ def with_campaign_hashtags(text: str, rules) -> str:
 
 # ---------- Campaigns (P3 part 1, 157): the `campaigns` table via shared/campaigns.py ----------
 # Members see shared campaigns + their own private ones (another's private one = 404); admins see all and edit.
-def _campaign_out(rules: dict, user: dict, now: Optional[datetime] = None) -> dict:
+def _campaign_stats(user_id: str, now: datetime) -> dict:
+    """159: the caller's own numbers per campaign: posts made, claimed, Rp paid / expected, and this WIB month's
+    claimed+paid (for the per-creator monthly cap meter). Amounts formatted by payouts (never in the UI)."""
+    start, end = post_advice.wib_month_bounds(now)
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT campaign,
+                       COUNT(*) FILTER (WHERE status IN ('posted', 'claimed', 'paid')),
+                       COUNT(*) FILTER (WHERE status IN ('claimed', 'paid')),
+                       COUNT(*) FILTER (WHERE status = 'paid'),
+                       COALESCE(SUM(paid_rp) FILTER (WHERE status = 'paid'), 0),
+                       COALESCE(SUM(expected_rp) FILTER (WHERE status = 'claimed'), 0),
+                       COALESCE(SUM(COALESCE(paid_rp, expected_rp)) FILTER (
+                           WHERE status IN ('claimed', 'paid') AND posted_at >= %s AND posted_at < %s), 0),
+                       COUNT(*) FILTER (WHERE status = 'planned')
+                FROM clip_posts WHERE user_id = %s AND campaign IS NOT NULL GROUP BY campaign
+                """,
+                (start, end, user_id),
+            )
+            return {r[0]: {"posted": r[1], "claimed": r[2], "paid": r[3], "paid_rp": int(r[4]), "expected_rp": int(r[5]),
+                           "month_rp": int(r[6]), "planned": r[7]} for r in cur.fetchall()}
+
+
+def _campaign_money(rules: dict, st: dict) -> dict:
+    """Card/detail money lines (159): payout sentence, budget text, my totals, monthly-cap meter."""
+    model = payouts.model_from_rules(rules)
+    b, lim = rules.get("budget") or {}, rules.get("limits") or {}
+    cur = (b.get("currency") or "IDR").upper()
+    total = b.get("total_per_month") or b.get("amount")
+    budget = None
+    if total:
+        budget = payouts.format_money(total, cur) + ("/month" if b.get("total_per_month") else "")
+        if b.get("refills") and b.get("per_refill"):
+            budget += f" ({b['refills']} refills of {payouts.format_money(b['per_refill'], cur)})"
+    cap = lim.get("max_payout_per_creator_per_month")
+    meter = None
+    if cap:
+        used = st.get("month_rp", 0)
+        meter = {"label": f"Your month: {payouts.format_idr(used)} of {payouts.format_idr(int(cap))} cap",
+                 "fraction": round(min(1.0, used / float(cap)), 4)}
+    return {"payout_text": payouts.describe(model), "budget_text": budget, "cap_meter": meter,
+            "mine": {"posted": st.get("posted", 0), "claimed": st.get("claimed", 0), "paid": st.get("paid", 0),
+                     "planned": st.get("planned", 0),
+                     "paid_fmt": payouts.format_idr(st.get("paid_rp", 0)),
+                     "expected_fmt": payouts.format_idr(st.get("expected_rp", 0))}}
+
+
+def _campaign_out(rules: dict, user: dict, now: Optional[datetime] = None, stats: Optional[dict] = None) -> dict:
     now = now or datetime.now(timezone.utc)
     return {**campaigns.summary(rules), "visibility": rules.get("visibility", "shared"), "paused": bool(rules.get("paused")),
-            "mine": rules.get("created_by") == user["id"], "can_edit": user["role"] == "admin",
+            "can_edit": user["role"] == "admin",
             # 158: Active / Ending soon / Ended / Paused + the open week (shared/campaign_status.py, one source)
-            "status": campaign_status.status(rules, now), "week": campaign_status.current_week(rules, now)}
+            "status": campaign_status.status(rules, now), "week": campaign_status.current_week(rules, now),
+            "created_by_me": rules.get("created_by") == user["id"],
+            **_campaign_money(rules, (stats or {}).get(rules["slug"], {}))}
 
 
 def _visible_campaign(slug: str, user: dict) -> dict:
@@ -4051,7 +4102,9 @@ def _visible_campaign(slug: str, user: dict) -> dict:
 def list_campaigns(request: Request):
     user = current_user(request)
     rows = [r for r in campaigns.load_all().values() if campaigns.visible_to(r, user)]
-    return [_campaign_out(r, user) for r in sorted(rows, key=lambda r: campaigns.display_name(r).lower())]
+    now = datetime.now(timezone.utc)
+    stats = _campaign_stats(user["id"], now)
+    return [_campaign_out(r, user, now, stats) for r in sorted(rows, key=lambda r: campaigns.display_name(r).lower())]
 
 
 @app.get("/api/campaigns/{slug}")
@@ -4065,7 +4118,8 @@ def get_campaign(slug: str, request: Request):
     meta = {"brief_text": row[0], "created_at": row[1].isoformat(), "updated_at": row[2].isoformat()} if row else \
         {"brief_text": None, "created_at": None, "updated_at": None}
     clean = {k: v for k, v in rules.items() if k not in ("slug", "brief_pending", "visibility", "created_by", "paused")}
-    return {**_campaign_out(rules, user), **meta, "rules": clean}
+    now = datetime.now(timezone.utc)
+    return {**_campaign_out(rules, user, now, _campaign_stats(user["id"], now)), **meta, "rules": clean}
 
 
 class CampaignUpdate(BaseModel):
