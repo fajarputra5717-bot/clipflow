@@ -10,6 +10,7 @@ warning chips (content safety) never do — the user decides.
 import re
 
 from shared import campaigns
+from shared import edit_spec as edit_specs
 
 # Duration limits in seconds per platform slug (rules files' "platforms"), from Lane B's
 # docs/research/publishing-apis.md (read 2026-10-02). TikTok's API limit is unconfirmed
@@ -26,11 +27,26 @@ PLATFORM_LIMITS = {
 HASHTAG_RE = re.compile(r"#\w+", re.UNICODE)
 
 
-def _duration(c):
+TRIM_MARGIN = 2.0   # "Trim to N s": N = the strictest failing platform limit minus this margin
+
+
+def _clip_length(c):
     try:
         return max(0.0, float(c.get("end_time") or 0) - float(c.get("start_time") or 0))
     except (TypeError, ValueError):
         return 0.0
+
+
+def _duration(c):
+    """The length that gets posted: the clip minus the editor's cuts (P4 task 3, edit_spec.cuts)."""
+    clip = _clip_length(c)
+    cuts = edit_specs.cuts_of(c.get("edit_spec") if isinstance(c.get("edit_spec"), dict) else None)
+    if not cuts or not clip:
+        return clip
+    a, b = cuts.get("trim") or [0.0, clip]
+    b = min(float(b), clip)
+    removed = sum(max(0.0, min(e, b) - max(s, a)) for s, e in cuts.get("removed") or [])
+    return max(0.0, (b - float(a)) - removed)
 
 
 def hashtags_ok(description, required):
@@ -48,16 +64,22 @@ def check(rules, c):
     chips = []
 
     dur = _duration(c)
-    bad = []
+    bad, too_long = [], []
     for slug in campaigns.platforms(rules):
         lo, hi, name = PLATFORM_LIMITS.get(slug, (None, None, slug))
         if lo is not None and not lo <= dur <= hi:
             bad.append(f"{name} ({lo}–{hi} s)")
+            if dur > hi:
+                too_long.append(hi)
+    target = max(1, int(min(too_long) - TRIM_MARGIN)) if too_long else None
     chips.append({
         "id": "length", "ok": not bad, "blocking": True,
-        "label": f"Length {round(dur)} s" if not bad else f"Length {round(dur)} s: too long for " + ", ".join(bad),
-        "detail": "Platform limits from the campaign's platforms.",
-        "fix": None,  # trimming arrives with the P4 timeline
+        "label": f"Length {round(dur)} s" if not bad else
+                 f"Length {round(dur)} s: too {'long' if too_long else 'short'} for " + ", ".join(bad),
+        "detail": "Platform limits from the campaign's platforms (after the editor's cuts).",
+        # P4: one-click trim through the editor's cuts (PUT …/editor/fix-length); too short can't be fixed
+        "fix": "trim" if target else None,
+        "fix_target": target,
     })
 
     required = campaigns.hashtags(rules)
@@ -77,7 +99,7 @@ def check(rules, c):
             "id": "watermark", "ok": warn is None, "blocking": True,
             "label": "Watermark" if warn is None else "Campaign watermark missing",
             "detail": (warn or {}).get("message") or f"{wm.get('asset_name') or 'Campaign watermark'} burned in.",
-            "fix": None,
+            "fix": None if warn is None else "rerender",   # P4: re-render picks up a now-resolvable asset
         })
 
     safety = c.get("safety_check")

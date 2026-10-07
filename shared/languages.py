@@ -8,6 +8,8 @@ pipeline actually used after Whisper's detection; everything downstream
 (hook prompt, AI text tools, Submagic) reads that via job_language().
 """
 
+import re
+
 SUPPORTED = ("en", "id")
 REQUESTABLE = ("auto",) + SUPPORTED
 NAMES = {"en": "English", "id": "Indonesian"}
@@ -70,3 +72,44 @@ STOPWORDS = {
 
 def stopwords_for(code):
     return STOPWORDS.get(code, STOPWORDS[DEFAULT])
+
+
+# ---- filler words (P4 task 5b, lane B): SUGGESTIONS in the editor timeline, never auto-cut.
+# Each filler is a sequence of token patterns (regex, full match on the lower-cased word with
+# punctuation stripped), so stretched forms ("emmm", "eeeh") and multi-word fillers match.
+FILLERS = {
+    "id": [
+        ["e+h+"], ["e+m+"], ["a+nu+"], ["kayak"], ["gitu"], ["apa", "namanya"],
+    ],
+    "en": [
+        ["u+m+"], ["u+h+"], ["like"], ["you", "know"], ["i", "mean"],
+    ],
+}
+
+_FILLER_RE = {code: [[re.compile(rf"^{p}$") for p in seq] for seq in seqs] for code, seqs in FILLERS.items()}
+_PUNCT = re.compile(r"[^\w']+", re.UNICODE)
+
+
+def _norm(word):
+    return _PUNCT.sub("", str(word or "").lower())
+
+
+def filler_spans(words, code=None):
+    """Filler suggestions in a word list [{text|word, start, end}, ...] → [{i0, i1, start, end, text}]
+    (i0..i1 inclusive word indexes). code = the job's language; None/unknown = every list.
+    Longest match first, no overlaps."""
+    lists = [_FILLER_RE[code]] if code in _FILLER_RE else list(_FILLER_RE.values())
+    seqs = sorted((s for lst in lists for s in lst), key=len, reverse=True)
+    toks = [_norm(w.get("text") if isinstance(w, dict) and "text" in w else w.get("word")) for w in words]
+    out, i = [], 0
+    while i < len(toks):
+        hit = next((s for s in seqs if i + len(s) <= len(toks)
+                    and all(p.match(toks[i + k]) for k, p in enumerate(s))), None)
+        if hit:
+            j = i + len(hit) - 1
+            out.append({"i0": i, "i1": j, "start": float(words[i]["start"]), "end": float(words[j]["end"]),
+                        "text": " ".join(str(words[k].get("text") or words[k].get("word") or "") for k in range(i, j + 1))})
+            i = j + 1
+        else:
+            i += 1
+    return out

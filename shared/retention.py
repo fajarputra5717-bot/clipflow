@@ -2,7 +2,11 @@
 
 Three effects, in the order the editor render applies them (see the editor build notes):
 
-  (a) silence trim   detect -> plan keep segments -> trim+concat (sample-accurate audio,
+  (a) silence trim   OFF by default (per-clip opt-in). Pauses come from Whisper word gaps
+                     (word_gap_silences -> plan_word_gap_keep), not audio level: finals carry a
+                     music/game bed. Cuts get a 40 ms equal-power audio crossfade so the bed
+                     doesn't jump. (silencedetect helpers remain for clean speech-only sources.)
+                     trim+concat (sample-accurate audio,
                      frame-snapped cuts so audio and video lengths agree exactly)
   (b) loudnorm       two-pass EBU R128 to -14 LUFS, then a true-peak limiter (always last)
   (c) punch-in zoom  smooth 1.0 -> 1.15 -> 1.0 at given timestamps (smoothstep, per-frame scale)
@@ -30,7 +34,11 @@ SILENCE_NOISE_DB = -35.0     # silencedetect threshold
 SILENCE_MIN_GAP = 0.50       # only silences at least this long are cut (s)
 SILENCE_PAD = 0.12           # speech kept on each side of a cut (s)
 WORD_PAD = 0.05              # extra protection around Whisper word spans (s)
-SEAM_FADE = 0.008            # audio micro-fade at each seam, avoids clicks (s)
+SEAM_FADE = 0.008            # audio micro-fade at each seam when crossfade is off (s)
+SILENCE_TRIM_DEFAULT = False # decision 2026-10-02: off unless enabled per clip
+WORD_GAP_MIN = 0.60          # a pause = gap between consecutive Whisper words >= this (s)
+CUT_CROSSFADE = 0.040        # equal-power audio crossfade centred on each cut (s)
+MIN_CUT = 0.10               # shorter cuts (after padding) aren't worth a seam (s)
 LOUDNORM_I = -14.0           # integrated loudness target (LUFS)
 LOUDNORM_TP = -1.0           # true-peak ceiling (dBTP)
 LOUDNORM_LRA = 11.0          # loudness range target (LU)
@@ -136,6 +144,37 @@ def relative_noise_db(integrated_lufs: Optional[float], *, below: float = 14.0,
     return max(lo, min(hi, integrated_lufs - below))
 
 
+def word_gap_silences(words: Sequence[dict], *, min_gap: float = WORD_GAP_MIN,
+                      window: Optional[Segment] = None) -> list[Segment]:
+    """Pauses between consecutive spoken words that are >= min_gap, as (start, end).
+
+    Only gaps BETWEEN words: the clip's own start/end are the editor's trim handles.
+    Words are sorted by start; overlapping words never produce a gap.
+    """
+    ws = sorted((float(w["start"]), float(w["end"])) for w in words)
+    out: list[Segment] = []
+    reach = None
+    for s, e in ws:
+        if reach is not None and s - reach >= min_gap:
+            out.append((reach, s))
+        reach = e if reach is None else max(reach, e)
+    if window:
+        lo, hi = window
+        out = [(max(a, lo), min(b, hi)) for a, b in out if b > lo and a < hi]
+    return out
+
+
+def plan_word_gap_keep(duration: float, words: Sequence[dict], *, min_gap: float = WORD_GAP_MIN,
+                       pad: float = SILENCE_PAD, forced_cuts: Sequence[Segment] = (),
+                       fps: Optional[float] = None, window: Optional[Segment] = None,
+                       min_cut: float = MIN_CUT) -> list[Segment]:
+    """Keep segments for word-gap silence trim: each gap >= min_gap is cut, leaving `pad` of
+    the pause on both sides of speech (so a 0.6 s gap with pad 0.12 removes 0.36 s)."""
+    gaps = word_gap_silences(words, min_gap=min_gap, window=window)
+    return plan_keep_segments(duration, gaps, words=words, forced_cuts=forced_cuts, min_gap=min_cut,
+                              pad=pad, word_pad=0.0, fps=fps, window=window)
+
+
 def plan_keep_segments(duration: float, silences: Sequence[Segment] = (), *,
                        words: Sequence[dict] = (), forced_cuts: Sequence[Segment] = (),
                        min_gap: float = SILENCE_MIN_GAP, pad: float = SILENCE_PAD,
@@ -231,25 +270,46 @@ def remap_times(times: Iterable[float], keep: Sequence[Segment] | TimeMap) -> li
 
 
 def silence_trim_graph(keep: Sequence[Segment], *, v_in: str = "0:v", a_in: str = "0:a",
-                       v_out: str = "vtrim", a_out: str = "atrim", fade: float = SEAM_FADE) -> str:
-    """filter_complex chunk: trim/atrim each keep segment and concat (video + audio).
+                       v_out: str = "vtrim", a_out: str = "atrim", crossfade: float = CUT_CROSSFADE,
+                       fade: float = SEAM_FADE, duration: Optional[float] = None) -> str:
+    """filter_complex chunk: cut video hard, join audio across each cut (labels without brackets).
 
-    Audio gets a few-ms fade at every seam (no clicks). Labels are without brackets.
+    crossfade > 0: every audio segment next to a cut is extended by crossfade/2 into the removed
+    part and neighbours are joined with an equal-power acrossfade centred on the cut. Each join
+    removes exactly the overlap that was added, so audio length == video length (no drift) and a
+    music/game bed blends instead of jumping. crossfade = 0: hard joins with a `fade` micro-fade.
+    duration (source length) bounds the extension of the last segment.
     """
     n = len(keep)
     if n == 0:
         raise ValueError("nothing to keep")
     parts = [f"[{v_in}]split={n}" + "".join(f"[sv{i}]" for i in range(n)),
              f"[{a_in}]asplit={n}" + "".join(f"[sa{i}]" for i in range(n))]
-    pairs = []
     for i, (s, e) in enumerate(keep):
-        d = e - s
-        fd = min(fade, d / 4)
         parts.append(f"[sv{i}]trim=start={_f(s)}:end={_f(e)},setpts=PTS-STARTPTS[v{i}]")
-        parts.append(f"[sa{i}]atrim=start={_f(s)}:end={_f(e)},asetpts=PTS-STARTPTS,"
-                     f"afade=t=in:d={_f(fd)},afade=t=out:st={_f(d - fd)}:d={_f(fd)}[a{i}]")
-        pairs.append(f"[v{i}][a{i}]")
-    parts.append("".join(pairs) + f"concat=n={n}:v=1:a=1[{v_out}][{a_out}]")
+    vjoin = "".join(f"[v{i}]" for i in range(n)) + f"concat=n={n}:v=1:a=0[{v_out}]"
+    if crossfade <= 0 or n == 1:
+        for i, (s, e) in enumerate(keep):
+            d = e - s
+            fd = min(fade, d / 4) if n > 1 else 0
+            fades = f",afade=t=in:d={_f(fd)},afade=t=out:st={_f(d - fd)}:d={_f(fd)}" if fd else ""
+            parts.append(f"[sa{i}]atrim=start={_f(s)}:end={_f(e)},asetpts=PTS-STARTPTS{fades}[a{i}]")
+        parts.append(vjoin)
+        parts.append("".join(f"[a{i}]" for i in range(n)) + f"concat=n={n}:v=0:a=1[{a_out}]")
+        return ";".join(parts)
+    # half the overlap must exist on both sides of every join, inside the segment AND the source
+    h = min([crossfade / 2] + [(e - s) / 2 for s, e in keep])
+    hi = duration if duration is not None else math.inf
+    for i, (s, e) in enumerate(keep):
+        a0 = s - h if i > 0 else s
+        a1 = min(e + h, hi) if i < n - 1 else e
+        parts.append(f"[sa{i}]atrim=start={_f(max(0.0, a0))}:end={_f(a1)},asetpts=PTS-STARTPTS[a{i}]")
+    prev = "a0"
+    for i in range(1, n):
+        out = a_out if i == n - 1 else f"x{i}"
+        parts.append(f"[{prev}][a{i}]acrossfade=d={_f(2 * h)}:c1=qsin:c2=qsin[{out}]")
+        prev = out
+    parts.append(vjoin)
     return ";".join(parts)
 
 
@@ -378,7 +438,8 @@ def loudnorm_apply_cmd(src: str, dst: str, measured: Optional[dict], *, audio_bi
 
 # --------------------------------------------------------------------------- combined render
 
-def trim_zoom_cmd(src: str, dst: str, *, keep: Sequence[Segment] = (),
+def trim_zoom_cmd(src: str, dst: str, *, keep: Sequence[Segment] = (), crossfade: float = CUT_CROSSFADE,
+                  source_duration: Optional[float] = None,
                   zoom_windows: Sequence[Segment] = (), width: int = 1080, height: int = 1920,
                   peak: float = ZOOM_PEAK, ramp: float = ZOOM_RAMP, preset: str = "veryfast",
                   crf: str | int = 20, threads: Optional[int] = None) -> FFmpegStep:
@@ -390,7 +451,7 @@ def trim_zoom_cmd(src: str, dst: str, *, keep: Sequence[Segment] = (),
     graph: list[str] = []
     v, a = "0:v", "0:a"
     if keep:
-        graph.append(silence_trim_graph(keep))
+        graph.append(silence_trim_graph(keep, crossfade=crossfade, duration=source_duration))
         v, a = "vtrim", "atrim"
     zf = zoom_filter(zoom_windows, width=width, height=height, peak=peak, ramp=ramp)
     if zf:

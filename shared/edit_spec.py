@@ -13,6 +13,13 @@ Keys so far:
            Full-frame clips: replaces FULLFRAME_CAPTION_Y; camera-panel clips:
            never below the seam. Missing = auto (today's placement).
 
+  hook_title: {on, text, duration}   P4 task 1 (lane B): title card over the first seconds.
+           text "" / missing = the clip's title; duration ∈ {2, 2.5, 3} s (default 2.5).
+           Rendered by worker/render_steps.add_title_card() in preview and final.
+  cuts: {trim: [a, b] | null, removed: [[s, e], ...]}   P4 task 3 (lane B): clip-relative SOURCE
+           seconds. trim = the kept window (null = whole clip); removed = cut words/pauses inside it.
+           Applied after the render (render_steps.apply_cuts), so burned captions are cut with the video.
+
 PATCH semantics (main.py update_candidate): top-level keys are merged into
 the stored spec; a key sent as null is removed.
 """
@@ -125,6 +132,10 @@ def normalize_patch(patch, styles, animations):
             value = normalize_color(value)
         elif key == "caption_y":
             value = normalize_caption_y(value)
+        elif key == "hook_title":
+            value = normalize_hook_title(value)
+        elif key == "cuts":
+            value = normalize_cuts(value)
         else:
             raise ValueError(f"unknown edit_spec key: {key!r}")
         if value is None:
@@ -140,3 +151,102 @@ def caption_override(spec):
     if not isinstance(cap, dict):
         return None, None
     return cap.get("style") or None, cap.get("animation") or None
+
+
+# ---- hook title card (P4 task 1, lane B)
+
+HOOK_TITLE_DURATIONS = (2.0, 2.5, 3.0)
+HOOK_TITLE_DEFAULT_DURATION = 2.5
+HOOK_TITLE_MAX_CHARS = 80
+
+
+def normalize_hook_title(value):
+    """{on: bool, text: str ('' = clip title), duration: 2|2.5|3} or None (= clear)."""
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        raise ValueError("hook_title must be an object")
+    text = " ".join(str(value.get("text") or "").split())
+    if len(text) > HOOK_TITLE_MAX_CHARS:
+        raise ValueError(f"hook_title.text is longer than {HOOK_TITLE_MAX_CHARS} characters")
+    try:
+        duration = float(value.get("duration", HOOK_TITLE_DEFAULT_DURATION))
+    except (TypeError, ValueError):
+        raise ValueError("hook_title.duration must be a number")
+    if duration not in HOOK_TITLE_DURATIONS:
+        raise ValueError(f"hook_title.duration must be one of {HOOK_TITLE_DURATIONS}")
+    return {"on": bool(value.get("on", True)), "text": text, "duration": duration}
+
+
+def hook_title_of(spec):
+    """The stored hook_title dict, or None."""
+    ht = (spec or {}).get("hook_title") if isinstance(spec, dict) else None
+    return ht if isinstance(ht, dict) else None
+
+
+# ---- cuts (P4 task 3, lane B)
+
+CUTS_MAX_RANGES = 400
+CUT_MIN_LEN = 0.04          # shorter removals are dropped (below one frame-ish + crossfade)
+OUTPUT_MIN_SECONDS = 1.0
+
+
+def _merge_ranges(ranges):
+    out = []
+    for a, b in sorted(ranges):
+        if out and a <= out[-1][1] + 1e-3:
+            out[-1][1] = max(out[-1][1], b)
+        else:
+            out.append([a, b])
+    return out
+
+
+def normalize_cuts(value, clip_duration=None):
+    """{trim: [a, b] | None, removed: [[s, e], ...]} (sorted, merged, clamped to the trim window,
+    3 decimals) or None (= clear). clip_duration (seconds) enables bounds + minimum-output checks."""
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        raise ValueError("cuts must be an object")
+    hi = float(clip_duration) if clip_duration else None
+    trim = value.get("trim")
+    if trim is not None:
+        try:
+            a, b = (round(float(x), 3) for x in trim)
+        except (TypeError, ValueError):
+            raise ValueError("cuts.trim must be [start, end] in seconds")
+        a = max(0.0, a)
+        if hi is not None:
+            b = min(hi, b)
+        if b - a < OUTPUT_MIN_SECONDS:
+            raise ValueError("cuts.trim keeps less than 1 second")
+        trim = [a, b]
+        if hi is not None and a <= 0.0005 and b >= hi - 0.0005:
+            trim = None                       # the whole clip: same as no trim
+    lo_w, hi_w = (trim or [0.0, hi if hi is not None else float("inf")])
+    raw = value.get("removed") or []
+    if not isinstance(raw, list) or len(raw) > CUTS_MAX_RANGES:
+        raise ValueError(f"cuts.removed must be a list of at most {CUTS_MAX_RANGES} [start, end] ranges")
+    ranges = []
+    for r in raw:
+        try:
+            s, e = (round(float(x), 3) for x in r)
+        except (TypeError, ValueError):
+            raise ValueError("cuts.removed entries must be [start, end] in seconds")
+        s, e = max(s, lo_w), min(e, hi_w)
+        if e - s >= CUT_MIN_LEN:
+            ranges.append([s, e])
+    removed = _merge_ranges(ranges)
+    if hi is not None:
+        kept = (hi_w - lo_w) - sum(e - s for s, e in removed)
+        if kept < OUTPUT_MIN_SECONDS:
+            raise ValueError("cuts remove (almost) the whole clip")
+    if trim is None and not removed:
+        return None
+    return {"trim": trim, "removed": removed}
+
+
+def cuts_of(spec):
+    """The stored cuts dict, or None."""
+    c = (spec or {}).get("cuts") if isinstance(spec, dict) else None
+    return c if isinstance(c, dict) and (c.get("trim") or c.get("removed")) else None

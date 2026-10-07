@@ -1470,6 +1470,7 @@ select::-ms-expand{display:none}
 @keyframes ppanelUp{from{transform:translateY(100%)}to{transform:none}}
 @media (prefers-reduced-motion:reduce){.ppanel{animation:none}}
 </style>
+<link rel="stylesheet" href="editor/editor.css"><!-- lane-b hook -->
 </head>
 <body>
 
@@ -2541,6 +2542,7 @@ function renderCandidate(c,jid,platform,job={}){
       <div class="candidate-top-actions">
         <span class="badge ${badgeClass(c.status)}">${esc(stageLabel(c.status||"candidate"))}</span>
         <button class="secondary preview-edit" data-edit="${esc(c.id)}" type="button" aria-expanded="${document.getElementById("candidate-"+c.id)?.classList.contains("editing")?"true":"false"}">${document.getElementById("candidate-"+c.id)?.classList.contains("editing")?"Close edit":"Edit"}</button>
+        <a class="secondary btn-link" href="#editor/${esc(jid)}/${esc(c.id)}" data-open-editor>Open editor</a><!-- lane-b hook -->
       </div>
     </div>
     ${clipReasonHtml(c)}
@@ -4517,5 +4519,7 @@ document.addEventListener("click",e=>{
 window.addEventListener("resize",()=>requestAnimationFrame(syncNav),{passive:true});
 
 </script>
+<script src="editor/editor.js" defer></script><!-- lane-b hook -->
+<script src="editor/review.js" defer></script><!-- lane-b hook -->
 </body>
 </html>

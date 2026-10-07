@@ -83,6 +83,7 @@ MEDIA_PATH_RE = re.compile(
 )
 
 OPEN_API_PATHS = {"/api/auth/login", "/api/auth/logout"}
+OPEN_API_PATHS = OPEN_API_PATHS | {"/api/env"}  # lane-b hook: staging banner (no secrets)
 
 # Part 5: a session whose password was set by an admin (create/reset) may only
 # do these until it picks its own password.
@@ -263,6 +264,7 @@ app.add_middleware(
     allow_methods=["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"],
     allow_headers=["Content-Type", API_KEY_HEADER, "Authorization"],
 )
+from app import routes_editor; app.include_router(routes_editor.router)  # lane-b hook
 
 
 # ============================================================
