@@ -1,8 +1,10 @@
 """rule_checks with the editor (P4): length after cuts + one-click fixes. Run: python -m unittest tests.test_rule_checks_editor"""
 
+import os
 import unittest
 
-from shared import rule_checks as rc
+os.environ.setdefault("CAMPAIGNS_DIR", "docs/campaigns")  # before shared.campaigns is imported (it reads it once)
+from shared import rule_checks as rc  # noqa: E402
 
 RULES = {"platforms": ["tiktok", "facebook"], "hashtags": {"required_in_order": ["#a", "#b"]},
          "watermark": {"required": True, "asset_name": "Motion Klip"}}
