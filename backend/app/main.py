@@ -2331,6 +2331,8 @@ def update_post(post_id: str, payload: PostUpdate, request: Request):
                 sets["posted_at"] = new["posted_at"] = _parse_ts(payload.posted_at, "posted_at")
             if "scheduled_for" in sent:
                 sets["scheduled_for"] = _parse_ts(payload.scheduled_for, "scheduled_for")
+                if sets["scheduled_for"] != _parse_ts(current.get("scheduled_for"), "scheduled_for"):
+                    sets["reminded_at"] = sets["reminder_status"] = None   # 148: a new time gets a new reminder
             if "views" in sent and payload.views is not None:
                 sets["views"] = new["views"] = payload.views
                 sets["views_at"] = datetime.now(timezone.utc)  # every views entry is stamped
@@ -2354,8 +2356,6 @@ def update_post(post_id: str, payload: PostUpdate, request: Request):
                     and (sets.get("scheduled_for") or current.get("scheduled_for")):
                 # 146: re-plan → the pre-post checks again, at the planned time.
                 when = sets.get("scheduled_for") or _parse_ts(current["scheduled_for"], "scheduled_for")
-                if "scheduled_for" in sent:
-                    sets["reminded_at"] = sets["reminder_status"] = None   # 148: a new time gets a new reminder
                 sets["eligible"], sets["ineligible_reason"] = _eligibility_for(
                     cur, user["id"], current["candidate_id"], current["platform"], new["account_id"], when)
             if current["status"] == "planned" and new["status"] == "posted" and current["candidate_id"]:

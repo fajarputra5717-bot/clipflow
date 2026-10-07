@@ -23,6 +23,8 @@
   Settings → Posting times: "Telegram reminder [15] min before". **Digest (142):** "🕒 Scheduled today" section.
 - Schema readiness now checks the newest column (`telegram_sends.post_id`, last statement).
 
+- **Fix (Lane C Low, qa d8517f5):** `PATCH /api/posts/{id}` clears `reminded_at`/`reminder_status` whenever `scheduled_for`
+  actually changes (was only inside the re-check, skipped e.g. for a post whose clip is gone).
 **Verified:** UI 109 passed (reminder chips/banner, lead save); unit tests OK; prod deploy: backend healthy
 (schema ready), worker `TELEGRAM_SENDER=separate`, sender "Telegram sender started", 0 restarts; columns present;
 `--preview-digest` OK. Real reminder delivery = owner (prod Telegram); staging write checks after lane-b merges
