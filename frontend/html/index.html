@@ -1295,6 +1295,21 @@ select::-ms-expand{display:none}
 .acct-meta small{display:block;color:var(--muted);font-size:12px}
 .acct-empty{padding:12px 14px;color:var(--muted);font-size:13px}
 @media (max-width:760px){.account-create{grid-template-columns:1fr}}
+/* Posting times (P2.5 S1): per platform, WIB; chips + add */
+.ptime-row{display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:10px 12px 10px 14px;border-top:1px solid var(--hairline)}
+.ptime-row:first-child{border-top:0}
+.ptime-name{flex:0 0 150px;font-weight:600;display:inline-flex;align-items:center;gap:6px}
+.ptime-name svg{width:16px;height:16px}
+.ptime-chips{flex:1;display:flex;flex-wrap:wrap;gap:6px;min-width:140px}
+.ptime-chip{display:inline-flex;align-items:center;gap:2px;padding:0 4px 0 12px;min-height:32px;border-radius:999px;background:var(--fill);font-size:13px;font-weight:600;font-variant-numeric:tabular-nums}
+.ptime-chip button,[data-theme="dark"] .ptime-chip button{min-height:28px;min-width:28px;padding:0;border:0;border-radius:999px;background:transparent;color:var(--muted);box-shadow:none}
+.ptime-none{font-size:13px;color:var(--muted)}
+.ptime-add{display:flex;gap:6px;align-items:center}
+.ptime-add input{width:120px;min-height:36px;padding:4px 10px}
+.ptime-add button{min-height:36px;padding:0 12px;border-radius:999px;font-size:13px}
+.ptimes-actions{display:flex;gap:var(--sp-1);margin-top:var(--sp-1)}
+.ptimes-actions button{min-height:var(--hit);border-radius:999px}
+@media (max-width:600px){.ptime-name{flex-basis:100%}}
 /* Publish step (P2 part 3, 130) = flow-preview step 7 "Publish queue" */
 .spacer{flex:1}
 .qgroup{margin-top:var(--sp-2)}
@@ -1665,6 +1680,13 @@ select::-ms-expand{display:none}
         </form>
         <p class="hint users-hint">Your own accounts, used when you mark a clip as posted and for per-account monthly caps. Paused accounts aren't offered.</p>
         <div class="account-msg" id="accountsMsg" role="status" aria-live="polite"></div>
+      </section>
+      <section class="inset-group posting-times" id="postingTimes" aria-labelledby="postingTimesTitle">
+        <h3 class="inset-title" id="postingTimesTitle">Posting times</h3>
+        <div class="inset-list" id="postingTimesList"></div>
+        <div class="ptimes-actions"><button class="primary" type="button" id="postingTimesSave" disabled>Save times</button><button class="secondary" type="button" id="postingTimesReset">Reset to defaults</button></div>
+        <p class="hint users-hint" id="postingTimesHint">Suggested times to post on each platform, in WIB (Asia/Jakarta). ClipFlow suggests the next free one when you plan a post.</p>
+        <div class="account-msg" id="postingTimesMsg" role="status" aria-live="polite"></div>
       </section>
       <section class="inset-group users-admin" id="usersAdmin" hidden aria-labelledby="usersTitle">
         <h3 class="inset-title" id="usersTitle">Users</h3>
@@ -3852,8 +3874,43 @@ async function loadAccounts(){
         <span class="acct-meta"><span class="acct-handle">@${esc(a.handle)}</span>${a.active?"":`<span class="user-tag">Paused</span>`}<small>${esc(a.platform_name)}${a.note?" · "+esc(a.note):""}</small></span>
         <span class="user-actions"><button class="secondary" type="button" data-account-active="${a.active?"false":"true"}" data-account-id="${esc(a.id)}">${a.active?"Pause":"Resume"}</button><button class="secondary" type="button" data-account-remove="${esc(a.id)}" aria-label="Remove @${esc(a.handle)}">Remove</button></span>
       </div>`).join(""):`<div class="acct-empty">No posting accounts yet.</div>`;
+    renderPostingTimes();
   }catch(err){accountsMessage(err.message)}
 }
+// Posting times (P2.5 S1): POSTING_TIMES user setting = {platform: ["HH:MM"]} in WIB; the server validates and
+// normalises (shared/schedule.py). Draft edits stay local until Save; Reset = "" (back to the default).
+let postingTimesDraft=null;
+function postingTimesSaved(){try{return JSON.parse((settingsCache.POSTING_TIMES||{}).value||"{}")}catch{return {}}}
+function postingTimesDirty(){return postingTimesDraft!=null&&JSON.stringify(postingTimesDraft)!==JSON.stringify(postingTimesSaved())}
+function postingTimesMessage(text,ok){const m=$("postingTimesMsg");m.textContent=text||"";m.classList.toggle("is-ok",!!ok);m.classList.toggle("is-error",!!text&&!ok)}
+function renderPostingTimes(){
+  if(!settingsCache.POSTING_TIMES){$("postingTimes").hidden=true;return}
+  $("postingTimes").hidden=false;
+  if(postingTimesDraft==null)postingTimesDraft=postingTimesSaved();
+  const plats=accountPlatforms.length?accountPlatforms:Object.keys(PLATFORM_SHORT).map(slug=>({slug,name:PLATFORM_SHORT[slug]}));
+  $("postingTimesList").innerHTML=plats.map(p=>{const ts=postingTimesDraft[p.slug]||[];
+    return `<div class="ptime-row" data-ptime-row="${esc(p.slug)}"><span class="ptime-name">${PLATFORM_ICON[p.slug]||""}${esc(p.name)}</span>
+      <span class="ptime-chips">${ts.length?ts.map(t=>`<span class="ptime-chip">${esc(t)}<button type="button" data-ptime-remove="${esc(p.slug)}" data-ptime="${esc(t)}" aria-label="Remove ${esc(t)} for ${esc(p.name)}">✕</button></span>`).join(""):`<span class="ptime-none">No suggested times</span>`}</span>
+      <span class="ptime-add"><input type="time" step="300" data-ptime-input="${esc(p.slug)}" aria-label="New time for ${esc(p.name)} (WIB)"><button class="secondary" type="button" data-ptime-add="${esc(p.slug)}">Add</button></span></div>`}).join("");
+  $("postingTimesSave").disabled=!postingTimesDirty();
+}
+async function savePostingTimes(value,btn,okText){
+  setBusy(btn,true,"Saving…");postingTimesMessage("");
+  try{await api("/api/settings",{method:"PUT",body:JSON.stringify({values:{POSTING_TIMES:value}})});
+    postingTimesDraft=null;settingsCache=await api("/api/settings");renderPostingTimes();postingTimesMessage(okText,true)}
+  catch(err){postingTimesMessage(err.message)}finally{setBusy(btn,false);$("postingTimesSave").disabled=!postingTimesDirty()}
+}
+document.addEventListener("click",e=>{
+  const rm=e.target.closest("[data-ptime-remove]");
+  if(rm){const p=rm.dataset.ptimeRemove;postingTimesDraft[p]=(postingTimesDraft[p]||[]).filter(t=>t!==rm.dataset.ptime);postingTimesMessage("");return renderPostingTimes()}
+  const ad=e.target.closest("[data-ptime-add]");
+  if(ad){const p=ad.dataset.ptimeAdd,inp=document.querySelector(`[data-ptime-input="${css(p)}"]`),v=(inp.value||"").slice(0,5);
+    if(!/^\d{2}:\d{2}$/.test(v)){postingTimesMessage("Pick a time first (HH:MM, WIB).");inp.focus();return}
+    postingTimesDraft[p]=[...new Set([...(postingTimesDraft[p]||[]),v])].sort();postingTimesMessage("");renderPostingTimes();
+    document.querySelector(`[data-ptime-input="${css(p)}"]`)?.focus();return}
+  if(e.target.closest("#postingTimesSave"))return savePostingTimes(JSON.stringify(postingTimesDraft),$("postingTimesSave"),"Saved.");
+  if(e.target.closest("#postingTimesReset"))return savePostingTimes("",$("postingTimesReset"),"Back to the default times.");
+});
 $("accountCreateForm").addEventListener("submit",async e=>{
   e.preventDefault();
   const platform=$("newAccountPlatform").value,handle=$("newAccountHandle").value.trim().replace(/^@/,""),note=$("newAccountNote").value.trim();
@@ -3887,6 +3944,7 @@ async function loadSettings(){
           </div>`}).join("")}</div>
       </section>`).join("");
     filterSettings();updateSettingsDirty();updateSubtitleDefaultsLine();if(!clipsTouched)updateCampaignHint();
+    postingTimesDraft=null;renderPostingTimes();
   }catch(e){$("settingsPanel").innerHTML=`<div class="error-box">${esc(e.message)}</div>`}
 }
 // Send only fields the user changed: the form shows effective values (DB → env → default), and

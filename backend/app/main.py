@@ -25,7 +25,7 @@ from starlette.concurrency import run_in_threadpool
 from app import auth
 
 from shared.ai import router as ai_router
-from shared import campaigns, descriptions, edit_spec as edit_specs, hook_ranges, languages, origins, payouts, post_advice, posts as post_rules, rule_checks
+from shared import campaigns, descriptions, edit_spec as edit_specs, hook_ranges, languages, origins, payouts, post_advice, posts as post_rules, rule_checks, schedule
 from shared.errors import AINotConfiguredError
 from shared.fonts import normalize_caption_font
 from shared.settings import (
@@ -5439,6 +5439,12 @@ def update_settings(req: SettingsUpdate, request: Request):
     if v and (not v.isdigit() or not 1 <= int(v) <= 8):
         raise HTTPException(status_code=400, detail="Clips per video must be a whole number from 1 to 8")
     validate_watermark_height(req.values)
+    if str(req.values.get("POSTING_TIMES") or "").strip():
+        # P2.5 S1: stored normalised ({platform: sorted "HH:MM"} WIB); "" = back to the default.
+        try:
+            req.values["POSTING_TIMES"] = json.dumps(schedule.normalize_posting_times(req.values["POSTING_TIMES"]))
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
 
     try:
         with get_db() as conn:

@@ -145,6 +145,12 @@ async function mockApi(page, api) {
     }
     { const m = path.match(/^\/api\/auth\/tokens\/([^/]+)$/);
       if (m && method === "DELETE") { api.tokens = (api.tokens || []).filter((t) => t.id !== m[1]); return json({ ok: true }); } }
+    if (path === "/api/settings" && method === "PUT" && body?.values && "POSTING_TIMES" in body.values) {   // P2.5 S1 mock
+      const v = body.values.POSTING_TIMES;
+      if (v.includes("99:")) return json({ detail: "TikTok: '99:00' is not a time (HH:MM, 24 h)" }, 400);
+      api.settings = { ...(api.settings || {}), POSTING_TIMES: { value: v || api.defaultPostingTimes, source: v ? "user" : "default", scope: "user" } };
+      return json({ status: "ok" });
+    }
     if (method === "GET" && path === "/api/auth/me") return api.user ? json({ user: api.user, via: "session", must_change_password: !!api.mustChange }) : json({ detail: "Unauthorized" }, 401);
     if (method === "GET") {
       if (path === "/api/media-token") return json({ token: "mock-token", expires_at: iso(-720) });

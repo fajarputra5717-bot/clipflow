@@ -378,6 +378,9 @@ falls back to env TELEGRAM_CHAT_ID, members never); ≤ 50 MB or `shrink_for_tel
 Digest (142): the notifier sends each user's `shared/digest.py` text at DIGEST_HOUR (09:00 WIB) to their own chat;
 claim advice for any caller = `shared/post_advice.advice_for` (one source). `--preview-digest` prints without sending. Payout amounts
 come only from Lane B's `shared/payouts.py` (P3), never hand-rolled.
+Schedule (P2.5, 145): `POSTING_TIMES` user setting = `{platform: ["HH:MM"]}` in WIB, validated/normalised only by
+`shared/schedule.py` (`normalize_posting_times`; `next_slots()` = next free slots in UTC, skipping taken minutes and
+campaign windows via `payouts.window_problems`). Times are stored TIMESTAMPTZ (UTC), shown in WIB (fixed +7).
 
 ## Frontend shell (R-11/R-12/R-13, lane B 067-073; badge v2.1117)
 
