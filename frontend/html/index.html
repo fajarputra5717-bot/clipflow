@@ -1313,6 +1313,14 @@ select::-ms-expand{display:none}
 .camp-meter i{display:block;height:100%;border-radius:3px;background:var(--accent);transform-origin:left}
 .camp-meter-label{font-size:12px;color:var(--muted)}
 .camp-card.is-ended{opacity:.72}
+/* 162: campaign-driven labels + the collapsed Expired group (Publish) */
+.pcard-earn{margin-left:6px;font-size:11px;padding:2px 8px;vertical-align:1px}
+.pexpired>summary{cursor:pointer;list-style:none;min-height:var(--hit);display:flex;align-items:center}
+.pexpired>summary::-webkit-details-marker{display:none}
+.pexpired>summary h3::before{content:"▸ "}
+.pexpired[open]>summary h3::before{content:"▾ "}
+.pexpired-camp h4{margin:var(--sp-1) 0 0;font-size:13px;color:var(--muted)}
+.pexpired .pcard{opacity:.8}
 .camp-card{cursor:pointer;transition:border-color var(--dur-2) var(--ease-out)}
 .camp-card:hover{border-color:var(--accent)}
 .camp-card .camp-open{align-self:flex-start;margin-top:4px;min-height:36px;padding:0 14px;border-radius:999px;font-size:13px}
@@ -3947,7 +3955,7 @@ document.addEventListener("click",e=>{
   const c=e.target.closest("[data-claim-cancel]");if(c){delete claimOpen[c.dataset.claimCancel];renderPublish()}
 });
 const POST_STATUS={ready:["Ready","idle"],planned:["Planned","idle"],posted:["Posted","completed"],claimed:["Claimed","attention"],paid:["Paid","completed"]};
-let publishGroups=[],publishFilter="left",publishCampaign="all",publishOpen={},publishPanel={}; // publishPanel: cid → open platform
+let publishGroups=[],publishFilter="left",publishCampaign="all",publishOpen={},publishPanel={},publishExpiredOpen=false; // publishPanel: cid → open platform
 function publishRowKey(r){return r.candidate_id+":"+r.platform}
 function rowStatus(r){const s=r.post?.status;return !s||s==="dropped"?"ready":s}
 // Copy that works in iOS Safari: the Clipboard API is called synchronously inside the tap (no await before it);
@@ -4011,7 +4019,7 @@ function publishCardHtml(c,rows){
         <div class="qt" title="${esc(c.title)}">${esc(c.title||"Untitled clip")}</div>
         ${c.job_title?`<div class="pcard-src" title="${esc(c.job_title)}">${esc(c.job_title)}</div>`:""}
         <div class="pcard-cap" title="${esc(c.caption)}">${esc((c.caption||"").replace(/\s+/g," "))}</div>
-        <div class="pcard-sum">Posted on ${s.posted||0} of ${s.total||rows.length}${s.expected_fmt?` · ${esc(s.expected_fmt)} expected`:""}</div>
+        <div class="pcard-sum">Posted on ${s.posted||0} of ${s.total||rows.length}${s.expected_fmt?` · ${esc(s.expected_fmt)} expected`:""}${c.earn?` <span class="badge cancelled pcard-earn" title="This clip can no longer earn in its campaign">${esc(c.earn.label)}</span>`:""}</div>
       </div>
     </div>
     <div class="qactions">
@@ -4042,9 +4050,14 @@ function renderPublish(){
   $("publishFilter").innerHTML=(camps.length>1?`<div class="seg" role="group" aria-label="Filter campaign">${[["all","All campaigns"],...camps].map(([id,n])=>`<button type="button" data-publish-campaign="${esc(id)}" aria-pressed="${publishCampaign===id}">${esc(n)}</button>`).join("")}</div>`:"")
     +`<div class="seg" role="group" aria-label="Filter clips">${[["left","Left to post"],["all","All"]].map(([id,n])=>`<button type="button" data-publish-filter="${id}" aria-pressed="${publishFilter===id}">${n}</button>`).join("")}</div>`;
   let total=0;
-  const html=publishGroups.filter(g=>publishCampaign==="all"||(g.campaign||"")===publishCampaign).map(g=>{
-    const cards=(g.cards||[]).map(c=>[c,g.rows.filter(r=>r.candidate_id===c.candidate_id)]).filter(([c,rs])=>{total++;return publishFilter==="all"||cardLeft(rs)||publishPanel[c.candidate_id]})  // an open card stays until closed;
-    return cards.length?`<div class="qgroup"><h3>${esc(g.campaign_name)}</h3>${cards.map(([c,rs])=>publishCardHtml(c,rs)).join("")}</div>`:""}).join("");
+  const shown=publishGroups.filter(g=>publishCampaign==="all"||(g.campaign||"")===publishCampaign);
+  const html=shown.filter(g=>!g.expired).map(g=>{
+    // an open card stays until closed
+    const cards=(g.cards||[]).map(c=>[c,g.rows.filter(r=>r.candidate_id===c.candidate_id)]).filter(([c,rs])=>{total++;return publishFilter==="all"||cardLeft(rs)||publishPanel[c.candidate_id]});
+    return cards.length?`<div class="qgroup"><h3>${esc(g.campaign_name)}</h3>${cards.map(([c,rs])=>publishCardHtml(c,rs)).join("")}</div>`:""}).join("")
+    // 162: ended campaigns leave the active queue: one collapsed "Expired" group at the bottom, nothing deleted
+    +(()=>{const ex=shown.filter(g=>g.expired&&(g.cards||[]).length);if(!ex.length)return "";const n=ex.reduce((a,g)=>a+g.cards.length,0);
+      return `<details class="qgroup pexpired" ${publishExpiredOpen?"open":""} data-publish-expired><summary><h3>Expired · ${n} clip${n===1?"":"s"} (campaign ended)</h3></summary>${ex.map(g=>`<div class="pexpired-camp"><h4>${esc(g.campaign_name)}</h4>${g.cards.map(c=>publishCardHtml(c,g.rows.filter(r=>r.candidate_id===c.candidate_id))).join("")}</div>`).join("")}</details>`})();
   const sheetRow=PUBLISH_SHEET_MQ.matches?openPanelRow():null;
   $("publishSheetHost").innerHTML=sheetRow?publishPanelHtml(sheetRow):"";
   $("publishList").innerHTML=html||`<div class="publish-empty">${total?`Every clip here is posted on all its platforms. <button class="plain" type="button" data-publish-filter="all">Show all</button>`:`No finished clips yet. Approve a clip in <button class="plain" type="button" data-nav="queue">Review</button>; it lands here once its final render is done.`}</div>`;
@@ -4444,7 +4457,7 @@ document.addEventListener("keydown",e=>{
     e.preventDefault();switchEditTab(cid,EDIT_TABS[j][0],true);
   }
 });
-document.addEventListener("toggle",e=>{const d=e.target;if(d.tagName!=="DETAILS")return;d.querySelector(":scope > summary")?.setAttribute("aria-expanded",String(d.open));if(d.matches("[data-edit-more]"))editMoreOpen[d.dataset.cid+":"+d.dataset.editMore]=d.open},true);
+document.addEventListener("toggle",e=>{const d=e.target;if(d.tagName!=="DETAILS")return;if(d.matches("[data-publish-expired]"))publishExpiredOpen=d.open;d.querySelector(":scope > summary")?.setAttribute("aria-expanded",String(d.open));if(d.matches("[data-edit-more]"))editMoreOpen[d.dataset.cid+":"+d.dataset.editMore]=d.open},true);
 // Sidebar: desktop = collapsible column (remembered), narrow = drawer.
 const SIDEBAR_MQ=window.matchMedia("(max-width:999px)");
 const SIDEBAR_STORAGE="clipflow_sidebar_collapsed_v1";

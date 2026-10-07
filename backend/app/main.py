@@ -1877,6 +1877,11 @@ def publish_queue(request: Request):
             "platforms": plats, "summary": _card_summary([posts.get((cid, p)) for p in plats]),
             "last_send": max(clip_sends, key=lambda v: v["_at"]) if clip_sends else None,
         })
+        # 162: "Week closed" / "Campaign ended" on the card; an ended campaign's group is "expired" (collapsed in the UI)
+        labels = campaign_status.clip_labels(rules, [{"posted_at": post_advice.as_ts(posts[(cid, p)]["posted_at"])}
+                                                     for p in plats if posts.get((cid, p)) and posts[(cid, p)]["posted_at"]], now)
+        g["cards"][-1].update(earn=labels["earn"], expired=labels["expired"])
+        g["expired"] = labels["expired"]
         for plat in plats:
             caption, trimmed = post_rules.trim_caption(body, tags, post_rules.CAPTION_LIMITS.get(plat, 2200))
             model = payouts.model_from_rules(rules) if rules else None
@@ -3874,7 +3879,8 @@ def new_hook(
                         -- style choices (caption preset/position, keyword colour, on/off switches) stay.
                         edit_spec = NULLIF(
                             (COALESCE(edit_spec, '{}'::jsonb) - 'cuts' - 'keywords')
-                                #- '{zoom,markers}' #- '{audio,silence_ranges}' #- '{hook_title,text}',
+                                #- '{zoom,markers}' #- '{audio,silence_ranges}' #- '{audio,silence_trim}'
+                                #- '{hook_title,text}',   -- silence_trim off too: its ranges were the old moment's (Lane C Low)
                             '{}'::jsonb),
                         -- 110: the new-hook prompt has no score (no prompt change);
                         -- clear the old hook's so the UI shows no stale estimate.

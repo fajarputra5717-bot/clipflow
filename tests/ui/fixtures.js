@@ -84,7 +84,8 @@ async function mockApi(page, api) {
       if (!api.telegram?.ready) return json({ detail: "Add your Telegram chat id in Account first" }, 409);
       return json({ id: "tg-1", status: "queued" });
     }
-    if (path === "/api/publish-queue" && method === "GET") return json({ groups: (api.publishGroups || []).map((g) => ({ ...g, cards: g.cards || publishCards(g.rows, api) })) });
+    if (path === "/api/publish-queue" && method === "GET") return json({ groups: (api.publishGroups || []).map((g) => ({ ...g,
+      cards: (g.cards || publishCards(g.rows, api)).map((c) => ({ ...c, earn: (api.cardEarn || {})[c.candidate_id] || c.earn || null, expired: !!g.expired })) })) });
     { const m = path.match(/^\/api\/posts\/([^/]+)$/);
       if (m && method === "PATCH") {
         const row = (api.publishGroups || []).flatMap((g) => g.rows).find((r) => r.post?.id === m[1]);

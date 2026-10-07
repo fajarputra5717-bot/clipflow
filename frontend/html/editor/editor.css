@@ -181,3 +181,9 @@ body.is-staging #toolbar{top:22px}
 .ed-zoom-mark:hover{background:var(--bad)}
 .ed-zoom-mark:focus-visible{outline:none;box-shadow:var(--ring)}
 .ed-tl-inner.is-zoom{cursor:copy}
+
+/* 162: Review page "Expired" group (clips of ended campaigns), collapsed */
+.rv-expired { margin-top: var(--sp-3); }
+.rv-expired > summary { cursor: pointer; min-height: var(--hit); display: flex; align-items: center; font-size: 13px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.rv-expired .rv-clip { opacity: .8; }

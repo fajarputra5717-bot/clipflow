@@ -14,6 +14,7 @@ const IME = [
   clip({ id: "c63", score: 63, ai_title: "No tags", rule_checks: [{ id: "hashtags", ok: false, blocking: true, label: "Hashtags missing or out of order", detail: "", fix: "hashtags" }] }),
   clip({ id: "c71", score: 71, ai_title: "Closed week", earn: { code: "week_closed", label: "Week closed" }, rule_checks: [ok("length", "Length 39 s")] }),
 ];
+const EXPIRED = clip({ id: "c50", score: 99, ai_title: "From an ended campaign", expired: true, earn: { code: "campaign_ended", label: "Campaign ended" } });
 
 async function mockReview(page, api, { filter = { campaign: "ime-roleplay", job: "all", status: "to_review" } } = {}) {
   api.filter = filter;
@@ -131,5 +132,21 @@ test.describe("Review/Editor navigation (149)", () => {
     await expect(app.locator("#reviewSection")).toBeHidden();
     await expect(app.locator("#candidate-c94")).toHaveClass(/editing/);
     await expect(app.locator("#flow li.active .flow-label")).toHaveText("Editor");
+  });
+});
+
+test.describe("Expired group (162)", () => {
+  test.use({ reducedMotion: "reduce" });
+  test("clips of an ended campaign leave the grid for a collapsed Expired group", async ({ app, api }) => {
+    IME.push(EXPIRED);
+    try {
+      await open(app, api);
+      await expect(app.locator("#rvGrid .rv-clip")).toHaveCount(4);
+      const ex = app.locator(".rv-expired");
+      await expect(ex.locator("summary")).toHaveText("Expired · 1 clip (campaign ended)");
+      await expect(app.locator("#rv-c50")).toBeHidden();
+      await ex.locator("summary").click();
+      await expect(app.locator("#rv-c50 .rv-earn")).toHaveText("Campaign ended");
+    } finally { IME.pop(); }
   });
 });
