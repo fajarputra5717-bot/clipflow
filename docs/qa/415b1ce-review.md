@@ -4,9 +4,10 @@ Deploy: 2026-10-07 03:18Z, riftstorm-sender is new. 6/6 riftstorm-* running, 0 r
 Worker has TELEGRAM_SENDER=separate (skips sends and reminders); sender runs worker.py --telegram-only. No double processing.
 queue_due_reminders: FOR UPDATE OF p SKIP LOCKED. Lead is per user and clamped. More than REMINDER_LATE_MAX late → 'missed'
 (flagged, not sent). No chat → 'no_chat', retried while still due. Members get no env-chat fallback (admin only), same as 6a.
-Bugs:
-1. Low: main.py:2332 PATCH /api/posts/{id} changes scheduled_for but doesn't clear reminded_at/reminder_status. The
-   schedule endpoint (main.py:2010) does. A post re-timed through the API/token path keeps its old 'sent'/'missed' and
-   is never reminded again. The UI re-plans through /schedule, so the UI isn't affected.
+Bugs: none.
+CORRECTION 2026-10-07: the earlier Low #1 ("PATCH /api/posts doesn't reset the reminder") was WRONG. 415b1ce
+main.py:2358 already cleared reminded_at/reminder_status whenever scheduled_for was sent. My grep output was truncated
+before that line. Lane A's a3c3dbb narrows it to "only when the time actually changes" (reviewed: OK, _parse_ts accepts the
+stored value). Withdrawn.
 Not verified: a real reminder send (owner, production); sender behaviour when the final is still rendering (code path
 sends the "⚠ … open ClipFlow → Schedule" note).
