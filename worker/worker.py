@@ -502,6 +502,15 @@ _settings = RuntimeSettings(
 )
 
 
+def load_campaign_rows():
+    """157: campaigns come from the DB (shared/campaigns.py, cached 5 s; files are the fallback)."""
+    with db() as conn:
+        return conn.execute("SELECT slug, name, rules, brief_text, created_by, visibility, paused, created_at, updated_at FROM campaigns").fetchall()
+
+
+campaigns.set_db_loader(load_campaign_rows, log=lambda msg: log(msg))
+
+
 def setting(name, default=None):
     return _settings.get(name, default, _job_owner.get())
 

@@ -31,7 +31,7 @@ from pathlib import Path
 import psycopg
 import requests
 
-from shared import digest  # 142: copied into the image; campaign rules mounted at /app/campaigns
+from shared import campaigns, digest  # 142: copied into the image; campaign rules mounted at /app/campaigns
 
 WIB = timezone(timedelta(hours=7))  # Asia/Jakarta, no DST
 
@@ -185,6 +185,16 @@ def connect():
         options="-c default_transaction_read_only=on -c statement_timeout=15000",
     )
 
+
+def load_campaign_rows():
+    """157: campaigns come from the DB (shared/campaigns.py falls back to the mounted files on error)."""
+    with connect() as conn:
+        cur = conn.execute("SELECT slug, name, rules, brief_text, created_by, visibility, paused, created_at, updated_at FROM campaigns")
+        keys = [d.name for d in cur.description]
+        return [dict(zip(keys, r)) for r in cur.fetchall()]
+
+
+campaigns.set_db_loader(load_campaign_rows)
 
 TITLE = "COALESCE(NULLIF(j.custom_title, ''), NULLIF(sv.title, ''), 'Job ' || LEFT(j.id, 8))"
 CAND_TITLE = "COALESCE(NULLIF(c.manual_title, ''), NULLIF(c.title, ''), NULLIF(c.ai_title, ''), 'Clip ' || (c.clip_index + 1))"

@@ -128,3 +128,4 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 154 · 2026-10-07 · (lane B) P4 task 5b: filler-word suggestions (never auto-cut) · editor.js
 155 · 2026-10-07 · (lane B) P4 task 6: Review page (flow-preview step 4) + filters remembered per user · review.js, routes
 156 · 2026-10-07 · (lane B) P4 task 4: zoom punch-ins (timeline markers, rendered via retention.py) · editor.js, render_steps.py
+157 · 2026-10-07 · P3 part 1: campaigns table (seeded once from docs/campaigns), shared/campaigns.py DB loader (5 s cache, file fallback), GET list/detail, admin PUT, paused blocks new jobs · main.py, shared, worker, notifier

@@ -2200,8 +2200,8 @@ function campaignName(slug){const c=campaignsCache.find(x=>x.slug===slug);return
 async function loadCampaigns(){
   try{campaignsCache=await api("/api/campaigns")||[]}catch(e){campaignsCache=[];console.error(e)}
   const sel=$("jobCampaign");if(!sel)return;const keep=sel.value;
-  sel.innerHTML=`<option value="">None (no rule checks)</option>`+campaignsCache.map(c=>`<option value="${esc(c.slug)}">${esc(c.name)}${c.brief_pending?" (brief pending)":""}</option>`).join("");
-  sel.value=campaignsCache.some(c=>c.slug===keep)?keep:"";updateCampaignHint();
+  sel.innerHTML=`<option value="">None (no rule checks)</option>`+campaignsCache.map(c=>`<option value="${esc(c.slug)}" ${c.paused?"disabled":""}>${esc(c.name)}${c.paused?" (paused)":c.brief_pending?" (brief pending)":""}</option>`).join(""); // 157: paused = no new videos
+  sel.value=campaignsCache.some(c=>c.slug===keep&&!c.paused)?keep:"";updateCampaignHint();
 }
 function updateCampaignHint(){
   const c=campaignsCache.find(x=>x.slug===$("jobCampaign")?.value),h=$("campaignHint");if(!h)return;

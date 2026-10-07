@@ -1,14 +1,20 @@
 """
-Campaign rules (081): docs/campaigns/<slug>.rules.json (+ <slug>.md brief),
-bind-mounted read-only at CAMPAIGNS_DIR in backend and worker. Re-read when a
-file changes (mtime), so editing a rules file needs no rebuild.
+Campaign rules. Since P3 part 1 (157) the `campaigns` table is the source:
+slug, name, rules JSONB (the docs/campaigns rules.json schema), brief_text
+(verbatim), created_by, visibility shared|private, paused. Each process registers
+a DB loader with set_db_loader() (backend, worker, sender, notifier); load_all()
+caches it for CACHE_SECONDS. The files docs/campaigns/<slug>.rules.json (+ .md
+brief, bind-mounted at CAMPAIGNS_DIR) are the first-run seed and the fallback when
+no loader is set (unit tests) or the DB can't be read.
 
-jobs.campaign holds the slug; NULL = no campaign (today's behaviour).
+jobs.campaign holds the slug; NULL = no campaign. get(slug) ignores visibility
+(a job's campaign always resolves); listing for a user goes through visible_to().
 """
 
 import json
 import os
 import re
+import time
 from pathlib import Path
 
 CAMPAIGNS_DIR = Path(os.getenv("CAMPAIGNS_DIR", "/app/campaigns"))
@@ -34,8 +40,68 @@ def _brief_pending(slug):
     return "--- BRIEF START ---" not in text
 
 
+CACHE_SECONDS = 5.0
+_db = {"loader": None, "at": 0.0, "data": None}
+
+
+def set_db_loader(loader, log=print):
+    """loader() -> [{slug, name, rules, brief_text, created_by, visibility, paused, created_at, updated_at}]."""
+    _db.update(loader=loader, log=log, at=0.0, data=None)
+
+
+def invalidate():
+    _db.update(at=0.0, data=None)
+
+
+def _from_db():
+    if not _db["loader"]:
+        return None
+    if _db["data"] is not None and time.monotonic() - _db["at"] < CACHE_SECONDS:
+        return _db["data"]
+    try:
+        rows = _db["loader"]()
+    except Exception as exc:  # DB down/migrating: the files are the backup
+        _db["log"](f"[campaigns] DB read failed, using files: {exc}")
+        return None
+    data = {}
+    for r in rows:
+        rules = dict(r["rules"] or {})
+        rules.update(slug=r["slug"], name=r["name"] or rules.get("name"), brief_pending=not (r.get("brief_text") or "").strip(),
+                     visibility=r.get("visibility") or "shared", created_by=r.get("created_by"),
+                     paused=bool(r.get("paused")))
+        data[r["slug"]] = rules
+    _db.update(at=time.monotonic(), data=data)
+    return data
+
+
+def visible_to(rules, user):
+    """Shared campaigns for everyone; a private one for its creator and admins."""
+    return bool(rules) and (rules.get("visibility", "shared") == "shared" or user.get("role") == "admin"
+                            or rules.get("created_by") == user.get("id"))
+
+
+def seed_rows():
+    """First run (157): every docs/campaigns rules file + its verbatim brief, as rows to insert."""
+    from shared.brief_parser import extract_brief
+    out = []
+    for slug, rules in _load_files().items():
+        try:
+            brief = extract_brief((CAMPAIGNS_DIR / f"{slug}.md").read_text(encoding="utf-8"))
+        except OSError:
+            brief = None
+        clean = {k: v for k, v in rules.items() if k not in ("slug", "brief_pending")}
+        out.append({"slug": slug, "name": display_name(rules), "rules": clean, "brief_text": brief})
+    return out
+
+
 def load_all():
-    """{slug: rules dict (+ 'slug', 'brief_pending')}, cached by mtime."""
+    """{slug: rules dict (+ 'slug', 'brief_pending', 'visibility', 'created_by', 'paused')}."""
+    data = _from_db()
+    return data if data is not None else _load_files()
+
+
+def _load_files():
+    """The rules files, cached by mtime."""
     key = _snapshot()
     if key != _cache["key"]:
         data = {}
