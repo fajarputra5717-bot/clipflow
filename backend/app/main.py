@@ -25,7 +25,7 @@ from starlette.concurrency import run_in_threadpool
 from app import auth
 
 from shared.ai import router as ai_router
-from shared import campaigns, descriptions, edit_spec as edit_specs, hook_ranges, languages, origins, payouts, post_advice, posts as post_rules, rule_checks, schedule
+from shared import campaign_status, campaigns, descriptions, edit_spec as edit_specs, hook_ranges, languages, origins, payouts, post_advice, posts as post_rules, rule_checks, schedule
 from shared.errors import AINotConfiguredError
 from shared.fonts import normalize_caption_font
 from shared.settings import (
@@ -497,8 +497,24 @@ def ensure_schema():
             PRIMARY KEY (user_id, key)
         )
         """,
-        # 148: a reminder send points at its planned post (header line). Keep LAST: the readiness check reads it.
+        # 148: a reminder send points at its planned post (header line).
         "ALTER TABLE telegram_sends ADD COLUMN IF NOT EXISTS post_id TEXT",
+        # P3 part 1 (157): campaigns in the DB, a shared catalogue (created_by + visibility, not user_id-owned:
+        # P1.5's exception for campaigns). rules = the docs/campaigns rules.json schema; brief_text verbatim.
+        # Keep LAST: the readiness check reads it.
+        """
+        CREATE TABLE IF NOT EXISTS campaigns (
+            slug TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            rules JSONB NOT NULL,
+            brief_text TEXT,
+            created_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+            visibility TEXT NOT NULL DEFAULT 'shared' CHECK (visibility IN ('shared', 'private')),
+            paused BOOLEAN NOT NULL DEFAULT FALSE,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """,
     ]
 
     try:
@@ -530,17 +546,54 @@ def ensure_schema():
     except Exception:
         print("[auth] bootstrap admin failed:", traceback.format_exc())
 
+    try:
+        seed_campaigns()
+    except Exception:
+        print("[campaigns] seed failed:", traceback.format_exc())
+
     global SCHEMA_READY
     try:
         with get_db() as conn:
             with conn.cursor() as cur:
-                # The newest column must exist: proof the statement list got through (148: telegram_sends.post_id).
-                cur.execute("SELECT EXISTS (SELECT 1 FROM information_schema.columns "
-                            "WHERE table_name = 'telegram_sends' AND column_name = 'post_id')")
+                # The newest table must exist: proof the statement list got through (157: campaigns).
+                cur.execute("SELECT to_regclass('public.campaigns') IS NOT NULL")
                 SCHEMA_READY = bool(cur.fetchone()[0])
     except Exception:
         print("[backend] schema readiness check failed:", traceback.format_exc())
     print(f"[backend] schema ready: {SCHEMA_READY}")
+
+
+def seed_campaigns() -> None:
+    """157 first run: an empty `campaigns` table gets every docs/campaigns rules file (+ verbatim brief) as a
+    shared campaign created by the bootstrap admin. Later file edits don't sync: the DB is the source now."""
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT EXISTS (SELECT 1 FROM campaigns)")
+            if cur.fetchone()[0]:
+                return
+            cur.execute("SELECT id FROM users WHERE role = 'admin' ORDER BY bootstrap DESC, created_at LIMIT 1")
+            row = cur.fetchone()
+            admin = row[0] if row else None
+            rows = campaigns.seed_rows()
+            for r in rows:
+                cur.execute(
+                    "INSERT INTO campaigns (slug, name, rules, brief_text, created_by) VALUES (%s, %s, %s::jsonb, %s, %s) "
+                    "ON CONFLICT (slug) DO NOTHING",
+                    (r["slug"], r["name"], json.dumps(r["rules"]), r["brief_text"], admin),
+                )
+        conn.commit()
+    print(f"[campaigns] seeded {len(rows)} campaigns from the rules files")
+
+
+def _load_campaign_rows():
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT slug, name, rules, brief_text, created_by, visibility, paused, created_at, updated_at FROM campaigns")
+            keys = ("slug", "name", "rules", "brief_text", "created_by", "visibility", "paused", "created_at", "updated_at")
+            return [dict(zip(keys, r)) for r in cur.fetchall()]
+
+
+campaigns.set_db_loader(_load_campaign_rows)
 
 
 OWNED_TABLES = ("jobs", "watermark_assets")
@@ -1291,8 +1344,10 @@ def create_job(req: ClipRequest, request: Request):
     rules = None
     if req.campaign:
         rules = campaigns.get(req.campaign)
-        if not rules:
+        if not campaigns.visible_to(rules, user):
             raise HTTPException(status_code=400, detail="Unknown campaign")
+        if rules.get("paused"):
+            raise HTTPException(status_code=400, detail=f"{campaigns.display_name(rules)} is paused: no new videos")
     wm = campaign_watermark_snapshot(rules)
     req.youtube_url = validate_youtube_url(req.youtube_url)
 
@@ -3813,6 +3868,13 @@ def new_hook(
                         hook_provider = %s,
                         manual_title = NULL,
                         subtitle_override = NULL,
+                        -- 160 (Lane B report): edit_spec keys in the OLD clip's time don't carry over to the
+                        -- new moment (cuts, keyword words, zoom markers, silence ranges, the hook card's text);
+                        -- style choices (caption preset/position, keyword colour, on/off switches) stay.
+                        edit_spec = NULLIF(
+                            (COALESCE(edit_spec, '{}'::jsonb) - 'cuts' - 'keywords')
+                                #- '{zoom,markers}' #- '{audio,silence_ranges}' #- '{hook_title,text}',
+                            '{}'::jsonb),
                         -- 110: the new-hook prompt has no score (no prompt change);
                         -- clear the old hook's so the UI shows no stale estimate.
                         score = NULL,
@@ -3975,10 +4037,140 @@ def with_campaign_hashtags(text: str, rules) -> str:
     return campaigns.with_campaign_hashtags(text, rules)
 
 
+# ---------- Campaigns (P3 part 1, 157): the `campaigns` table via shared/campaigns.py ----------
+# Members see shared campaigns + their own private ones (another's private one = 404); admins see all and edit.
+def _campaign_stats(user_id: str, now: datetime) -> dict:
+    """159: the caller's own numbers per campaign: posts made, claimed, Rp paid / expected, and this WIB month's
+    claimed+paid (for the per-creator monthly cap meter). Amounts formatted by payouts (never in the UI)."""
+    start, end = post_advice.wib_month_bounds(now)
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT campaign,
+                       COUNT(*) FILTER (WHERE status IN ('posted', 'claimed', 'paid')),
+                       COUNT(*) FILTER (WHERE status IN ('claimed', 'paid')),
+                       COUNT(*) FILTER (WHERE status = 'paid'),
+                       COALESCE(SUM(paid_rp) FILTER (WHERE status = 'paid'), 0),
+                       COALESCE(SUM(expected_rp) FILTER (WHERE status = 'claimed'), 0),
+                       COALESCE(SUM(COALESCE(paid_rp, expected_rp)) FILTER (
+                           WHERE status IN ('claimed', 'paid') AND posted_at >= %s AND posted_at < %s), 0),
+                       COUNT(*) FILTER (WHERE status = 'planned')
+                FROM clip_posts WHERE user_id = %s AND campaign IS NOT NULL GROUP BY campaign
+                """,
+                (start, end, user_id),
+            )
+            return {r[0]: {"posted": r[1], "claimed": r[2], "paid": r[3], "paid_rp": int(r[4]), "expected_rp": int(r[5]),
+                           "month_rp": int(r[6]), "planned": r[7]} for r in cur.fetchall()}
+
+
+def _campaign_money(rules: dict, st: dict) -> dict:
+    """Card/detail money lines (159): payout sentence, budget text, my totals, monthly-cap meter."""
+    model = payouts.model_from_rules(rules)
+    b, lim = rules.get("budget") or {}, rules.get("limits") or {}
+    cur = (b.get("currency") or "IDR").upper()
+    total = b.get("total_per_month") or b.get("amount")
+    budget = None
+    if total:
+        budget = payouts.format_money(total, cur) + ("/month" if b.get("total_per_month") else "")
+        if b.get("refills") and b.get("per_refill"):
+            budget += f" ({b['refills']} refills of {payouts.format_money(b['per_refill'], cur)})"
+    cap = lim.get("max_payout_per_creator_per_month")
+    meter = None
+    if cap:
+        used = st.get("month_rp", 0)
+        meter = {"label": f"Your month: {payouts.format_idr(used)} of {payouts.format_idr(int(cap))} cap",
+                 "fraction": round(min(1.0, used / float(cap)), 4)}
+    return {"payout_text": payouts.describe(model), "budget_text": budget, "cap_meter": meter,
+            "mine": {"posted": st.get("posted", 0), "claimed": st.get("claimed", 0), "paid": st.get("paid", 0),
+                     "planned": st.get("planned", 0),
+                     "paid_fmt": payouts.format_idr(st.get("paid_rp", 0)),
+                     "expected_fmt": payouts.format_idr(st.get("expected_rp", 0))}}
+
+
+def _campaign_out(rules: dict, user: dict, now: Optional[datetime] = None, stats: Optional[dict] = None) -> dict:
+    now = now or datetime.now(timezone.utc)
+    return {**campaigns.summary(rules), "visibility": rules.get("visibility", "shared"), "paused": bool(rules.get("paused")),
+            "can_edit": user["role"] == "admin",
+            # 158: Active / Ending soon / Ended / Paused + the open week (shared/campaign_status.py, one source)
+            "status": campaign_status.status(rules, now), "week": campaign_status.current_week(rules, now),
+            "created_by_me": rules.get("created_by") == user["id"],
+            **_campaign_money(rules, (stats or {}).get(rules["slug"], {}))}
+
+
+def _visible_campaign(slug: str, user: dict) -> dict:
+    rules = campaigns.get(slug)
+    if not campaigns.visible_to(rules, user):
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    return rules
+
+
 @app.get("/api/campaigns")
-def list_campaigns():
-    """Campaigns from docs/campaigns/*.rules.json (re-read on change)."""
-    return [campaigns.summary(r) for r in campaigns.load_all().values()]
+def list_campaigns(request: Request):
+    user = current_user(request)
+    rows = [r for r in campaigns.load_all().values() if campaigns.visible_to(r, user)]
+    now = datetime.now(timezone.utc)
+    stats = _campaign_stats(user["id"], now)
+    return [_campaign_out(r, user, now, stats) for r in sorted(rows, key=lambda r: campaigns.display_name(r).lower())]
+
+
+@app.get("/api/campaigns/{slug}")
+def get_campaign(slug: str, request: Request):
+    user = current_user(request)
+    rules = _visible_campaign(slug, user)
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT brief_text, created_at, updated_at FROM campaigns WHERE slug = %s", (slug,))
+            row = cur.fetchone()
+    meta = {"brief_text": row[0], "created_at": row[1].isoformat(), "updated_at": row[2].isoformat()} if row else \
+        {"brief_text": None, "created_at": None, "updated_at": None}
+    clean = {k: v for k, v in rules.items() if k not in ("slug", "brief_pending", "visibility", "created_by", "paused")}
+    now = datetime.now(timezone.utc)
+    return {**_campaign_out(rules, user, now, _campaign_stats(user["id"], now)), **meta, "rules": clean}
+
+
+class CampaignUpdate(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=1, max_length=120)
+    rules: Optional[dict] = None
+    brief_text: Optional[str] = Field(default=None, max_length=50_000)
+    visibility: Optional[str] = None
+    paused: Optional[bool] = None
+
+
+@app.put("/api/campaigns/{slug}")
+def update_campaign(slug: str, payload: CampaignUpdate, request: Request):
+    """Admin edits (members: 403 on a campaign they can see, 404 otherwise). Only sent fields change."""
+    user = current_user(request)
+    _visible_campaign(slug, user)
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Only an admin can edit campaigns")
+    sent, sets = payload.model_fields_set, {}
+    if "name" in sent and payload.name:
+        sets["name"] = payload.name.strip()
+    if "rules" in sent and payload.rules is not None:
+        bad = [p for p in payload.rules.get("platforms") or [] if p not in rule_checks.PLATFORM_LIMITS]
+        if bad or not isinstance(payload.rules.get("platforms", []), list):
+            raise HTTPException(status_code=400, detail=f"Unknown platform(s): {bad}")
+        sets["rules"] = json.dumps({k: v for k, v in payload.rules.items()
+                                    if k not in ("slug", "brief_pending", "visibility", "created_by", "paused")})
+    if "brief_text" in sent:
+        sets["brief_text"] = (payload.brief_text or "").strip() or None
+    if "visibility" in sent:
+        if payload.visibility not in ("shared", "private"):
+            raise HTTPException(status_code=400, detail="visibility must be shared or private")
+        sets["visibility"] = payload.visibility
+    if "paused" in sent and payload.paused is not None:
+        sets["paused"] = payload.paused
+    if sets:
+        cols = ", ".join(f"{k} = %s::jsonb" if k == "rules" else f"{k} = %s" for k in sets)
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"UPDATE campaigns SET {cols}, updated_at = NOW() WHERE slug = %s", (*sets.values(), slug))
+                if not cur.rowcount:
+                    raise HTTPException(status_code=404, detail="Campaign not found")
+            conn.commit()
+        campaigns.invalidate()
+    return get_campaign(slug, request)
 
 
 def job_language_of(job_id: str) -> str:
