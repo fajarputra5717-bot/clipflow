@@ -27,7 +27,9 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
+from shared import caption_options
 from shared import edit_spec as edit_specs
+from shared import fonts
 from shared import languages
 from shared import timeline as timelines
 
@@ -61,7 +63,9 @@ def _load(cur, jid: str, cid: str, user: dict) -> dict:
         f"""
         SELECT c.id::text, c.job_id::text, c.status, c.title, c.manual_title, c.ai_title, c.reason,
                c.start_time, c.end_time, c.duration_seconds, c.edit_spec, c.preview_path, c.final_path,
-               c.updated_at, s.title, j.custom_title, j.platform, j.campaign, j.status
+               c.updated_at, s.title, j.custom_title, j.platform, j.campaign, j.status,
+               c.subtitle_text, c.subtitle_override, j.subtitle_style, j.subtitle_font, j.subtitle_size,
+               j.subtitle_animation, j.burn_subtitles
         FROM clip_candidates c JOIN jobs j ON j.id = c.job_id
         LEFT JOIN source_videos s ON s.id = j.source_video_id
         WHERE c.id::text = %s AND c.job_id::text = %s AND {where}
@@ -73,8 +77,14 @@ def _load(cur, jid: str, cid: str, user: dict) -> dict:
         raise HTTPException(status_code=404, detail="Clip not found")
     keys = ["id", "job_id", "status", "title", "manual_title", "ai_title", "reason", "start_time", "end_time",
             "duration_seconds", "edit_spec", "preview_path", "final_path", "updated_at", "job_source_title",
-            "job_custom_title", "platform", "campaign", "job_status"]
-    return dict(zip(keys, row))
+            "job_custom_title", "platform", "campaign", "job_status", "subtitle_text", "subtitle_override",
+            "subtitle_style", "subtitle_font", "subtitle_size", "subtitle_animation", "burn_subtitles"]
+    c = dict(zip(keys, row))
+    try:   # 112: what "Auto" caption position means for a full-frame clip (the owner's setting)
+        c["auto_caption_y"] = float(_core().runtime_setting("FULLFRAME_CAPTION_Y", user_id=user["id"]) or 78)
+    except (TypeError, ValueError):
+        c["auto_caption_y"] = 78.0
+    return c
 
 
 def _state(c: dict) -> dict:
@@ -101,12 +111,40 @@ def _state(c: dict) -> dict:
                      "colors": list(edit_specs.PROGRESS_COLORS)},
         "audio": {"compress": False, "silence_trim": False, "silence_ranges": [], **edit_specs.audio_of(spec),
                   "loudness": {"lufs": -14.0, "true_peak_dbtp": -1.0, "always_on": True}},
+        "captions": _captions_state(c, spec),
         "hook_title": {
             "on": bool(ht.get("on", False)), "text": ht.get("text", ""),
             "duration": ht.get("duration", edit_specs.HOOK_TITLE_DEFAULT_DURATION),
             "default_text": default_text, "durations": list(edit_specs.HOOK_TITLE_DURATIONS),
             "max_chars": edit_specs.HOOK_TITLE_MAX_CHARS,
         },
+    }
+
+
+def _captions_state(c: dict, spec: dict) -> dict:
+    """Task 7a: job style (font/size shared by every clip in the job) + this clip's own preset override,
+    position, keywords and caption text. Writes go through main's existing routes (candidate PATCH,
+    PATCH …/subtitle-style, POST …/caption-preset, fix-subtitle-ai, new-hook)."""
+    js = c.get("subtitle_style") if isinstance(c.get("subtitle_style"), dict) else {}
+    job_style = js.get("style") or "outline"
+    job_anim = c.get("subtitle_animation") or js.get("animation") or "karaoke"
+    o_style, o_anim = edit_specs.caption_override(spec)
+    own = {"style": o_style, "animation": o_anim} if (o_style or o_anim) else None
+    style = o_style or job_style
+    override = c.get("subtitle_override") or ""
+    return {
+        "job": {"style": job_style, "animation": job_anim,
+                "font": c.get("subtitle_font") or js.get("font") or fonts.DEFAULT_CAPTION_FONT,
+                "size": int(c.get("subtitle_size") or js.get("size") or 42)},
+        "clip": own,                                   # None = follows the job's style + animation
+        "style": style, "animation": o_anim or job_anim,
+        "caption_y": spec.get("caption_y"), "auto_caption_y": c.get("auto_caption_y", 78.0),
+        "keywords": list(spec.get("keywords") or []), "keyword_color": spec.get("keyword_color"),
+        "auto_keyword_color": caption_options.auto_keyword_color(style),
+        "transcript": c.get("subtitle_text") or "", "override": override,
+        "text": override or (c.get("subtitle_text") or ""),
+        "burn": c.get("burn_subtitles") is not False,
+        "options": caption_options.options(),
     }
 
 

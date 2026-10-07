@@ -60,6 +60,7 @@
       E.progress = { on: E.state.progress.on, color: E.state.progress.color };
       E.audio = { compress: E.state.audio.compress, silence_trim: E.state.audio.silence_trim,
                   silence_ranges: (E.state.audio.silence_ranges || []).map((r) => r.slice()) };
+      loadCaptions();
       render();
       if (RENDERING.includes(E.state.candidate.status)) watchRender();
     } catch (e) {
@@ -445,12 +446,21 @@
       </div>`;
   }
 
-  function saver(key, url, getBody) {           // one debounced PUT per editor key
+  // One debounced save per editor key. Editor routes (relative url) answer the editor state; main's own
+  // routes (absolute url, e.g. the candidate PATCH) don't, so their answer is ignored.
+  function saver(key, url, getBody, method = "PUT") {
     E.savers = E.savers || {};
     const s = E.savers[key] = E.savers[key] || { t: 0 };
     s.flush = async () => {
       clearTimeout(s.t); s.t = 0;
-      try { E.state = await api(edUrl(E.jid, E.cid) + url, { method: "PUT", body: JSON.stringify(getBody()) }); paintState(); }
+      try {
+        const body = getBody();
+        if (body === null) return paintState();
+        const r = await api(url.startsWith("/api/") ? url : edUrl(E.jid, E.cid) + url, { method, body: JSON.stringify(body) });
+        if (!url.startsWith("/api/")) E.state = r;
+        if (s.after) s.after();
+        paintState();
+      }
       catch (e) { paintState("Not saved: " + e.message); throw e; }
     };
     clearTimeout(s.t); E.dirty = true; paintHook(); paintState("Saving…");
@@ -463,7 +473,89 @@
   const saveAudio = () => saver("audio", "/audio", () => E.audio);
   function repaintPanel() { const p = document.querySelector(".ed-panel"); if (p) p.innerHTML = panelHtml(E.tab); }
 
+  // ------------------------------------------------------------------ captions (task 7a)
+  // Style + animation are this clip's own (edit_spec.caption, cleared when equal to the job's, 108);
+  // font + size are the job's (every clip in it); position, keywords and caption text are the clip's.
+  const kwToken = (w) => String(w || "").toLowerCase().replace(/[^\p{L}\p{N}_]+/gu, "");
+  const normText = (t) => String(t || "").toUpperCase().split("\n").map((l) => l.trim().replace(/\s+/g, " ")).filter(Boolean).join("\n");
+  function loadCaptions() {
+    const c = E.state.captions;
+    E.cap = { style: c.style, animation: c.animation, font: c.job.font, size: c.job.size, caption_y: c.caption_y,
+              keywords: new Set(c.keywords), keyword_color: c.keyword_color, text: normText(c.text),
+              savedText: normText(c.text), job: { ...c.job }, styleOpen: E.cap ? E.cap.styleOpen : false };
+  }
+  const capOpt = () => E.state.captions.options;
+  const styleOf = (id) => capOpt().styles.find((x) => x.id === id) || capOpt().styles[0];
+  function kwColor() {
+    if (E.cap.keyword_color) return E.cap.keyword_color;
+    const hi = styleOf(E.cap.style).highlight.replace("#", ""), rgb = (h) => [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
+    const h = rgb(hi), far = capOpt().keyword_colors.find((k) => { const r = rgb(k.color.slice(1)); return Math.hypot(r[0] - h[0], r[1] - h[1], r[2] - h[2]) >= 120; });
+    return (far || capOpt().keyword_colors[0]).color;      // 116: auto = first palette colour that contrasts
+  }
+  function fontCss(name) {                                   // browser stand-in for the ASS font (served at /fonts/)
+    const fam = { Montserrat: "CF Montserrat", Inter: "CF Inter", Oswald: "CF Oswald", Poppins: "CF Poppins" }[String(name).split(" ")[0]];
+    const weight = /Black/.test(name) ? 900 : /ExtraBold/.test(name) ? 800 : /Bold|Anton|Bebas|Archivo/.test(name) ? 700 : 500;
+    return `font-family:${fam ? `"${fam}",` : ""}var(--font-display);font-weight:${weight}`;
+  }
+  function sampleHtml(style, kw, words = ["THIS", "CHANGES", "EVERYTHING"]) {
+    const st = styleOf(style);
+    return `<span class="ed-capsample${st.box ? " is-box" : ""}${st.shadow ? " has-shadow" : ""}" style="--rest:${st.resting};--hi:${st.highlight};--kw:${kw};--ol:${st.outline}px;letter-spacing:${st.letterSpacing}">${
+      words.map((w, i) => `<span class="${i === 1 ? "kw" : i === 0 ? "hi" : ""}">${esc(w)}</span>`).join(" ")}</span>`;
+  }
   function captionsPanel() {
+    const C = E.cap, o = capOpt(), cs = E.state.captions, kw = kwColor();
+    const words = [], seen = new Set();
+    for (const w of C.text.split(/\s+/)) { const t = kwToken(w); if (t && !seen.has(t)) { seen.add(t); words.push([t, w.replace(/[^\p{L}\p{N}'-]+/gu, "")]); } }
+    const presetOn = (p) => p.style === C.style && p.animation === C.animation;
+    const yOn = C.caption_y != null, yVal = yOn ? C.caption_y : cs.auto_caption_y;
+    return `
+      ${cs.burn ? "" : `<div class="ed-note-box">Burn-in is off for this job: captions aren't drawn on the video.</div>`}
+      <div class="ed-group">
+        <div class="ed-label">Preset</div>
+        <div class="ed-presets" role="group" aria-label="Caption preset">
+          ${o.presets.map((p) => `<button type="button" class="ed-preset" data-ed-preset="${esc(p.id)}" aria-pressed="${presetOn(p)}">
+            <span class="ed-ptile">${sampleHtml(p.style, kw, ["THIS", "CHANGES"])}</span>${esc(p.label)}</button>`).join("")}
+        </div>
+        <div class="ed-row ed-row-tight"><span class="ed-hint">${C.style === cs.job.style && C.animation === cs.job.animation ? "Same as the job's style." : "This clip only."}</span>
+          <button type="button" class="sm" data-ed-cap-all>Apply to all clips</button></div>
+      </div>
+      <div class="ed-group">
+        <div class="ed-row ed-row-tight"><div class="ed-label">Keyword highlight</div>
+          <div class="ed-swatches" role="group" aria-label="Keyword colour">${o.keyword_colors.map((k) => `<button type="button" class="ed-sw ed-sw-sm" style="background:${k.color}"
+            data-ed-kw-color="${k.color}" aria-label="${esc(k.label)}" title="${esc(k.label)}" aria-pressed="${kw === k.color}"></button>`).join("")}</div></div>
+        <div class="ed-hint" id="edKwNote">${C.keywords.size ? `${C.keywords.size} highlighted · tap a word to toggle` : "Tap a word to highlight it"}</div>
+        <div class="ed-kw" role="group" aria-label="Caption words: tap to highlight" style="--kw:${kw}">
+          ${words.slice(0, 80).map(([t, w]) => `<button type="button" class="ed-kwword" data-ed-kw="${esc(t)}" aria-pressed="${C.keywords.has(t)}">${esc(w)}</button>`).join("")}
+        </div>
+      </div>
+      ${hookGroupHtml()}
+      <div class="ed-group">
+        <div class="ed-row ed-row-tight"><label class="ed-label" for="edCapText">Caption text</label>
+          <button type="button" class="sm" data-ed-fix-typos>Fix typos (AI)</button></div>
+        <textarea id="edCapText" class="ed-captext" rows="5" spellcheck="false" data-ed-cap-text aria-describedby="edCapTextHint">${esc(C.text)}</textarea>
+        <div class="ed-row ed-row-tight"><span class="ed-hint" id="edCapTextHint">One caption line per row. Edited words keep Whisper's timing.</span>
+          ${normText(C.text) !== normText(cs.transcript) ? `<button type="button" class="sm" data-ed-cap-reset>Back to transcript</button>` : ""}</div>
+      </div>
+      <details class="ed-group ed-more" data-ed-style-more ${C.styleOpen ? "open" : ""}>
+        <summary class="ed-label">Style, font, size and position</summary>
+        <div class="ed-sample">${sampleHtml(C.style, kw)}</div>
+        <label class="ed-field"><span>Style</span><select data-ed-cap="style">${o.styles.map((x) => `<option value="${x.id}" ${x.id === C.style ? "selected" : ""}>${esc(x.label)}</option>`).join("")}</select></label>
+        <label class="ed-field"><span>Animation</span><select data-ed-cap="animation">${o.animations.map((x) => `<option value="${x.id}" ${x.id === C.animation ? "selected" : ""}>${esc(x.label)}</option>`).join("")}</select></label>
+        <label class="ed-field"><span>Font · all clips in this job</span><select data-ed-cap="font">${o.fonts.map((f) => `<option ${f === C.font ? "selected" : ""}>${esc(f)}</option>`).join("")}</select></label>
+        <label class="ed-range"><span>Size · job</span><input type="range" min="${o.size_range[0]}" max="${o.size_range[1]}" step="1" value="${C.size}" data-ed-cap="size" aria-label="Caption size"><output id="edCapSize">${C.size}</output></label>
+        <div class="ed-row"><div><div class="ed-label" id="edCapYLbl">Custom position</div>
+          <div class="ed-hint">% from the top. Lower moves captions up, off in-game HUD. With a facecam panel they stay above it.</div></div>
+          <button class="ed-switch" type="button" role="switch" aria-checked="${yOn}" aria-labelledby="edCapYLbl" data-ed-capy-on></button></div>
+        <label class="ed-range ${yOn ? "" : "is-off"}"><span>Position</span><input type="range" min="${o.caption_y_range[0]}" max="${o.caption_y_range[1]}" step="1" value="${yVal}"
+          data-ed-capy aria-label="Caption position" ${yOn ? "" : "disabled"}><output id="edCapY">${yOn ? `${yVal} %` : "Auto"}</output></label>
+      </details>
+      <div class="ed-group">
+        <div class="ed-row"><div><div class="ed-label">Different moment</div>
+          <div class="ed-hint">AI picks another hook from the video and re-renders this clip. Cuts, punch-ins and highlighted keywords are cleared; style choices stay.</div></div>
+          <button type="button" class="sm" data-ed-new-hook>Get another hook</button></div>
+      </div>`;
+  }
+  function hookGroupHtml() {
     const h = E.hook;
     return `
       <div class="ed-group">
@@ -484,6 +576,72 @@
             </div></div>
         </div>
       </div>`;
+  }
+  // Clip-level caption fields → one candidate PATCH (edit_spec merge + subtitle_override when the text changed).
+  function capClipBody() {
+    const C = E.cap, job = E.state.captions.job, spec = {
+      caption: C.style === job.style && C.animation === job.animation ? null : { style: C.style, animation: C.animation },
+      caption_y: C.caption_y,
+    };
+    if (C.kwDirty) { spec.keywords = [...C.keywords]; spec.keyword_color = C.keyword_color || null; }   // untouched: the worker's AI pick (111) stays free
+    const body = { edit_spec: spec }, now = normText(C.text);
+    if (now !== C.savedText) body.subtitle_override = now === normText(E.state.captions.transcript) ? "" : now;   // "" = back to Whisper
+    return body;
+  }
+  function saveCapClip() {
+    saver("capclip", `/api/jobs/${encodeURIComponent(E.jid)}/candidates/${encodeURIComponent(E.cid)}`, capClipBody, "PATCH");
+    E.savers.capclip.after = () => { E.cap.savedText = normText(E.cap.text); };
+  }
+  function saveCapJob() {
+    const job = E.state.captions.job;
+    job.font = E.cap.font; job.size = E.cap.size;
+    saver("capjob", `/api/jobs/${encodeURIComponent(E.jid)}/subtitle-style`, () => ({
+      subtitle_style: job.style, subtitle_font: E.cap.font, subtitle_size: E.cap.size, subtitle_animation: job.animation }), "PATCH");
+  }
+  function repaintCaptions(focusSel) {
+    if (E.tab !== "captions") return;
+    const ta = $("edCapText"), pos = ta && document.activeElement === ta ? [ta.selectionStart, ta.selectionEnd] : null;
+    repaintPanel();
+    if (focusSel) { const el = document.querySelector(focusSel); if (el) el.focus({ preventScroll: true }); }
+    if (pos) { const t = $("edCapText"); t.focus({ preventScroll: true }); t.setSelectionRange(...pos); }
+  }
+  // Two-tap confirm for actions that reach beyond this clip's edits (no native dialogs in the app).
+  function armed(btn, label) {
+    if (btn.dataset.armed === "1") { clearTimeout(btn._armT); btn.dataset.armed = ""; btn.textContent = btn.dataset.label; return true; }
+    btn.dataset.label = btn.textContent; btn.dataset.armed = "1"; btn.textContent = label; btn.classList.add("is-armed");
+    btn._armT = setTimeout(() => { btn.dataset.armed = ""; btn.textContent = btn.dataset.label; btn.classList.remove("is-armed"); }, 4000);
+    return false;
+  }
+  async function capApplyAll(btn) {
+    if (!armed(btn, "Tap again: every clip re-renders")) return;
+    btn.classList.remove("is-armed");
+    setBusy(btn, true, "Applying…");
+    try {
+      await flushSavers();
+      await api(`/api/jobs/${encodeURIComponent(E.jid)}/caption-preset`, { method: "POST", body: JSON.stringify({ style: E.cap.style, animation: E.cap.animation }) });
+      E.state = await api(edUrl(E.jid, E.cid)); loadCaptions(); repaintCaptions();
+      if (RENDERING.includes(E.state.candidate.status)) { paintState(); watchRender(); }
+    } catch (e) { paintState("Not applied: " + e.message); }
+    finally { setBusy(btn, false); }
+  }
+  async function capFixTypos(btn) {
+    setBusy(btn, true, "Fixing typos…");
+    try {
+      const r = await api(`/api/jobs/${encodeURIComponent(E.jid)}/candidates/${encodeURIComponent(E.cid)}/fix-subtitle-ai`, { method: "POST" });
+      if (r && r.subtitle_text) { E.cap.text = normText(r.subtitle_text); repaintCaptions(); saveCapClip(); }
+    } catch (e) { paintState("Fix typos failed: " + e.message); }
+    finally { setBusy(btn, false); }
+  }
+  async function capNewHook(btn) {
+    if (!armed(btn, "Tap again to replace this clip")) return;
+    btn.classList.remove("is-armed");
+    setBusy(btn, true, "Finding a hook…");
+    try {
+      await flushSavers();
+      await api(`/api/jobs/${encodeURIComponent(E.jid)}/candidates/${encodeURIComponent(E.cid)}/new-hook`, { method: "POST" });
+      E.reloadAfterRender = true;                 // new start/end + transcript: reopen everything once rendered
+      E.state.candidate.status = "preview_queued"; paintState(); watchRender();
+    } catch (e) { setBusy(btn, false); paintState(e.message); }
   }
 
   function hookText() { return (E.hook.text || E.hook.default_text || "").trim(); }
@@ -585,6 +743,7 @@
         if (RENDERING.includes(st.candidate.status)) return paintState();
         clearInterval(E.pollT); E.busy = false; E.dirty = false; paintHook();
         setBusy(btn, false);
+        if (E.reloadAfterRender) { E.reloadAfterRender = false; return open(E.jid, E.cid); }
         const v = $("edVideo");
         if (v && st.candidate.has_preview) { v.src = previewSrc(); if (!reduced()) v.play().catch(() => {}); loadTimeline(); }
         else render();
@@ -595,7 +754,7 @@
 
   // ------------------------------------------------------------------ events (delegated, data-*)
   document.addEventListener("click", (e) => {
-    const t = e.target.closest("[data-ed-back],[data-ed-hook-on],[data-ed-hook-dur],[data-ed-render],[data-ed-play],[data-ed-tab],[data-ed-zoom-on],[data-ed-progress-on],[data-ed-progress-color],[data-ed-compress],[data-ed-silence],[data-ed-word],[data-ed-pause],[data-ed-mode],[data-ed-suggest],[data-ed-fillers],[data-ed-cuts-reset],[data-ed-zoom-add],[data-ed-zoom-mark],[data-ed-trim],[data-ed-seekarea]");
+    const t = e.target.closest("[data-ed-back],[data-ed-hook-on],[data-ed-hook-dur],[data-ed-render],[data-ed-play],[data-ed-tab],[data-ed-zoom-on],[data-ed-progress-on],[data-ed-progress-color],[data-ed-compress],[data-ed-silence],[data-ed-word],[data-ed-pause],[data-ed-mode],[data-ed-suggest],[data-ed-fillers],[data-ed-cuts-reset],[data-ed-zoom-add],[data-ed-zoom-mark],[data-ed-trim],[data-ed-seekarea],[data-ed-preset],[data-ed-cap-all],[data-ed-kw],[data-ed-kw-color],[data-ed-fix-typos],[data-ed-cap-reset],[data-ed-capy-on],[data-ed-new-hook]");
     if (!t || !E.state && !t.matches("[data-ed-back]")) return;
     if (t.matches("[data-ed-back]")) {                       // back to the Review page (step 4) for this job
       e.preventDefault(); const jid = E.jid; close(false); location.hash = `#review/${encodeURIComponent(jid || "")}`;
@@ -603,9 +762,28 @@
     }
     if (t.matches("[data-ed-hook-on]")) {
       E.hook.on = !E.hook.on;
-      const panel = document.querySelector(".ed-panel"); panel.innerHTML = captionsPanel();
+      repaintCaptions("[data-ed-hook-on]");
       paintHook(); scheduleSave(); return;
     }
+    if (t.matches("[data-ed-preset]")) {
+      const p = capOpt().presets.find((x) => x.id === t.dataset.edPreset); if (!p) return;
+      E.cap.style = p.style; E.cap.animation = p.animation; repaintCaptions(`[data-ed-preset="${p.id}"]`); saveCapClip(); return;
+    }
+    if (t.matches("[data-ed-cap-all]")) return capApplyAll(t);
+    if (t.matches("[data-ed-kw]")) {
+      const k = t.dataset.edKw; E.cap.kwDirty = true; E.cap.keywords.has(k) ? E.cap.keywords.delete(k) : E.cap.keywords.add(k);
+      t.setAttribute("aria-pressed", String(E.cap.keywords.has(k)));
+      const n = $("edKwNote"); if (n) n.textContent = E.cap.keywords.size ? `${E.cap.keywords.size} highlighted · tap a word to toggle` : "Tap a word to highlight it";
+      saveCapClip(); return;
+    }
+    if (t.matches("[data-ed-kw-color]")) { E.cap.kwDirty = true; E.cap.keyword_color = t.dataset.edKwColor; repaintCaptions(`[data-ed-kw-color="${t.dataset.edKwColor}"]`); saveCapClip(); return; }
+    if (t.matches("[data-ed-fix-typos]")) return capFixTypos(t);
+    if (t.matches("[data-ed-cap-reset]")) { E.cap.text = normText(E.state.captions.transcript); repaintCaptions("#edCapText"); saveCapClip(); return; }
+    if (t.matches("[data-ed-capy-on]")) {
+      E.cap.caption_y = E.cap.caption_y == null ? E.state.captions.auto_caption_y : null;
+      repaintCaptions("[data-ed-capy-on]"); saveCapClip(); return;
+    }
+    if (t.matches("[data-ed-new-hook]")) return capNewHook(t);
     if (t.matches("[data-ed-hook-dur]")) {
       E.hook.duration = Number(t.dataset.edHookDur);
       document.querySelectorAll("[data-ed-hook-dur]").forEach((b) => b.setAttribute("aria-pressed", String(b === t)));
@@ -702,6 +880,14 @@
       E.zoom.intensity = Number(e.target.value); const o = $("edZoomOut"); if (o) o.textContent = `${E.zoom.intensity}%`;
       zoomChanged(); return;
     }
+    if (E.state && E.cap && e.target.matches) {
+      const k = e.target.matches("[data-ed-cap]") ? e.target.dataset.edCap : null;
+      if (e.target.matches("[data-ed-cap-text]")) { E.cap.text = e.target.value; saveCapClip(); return; }
+      if (e.target.matches("[data-ed-capy]")) { E.cap.caption_y = Number(e.target.value); $("edCapY").textContent = `${E.cap.caption_y} %`; saveCapClip(); return; }
+      if (k === "size") { E.cap.size = Number(e.target.value); $("edCapSize").textContent = E.cap.size; saveCapJob(); return; }
+      if (k === "style" || k === "animation") { E.cap[k] = e.target.value; repaintCaptions(`[data-ed-cap="${k}"]`); saveCapClip(); return; }
+      if (k === "font") { E.cap.font = e.target.value; saveCapJob(); return; }
+    }
     if (e.target.id !== "edHookText" || !E.state) return;
     E.hook.text = e.target.value;
     const v = $("edVideo"); if (v && v.currentTime > Number(E.hook.duration)) v.currentTime = 0;
@@ -721,6 +907,9 @@
     b.textContent = "STAGING · test data, not production";
     document.body.appendChild(b); document.body.classList.add("is-staging");
   }).catch(() => {});
+  document.addEventListener("toggle", (e) => {                 // keep "Style, font…" open across repaints
+    if (E.cap && e.target.matches && e.target.matches("[data-ed-style-more]")) E.cap.styleOpen = e.target.open;
+  }, true);
   window.addEventListener("hashchange", route);
   window.addEventListener("resize", () => { if (E.cid) moveSeg(); }, { passive: true });
   window.addEventListener("load", () => setTimeout(route, 0));
