@@ -33,8 +33,8 @@ class Stage(unittest.TestCase):
 
     def test_appends_before_watermark_and_is_one_shot(self):
         filters = ["[0:v]...[stacked];"]
-        rs.begin_render(self.CAND, 35)
-        last = rs.zoom_stage(filters, "stacked", 1080, 1920, log=lambda m: None)
+        rs.begin_render(self.CAND, 35, "/d/final/c.mp4")
+        last = rs.zoom_stage(filters, "stacked", 1080, 1920, output_path="/d/final/c.mp4", log=lambda m: None)
         self.assertEqual(last, "zoomed")
         self.assertTrue(filters[-1].startswith("[stacked]scale=w='trunc(iw*("))
         self.assertIn("crop=1080:1920", filters[-1])
@@ -48,8 +48,24 @@ class Stage(unittest.TestCase):
     def test_off_or_no_markers_or_no_context(self):
         for spec in ({"zoom": {"on": False, "markers": [2.0]}}, {"zoom": {"on": True, "markers": []}}, {},
                      {"zoom": {"on": True, "intensity": 0, "markers": [2.0]}}):
-            rs.begin_render({"id": "c", "edit_spec": spec}, 35)
-            self.assertEqual(rs.zoom_stage([], "stacked", 540, 960, log=lambda m: None), "stacked", spec)
+            rs.begin_render({"id": "c", "edit_spec": spec}, 35, "/p.mp4")
+            self.assertEqual(rs.zoom_stage([], "stacked", 540, 960, output_path="/p.mp4", log=lambda m: None), "stacked", spec)
+        self.assertEqual(rs.zoom_stage([], "stacked", 540, 960, log=lambda m: None), "stacked")
+
+
+class StaleContext(unittest.TestCase):
+    def test_failed_render_leaves_nothing_for_another_output(self):
+        """QA 8cf6088 Low: begin_render, then render_vertical fails before zoom_stage (ensure_disk_space);
+        the next render (clean plate, other path) must not zoom with this clip's markers."""
+        rs.begin_render(Stage.CAND, 35, "/d/previews/c.mp4")
+        f = []
+        self.assertEqual(rs.zoom_stage(f, "stacked", 1080, 1920, output_path="/d/tmp/c.clean.tmp.mp4", log=lambda m: None), "stacked")
+        self.assertEqual(f, [])
+        # and it is consumed: the original output no longer matches either
+        self.assertEqual(rs.zoom_stage([], "stacked", 540, 960, output_path="/d/previews/c.mp4", log=lambda m: None), "stacked")
+
+    def test_caller_without_path_never_zooms(self):
+        rs.begin_render(Stage.CAND, 35, "/x.mp4")
         self.assertEqual(rs.zoom_stage([], "stacked", 540, 960, log=lambda m: None), "stacked")
 
 

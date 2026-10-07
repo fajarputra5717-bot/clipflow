@@ -299,14 +299,17 @@ def apply_cuts(path, candidate: dict, clip_duration: float, *, preset, crf, run,
 _render_ctx: dict = {}
 
 
-def begin_render(candidate: dict, clip_duration: float) -> None:
-    """Hook right before render_vertical() in preview + final: what zoom_stage() may use. One-shot
-    (consumed by the next zoom_stage), so other render_vertical callers never pick up a stale clip."""
+def begin_render(candidate: dict, clip_duration: float, output_path=None) -> None:
+    """Hook right before render_vertical() in preview + final: what zoom_stage() may use. Bound to the
+    OUTPUT FILE of that render and one-shot: if render_vertical fails before zoom_stage runs (e.g.
+    ensure_disk_space), the leftover context can never apply to another render (QA 8cf6088 Low: a clean
+    plate writes a different path)."""
     _render_ctx.clear()
-    _render_ctx.update(candidate=candidate, duration=float(clip_duration))
+    _render_ctx.update(candidate=candidate, duration=float(clip_duration),
+                       output=str(output_path) if output_path is not None else None)
 
 
-def zoom_stage(filters: list, last: str, width: int, height: int, log=print) -> str:
+def zoom_stage(filters: list, last: str, width: int, height: int, output_path=None, log=print) -> str:
     """Hook inside render_vertical() right after the layout: append the punch-in zoom (retention.py,
     smooth per-frame scale + fixed crop) to the filter graph BEFORE the watermark and captions, so text
     never zooms. Times are clip-relative source seconds (render_vertical input-seeks to the clip start),
@@ -315,8 +318,8 @@ def zoom_stage(filters: list, last: str, width: int, height: int, log=print) -> 
     ctx = dict(_render_ctx)
     _render_ctx.clear()
     cand = ctx.get("candidate")
-    if not cand:
-        return last
+    if not cand or ctx.get("output") is None or output_path is None or ctx["output"] != str(output_path):
+        return last                                   # not the render begin_render() announced
     z = edit_specs.zoom_of(cand.get("edit_spec"))
     if not z or not z.get("on", True) or not z.get("markers"):
         return last
