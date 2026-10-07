@@ -381,6 +381,9 @@ come only from Lane B's `shared/payouts.py` (P3), never hand-rolled.
 Schedule (P2.5, 145): `POSTING_TIMES` user setting = `{platform: ["HH:MM"]}` in WIB, validated/normalised only by
 `shared/schedule.py` (`normalize_posting_times`; `next_slots()` = next free slots in UTC, skipping taken minutes and
 campaign windows via `payouts.window_problems`). Times are stored TIMESTAMPTZ (UTC), shown in WIB (fixed +7).
+"Scheduled" = `clip_posts.status='planned'` + `scheduled_for` (no new status). Approve & schedule (146):
+`POST …/candidates/{cid}/schedule` = Approve gate + `_queue_final_render()` (the one approve path) + planned rows with
+`_eligibility_for()` at the planned time; re-plan via PATCH re-checks. Mark posted on a planned row PATCHes it.
 
 ## Frontend shell (R-11/R-12/R-13, lane B 067-073; badge v2.1117)
 

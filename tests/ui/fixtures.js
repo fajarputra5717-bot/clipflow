@@ -145,6 +145,13 @@ async function mockApi(page, api) {
     }
     { const m = path.match(/^\/api\/auth\/tokens\/([^/]+)$/);
       if (m && method === "DELETE") { api.tokens = (api.tokens || []).filter((t) => t.id !== m[1]); return json({ ok: true }); } }
+    { const m = path.match(/^\/api\/jobs\/([^/]+)\/candidates\/([^/]+)\/(schedule-plan|schedule)$/);   // P2.5 S2 mocks
+      if (m && m[3] === "schedule-plan" && method === "GET") return json(api.schedulePlan);
+      if (m && m[3] === "schedule" && method === "POST") {
+        if (body.dry_run) return json({ posts: body.posts.map((x) => ({ platform: x.platform, eligible: !(api.planWarn || {})[x.platform],
+          ineligible_reason: (api.planWarn || {})[x.platform] || null })) });
+        return json({ approved: !api.schedulePlan.approved, posts: body.posts.map((x, i) => ({ id: "plan-" + i, status: "planned", ...x })) });
+      } }
     if (path === "/api/settings" && method === "PUT" && body?.values && "POSTING_TIMES" in body.values) {   // P2.5 S1 mock
       const v = body.values.POSTING_TIMES;
       if (v.includes("99:")) return json({ detail: "TikTok: '99:00' is not a time (HH:MM, 24 h)" }, 400);

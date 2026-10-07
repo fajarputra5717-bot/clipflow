@@ -1852,6 +1852,179 @@ def _card_summary(posts_: list) -> dict:
             "expected_fmt": payouts.format_idr(sum(amounts)) if amounts else None}
 
 
+# ---------- Approve & schedule (P2.5 S2, 146) ----------
+# "Scheduled" = a planned clip_posts row with scheduled_for set (no new status). The plan offers, per platform of
+# the clip, its live post and every active account with the next free suggested slots (shared/schedule.py: the
+# user's POSTING_TIMES minus minutes already planned/posted on that account, inside the campaign window). Saving
+# runs the Approve gate (409), queues the final render if it isn't queued/done, and upserts one planned post per
+# platform with the pre-post checks evaluated AT THE PLANNED TIME (eligible / ineligible_reason, as Mark posted).
+APPROVED_STATUSES = ("render_queued", "rendering", "completed")
+
+
+def _plan_clip(cur, user_id: str, job_id: str, candidate_id: str):
+    cur.execute(
+        """
+        SELECT c.status, j.campaign, j.platform FROM clip_candidates c JOIN jobs j ON j.id = c.job_id
+        WHERE c.id = %s AND c.job_id = %s AND j.user_id = %s
+        """,
+        (candidate_id, job_id, user_id),
+    )
+    row = cur.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Clip not found")
+    rules = campaigns.get(row[1]) if row[1] else None
+    return row[0], row[1], rules, post_rules.clip_platforms(rules, row[2])
+
+
+def _live_posts(cur, user_id: str, candidate_id: str) -> dict:
+    """Latest post per platform for one clip; a live one wins over a dropped one (as the Publish queue)."""
+    cur.execute(
+        f"""
+        SELECT DISTINCT ON (p.platform) {POST_COLUMNS} FROM {POST_FROM}
+        WHERE p.user_id = %s AND p.candidate_id = %s
+        ORDER BY p.platform, (p.status = 'dropped'), p.created_at DESC
+        """,
+        (user_id, candidate_id),
+    )
+    return {d["platform"]: d for d in (_post_row(r) for r in cur.fetchall())}
+
+
+def _taken_slots(cur, user_id: str, account_id: str, after: datetime, skip_post: Optional[str] = None) -> list:
+    cur.execute(
+        """
+        SELECT COALESCE(scheduled_for, posted_at) FROM clip_posts
+        WHERE user_id = %s AND account_id = %s AND status <> 'dropped' AND id IS DISTINCT FROM %s
+          AND COALESCE(scheduled_for, posted_at) >= %s
+        """,
+        (user_id, account_id, skip_post, after - timedelta(minutes=1)),
+    )
+    return [r[0] for r in cur.fetchall()]
+
+
+def _posting_times(user_id: str) -> dict:
+    return schedule.parse_posting_times(runtime_setting("POSTING_TIMES", user_id=user_id),
+                                        DEFAULT_SETTINGS["POSTING_TIMES"])
+
+
+@app.get("/api/jobs/{job_id}/candidates/{candidate_id}/schedule-plan")
+def schedule_plan(job_id: str, candidate_id: str, request: Request):
+    user = current_user(request)
+    times = _posting_times(user["id"])
+    now = datetime.now(timezone.utc)
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            status, camp, rules, plats = _plan_clip(cur, user["id"], job_id, candidate_id)
+            live = _live_posts(cur, user["id"], candidate_id)
+            cur.execute(
+                "SELECT id, platform, handle FROM platform_accounts WHERE user_id = %s AND active ORDER BY lower(handle)",
+                (user["id"],),
+            )
+            accounts = cur.fetchall()
+            out = []
+            for plat in plats:
+                post = live.get(plat)
+                post = post if post and post["status"] != "dropped" else None
+                accts = []
+                for aid, aplat, handle in accounts:
+                    if aplat != plat:
+                        continue
+                    taken = _taken_slots(cur, user["id"], aid, now, post["id"] if post else None)
+                    accts.append({"id": aid, "handle": handle, "suggestions": [
+                        t.isoformat() for t in schedule.next_slots(times, plat, now, taken, rules=rules)]})
+                out.append({"platform": plat, "platform_name": rule_checks.PLATFORM_LIMITS[plat][2],
+                            "times": times.get(plat, []), "post": post, "accounts": accts})
+    blocking = candidate_rule_failures(job_id, candidate_id)
+    return {"approved": status in APPROVED_STATUSES, "status": status,
+            "campaign_name": campaigns.display_name(rules) if rules else None,
+            "blocking": [ch["label"] for ch in blocking], "platforms": out}
+
+
+class PlanItem(BaseModel):
+    platform: str = Field(max_length=20)
+    account_id: str = Field(max_length=64)
+    scheduled_for: str = Field(max_length=40)
+
+
+class SchedulePlan(BaseModel):
+    posts: list[PlanItem] = Field(default_factory=list, max_length=6)
+    approve: bool = True
+    dry_run: bool = False   # only evaluate the checks at the planned times (the sheet's live amber notes)
+
+
+@app.post("/api/jobs/{job_id}/candidates/{candidate_id}/schedule")
+def schedule_clip(job_id: str, candidate_id: str, payload: SchedulePlan, request: Request):
+    user = current_user(request)
+    now = datetime.now(timezone.utc)
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            status, camp, rules, plats = _plan_clip(cur, user["id"], job_id, candidate_id)
+            failing = candidate_rule_failures(job_id, candidate_id)
+            if failing:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Fix {len(failing)} rule{'s' if len(failing) != 1 else ''} to approve: "
+                           + "; ".join(ch["label"] for ch in failing),
+                )
+            if not payload.posts and not payload.dry_run:
+                raise HTTPException(status_code=400, detail="Pick at least one platform to schedule")
+            if len({i.platform for i in payload.posts}) != len(payload.posts):
+                raise HTTPException(status_code=400, detail="One planned post per platform")
+            live = _live_posts(cur, user["id"], candidate_id)
+            checked = []
+            for item in payload.posts:
+                plat = item.platform.strip().lower()
+                if plat not in plats:
+                    raise HTTPException(status_code=400, detail=f"{plat} isn't a platform of this clip")
+                when = _parse_ts(item.scheduled_for, "scheduled_for")
+                if not when or when < now - timedelta(minutes=1):
+                    raise HTTPException(status_code=400, detail="Pick a time in the future")
+                _check_account(cur, user["id"], item.account_id, plat)
+                post = live.get(plat)
+                if post and post["status"] in ("posted", "claimed", "paid"):
+                    raise HTTPException(status_code=409, detail=f"{rule_checks.PLATFORM_LIMITS[plat][2]} is already posted")
+                eligible, reason = _eligibility_for(cur, user["id"], candidate_id, plat, item.account_id, when)
+                checked.append((plat, item.account_id, when, eligible, reason, post))
+            if payload.dry_run:
+                return {"posts": [{"platform": c[0], "eligible": c[3], "ineligible_reason": c[4]} for c in checked]}
+            approved = False
+            if payload.approve and status not in APPROVED_STATUSES:
+                _queue_final_render(cur, job_id, candidate_id)
+                approved = True
+            ids = []
+            try:
+                for plat, account_id, when, eligible, reason, post in checked:
+                    if post and post["status"] == "planned":
+                        cur.execute(
+                            """
+                            UPDATE clip_posts SET account_id = %s, scheduled_for = %s, eligible = %s,
+                                   ineligible_reason = %s, updated_at = NOW()
+                            WHERE id = %s AND user_id = %s
+                            """,
+                            (account_id, when, eligible, reason, post["id"], user["id"]),
+                        )
+                        ids.append(post["id"])
+                        continue
+                    # New plan (a dropped post stays as history): same validation as POST /api/posts.
+                    pid = str(uuid.uuid4())
+                    cur.execute(
+                        """
+                        INSERT INTO clip_posts (id, user_id, candidate_id, job_id, campaign, title, platform, account_id,
+                                                status, scheduled_for, eligible, ineligible_reason)
+                        SELECT %s, %s, c.id, c.job_id, j.campaign,
+                               COALESCE(NULLIF(c.manual_title, ''), NULLIF(c.title, ''), c.ai_title),
+                               %s, %s, 'planned', %s, %s, %s
+                        FROM clip_candidates c JOIN jobs j ON j.id = c.job_id WHERE c.id = %s AND j.user_id = %s
+                        """,
+                        (pid, user["id"], plat, account_id, when, eligible, reason, candidate_id, user["id"]),
+                    )
+                    ids.append(pid)
+            except psycopg.errors.UniqueViolation:
+                raise HTTPException(status_code=409, detail="This clip already has a post on that account")
+            posts = [_fetch_post(cur, i, user["id"]) for i in ids]
+        conn.commit()
+    return {"approved": approved, "posts": posts}
+
+
 # ---------- pre-post checks (P2 part 4, 131) ----------
 # block = the clip-level rule failures that already block Approve (rule_checks: length, hashtags,
 # watermark) → Mark posted refused (409). warn = campaign window (payouts.window_problems), the
@@ -2093,6 +2266,12 @@ def update_post(post_id: str, payload: PostUpdate, request: Request):
             problem = _complete_problem(new)
             if problem:
                 raise HTTPException(status_code=400, detail=problem)
+            if new["status"] == "planned" and current["candidate_id"] and ("scheduled_for" in sent or "account_id" in sent) \
+                    and (sets.get("scheduled_for") or current.get("scheduled_for")):
+                # 146: re-plan → the pre-post checks again, at the planned time.
+                when = sets.get("scheduled_for") or _parse_ts(current["scheduled_for"], "scheduled_for")
+                sets["eligible"], sets["ineligible_reason"] = _eligibility_for(
+                    cur, user["id"], current["candidate_id"], current["platform"], new["account_id"], when)
             if current["status"] == "planned" and new["status"] == "posted" and current["candidate_id"]:
                 when = new["posted_at"] if isinstance(new["posted_at"], datetime) else _parse_ts(new["posted_at"], "posted_at")
                 sets["eligible"], sets["ineligible_reason"] = _eligibility_for(
@@ -3297,6 +3476,28 @@ def fix_candidate_rule(job_id: str, candidate_id: str, req: RuleFix):
 # APPROVE CANDIDATE (trigger final, full-resolution render)
 # ============================================================
 
+def _queue_final_render(cur, job_id: str, candidate_id: str) -> None:
+    """Approve = queue the final render + a version entry, in the caller's transaction (approve, 146 schedule)."""
+    cur.execute(
+        """
+        UPDATE clip_candidates
+        SET status = 'render_queued',
+            progress = 0,
+            message = 'Queued: rendering final approved clip',
+            error_stage = NULL,
+            error_message = NULL,
+            updated_at = NOW()
+        WHERE id = %s
+          AND job_id = %s
+        RETURNING id
+        """,
+        (candidate_id, job_id),
+    )
+    if not cur.fetchone():
+        raise HTTPException(status_code=404, detail="Candidate not found")
+    record_candidate_version(cur, candidate_id, "Final render requested")
+
+
 @app.post(
     "/api/jobs/{job_id}/candidates/{candidate_id}/approve"
 )
@@ -3320,37 +3521,7 @@ def approve_candidate(
 
             with conn.cursor() as cur:
 
-                cur.execute(
-                    """
-                    UPDATE clip_candidates
-                    SET status = 'render_queued',
-                        progress = 0,
-                        message = 'Queued: rendering final approved clip',
-                        error_stage = NULL,
-                        error_message = NULL,
-                        updated_at = NOW()
-                    WHERE id = %s
-                      AND job_id = %s
-                    RETURNING id
-                    """,
-                    (
-                        candidate_id,
-                        job_id,
-                    ),
-                )
-
-                row = cur.fetchone()
-
-                if not row:
-
-                    raise HTTPException(
-                        status_code=404,
-                        detail="Candidate not found",
-                    )
-
-                record_candidate_version(
-                    cur, candidate_id, "Final render requested"
-                )
+                _queue_final_render(cur, job_id, candidate_id)
 
             conn.commit()
 

@@ -117,3 +117,4 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 143 · 2026-10-07 · Deploy order: /health 503 until the schema is migrated; backend healthcheck; worker + notifier depends_on service_healthy · main.py, docker-compose.yml
 144 · 2026-10-07 · P2 fix: Publish = one card per clip, per-platform status chips + panel (bottom sheet on mobile), campaign / left-to-post filters; card send = video + every caption · index.html, main.py, worker.py, shared
 145 · 2026-10-07 · P2.5 S1: POSTING_TIMES per-user setting (WIB, owner defaults), shared/schedule.py (normalize, next_slots with campaign windows), Settings → Posting times editor · settings, main.py, index.html
+146 · 2026-10-07 · P2.5 S2: Approve & schedule sheet (per platform: account, WIB suggested slots, live eligibility), GET schedule-plan / POST schedule (approve gate + planned clip_posts), re-plan re-checks · main.py, index.html

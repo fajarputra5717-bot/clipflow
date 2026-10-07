@@ -1295,6 +1295,25 @@ select::-ms-expand{display:none}
 .acct-meta small{display:block;color:var(--muted);font-size:12px}
 .acct-empty{padding:12px 14px;color:var(--muted);font-size:13px}
 @media (max-width:760px){.account-create{grid-template-columns:1fr}}
+/* Approve & schedule sheet (P2.5 S2, 146): one row per platform; times in WIB */
+.plan-intro{margin:0 0 var(--sp-2);font-size:13px;color:var(--muted)}
+.plan-row{border-top:1px solid var(--hairline);padding:12px 0}
+.plan-row:first-of-type{border-top:0}
+.plan-head{display:flex;align-items:center;gap:8px;font-weight:600;min-height:var(--hit)}
+.plan-head input[type=checkbox]{width:20px;height:20px;margin:0}
+.plan-head svg{width:16px;height:16px}
+.plan-head .plan-state{margin-left:auto;font-size:12px;font-weight:500;color:var(--muted)}
+.plan-fields{display:grid;grid-template-columns:1fr 1fr;gap:var(--sp-1);margin-top:6px}
+.plan-fields .field{margin:0}
+.plan-fields label{font-size:12px}
+.plan-slots{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.plan-slots button,[data-theme="dark"] .plan-slots button{min-height:36px;padding:0 12px;border-radius:999px;font-size:13px;background:var(--fill);color:var(--text);border:0;box-shadow:none;font-variant-numeric:tabular-nums}
+.plan-slots button[aria-pressed="true"]{background:var(--accent);color:#fff}
+.plan-note{margin:8px 0 0;font-size:12px}
+.plan-note.is-warn{color:var(--badge-warn-fg)}.plan-note.is-block{color:var(--badge-bad-fg)}
+.plan-row.is-off .plan-fields,.plan-row.is-off .plan-slots,.plan-row.is-off .plan-note{display:none}
+.plan-block{margin:0 0 var(--sp-2);padding:10px 12px;border-radius:14px;background:var(--badge-bad-bg);color:var(--badge-bad-fg);font-size:13px}
+@media (max-width:600px){.plan-fields{grid-template-columns:1fr}}
 /* Posting times (P2.5 S1): per platform, WIB; chips + add */
 .ptime-row{display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:10px 12px 10px 14px;border-top:1px solid var(--hairline)}
 .ptime-row:first-child{border-top:0}
@@ -1302,7 +1321,8 @@ select::-ms-expand{display:none}
 .ptime-name svg{width:16px;height:16px}
 .ptime-chips{flex:1;display:flex;flex-wrap:wrap;gap:6px;min-width:140px}
 .ptime-chip{display:inline-flex;align-items:center;gap:2px;padding:0 4px 0 12px;min-height:32px;border-radius:999px;background:var(--fill);font-size:13px;font-weight:600;font-variant-numeric:tabular-nums}
-.ptime-chip button,[data-theme="dark"] .ptime-chip button{min-height:28px;min-width:28px;padding:0;border:0;border-radius:999px;background:transparent;color:var(--muted);box-shadow:none}
+.ptime-chip button,[data-theme="dark"] .ptime-chip button{position:relative;min-height:28px;min-width:28px;padding:0;border:0;border-radius:999px;background:transparent;color:var(--muted);box-shadow:none}
+.ptime-chip button::after{content:"";position:absolute;inset:-8px}  /* 44 px hit area (--hit) around the 28 px glyph */
 .ptime-none{font-size:13px;color:var(--muted)}
 .ptime-add{display:flex;gap:6px;align-items:center}
 .ptime-add input{width:120px;min-height:36px;padding:4px 10px}
@@ -1617,6 +1637,18 @@ select::-ms-expand{display:none}
 <div id="publishSheetHost"></div><!-- 144: the ≤ 600 px Publish panel (bottom sheet) lives here, outside the transformed .view-section; empty when closed -->
 <nav class="tabbar" id="tabbar" aria-label="Main"><button class="tabbar-item" type="button" data-nav="current"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v10.5M8 10.5l4 4 4-4"/><path d="M4.5 15v2.5A2.5 2.5 0 0 0 7 20h10a2.5 2.5 0 0 0 2.5-2.5V15"/></svg><span>Analyze</span></button><button class="tabbar-item" type="button" data-nav="queue"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg><span>Review</span></button><button class="tabbar-item" type="button" data-nav="publish"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 3 10 14"/><path d="m21 3-7 18-4-7-7-4z"/></svg><span>Publish</span></button><button class="tabbar-item" type="button" data-nav="watermarks" aria-haspopup="dialog"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="3"/><path d="m3.5 15.5 4.5-4.5 4 4"/><path d="M14.5 16h3"/></svg><span>Watermarks</span></button><button class="tabbar-item" type="button" data-nav="settings" aria-haspopup="dialog"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg><span>Settings</span></button></nav>
 <!-- Sheets (068): Settings and Watermarks open as centred dialogs from the sidebar. Closed = visibility:hidden + pointer-events:none. -->
+<div class="sheet-layer" id="scheduleSheet" aria-hidden="true">
+  <div class="sheet-backdrop" data-sheet-close></div>
+  <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="scheduleSheetTitle">
+    <header class="sheet-head"><h2 id="scheduleSheetTitle">Approve &amp; schedule</h2><button class="sheet-close" type="button" data-sheet-close aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></header>
+    <div class="sheet-body" id="scheduleBody"></div>
+    <footer class="sheet-foot">
+      <span class="sheet-foot-status" id="scheduleStatus" aria-live="polite"></span>
+      <button class="secondary" type="button" data-sheet-close>Cancel</button>
+      <button class="primary" id="scheduleSave" type="button" disabled>Approve &amp; schedule</button>
+    </footer>
+  </section>
+</div>
 <div class="sheet-layer" id="accountSheet" aria-hidden="true">
   <div class="sheet-backdrop" data-sheet-close></div>
   <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="accountSheetTitle">
@@ -2601,7 +2633,7 @@ function renderCandidate(c,jid,platform,job={}){
 
         <div class="actions edit-actions">
           <button class="${busy?"is-busy":""}" data-apply="${esc(jid)}" data-cid="${esc(c.id)}" type="button" ${busy?'disabled aria-busy="true"':""}>${busy?"Updating…":"Apply changes"}</button>
-          ${(()=>{const bad=ruleFailures(c);return `<button class="secondary" data-approve="${esc(jid)}" data-cid="${esc(c.id)}" type="button" title="Approve renders the final video" ${busy||bad.length?"disabled":""}>${bad.length?`Fix ${bad.length} rule${bad.length===1?"":"s"} to approve`:"Approve"}</button>`})()}
+          ${(()=>{const bad=ruleFailures(c);return `<button class="secondary" data-approve="${esc(jid)}" data-cid="${esc(c.id)}" type="button" title="Approve renders the final video" ${busy||bad.length?"disabled":""}>${bad.length?`Fix ${bad.length} rule${bad.length===1?"":"s"} to approve`:"Approve"}</button>${bad.length?"":`<button class="secondary" data-approve-schedule="${esc(jid)}" data-cid="${esc(c.id)}" type="button" ${busy?"disabled":""}>${["render_queued","rendering","completed"].includes(c.status)?"Schedule":"Approve &amp; schedule"}</button>`}`})()}
         </div>
 
         ${final?`<div class="final-box"><strong>Final render ready</strong><div class="muted">Download the finished clip or send it to YouTube Shorts when OAuth is configured.</div><div class="actions"><a href="${esc(final)}" download="clipflow_${esc(c.id)}.mp4"><button type="button">Download</button></a><button class="secondary" data-upload="${esc(jid)}" data-cid="${esc(c.id)}" type="button">Upload to YouTube</button></div></div>`:""}
@@ -3224,6 +3256,93 @@ async function approve(jid,cid){
   try{await api(`/api/jobs/${jid}/candidates/${cid}/approve`,{method:"POST"});watchCandidate(jid,cid)}
   catch(e){setBusy(b,false);clearCandidateActiveTask(cid);alert("Approve failed: "+e.message)}
 }
+// Approve & schedule (P2.5 S2, 146): the plan (GET …/schedule-plan) gives per platform the live post and each
+// active account's next free suggested slots; times are edited and shown in WIB (fixed UTC+7, no DST) and sent
+// as ISO with +07:00. Changes re-run the pre-post checks at the planned time (dry_run); Save = approve gate +
+// final render (if not yet) + planned clip_posts. "Scheduled" is planned + scheduled_for; nothing auto-posts.
+const WIB_MS=7*3600e3;
+function toWibInput(iso){return iso?new Date(new Date(iso).getTime()+WIB_MS).toISOString().slice(0,16):""}
+function fromWibInput(v){return v?v+":00+07:00":""}
+function fmtWib(iso,withDate=true){if(!iso)return "";const o={timeZone:"Asia/Jakarta",hour:"2-digit",minute:"2-digit",hour12:false};
+  if(withDate)Object.assign(o,{weekday:"short",day:"numeric",month:"short"});return new Date(iso).toLocaleString("en-GB",o).replace(",","")+" WIB"}
+let planState=null; // {jid,cid,plan,rows:{platform:{on,account,when,touched}}}
+async function openSchedule(jid,cid,opener){
+  setBusy(opener,true);
+  try{
+    const plan=await api(`/api/jobs/${encodeURIComponent(jid)}/candidates/${encodeURIComponent(cid)}/schedule-plan`);
+    const rows={};
+    for(const p of plan.platforms){const post=p.post,a=post&&post.status==="planned"?p.accounts.find(x=>x.id===post.account_id)||p.accounts[0]:p.accounts[0];
+      rows[p.platform]={on:!!a&&(!post||post.status==="planned"),account:a?.id||"",when:post?.status==="planned"&&post.scheduled_for?post.scheduled_for:(a?.suggestions[0]||""),touched:!!(post&&post.status==="planned"),note:null}}
+    planState={jid,cid,plan,rows};
+    $("scheduleSheetTitle").textContent=plan.approved?"Schedule":"Approve & schedule";
+    $("scheduleSave").textContent=plan.approved?"Save schedule":"Approve & schedule";
+    renderSchedule();openSheet("scheduleSheet",opener);checkSchedule();
+  }catch(err){alert(err.message)}finally{setBusy(opener,false)}
+}
+function planRowHtml(p){
+  const r=planState.rows[p.platform],post=p.post,posted=post&&post.status!=="planned",acct=p.accounts.find(a=>a.id===r.account);
+  const state=posted?`Posted${post.account_handle?" @"+esc(post.account_handle):""}`:post?`Planned ${esc(fmtWib(post.scheduled_for))}`:"";
+  if(!p.accounts.length&&!posted)return `<div class="plan-row is-off" data-plan-row="${esc(p.platform)}"><div class="plan-head"><input type="checkbox" disabled aria-label="${esc(p.platform_name)}">${PLATFORM_ICON[p.platform]||""}${esc(p.platform_name)}</div>
+    <p class="qnote" style="margin-left:0">No active ${esc(p.platform_name)} account yet. <button class="plain" type="button" data-nav="settings">Add one in Settings → Posting accounts</button></p></div>`;
+  return `<div class="plan-row${r.on?"":" is-off"}" data-plan-row="${esc(p.platform)}">
+    <label class="plan-head"><input type="checkbox" data-plan-on="${esc(p.platform)}" ${r.on?"checked":""} ${posted?"disabled":""}>${PLATFORM_ICON[p.platform]||""}${esc(p.platform_name)}<span class="plan-state">${state}</span></label>
+    ${posted?"":`<div class="plan-fields">
+      <div class="field"><label for="plan-acct-${esc(p.platform)}">Account</label><select id="plan-acct-${esc(p.platform)}" data-plan-account="${esc(p.platform)}">${p.accounts.map(a=>`<option value="${esc(a.id)}" ${a.id===r.account?"selected":""}>@${esc(a.handle)}</option>`).join("")}</select></div>
+      <div class="field"><label for="plan-when-${esc(p.platform)}">Post at (WIB)</label><input id="plan-when-${esc(p.platform)}" type="datetime-local" step="300" data-plan-when="${esc(p.platform)}" value="${esc(toWibInput(r.when))}"></div>
+    </div>
+    <div class="plan-slots" role="group" aria-label="Suggested times">${(acct?.suggestions||[]).map(t=>`<button type="button" data-plan-slot="${esc(p.platform)}" data-when="${esc(t)}" aria-pressed="${toWibInput(t)===toWibInput(r.when)}">${esc(fmtWib(t))}</button>`).join("")||`<span class="ptime-none">No suggested times left in the next 2 weeks${planState.plan.campaign_name?" inside the campaign window":""}. Pick one, or set times in Settings → Posting times.</span>`}</div>
+    ${r.note?`<p class="plan-note is-${esc(r.note.level)}">${esc(r.note.text)}</p>`:""}`}
+  </div>`;
+}
+function renderSchedule(){
+  const {plan}=planState,bad=plan.blocking||[];
+  $("scheduleBody").innerHTML=`${bad.length?`<p class="plan-block">Fix before approving: ${esc(bad.join("; "))}</p>`:""}
+    <p class="plan-intro">${plan.campaign_name?esc(plan.campaign_name)+" · ":""}One planned post per platform. ClipFlow reminds you on Telegram when it's time; you post it yourself.</p>
+    ${plan.platforms.map(planRowHtml).join("")}`;
+  syncScheduleSave();
+}
+function planItems(){return Object.entries(planState.rows).filter(([plat,r])=>r.on&&r.account&&r.when&&!(planState.plan.platforms.find(p=>p.platform===plat)?.post?.status||"planned").match(/posted|claimed|paid/)).map(([platform,r])=>({platform,account_id:r.account,scheduled_for:new Date(r.when).toISOString()}))}
+function syncScheduleSave(){$("scheduleSave").disabled=!!(planState.plan.blocking||[]).length||!planItems().length}
+let planCheckTimer=0,planCheckSeq=0;
+function checkSchedule(){clearTimeout(planCheckTimer);planCheckTimer=setTimeout(async()=>{
+  const {jid,cid}=planState,items=planItems(),seq=++planCheckSeq;if(!items.length||(planState.plan.blocking||[]).length)return;
+  try{const d=await api(`/api/jobs/${encodeURIComponent(jid)}/candidates/${encodeURIComponent(cid)}/schedule`,{method:"POST",body:JSON.stringify({posts:items,dry_run:true})});
+    if(seq!==planCheckSeq||!planState)return;
+    for(const r of Object.values(planState.rows))r.note=null;
+    for(const x of d.posts||[])if(x.ineligible_reason)planState.rows[x.platform].note={level:"warn",text:"Will be recorded as not eligible: "+x.ineligible_reason};
+    $("scheduleStatus").textContent="";$("scheduleStatus").classList.remove("is-error");
+  }catch(err){if(seq===planCheckSeq){$("scheduleStatus").textContent=err.message;$("scheduleStatus").classList.add("is-error")}}
+  if(planState)Object.keys(planState.rows).forEach(plat=>{const row=document.querySelector(`[data-plan-row="${css(plat)}"]`);if(!row)return;row.querySelector(".plan-note")?.remove();const n=planState.rows[plat].note;
+    if(n){const pEl=document.createElement("p");pEl.className="plan-note is-"+n.level;pEl.textContent=n.text;row.appendChild(pEl)}});
+},motionMs(250)||0)}
+document.addEventListener("change",e=>{
+  if(!planState)return;
+  const on=e.target.closest?.("[data-plan-on]");if(on){planState.rows[on.dataset.planOn].on=on.checked;on.closest(".plan-row").classList.toggle("is-off",!on.checked);syncScheduleSave();return checkSchedule()}
+  const ac=e.target.closest?.("[data-plan-account]");
+  if(ac){const plat=ac.dataset.planAccount,r=planState.rows[plat];r.account=ac.value;
+    if(!r.touched){const a=planState.plan.platforms.find(p=>p.platform===plat).accounts.find(x=>x.id===ac.value);r.when=a?.suggestions[0]||r.when}
+    renderSchedule();return checkSchedule()}
+  const wh=e.target.closest?.("[data-plan-when]");
+  if(wh){const r=planState.rows[wh.dataset.planWhen];r.when=wh.value?new Date(fromWibInput(wh.value)).toISOString():"";r.touched=true;
+    wh.closest(".plan-row").querySelectorAll("[data-plan-slot]").forEach(b=>b.setAttribute("aria-pressed",String(toWibInput(b.dataset.when)===wh.value)));syncScheduleSave();checkSchedule()}
+});
+document.addEventListener("click",e=>{
+  const as=e.target.closest("[data-approve-schedule]");if(as)return openSchedule(as.dataset.approveSchedule,as.dataset.cid,as);
+  const sl=e.target.closest("[data-plan-slot]");
+  if(sl&&planState){const r=planState.rows[sl.dataset.planSlot];r.when=sl.dataset.when;r.touched=true;
+    const row=sl.closest(".plan-row");row.querySelector("[data-plan-when]").value=toWibInput(r.when);
+    row.querySelectorAll("[data-plan-slot]").forEach(b=>b.setAttribute("aria-pressed",String(b===sl)));syncScheduleSave();return checkSchedule()}
+  if(e.target.closest("#scheduleSheet [data-nav]"))closeSheet(false);
+  if(e.target.closest("#scheduleSave"))return saveSchedule();
+});
+async function saveSchedule(){
+  const b=$("scheduleSave"),{jid,cid}=planState,st=$("scheduleStatus");setBusy(b,true,"Saving…");st.textContent="";st.classList.remove("is-error");
+  try{const d=await api(`/api/jobs/${encodeURIComponent(jid)}/candidates/${encodeURIComponent(cid)}/schedule`,{method:"POST",body:JSON.stringify({posts:planItems(),approve:true})});
+    closeSheet();planState=null;
+    if(d.approved){setCandidateActiveTask(jid,cid,{actionLabel:"Rendering final",status:"render_queued",progress:0});watchCandidate(jid,cid)}
+    else if(currentTab==="publish")loadPublish();
+  }catch(err){st.textContent=err.message;st.classList.add("is-error")}finally{setBusy(b,false);if(planState)syncScheduleSave()}
+}
 async function rate(jid,cid,n){
   try{await api(`/api/jobs/${jid}/candidates/${cid}`,{method:"PATCH",body:JSON.stringify({rating:n})});await openQueueJob(jid)}catch(e){alert("Rating failed: "+e.message)}
 }
@@ -3743,7 +3862,7 @@ function chipState(r){
   const st=rowStatus(r),p=r.post,checks=r.checks||[];
   if(st==="ready"){if(checks.some(c=>c.level==="block"))return ["Blocked","is-block"];
     if(checks.some(c=>c.level==="warn"&&!c.account_id))return ["Not eligible","is-warn"];return ["Ready","is-ready"]}
-  const label=st==="posted"?"Posted"+(p.account_handle?" @"+p.account_handle:""):(POST_STATUS[st]||POST_STATUS.ready)[0];
+  const label=st==="posted"?"Posted"+(p.account_handle?" @"+p.account_handle:""):st==="planned"&&p.scheduled_for?"Planned "+fmtWib(p.scheduled_for).replace(" WIB",""):(POST_STATUS[st]||POST_STATUS.ready)[0];
   return [label,p.eligible===false?"is-warn":"is-"+st];
 }
 function chipHtml(r){
@@ -3752,25 +3871,25 @@ function chipHtml(r){
 }
 function publishPanelHtml(r){
   const st=rowStatus(r),[label,cls]=chipState(r),k=publishRowKey(r),open=publishOpen[k];
-  const accts=accountsCache.filter(a=>a.platform===r.platform&&a.active);
+  const accts=accountsCache.filter(a=>a.platform===r.platform&&a.active),acct0=(accts.find(a=>a.id===r.post?.account_id)||accts[0])?.id;
   const checks=r.checks||[],blocks=checks.filter(c=>c.level==="block");
   const rowWarns=checks.filter(c=>c.level==="warn"&&!c.account_id);
   const usage=r.account_usage||{},capLabel=a=>{const u=usage[a.id];return u&&u.cap!=null?` · ${u.used}/${u.cap} this month${u.used>=u.cap?" (cap reached)":""}`:""};
   const form=!open?"":accts.length?`<form class="qmark" data-mark-form="${esc(k)}" novalidate>
-      <div class="field"><label for="acct-${esc(k)}">Account</label><select id="acct-${esc(k)}" data-mark-account="${esc(k)}">${accts.map(a=>`<option value="${esc(a.id)}">@${esc(a.handle)}${esc(capLabel(a))}</option>`).join("")}</select></div>
+      <div class="field"><label for="acct-${esc(k)}">Account</label><select id="acct-${esc(k)}" data-mark-account="${esc(k)}">${accts.map(a=>`<option value="${esc(a.id)}" ${a.id===r.post?.account_id?"selected":""}>@${esc(a.handle)}${esc(capLabel(a))}</option>`).join("")}</select></div>
       <div class="field"><label for="url-${esc(k)}">Link to the post</label><input id="url-${esc(k)}" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://…"></div>
       <button class="primary" type="submit">Save</button><button class="secondary" type="button" data-mark-cancel="${esc(k)}">Cancel</button>
-      <p class="qmark-warn" data-mark-warn ${markWarnings(r,accts[0]?.id).length?"":"hidden"}>${esc(markWarnText(r,accts[0]?.id))}</p>
+      <p class="qmark-warn" data-mark-warn ${markWarnings(r,acct0).length?"":"hidden"}>${esc(markWarnText(r,acct0))}</p>
       <div class="account-msg" role="status" aria-live="polite"></div></form>`
     :`<p class="qnote">No active ${esc(r.platform_name)} account yet. <button class="plain" type="button" data-nav="settings">Add one in Settings → Posting accounts</button></p>`;
-  const where=st==="ready"?"":`<p class="ppanel-when">${esc(fmtPostedAt(r.post.posted_at)||"")}${r.post.account_handle?" · @"+esc(r.post.account_handle):""}${r.post.url?` · <a href="${esc(r.post.url)}" target="_blank" rel="noopener">Open post</a>`:""}</p>`;
+  const where=st==="ready"?"":`<p class="ppanel-when">${esc(st==="planned"?"Planned "+fmtWib(r.post.scheduled_for):fmtPostedAt(r.post.posted_at)||"")}${r.post.account_handle?" · @"+esc(r.post.account_handle):""}${r.post.url?` · <a href="${esc(r.post.url)}" target="_blank" rel="noopener">Open post</a>`:""}</p>`;
   return `<div class="ppanel-scrim" data-panel-close></div>
   <div class="ppanel" id="pp-${esc(r.candidate_id)}" data-publish-row="${esc(k)}" data-platform="${esc(r.platform)}" role="region" aria-label="${esc(r.platform_name)}" tabindex="-1">
     <div class="ppanel-head"><span class="pchip">${PLATFORM_ICON[r.platform]||""}${esc(r.platform_name)}</span><span class="pstat ${cls} is-static"><span class="pstat-st">${esc(label)}</span></span><span class="spacer"></span><button type="button" class="ppanel-close" data-panel-close aria-label="Close">✕</button></div>
     ${where}
     <div class="qactions">
       <button class="secondary" type="button" data-copy-caption="${esc(k)}">Copy caption</button>
-      ${st==="ready"?`<button class="secondary" type="button" data-mark-open="${esc(k)}" aria-expanded="${open?"true":"false"}" ${blocks.length?`disabled title="Fix the red checks first (same rules as Approve)"`:""}>Mark posted</button>`:""}
+      ${st==="ready"||st==="planned"?`<button class="secondary" type="button" data-mark-open="${esc(k)}" aria-expanded="${open?"true":"false"}" ${blocks.length?`disabled title="Fix the red checks first (same rules as Approve)"`:""}>Mark posted</button>`:""}
     </div>
     ${blocks.length||rowWarns.length||(r.post&&r.post.eligible===false&&st!=="ready")?`<ul class="qchecks">${blocks.map(c=>`<li class="qcheck is-block">${esc(c.message)}</li>`).join("")}${st==="ready"?rowWarns.map(c=>`<li class="qcheck is-warn">${esc(c.message)}</li>`).join("")+checks.filter(c=>c.level==="warn"&&c.account_id).map(c=>`<li class="qcheck is-warn">${esc(c.message)}</li>`).join(""):""}${r.post&&r.post.eligible===false&&st!=="ready"?`<li class="qcheck is-warn">Not eligible: ${esc(r.post.ineligible_reason||"")}</li>`:""}</ul>`:""}
     ${r.caption_trimmed?`<p class="qnote">Caption shortened to fit ${esc(r.platform_name)}; hashtags kept in order.</p>`:""}
@@ -3856,7 +3975,8 @@ document.addEventListener("submit",async e=>{
   const k=f.dataset.markForm,r=publishRow(k),msg=f.querySelector(".account-msg"),url=f.querySelector("input").value.trim(),account_id=f.querySelector("select").value;
   if(!/^https:\/\//i.test(url)){msg.textContent="Paste the https:// link of the post.";msg.classList.add("is-error");f.querySelector("input").focus();return}
   const btn=f.querySelector("button[type=submit]");setBusy(btn,true,"Saving…");
-  try{await api("/api/posts",{method:"POST",body:JSON.stringify({candidate_id:r.candidate_id,platform:r.platform,account_id,status:"posted",url})});delete publishOpen[k];await loadPublish()}
+  try{if(r.post?.status==="planned")await api("/api/posts/"+encodeURIComponent(r.post.id),{method:"PATCH",body:JSON.stringify({status:"posted",account_id,url})}); // 146: a planned post becomes posted
+    else await api("/api/posts",{method:"POST",body:JSON.stringify({candidate_id:r.candidate_id,platform:r.platform,account_id,status:"posted",url})});delete publishOpen[k];await loadPublish()}
   catch(err){setBusy(btn,false);msg.textContent=err.message;msg.classList.add("is-error")}
 });
 
