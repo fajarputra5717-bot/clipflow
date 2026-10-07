@@ -14,3 +14,9 @@
   "+ Zoom at playhead"; marker lane above the waveform with the planned zoom window shaded; debounced save;
   Render preview flushes it. The Effects tab (intensity, on/off) is task 5.
 - Tests: `tests/test_zoom.py` (6), 2 UI specs × 2 viewports.
+
+**Verified on staging (running exactly 8cf6088, clean tree):** clip 65dbd109, markers 3.0 s + 12.0 s at intensity 100
+(peak 1.30): preview log "Zoom: 2 punch-in(s), peak 1.30, canvas 540x960", final "… canvas 1080x1920", final
+−14.2 LUFS. Frames at 2.8 / 3.12 / 3.6 / 5.0 s: content scales in (ramp), holds, returns; the captions ("SUMPAH",
+"ITU YANG MX") and the campaign watermark stay at the same size and position in every frame (they're drawn after
+the zoom). Markers cleared afterwards. UI suite on staging: 147 passed; unit 133 OK.
