@@ -294,6 +294,44 @@ def apply_cuts(path, candidate: dict, clip_duration: float, *, preset, crf, run,
     return out
 
 
+# --------------------------------------------------------------------------- zoom (task 4)
+
+_render_ctx: dict = {}
+
+
+def begin_render(candidate: dict, clip_duration: float) -> None:
+    """Hook right before render_vertical() in preview + final: what zoom_stage() may use. One-shot
+    (consumed by the next zoom_stage), so other render_vertical callers never pick up a stale clip."""
+    _render_ctx.clear()
+    _render_ctx.update(candidate=candidate, duration=float(clip_duration))
+
+
+def zoom_stage(filters: list, last: str, width: int, height: int, log=print) -> str:
+    """Hook inside render_vertical() right after the layout: append the punch-in zoom (retention.py,
+    smooth per-frame scale + fixed crop) to the filter graph BEFORE the watermark and captions, so text
+    never zooms. Times are clip-relative source seconds (render_vertical input-seeks to the clip start),
+    the same basis as the editor markers; cuts happen after the render. Returns the new last label."""
+    from shared import retention
+    ctx = dict(_render_ctx)
+    _render_ctx.clear()
+    cand = ctx.get("candidate")
+    if not cand:
+        return last
+    z = edit_specs.zoom_of(cand.get("edit_spec"))
+    if not z or not z.get("on", True) or not z.get("markers"):
+        return last
+    peak = edit_specs.zoom_peak(z.get("intensity", edit_specs.ZOOM_DEFAULT_INTENSITY))
+    if peak <= 1.0:
+        return last
+    wins = retention.plan_zoom_windows(z["markers"], ctx["duration"])
+    zf = retention.zoom_filter(wins, width=width, height=height, peak=peak)
+    if not zf:
+        return last
+    filters.append(f"[{last}]{zf}[zoomed];")
+    log(f"Zoom: {len(wins)} punch-in(s), peak {peak:.2f}, canvas {width}x{height}")
+    return "zoomed"
+
+
 # --------------------------------------------------------------------------- timeline (task 2)
 
 def write_timeline(preview_path, segments, duration, candidate, previews_dir, *, source_path=None, start=None, log=print):

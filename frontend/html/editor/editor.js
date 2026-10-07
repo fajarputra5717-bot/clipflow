@@ -13,7 +13,8 @@
   const edUrl = (jid, cid) => `/api/jobs/${encodeURIComponent(jid)}/candidates/${encodeURIComponent(cid)}/editor`;
   const reduced = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const PPS = 100;                              // timeline pixels per second
-  const E = { mode: "seek", cuts: { trim: null, removed: [] }, cutT: 0, drag: null, tl: null, raf: 0, nowWord: -1, jid: null, cid: null, state: null, hook: null, saveT: 0, pollT: 0, hidden: [], tab: "captions", busy: false };
+  const ZOOM_SPAN = 1.75;                       // ramp 0.25 + hold 1.0 + ramp 0.25 + merge gap: retention.plan_zoom_windows
+  const E = { zoom: { on: true, intensity: 50, markers: [] }, zoomT: 0, mode: "seek", cuts: { trim: null, removed: [] }, cutT: 0, drag: null, tl: null, raf: 0, nowWord: -1, jid: null, cid: null, state: null, hook: null, saveT: 0, pollT: 0, hidden: [], tab: "captions", busy: false };
 
   function section() {
     let s = $("editorSection");
@@ -55,6 +56,7 @@
       E.hook = { ...E.state.hook_title };
       E.cuts = { trim: E.state.cuts.trim, removed: E.state.cuts.removed.map((r) => r.slice()) };
       E.mode = "seek";
+      E.zoom = { on: E.state.zoom.on, intensity: E.state.zoom.intensity, markers: E.state.zoom.markers.slice() };
       render();
       if (RENDERING.includes(E.state.candidate.status)) watchRender();
     } catch (e) {
@@ -63,7 +65,7 @@
   }
 
   function close(setHash = true) {
-    clearTimeout(E.saveT); clearTimeout(E.cutT); clearInterval(E.pollT); cancelAnimationFrame(E.raf); E.tl = null; E.nowWord = -1; E.drag = null;
+    clearTimeout(E.saveT); clearTimeout(E.cutT); clearTimeout(E.zoomT); clearInterval(E.pollT); cancelAnimationFrame(E.raf); E.tl = null; E.nowWord = -1; E.drag = null;
     const s = $("editorSection");
     if (s) { s.hidden = true; s.classList.add("hidden"); s.innerHTML = ""; }
     E.hidden.forEach(([v, hadHidden]) => v.classList.toggle("hidden", hadHidden));
@@ -152,10 +154,12 @@
         <div class="ed-chips" role="group" aria-label="Click mode">
           <button type="button" class="ed-chip" data-ed-mode="seek" aria-pressed="${E.mode === "seek"}">Seek</button>
           <button type="button" class="ed-chip" data-ed-mode="cut" aria-pressed="${E.mode === "cut"}" title="Cut mode (C)">✂ Cut</button>
+          <button type="button" class="ed-chip" data-ed-mode="zoom" aria-pressed="${E.mode === "zoom"}" title="Zoom mode (Z): click the timeline to add a punch-in, click a ◆ to remove it">◆ Zoom</button>
         </div>
         <button type="button" class="ed-chip" data-ed-suggest ${nSuggest ? "" : "disabled"}>Cut ${nSuggest} pause${nSuggest === 1 ? "" : "s"} ≥ ${E.state.cuts.suggest_min_gap} s</button>
         <button type="button" class="ed-chip" data-ed-fillers ${(tl.fillers || []).length ? "" : "hidden"}></button>
         <button type="button" class="ed-chip" data-ed-cuts-reset>Restore all</button>
+        <button type="button" class="ed-chip" data-ed-zoom-add title="Add a punch-in at the playhead (Z mode: click anywhere)">+ Zoom at playhead</button>
         <span class="ed-spacer"></span>
         <span class="ed-out" id="edOut"></span>
         <span class="ed-time" id="edTlTime">0:00.0 / ${fmt(dur)}</span></div>
@@ -165,6 +169,7 @@
           <div class="ed-tl-ruler" aria-hidden="true">${ruler}</div>
           <canvas class="ed-tl-wave" id="edWave" aria-hidden="true"></canvas>
           <div id="edBands" aria-hidden="true"></div>
+          <div class="ed-zoom-lane" id="edZoomLane" aria-label="Zoom punch-ins"></div>
           <div class="ed-tl-words" role="group" aria-label="Words and pauses">${pauses}${words}</div>
           <div class="ed-trim-shade l" id="edShadeL" aria-hidden="true"></div><div class="ed-trim-shade r" id="edShadeR" aria-hidden="true"></div>
           <div class="ed-trim-h" id="edTrimA" role="slider" tabindex="0" aria-label="Clip start" data-ed-trim="a"></div>
@@ -267,11 +272,42 @@
     });
     const out = outputSeconds(), o = $("edOut");
     if (o) o.textContent = `Output ${out.toFixed(1)} s`;
+    paintZoom();
     const hint = $("edTlHint");
-    if (hint) hint.textContent = E.mode === "cut" ? "Cut mode: click a word or pause to cut it, click again to restore. Drag the orange handles to trim."
+    if (hint) hint.textContent = E.mode === "zoom" ? `Zoom mode: click the timeline to add a punch-in (max ${E.state.zoom.max_markers}), click a ◆ to remove it.`
+      : E.mode === "cut" ? "Cut mode: click a word or pause to cut it, click again to restore. Drag the orange handles to trim."
       : (E.state.candidate.has_preview ? "Click a word to jump there. Switch to ✂ Cut (C) to cut words and pauses." : "Render a preview to play.");
     const s = document.querySelector("[data-ed-suggest]"), n = suggestedPauses().length;
     if (s) { s.disabled = !n; s.textContent = `Cut ${n} pause${n === 1 ? "" : "s"} ≥ ${E.state.cuts.suggest_min_gap} s`; }
+  }
+
+  // ---- zoom punch-ins (task 4): source-time markers, rendered before captions/watermark
+  function paintZoom() {
+    const lane = $("edZoomLane"); if (!lane || !E.tl) return;
+    const dur = E.tl.duration;
+    lane.innerHTML = E.zoom.markers.map((m, k) => `<span class="ed-zoom-span" style="left:${m * PPS}px;width:${Math.min(ZOOM_SPAN, dur - m) * PPS}px" aria-hidden="true"></span>
+      <button type="button" class="ed-zoom-mark" data-ed-zoom-mark="${k}" style="left:${m * PPS}px" title="Punch-in at ${m.toFixed(2)} s · click to remove" aria-label="Zoom punch-in at ${m.toFixed(1)} seconds, remove"></button>`).join("");
+    const b = document.querySelector("[data-ed-zoom-add]");
+    if (b) b.disabled = E.zoom.markers.length >= E.state.zoom.max_markers;
+  }
+  function addZoom(t) {
+    if (!E.tl || E.zoom.markers.length >= E.state.zoom.max_markers) return;
+    t = Math.round(Math.max(0, Math.min(t, E.tl.duration - 0.3)) * 100) / 100;
+    if (E.zoom.markers.some((m) => Math.abs(m - t) < 0.3)) return;          // a second click on the same spot
+    E.zoom.markers = [...E.zoom.markers, t].sort((a, b) => a - b);
+    zoomChanged();
+  }
+  function zoomChanged() {
+    paintZoom(); E.dirty = true; paintHook();
+    clearTimeout(E.zoomT); paintState("Saving…");
+    E.zoomT = setTimeout(saveZoom, 600);
+  }
+  async function saveZoom() {
+    clearTimeout(E.zoomT); E.zoomT = 0;
+    try {
+      E.state = await api(edUrl(E.jid, E.cid) + "/zoom", { method: "PUT", body: JSON.stringify(E.zoom) });
+      paintState();
+    } catch (e) { paintState("Not saved: " + e.message); throw e; }
   }
 
   function setTrim(which, v) {
@@ -445,6 +481,7 @@
     try {
       if (E.saveT) await save();
       if (E.cutT) await saveCuts();
+      if (E.zoomT) await saveZoom();
       await api(`/api/jobs/${encodeURIComponent(E.jid)}/candidates/${encodeURIComponent(E.cid)}/regenerate-preview`, { method: "POST" });
       E.state.candidate.status = "preview_queued";
       paintState();
@@ -478,7 +515,7 @@
 
   // ------------------------------------------------------------------ events (delegated, data-*)
   document.addEventListener("click", (e) => {
-    const t = e.target.closest("[data-ed-back],[data-ed-hook-on],[data-ed-hook-dur],[data-ed-render],[data-ed-play],[data-ed-tab],[data-ed-word],[data-ed-pause],[data-ed-mode],[data-ed-suggest],[data-ed-fillers],[data-ed-cuts-reset],[data-ed-trim],[data-ed-seekarea]");
+    const t = e.target.closest("[data-ed-back],[data-ed-hook-on],[data-ed-hook-dur],[data-ed-render],[data-ed-play],[data-ed-tab],[data-ed-word],[data-ed-pause],[data-ed-mode],[data-ed-suggest],[data-ed-fillers],[data-ed-cuts-reset],[data-ed-zoom-add],[data-ed-zoom-mark],[data-ed-trim],[data-ed-seekarea]");
     if (!t || !E.state && !t.matches("[data-ed-back]")) return;
     if (t.matches("[data-ed-back]")) {                       // back to the Review page (step 4) for this job
       e.preventDefault(); const jid = E.jid; close(false); location.hash = `#review/${encodeURIComponent(jid || "")}`;
@@ -497,9 +534,14 @@
     }
     if (t.matches("[data-ed-mode]")) { setMode(t.dataset.edMode); return; }
     if (t.matches("[data-ed-suggest]")) { E.cuts.removed = merge([...E.cuts.removed, ...suggestedPauses().map(pauseRange)]); cutsChanged(); return; }
+    if (t.matches("[data-ed-zoom-mark]")) { E.zoom.markers = E.zoom.markers.filter((_, k) => k !== Number(t.dataset.edZoomMark)); zoomChanged(); return; }
+    if (t.matches("[data-ed-zoom-add]")) { const v = $("edVideo"); addZoom(toSrc(v ? v.currentTime : 0)); return; }
     if (t.matches("[data-ed-fillers]")) { E.cuts.removed = merge([...E.cuts.removed, ...pendingFillers().map((f) => [f.start, f.end])]); cutsChanged(); return; }
     if (t.matches("[data-ed-cuts-reset]")) { E.cuts = { trim: null, removed: [] }; cutsChanged(); return; }
     if (t.matches("[data-ed-trim]")) return;                       // handles drag (pointer events below)
+    if (E.mode === "zoom" && t.matches("[data-ed-word],[data-ed-pause],[data-ed-seekarea]")) {
+      const inner = $("edTlInner"); addZoom((e.clientX - inner.getBoundingClientRect().left) / PPS); return;
+    }
     if (t.matches("[data-ed-word]")) {
       const w = E.tl && E.tl.words[Number(t.dataset.edWord)]; if (!w) return;
       const f = fillerOf(w.i);
@@ -526,7 +568,7 @@
   function setMode(m) {
     E.mode = m;
     document.querySelectorAll("[data-ed-mode]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.edMode === m)));
-    const inner = $("edTlInner"); if (inner) inner.classList.toggle("is-cut", m === "cut");
+    const inner = $("edTlInner"); if (inner) { inner.classList.toggle("is-cut", m === "cut"); inner.classList.toggle("is-zoom", m === "zoom"); }
     paintCuts();
   }
   // trim handles: pointer drag (touch too) + arrow keys
@@ -548,6 +590,9 @@
     }
     if ((e.key === "c" || e.key === "C") && !e.target.closest("input,textarea,select,[contenteditable]") && !e.metaKey && !e.ctrlKey) {
       setMode(E.mode === "cut" ? "seek" : "cut");
+    }
+    if ((e.key === "z" || e.key === "Z") && !e.target.closest("input,textarea,select,[contenteditable]") && !e.metaKey && !e.ctrlKey) {
+      setMode(E.mode === "zoom" ? "seek" : "zoom");
     }
   });
   document.addEventListener("input", (e) => {

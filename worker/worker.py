@@ -5093,6 +5093,7 @@ def render_vertical(
     )
 
     last = "stacked"
+    last = render_steps.zoom_stage(filters, last, width, height, log=log)  # lane-b hook
 
     # --------------------------------------------------------
     # WATERMARK (optional)
@@ -5526,6 +5527,7 @@ def create_preview(
         )
     )
 
+    render_steps.begin_render(candidate, duration)  # lane-b hook
     subtitle_file = render_steps.add_title_card(subtitle_file, candidate, size=(preview_width, preview_height), clip_duration=duration, avoid=watermark_rect, out_dir=SUBTITLE_DIR, log=log)  # lane-b hook
     render_vertical(
         video_path,
@@ -5995,6 +5997,7 @@ def render_final_candidate(
         )
     )
 
+    render_steps.begin_render(candidate, duration)  # lane-b hook
     subtitle_file = render_steps.add_title_card(subtitle_file, candidate, size=(FINAL_WIDTH, FINAL_HEIGHT), clip_duration=duration, avoid=watermark_rect, out_dir=SUBTITLE_DIR, log=log)  # lane-b hook
     render_vertical(
         video_path,
