@@ -19,3 +19,8 @@ Staging = main 0a81ae5 (145–148 + lane-b merge), rebuilt by Lane B. Members la
 
 Corrections: 148 Low withdrawn (QA error). Open Lows: P2 list only. Not covered here: production post-merge check (0a81ae5),
 see the post-merge note once Lane A deploys.
+
+Build note (Lane B, after the run): the staging images also contained Lane B's UNCOMMITTED editor task-4 work (zoom
+punch-ins: edit_spec.zoom, zoom_stage hook in render_vertical). It's a no-op without zoom markers, and none of the
+lane-c clips have an edit_spec.zoom key (checked: 0), so this gate holds for main 0a81ae5. Process risk: staging should
+run committed code only, or a gate can't be tied to a SHA. Task 4 gets its own review when it's committed.
