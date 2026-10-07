@@ -22,6 +22,11 @@ Keys so far:
   zoom: {on, intensity, markers: [s, ...]}   P4 task 4 (lane B): punch-ins at SOURCE seconds; intensity
            0–100 (peak scale 1.0–1.30, default 50 = 1.15). Rendered inside render_vertical before the
            watermark/captions (render_steps.zoom_stage), so text never zooms.
+  progress: {on, color: "#RRGGBB"}   P4 task 5: thin bar at the top, burned in the caption ASS (one
+           animated segment per kept part, so it runs continuously after cuts).
+  audio: {compress: bool, silence_trim: bool, silence_ranges: [[s, e], ...]}   P4 task 5: light
+           compression before loudnorm; silence_trim = the "Remove silences" toggle, silence_ranges = the
+           pause cuts it added to cuts.removed (so turning it off removes exactly those).
 
 PATCH semantics (main.py update_candidate): top-level keys are merged into
 the stored spec; a key sent as null is removed.
@@ -141,6 +146,10 @@ def normalize_patch(patch, styles, animations):
             value = normalize_cuts(value)
         elif key == "zoom":
             value = normalize_zoom(value)
+        elif key == "progress":
+            value = normalize_progress(value)
+        elif key == "audio":
+            value = normalize_audio(value)
         else:
             raise ValueError(f"unknown edit_spec key: {key!r}")
         if value is None:
@@ -303,3 +312,55 @@ def zoom_of(spec):
 def zoom_peak(intensity):
     """0–100 → peak scale 1.0–1.30 (50 → 1.15, the retention engine's default)."""
     return 1.0 + 0.30 * max(0, min(100, int(intensity))) / 100
+
+
+# ---- Effects + Audio tabs (P4 task 5, lane B)
+
+PROGRESS_COLORS = ("#FFD60A", "#FFFFFF", "#FF453A", "#0A84FF")
+
+
+def normalize_progress(value):
+    """{on, color} or None. Colour must be #RRGGBB (the UI offers PROGRESS_COLORS)."""
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        raise ValueError("progress must be an object")
+    color = str(value.get("color") or PROGRESS_COLORS[0]).upper()
+    if not re.fullmatch(r"#[0-9A-F]{6}", color):
+        raise ValueError("progress.color must be #RRGGBB")
+    on = bool(value.get("on", False))
+    return {"on": on, "color": color} if on or color != PROGRESS_COLORS[0] else None
+
+
+def progress_of(spec):
+    p = (spec or {}).get("progress") if isinstance(spec, dict) else None
+    return p if isinstance(p, dict) and p.get("on") else None
+
+
+def normalize_audio(value, clip_duration=None):
+    """{compress, silence_trim, silence_ranges} or None (all off). Ranges are clamped to the clip like cuts
+    (0 … clip_duration when known), sorted; empty or inverted ones are dropped (QA 2e3d583 Low)."""
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        raise ValueError("audio must be an object")
+    ranges = []
+    for r in value.get("silence_ranges") or []:
+        try:
+            s, e = (round(float(x), 3) for x in r)
+        except (TypeError, ValueError):
+            raise ValueError("audio.silence_ranges entries must be [start, end]")
+        s = max(0.0, s)
+        if clip_duration:
+            e = min(round(float(clip_duration), 3), e)
+        if e > s:
+            ranges.append([s, e])
+    ranges.sort()
+    out = {"compress": bool(value.get("compress", False)), "silence_trim": bool(value.get("silence_trim", False)),
+           "silence_ranges": ranges[:CUTS_MAX_RANGES]}
+    return out if (out["compress"] or out["silence_trim"] or out["silence_ranges"]) else None
+
+
+def audio_of(spec):
+    a = (spec or {}).get("audio") if isinstance(spec, dict) else None
+    return a if isinstance(a, dict) else {}

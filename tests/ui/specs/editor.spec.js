@@ -10,9 +10,29 @@ function editorState(over = {}) {
     hook_title: { on: false, text: "", duration: 2.5, default_text: "First mock clip", durations: [2, 2.5, 3], max_chars: 80 },
     cuts: { trim: null, removed: [], output_seconds: 6, suggest_min_gap: 0.6, pad: 0.12 },
     zoom: { on: true, intensity: 50, markers: [], max_markers: 40 },
+    progress: { on: false, color: "#FFD60A", colors: ["#FFD60A", "#FFFFFF", "#FF453A", "#0A84FF"] },
+    audio: { compress: false, silence_trim: false, silence_ranges: [], loudness: { lufs: -14, true_peak_dbtp: -1, always_on: true } },
+    captions: CAPTIONS(),
     ...over,
   };
 }
+
+const CAPTIONS = () => ({
+  job: { style: "outline", animation: "karaoke", font: "Montserrat Black", size: 42 }, clip: null, style: "outline", animation: "karaoke",
+  caption_y: null, auto_caption_y: 78, keywords: ["kekuatan"], keyword_color: null, auto_keyword_color: "#30D158",
+  transcript: "HAHAHAHA KEKUATAN\nHITAM", override: "", text: "HAHAHAHA KEKUATAN\nHITAM", burn: true,
+  options: {
+    styles: [{ id: "outline", label: "Outline", resting: "#FFFFFF", highlight: "#FFD60A", weight: 800, outline: 4.5, shadow: true, box: false, sizeMult: 1, letterSpacing: "0" },
+             { id: "impact", label: "Impact", resting: "#FFFFFF", highlight: "#FF3B30", weight: 900, outline: 2, shadow: true, box: false, sizeMult: 1.08, letterSpacing: "0" },
+             { id: "neon", label: "Neon", resting: "#5CE1FF", highlight: "#FF2D95", weight: 800, outline: 2.5, shadow: true, box: false, sizeMult: 1, letterSpacing: "0" }],
+    animations: [{ id: "karaoke", label: "Karaoke sweep", family: "flow" }, { id: "word_pop", label: "Word pop", family: "chunk" }, { id: "typewriter", label: "Typewriter", family: "typewriter" }],
+    presets: [{ id: "karaoke", label: "Karaoke", style: "outline", animation: "karaoke" }, { id: "pop", label: "Word pop", style: "impact", animation: "word_pop" },
+              { id: "neon", label: "Neon", style: "neon", animation: "typewriter" }],
+    fonts: ["Liberation Sans Bold", "Montserrat Black", "Anton"],
+    keyword_colors: [{ color: "#FFD60A", label: "Yellow" }, { color: "#30D158", label: "Green" }, { color: "#FF453A", label: "Red" }],
+    size_range: [12, 120], caption_y_range: [30, 85],
+  },
+});
 
 const TIMELINE = {
   version: 1, duration: 6, rate: 50, cached: true,
@@ -26,13 +46,15 @@ async function mockEditor(page, api, timeline = TIMELINE) {
   api.editor = editorState();
   await page.route(/\/api\/jobs\/[^/]+\/candidates\/[^/]+\/editor\/timeline/, (route) =>
     route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(timeline) }));
-  await page.route(/\/api\/jobs\/[^/]+\/candidates\/[^/]+\/editor(\/hook-title|\/cuts|\/zoom)?(\?.*)?$/, async (route) => {
+  await page.route(/\/api\/jobs\/[^/]+\/candidates\/[^/]+\/editor(\/hook-title|\/cuts|\/zoom|\/progress|\/audio)?(\?.*)?$/, async (route) => {
     const req = route.request();
     if (req.method() === "PUT") {
       const body = req.postDataJSON(), path = new URL(req.url()).pathname;
       api.calls.push({ method: "PUT", path, body });
       if (path.endsWith("/cuts")) api.editor.cuts = { ...api.editor.cuts, trim: body.trim, removed: body.removed };
       else if (path.endsWith("/zoom")) api.editor.zoom = { ...api.editor.zoom, ...body };
+      else if (path.endsWith("/progress")) api.editor.progress = { ...api.editor.progress, ...body };
+      else if (path.endsWith("/audio")) api.editor.audio = { ...api.editor.audio, ...body };
       else api.editor.hook_title = { ...api.editor.hook_title, ...body };
     }
     return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(api.editor) });
@@ -226,5 +248,112 @@ test.describe("Editor page", () => {
     const post = api.calls.findIndex((c) => c.method === "POST" && c.path.endsWith("/regenerate-preview"));
     expect(put).toBeGreaterThanOrEqual(0);
     expect(put).toBeLessThan(post);
+  });
+});
+
+// P4 task 5: Effects + Audio tabs are live controls saved to edit_spec (debounced PUT), loudness is read-only.
+test.describe("Editor Effects + Audio tabs", () => {
+  test.use({ reducedMotion: "reduce" });
+  const lastPut = (api, end) => api.calls.filter((c) => c.method === "PUT" && c.path.endsWith(end)).at(-1)?.body;
+  async function openEd(app, api) {
+    await mockEditor(app, api);
+    await app.evaluate(() => { location.hash = "#editor/job-done/cand-a"; });
+    await expect(app.locator('[data-ed-tab="effects"]')).toBeVisible();
+  }
+
+  test("Effects: progress bar on + colour, punch-in switch + intensity", async ({ app, api }) => {
+    await openEd(app, api);
+    await app.locator('[data-ed-tab="effects"]').click();
+    await app.locator("[data-ed-progress-on]").click();
+    await app.locator('[data-ed-progress-color="#FF453A"]').click();
+    await expect(app.locator('[data-ed-progress-color="#FF453A"]')).toHaveAttribute("aria-pressed", "true");
+    await expect.poll(() => lastPut(api, "/progress"), { timeout: 3000 }).toEqual({ on: true, color: "#FF453A" });
+    await app.locator("[data-ed-zoom-intensity]").fill("80");
+    await expect(app.locator("#edZoomOut")).toHaveText("80%");
+    await expect.poll(() => lastPut(api, "/zoom")?.intensity, { timeout: 3000 }).toBe(80);
+    await app.locator("[data-ed-zoom-on]").click();
+    await expect.poll(() => lastPut(api, "/zoom")?.on, { timeout: 3000 }).toBe(false);
+  });
+
+  test("Audio: compression + silence trim save; loudness is read-only", async ({ app, api }) => {
+    await openEd(app, api);
+    await app.locator('[data-ed-tab="audio"]').click();
+    await expect(app.locator(".ed-panel")).toContainText("-14 LUFS");
+    await app.locator("[data-ed-compress]").click();
+    await expect.poll(() => lastPut(api, "/audio")?.compress, { timeout: 3000 }).toBe(true);
+    await app.locator("[data-ed-silence]").click();
+    await expect.poll(() => lastPut(api, "/audio")?.silence_trim, { timeout: 3000 }).toBe(true);
+    expect(lastPut(api, "/audio").silence_ranges.length).toBeGreaterThan(0);
+    await expect.poll(() => lastPut(api, "/cuts")?.removed.length, { timeout: 3000 }).toBeGreaterThan(0);
+    await app.locator("[data-ed-silence]").click();
+    await expect.poll(() => lastPut(api, "/cuts")?.removed.length, { timeout: 3000 }).toBe(0);
+  });
+});
+
+// P4 task 7a: Captions tab = preset tiles, keywords, caption text + Fix typos, style/font/size/position, new hook.
+// Writes go to main's existing routes (candidate PATCH, subtitle-style, caption-preset, fix-subtitle-ai, new-hook).
+test.describe("Editor Captions tab", () => {
+  test.use({ reducedMotion: "reduce" });
+  const CAND = "/api/jobs/job-done/candidates/cand-a";
+  const last = (api, method, path) => api.calls.filter((c) => c.method === method && c.path === path).at(-1)?.body;
+  async function openEd(app, api) {
+    await mockEditor(app, api);
+    await app.route(/\/fix-subtitle-ai$/, (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ subtitle_text: "hahahaha kekuatan\nhitam legam" }) }));
+    await app.evaluate(() => { location.hash = "#editor/job-done/cand-a"; });
+    await expect(app.locator("[data-ed-preset]").first()).toBeVisible();
+  }
+
+  test("preset is this clip's own; equal to the job's clears it; untouched keywords aren't sent", async ({ app, api }) => {
+    await openEd(app, api);
+    await expect(app.locator('[data-ed-preset="karaoke"]')).toHaveAttribute("aria-pressed", "true");
+    await app.locator('[data-ed-preset="pop"]').click();
+    await expect(app.locator('[data-ed-preset="pop"]')).toHaveAttribute("aria-pressed", "true");
+    await expect.poll(() => last(api, "PATCH", CAND)?.edit_spec?.caption, { timeout: 3000 }).toEqual({ style: "impact", animation: "word_pop" });
+    expect(last(api, "PATCH", CAND).edit_spec).not.toHaveProperty("keywords");
+    await app.locator('[data-ed-preset="karaoke"]').click();
+    await expect.poll(() => last(api, "PATCH", CAND)?.edit_spec?.caption, { timeout: 3000 }).toBeNull();
+  });
+
+  test("keywords toggle + colour; caption text edit and Fix typos send subtitle_override", async ({ app, api }) => {
+    await openEd(app, api);
+    await expect(app.locator('[data-ed-kw="kekuatan"]')).toHaveAttribute("aria-pressed", "true");
+    await app.locator('[data-ed-kw="hitam"]').click();
+    await app.locator('[data-ed-kw-color="#FF453A"]').click();
+    await expect.poll(() => last(api, "PATCH", CAND)?.edit_spec?.keyword_color, { timeout: 3000 }).toBe("#FF453A");
+    expect(last(api, "PATCH", CAND).edit_spec.keywords.sort()).toEqual(["hitam", "kekuatan"]);
+    await app.locator("[data-ed-fix-typos]").click();
+    await expect(app.locator("#edCapText")).toHaveValue("HAHAHAHA KEKUATAN\nHITAM LEGAM");
+    await expect.poll(() => last(api, "PATCH", CAND)?.subtitle_override, { timeout: 3000 }).toBe("HAHAHAHA KEKUATAN\nHITAM LEGAM");
+    await app.locator("[data-ed-cap-reset]").click();
+    await expect.poll(() => last(api, "PATCH", CAND)?.subtitle_override, { timeout: 3000 }).toBe("");
+  });
+
+  test("font + size are job-level; position switch + slider; Apply to all clips", async ({ app, api }) => {
+    await openEd(app, api);
+    await app.locator("[data-ed-style-more] > summary").click();
+    await app.locator('select[data-ed-cap="font"]').selectOption("Anton");
+    await app.locator('input[data-ed-cap="size"]').fill("56");
+    await expect.poll(() => last(api, "PATCH", "/api/jobs/job-done/subtitle-style"), { timeout: 3000 })
+      .toEqual({ subtitle_style: "outline", subtitle_font: "Anton", subtitle_size: 56, subtitle_animation: "karaoke" });
+    await app.locator("[data-ed-capy-on]").click();
+    await expect(app.locator("#edCapY")).toHaveText("78 %");
+    await app.locator("[data-ed-capy]").fill("60");
+    await expect.poll(() => last(api, "PATCH", CAND)?.edit_spec?.caption_y, { timeout: 3000 }).toBe(60);
+    await expect(app.locator("[data-ed-style-more]")).toHaveAttribute("open", "");          // stays open across repaints
+    await app.locator('select[data-ed-cap="style"]').selectOption("neon");
+    await app.locator("[data-ed-cap-all]").click();
+    await expect(app.locator("[data-ed-cap-all]")).toHaveText("Tap again: every clip re-renders");
+    expect(api.calls.some((c) => c.path.endsWith("/caption-preset"))).toBe(false);
+    await app.locator("[data-ed-cap-all]").click();
+    await expect.poll(() => last(api, "POST", "/api/jobs/job-done/caption-preset")).toEqual({ style: "neon", animation: "karaoke" });
+  });
+
+  test("Get another hook needs a second tap, then calls new-hook", async ({ app, api }) => {
+    await openEd(app, api);
+    await app.locator("[data-ed-new-hook]").click();
+    await expect(app.locator("[data-ed-new-hook]")).toHaveText("Tap again to replace this clip");
+    expect(api.calls.some((c) => c.path.endsWith("/new-hook"))).toBe(false);
+    await app.locator("[data-ed-new-hook]").click();
+    await expect.poll(() => api.calls.some((c) => c.method === "POST" && c.path === CAND + "/new-hook")).toBe(true);
   });
 });

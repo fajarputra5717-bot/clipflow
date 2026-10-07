@@ -181,6 +181,52 @@ body.is-staging #toolbar{top:22px}
 .ed-zoom-mark:hover{background:var(--bad)}
 .ed-zoom-mark:focus-visible{outline:none;box-shadow:var(--ring)}
 .ed-tl-inner.is-zoom{cursor:copy}
+/* Effects + Audio tabs (task 5) */
+.ed-range{display:grid;grid-template-columns:90px minmax(0,1fr) 52px;align-items:center;gap:12px;min-height:var(--hit);font-size:14px}
+.ed-range input{width:100%;accent-color:var(--accent)}
+.ed-range output{text-align:right;font-variant-numeric:tabular-nums;color:var(--muted);font-size:13px}
+.ed-swatches{display:flex;gap:12px;flex-wrap:wrap;margin-top:6px}
+.ed-sw{position:relative;width:32px;height:32px;min-height:0;padding:0;border-radius:50%;border:2px solid var(--panel);box-shadow:0 0 0 1px var(--line2,var(--line));cursor:pointer}
+.ed-sw::after{content:"";position:absolute;inset:-6px}
+.ed-sw[aria-pressed="true"]{box-shadow:0 0 0 2px var(--accent)}
+.ed-prog{position:absolute;left:0;right:0;top:0;height:.6cqh;min-height:3px;background:rgba(255,255,255,.18);opacity:0;transition:opacity var(--dur-2) var(--ease);pointer-events:none;z-index:3}
+.ed-prog.show{opacity:1}
+.ed-prog i{display:block;height:100%;background:var(--prog,#FFD60A);transform-origin:left;transform:scaleX(0)}
+.ed-panel.in-r{animation:edTabR var(--dur-3) var(--ease-spring)}
+.ed-panel.in-l{animation:edTabL var(--dur-3) var(--ease-spring)}
+@keyframes edTabR{from{opacity:0;transform:translateX(16px)}to{opacity:1;transform:none}}
+@keyframes edTabL{from{opacity:0;transform:translateX(-16px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.ed-panel.in-r,.ed-panel.in-l{animation:none}}
+/* Captions tab (task 7a) */
+.ed-row-tight{min-height:36px}
+.ed-presets{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:8px}
+.ed-preset{display:flex;flex-direction:column;align-items:center;gap:6px;min-height:var(--hit);padding:8px 6px;border-radius:14px;border:1px solid var(--line);background:var(--fill);color:var(--text);font:600 12px var(--font-text);cursor:pointer;transition:transform var(--dur-1) var(--ease),border-color var(--dur-2) var(--ease)}
+.ed-preset:active{transform:scale(var(--press))}
+.ed-preset[aria-pressed="true"]{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.ed-ptile{display:grid;place-items:center;width:100%;height:44px;border-radius:10px;background:linear-gradient(160deg,#3a3f4b,#16181d);overflow:hidden}
+.ed-capsample{font-size:13px;line-height:1.15;text-transform:uppercase;color:var(--rest);font-family:"CF Montserrat",var(--font-display);font-weight:900;white-space:nowrap}
+.ed-capsample.has-shadow{text-shadow:0 0 calc(var(--ol)*.6) #000,0 1px 2px #000}
+.ed-capsample:not(.has-shadow):not(.is-box){-webkit-text-stroke:calc(var(--ol)*.25) #000;paint-order:stroke fill}
+.ed-capsample .hi{color:var(--hi)}
+.ed-capsample .kw{color:var(--kw)}
+.ed-capsample.is-box span{background:rgba(0,0,0,.72);padding:0 .2em;border-radius:.2em}
+.ed-sample{display:grid;place-items:center;height:64px;margin:10px 0 4px;border-radius:12px;background:linear-gradient(160deg,#3a3f4b,#16181d)}
+.ed-sample .ed-capsample{font-size:20px}
+.ed-sw-sm{width:26px;height:26px}
+.ed-kw{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;max-height:168px;overflow:auto;padding:2px}
+.ed-kwword{min-height:32px;padding:0 10px;border-radius:8px;border:0;background:var(--fill);color:var(--text);font:600 12px var(--font-text);text-transform:uppercase;cursor:pointer;position:relative}
+.ed-kwword::after{content:"";position:absolute;inset:-6px -2px}
+.ed-kwword[aria-pressed="true"]{background:var(--kw);color:#000}
+.ed-captext{width:100%;min-height:120px;margin-top:6px;font:500 13px/1.5 var(--font-text);text-transform:uppercase;resize:vertical}
+.ed-more>summary{display:flex;align-items:center;min-height:var(--hit);cursor:pointer;list-style:none}
+.ed-more>summary::-webkit-details-marker{display:none}
+.ed-more>summary::after{content:"";margin-left:auto;width:8px;height:8px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(45deg);transition:transform var(--dur-2) var(--ease)}
+.ed-more[open]>summary::after{transform:rotate(-135deg)}
+.ed-more select{width:100%}
+.ed-range.is-off{opacity:.45}
+.ed-note-box{padding:10px 12px;margin-bottom:12px;border-radius:12px;background:var(--fill);font-size:13px;color:var(--muted)}
+@media (max-width:600px){.ed-presets{grid-template-columns:repeat(2,minmax(0,1fr))}}
+button.is-armed{background:var(--badge-failed-bg,#ff453a);color:#fff}
 
 /* 162: Review page "Expired" group (clips of ended campaigns), collapsed */
 .rv-expired { margin-top: var(--sp-3); }
