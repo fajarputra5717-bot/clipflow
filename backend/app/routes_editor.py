@@ -16,6 +16,8 @@ Routes (all under /api, so the auth middleware applies):
   GET /api/jobs/{jid}/candidates/{cid}/editor/timeline     waveform peaks + word chips (task 2)
   PUT /api/jobs/{jid}/candidates/{cid}/editor/cuts         {trim, removed} → edit_spec.cuts (task 3)
   PUT /api/jobs/{jid}/candidates/{cid}/editor/zoom         {on, intensity, markers} → edit_spec.zoom (task 4)
+  PUT /api/jobs/{jid}/candidates/{cid}/editor/progress     {on, color} → edit_spec.progress (task 5)
+  PUT /api/jobs/{jid}/candidates/{cid}/editor/audio        {compress, silence_trim, silence_ranges} (task 5)
 Rendering stays on the existing POST /api/jobs/{jid}/candidates/{cid}/regenerate-preview (island
 progress via /api/activity, version history).
 """
@@ -95,6 +97,10 @@ def _state(c: dict) -> dict:
         "cuts": _cuts_state(spec, duration),
         "zoom": {**{"on": True, "intensity": edit_specs.ZOOM_DEFAULT_INTENSITY, "markers": []},
                  **(edit_specs.zoom_of(spec) or {}), "max_markers": edit_specs.ZOOM_MAX_MARKERS},
+        "progress": {"on": False, "color": edit_specs.PROGRESS_COLORS[0], **((spec or {}).get("progress") or {}),
+                     "colors": list(edit_specs.PROGRESS_COLORS)},
+        "audio": {"compress": False, "silence_trim": False, "silence_ranges": [], **edit_specs.audio_of(spec),
+                  "loudness": {"lufs": -14.0, "true_peak_dbtp": -1.0, "always_on": True}},
         "hook_title": {
             "on": bool(ht.get("on", False)), "text": ht.get("text", ""),
             "duration": ht.get("duration", edit_specs.HOOK_TITLE_DEFAULT_DURATION),
@@ -246,6 +252,38 @@ def put_zoom(job_id: str, candidate_id: str, body: ZoomIn, user: dict = Depends(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     return _save_spec_key(job_id, candidate_id, user, "zoom", value)
+
+
+class ProgressIn(BaseModel):
+    on: bool = False
+    color: str = edit_specs.PROGRESS_COLORS[0]
+
+
+@editor.put("/progress")
+def put_progress(job_id: str, candidate_id: str, body: ProgressIn, user: dict = Depends(get_current_user)):
+    """Progress bar overlay (P4 task 5)."""
+    try:
+        value = edit_specs.normalize_progress(body.model_dump())
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return _save_spec_key(job_id, candidate_id, user, "progress", value)
+
+
+class AudioIn(BaseModel):
+    compress: bool = False
+    silence_trim: bool = False
+    silence_ranges: list[list[float]] = []
+
+
+@editor.put("/audio")
+def put_audio(job_id: str, candidate_id: str, body: AudioIn, user: dict = Depends(get_current_user)):
+    """Audio tab (P4 task 5): light compression + the Remove-silences toggle state. The pause cuts themselves
+    live in edit_spec.cuts (PUT …/cuts); loudness is always on and not editable here."""
+    try:
+        value = edit_specs.normalize_audio(body.model_dump())
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return _save_spec_key(job_id, candidate_id, user, "audio", value)
 
 
 class FixLengthIn(BaseModel):

@@ -181,3 +181,19 @@ body.is-staging #toolbar{top:22px}
 .ed-zoom-mark:hover{background:var(--bad)}
 .ed-zoom-mark:focus-visible{outline:none;box-shadow:var(--ring)}
 .ed-tl-inner.is-zoom{cursor:copy}
+/* Effects + Audio tabs (task 5) */
+.ed-range{display:grid;grid-template-columns:90px minmax(0,1fr) 52px;align-items:center;gap:12px;min-height:var(--hit);font-size:14px}
+.ed-range input{width:100%;accent-color:var(--accent)}
+.ed-range output{text-align:right;font-variant-numeric:tabular-nums;color:var(--muted);font-size:13px}
+.ed-swatches{display:flex;gap:12px;flex-wrap:wrap;margin-top:6px}
+.ed-sw{position:relative;width:32px;height:32px;min-height:0;padding:0;border-radius:50%;border:2px solid var(--panel);box-shadow:0 0 0 1px var(--line2,var(--line));cursor:pointer}
+.ed-sw::after{content:"";position:absolute;inset:-6px}
+.ed-sw[aria-pressed="true"]{box-shadow:0 0 0 2px var(--accent)}
+.ed-prog{position:absolute;left:0;right:0;top:0;height:.6cqh;min-height:3px;background:rgba(255,255,255,.18);opacity:0;transition:opacity var(--dur-2) var(--ease);pointer-events:none;z-index:3}
+.ed-prog.show{opacity:1}
+.ed-prog i{display:block;height:100%;background:var(--prog,#FFD60A);transform-origin:left;transform:scaleX(0)}
+.ed-panel.in-r{animation:edTabR var(--dur-3) var(--ease-spring)}
+.ed-panel.in-l{animation:edTabL var(--dur-3) var(--ease-spring)}
+@keyframes edTabR{from{opacity:0;transform:translateX(16px)}to{opacity:1;transform:none}}
+@keyframes edTabL{from{opacity:0;transform:translateX(-16px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.ed-panel.in-r,.ed-panel.in-l{animation:none}}

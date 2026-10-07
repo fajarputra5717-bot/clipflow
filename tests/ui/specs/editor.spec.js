@@ -10,6 +10,8 @@ function editorState(over = {}) {
     hook_title: { on: false, text: "", duration: 2.5, default_text: "First mock clip", durations: [2, 2.5, 3], max_chars: 80 },
     cuts: { trim: null, removed: [], output_seconds: 6, suggest_min_gap: 0.6, pad: 0.12 },
     zoom: { on: true, intensity: 50, markers: [], max_markers: 40 },
+    progress: { on: false, color: "#FFD60A", colors: ["#FFD60A", "#FFFFFF", "#FF453A", "#0A84FF"] },
+    audio: { compress: false, silence_trim: false, silence_ranges: [], loudness: { lufs: -14, true_peak_dbtp: -1, always_on: true } },
     ...over,
   };
 }
@@ -26,13 +28,15 @@ async function mockEditor(page, api, timeline = TIMELINE) {
   api.editor = editorState();
   await page.route(/\/api\/jobs\/[^/]+\/candidates\/[^/]+\/editor\/timeline/, (route) =>
     route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(timeline) }));
-  await page.route(/\/api\/jobs\/[^/]+\/candidates\/[^/]+\/editor(\/hook-title|\/cuts|\/zoom)?(\?.*)?$/, async (route) => {
+  await page.route(/\/api\/jobs\/[^/]+\/candidates\/[^/]+\/editor(\/hook-title|\/cuts|\/zoom|\/progress|\/audio)?(\?.*)?$/, async (route) => {
     const req = route.request();
     if (req.method() === "PUT") {
       const body = req.postDataJSON(), path = new URL(req.url()).pathname;
       api.calls.push({ method: "PUT", path, body });
       if (path.endsWith("/cuts")) api.editor.cuts = { ...api.editor.cuts, trim: body.trim, removed: body.removed };
       else if (path.endsWith("/zoom")) api.editor.zoom = { ...api.editor.zoom, ...body };
+      else if (path.endsWith("/progress")) api.editor.progress = { ...api.editor.progress, ...body };
+      else if (path.endsWith("/audio")) api.editor.audio = { ...api.editor.audio, ...body };
       else api.editor.hook_title = { ...api.editor.hook_title, ...body };
     }
     return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(api.editor) });
@@ -226,5 +230,44 @@ test.describe("Editor page", () => {
     const post = api.calls.findIndex((c) => c.method === "POST" && c.path.endsWith("/regenerate-preview"));
     expect(put).toBeGreaterThanOrEqual(0);
     expect(put).toBeLessThan(post);
+  });
+});
+
+// P4 task 5: Effects + Audio tabs are live controls saved to edit_spec (debounced PUT), loudness is read-only.
+test.describe("Editor Effects + Audio tabs", () => {
+  test.use({ reducedMotion: "reduce" });
+  const lastPut = (api, end) => api.calls.filter((c) => c.method === "PUT" && c.path.endsWith(end)).at(-1)?.body;
+  async function openEd(app, api) {
+    await mockEditor(app, api);
+    await app.evaluate(() => { location.hash = "#editor/job-done/cand-a"; });
+    await expect(app.locator('[data-ed-tab="effects"]')).toBeVisible();
+  }
+
+  test("Effects: progress bar on + colour, punch-in switch + intensity", async ({ app, api }) => {
+    await openEd(app, api);
+    await app.locator('[data-ed-tab="effects"]').click();
+    await app.locator("[data-ed-progress-on]").click();
+    await app.locator('[data-ed-progress-color="#FF453A"]').click();
+    await expect(app.locator('[data-ed-progress-color="#FF453A"]')).toHaveAttribute("aria-pressed", "true");
+    await expect.poll(() => lastPut(api, "/progress"), { timeout: 3000 }).toEqual({ on: true, color: "#FF453A" });
+    await app.locator("[data-ed-zoom-intensity]").fill("80");
+    await expect(app.locator("#edZoomOut")).toHaveText("80%");
+    await expect.poll(() => lastPut(api, "/zoom")?.intensity, { timeout: 3000 }).toBe(80);
+    await app.locator("[data-ed-zoom-on]").click();
+    await expect.poll(() => lastPut(api, "/zoom")?.on, { timeout: 3000 }).toBe(false);
+  });
+
+  test("Audio: compression + silence trim save; loudness is read-only", async ({ app, api }) => {
+    await openEd(app, api);
+    await app.locator('[data-ed-tab="audio"]').click();
+    await expect(app.locator(".ed-panel")).toContainText("-14 LUFS");
+    await app.locator("[data-ed-compress]").click();
+    await expect.poll(() => lastPut(api, "/audio")?.compress, { timeout: 3000 }).toBe(true);
+    await app.locator("[data-ed-silence]").click();
+    await expect.poll(() => lastPut(api, "/audio")?.silence_trim, { timeout: 3000 }).toBe(true);
+    expect(lastPut(api, "/audio").silence_ranges.length).toBeGreaterThan(0);
+    await expect.poll(() => lastPut(api, "/cuts")?.removed.length, { timeout: 3000 }).toBeGreaterThan(0);
+    await app.locator("[data-ed-silence]").click();
+    await expect.poll(() => lastPut(api, "/cuts")?.removed.length, { timeout: 3000 }).toBe(0);
   });
 });

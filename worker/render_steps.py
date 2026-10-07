@@ -176,9 +176,78 @@ def card_window(dur: float, keep) -> tuple[float, float]:
 
 def add_title_card(ass_path, candidate: dict, *, size: tuple[int, int], clip_duration: float,
                    avoid: Optional[dict] = None, out_dir=None, log=print):
-    """The worker hook. Returns the .ass path the render should burn: unchanged when the card is off,
-    the same file with the card appended, or (captions off) a new title-only .ass named with the
-    candidate id (orphan sweep rule)."""
+    """Called by the worker before render_vertical (preview + final): adds the caption-layer overlays
+    of the editor to the .ass the render burns — the hook title card (task 1) and the progress bar
+    (task 5). Returns the .ass path to burn: unchanged when both are off, the same file with them
+    appended, or (captions off) a new overlay-only .ass named with the candidate id (orphan sweep rule)."""
+    path = _add_card(ass_path, candidate, size=size, clip_duration=clip_duration, avoid=avoid, out_dir=out_dir, log=log)
+    return add_progress_bar(path, candidate, size=size, clip_duration=clip_duration, out_dir=out_dir, log=log)
+
+
+def _ass_with_style(ass_path, candidate, size, out_dir, style_line):
+    """(path, body) of the .ass to append to: the existing file, or a new overlay-only one; the style
+    line is inserted after the Format line of [V4+ Styles] (once)."""
+    width, height = size
+    if ass_path and Path(ass_path).exists():
+        path = Path(ass_path)
+        body = path.read_text(encoding="utf-8")
+    else:
+        path = Path(out_dir or "/tmp") / f"{candidate['id']}.title.ass"
+        body = path.read_text(encoding="utf-8") if path.exists() and ass_path and str(path) == str(ass_path) else _header(width, height)
+    name = style_line.split(",", 1)[0]
+    if name not in body:
+        body = re.sub(r"(\[V4\+ Styles\]\s*\nFormat:[^\n]*\n)", lambda m: m.group(1) + style_line + "\n", body, count=1)
+    return path, body
+
+
+def _ass_bgr(hexrgb: str) -> str:
+    """'#RRGGBB' → '&HBBGGRR&' (ASS colour override, no alpha byte)."""
+    h = hexrgb.lstrip("#").upper()
+    return f"&H{h[4:6]}{h[2:4]}{h[0:2]}&"
+
+
+PROGRESS_STYLE = "Style: Progress,Arial,10,&H00FFFFFF,&H00FFFFFF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1"
+
+
+def progress_events(color: str, width: int, height: int, keep, clip_duration: float) -> list[str]:
+    """Bar at the top: a faint full-width track + a fill whose width grows with OUTPUT time. One pair of
+    events per kept segment (source time) with the fill animated from that segment's output start to its
+    output end, so after the cut the bar is continuous; a cut segment's events are removed with it."""
+    segs = keep or [(0.0, float(clip_duration))]
+    total = sum(b - a for a, b in segs) or 1.0
+    bar_h = max(4, round(height * 0.006))
+    rect = f"m 0 0 l {width} 0 {width} {bar_h} 0 {bar_h}"
+    out, acc = [], 0.0
+    for a, b in segs:
+        p0, p1 = acc / total * 100, (acc + (b - a)) / total * 100
+        ms = max(1, round((b - a) * 1000))
+        out.append(f"Dialogue: 30,{_ts(a)},{_ts(b)},Progress,,0,0,0,,{{\\an7\\pos(0,0)\\p1\\bord0\\shad0\\1c&HFFFFFF&\\1a&HD0&}}{rect}")
+        out.append(f"Dialogue: 31,{_ts(a)},{_ts(b)},Progress,,0,0,0,,{{\\an7\\pos(0,0)\\p1\\bord0\\shad0\\1c{_ass_bgr(color)}"
+                   f"\\1a&H00&\\fscx{p0:.3f}\\t(0,{ms},\\fscx{p1:.3f})}}{rect}")
+        acc += b - a
+    return out
+
+
+def add_progress_bar(ass_path, candidate: dict, *, size: tuple[int, int], clip_duration: float, out_dir=None, log=print):
+    try:
+        p = edit_specs.progress_of(candidate.get("edit_spec"))
+        if not p:
+            return ass_path
+        width, height = size
+        path, body = _ass_with_style(ass_path, candidate, size, out_dir, PROGRESS_STYLE)
+        events = progress_events(p["color"], width, height, cut_plan(candidate, clip_duration), clip_duration)
+        body = body.rstrip("\n") + "\n" + "\n".join(events) + "\n"
+        path.write_text(body, encoding="utf-8")
+        log(f"Progress bar: {len(events) // 2} segment(s), {p['color']}, canvas {width}x{height}")
+        return str(path)
+    except Exception as e:  # never break a render over the bar
+        log(f"WARNING: progress bar skipped: {e}")
+        return ass_path
+
+
+def _add_card(ass_path, candidate: dict, *, size: tuple[int, int], clip_duration: float,
+              avoid: Optional[dict] = None, out_dir=None, log=print):
+    """Hook title card (task 1): appended to the .ass (or a new one when captions are off)."""
     try:
         text = card_text(candidate)
         if not text:
@@ -209,6 +278,9 @@ def add_title_card(ass_path, candidate: dict, *, size: tuple[int, int], clip_dur
 # --------------------------------------------------------------------------- cuts (task 3)
 
 CUT_FPS_DEFAULT = 30.0
+# Light compression for peaky sources (task 5): tames shouts/laughs so loudnorm (always last) can raise the
+# rest without the limiter working hard. Gentle 3:1 above -20 dBFS, soft knee, no make-up gain.
+COMPRESSOR = "acompressor=threshold=0.1:ratio=3:attack=10:release=180:knee=4:makeup=1"
 
 
 def cut_plan(candidate: dict, clip_duration: float, fps: Optional[float] = None):
@@ -282,16 +354,26 @@ def apply_cuts(path, candidate: dict, clip_duration: float, *, preset, crf, run,
     Returns the output duration, or None when the clip has no cuts. Loudnorm runs after this."""
     from shared import retention
     keep = cut_plan(candidate, clip_duration, _probe_fps(path))
-    if not keep:
+    compress = bool(edit_specs.audio_of(candidate.get("edit_spec")).get("compress"))
+    if not keep and not compress:
         return None
     tmp = Path(str(path) + ".cut.mp4")
-    graph = retention.silence_trim_graph(keep, crossfade=retention.CUT_CROSSFADE, duration=float(clip_duration))
-    run(["ffmpeg", "-hide_banner", "-nostats", "-y", "-i", str(path), "-filter_complex", graph,
-         "-map", "[vtrim]", "-map", "[atrim]", *retention.encode_args(preset, crf), str(tmp)], timeout=timeout)
+    if keep:
+        graph = retention.silence_trim_graph(keep, crossfade=retention.CUT_CROSSFADE, duration=float(clip_duration))
+        amap = "[atrim]"
+        if compress:                      # task 5: light compression, then loudnorm (Lane A) runs last
+            graph += f";[atrim]{COMPRESSOR}[acomp]"
+            amap = "[acomp]"
+        run(["ffmpeg", "-hide_banner", "-nostats", "-y", "-i", str(path), "-filter_complex", graph,
+             "-map", "[vtrim]", "-map", amap, *retention.encode_args(preset, crf), str(tmp)], timeout=timeout)
+    else:                                 # compression only: the video is copied
+        run(["ffmpeg", "-hide_banner", "-nostats", "-y", "-i", str(path), "-map", "0:v", "-map", "0:a",
+             "-c:v", "copy", "-af", COMPRESSOR, "-c:a", "aac", "-b:a", "128k", "-ar", "48000",
+             "-movflags", "+faststart", str(tmp)], timeout=timeout)
     tmp.replace(path)
-    out = sum(b - a for a, b in keep)
-    log(f"Cuts: {len(keep)} segments, {clip_duration:.1f} s -> {out:.1f} s")
-    return out
+    out = sum(b - a for a, b in keep) if keep else float(clip_duration)
+    log(f"Cuts: {len(keep or [])} segments, {clip_duration:.1f} s -> {out:.1f} s" + (" + light compression" if compress else ""))
+    return out if keep else None
 
 
 # --------------------------------------------------------------------------- zoom (task 4)

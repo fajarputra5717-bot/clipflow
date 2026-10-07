@@ -9,7 +9,7 @@
   const $ = (id) => document.getElementById(id);
   const RENDERING = ["preview_queued", "preview_rendering", "render_queued", "rendering"];
   const TABS = [["captions", "Captions"], ["effects", "Effects"], ["audio", "Audio"], ["watermark", "Watermark"], ["export", "Export"]];
-  const READY_TABS = new Set(["captions"]);   // the rest arrive with P4 tasks 3–5
+  const READY_TABS = new Set(["captions", "effects", "audio"]);   // Watermark / Export arrive later
   const edUrl = (jid, cid) => `/api/jobs/${encodeURIComponent(jid)}/candidates/${encodeURIComponent(cid)}/editor`;
   const reduced = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const PPS = 100;                              // timeline pixels per second
@@ -57,6 +57,9 @@
       E.cuts = { trim: E.state.cuts.trim, removed: E.state.cuts.removed.map((r) => r.slice()) };
       E.mode = "seek";
       E.zoom = { on: E.state.zoom.on, intensity: E.state.zoom.intensity, markers: E.state.zoom.markers.slice() };
+      E.progress = { on: E.state.progress.on, color: E.state.progress.color };
+      E.audio = { compress: E.state.audio.compress, silence_trim: E.state.audio.silence_trim,
+                  silence_ranges: (E.state.audio.silence_ranges || []).map((r) => r.slice()) };
       render();
       if (RENDERING.includes(E.state.candidate.status)) watchRender();
     } catch (e) {
@@ -97,6 +100,7 @@
             ${c.has_preview ? `<video id="edVideo" src="${previewSrc()}" playsinline loop muted preload="metadata"></video>`
                             : `<div class="ed-novideo">No preview yet</div>`}
             <div class="ed-hook" id="edHook" aria-hidden="true"><span></span></div>
+            <div class="ed-prog" id="edProg" aria-hidden="true"><i></i></div>
           </div>
           <div class="ed-pctrl">
             <button class="icon-btn" type="button" data-ed-play aria-label="Play" ${c.has_preview ? "" : "disabled"}>▶</button>
@@ -111,7 +115,7 @@
                ${READY_TABS.has(id) ? "" : `aria-disabled="true" title="Coming in a later editor step"`}
                data-ed-tab="${id}">${n}</button>`).join("")}
           </div>
-          <div class="ed-panel" role="tabpanel" aria-labelledby="edtab-captions">${captionsPanel()}</div>
+          <div class="ed-panel" role="tabpanel" aria-labelledby="edtab-${E.tab}">${panelHtml(E.tab)}</div>
         </div>
       </div>
       <div class="ed-tl" id="edTl" aria-label="Timeline"><div class="ed-hint">Loading the timeline…</div></div>
@@ -390,6 +394,75 @@
     paintPlayhead(false); paintHook();
   }
 
+  function panelHtml(tab) { return tab === "effects" ? effectsPanel() : tab === "audio" ? audioPanel() : captionsPanel(); }
+  const sw = (attr, on, label) => `<button class="ed-switch" type="button" role="switch" aria-checked="${on}" aria-label="${label}" ${attr}></button>`;
+
+  function effectsPanel() {
+    const z = E.zoom, p = E.progress, n = z.markers.length;
+    return `
+      <div class="ed-group">
+        <div class="ed-row"><div><div class="ed-label">Zoom punch-ins</div>
+          <div class="ed-hint">${n} punch-in${n === 1 ? "" : "s"} on the timeline: add them in ◆ Zoom mode (key Z).</div></div>
+          ${sw("data-ed-zoom-on", z.on, "Zoom punch-ins")}</div>
+        <div class="ed-dep ${z.on ? "" : "is-off"}" ${z.on ? "" : "inert"}>
+          <label class="ed-range"><span>Intensity</span>
+            <input type="range" min="0" max="100" step="5" value="${z.intensity}" data-ed-zoom-intensity aria-label="Zoom intensity">
+            <output id="edZoomOut">${z.intensity}%</output></label>
+        </div>
+      </div>
+      <div class="ed-group">
+        <div class="ed-row"><div><div class="ed-label">Progress bar</div><div class="ed-hint">Thin bar across the top; it runs on through cuts.</div></div>
+          ${sw("data-ed-progress-on", p.on, "Progress bar")}</div>
+        <div class="ed-dep ${p.on ? "" : "is-off"}" ${p.on ? "" : "inert"}>
+          <div class="ed-swatches" role="group" aria-label="Progress bar colour">
+            ${E.state.progress.colors.map((c) => `<button type="button" class="ed-sw" style="background:${c}" data-ed-progress-color="${c}"
+               aria-pressed="${c === p.color}" aria-label="Colour ${c}"></button>`).join("")}
+          </div>
+        </div>
+      </div>`;
+  }
+
+  function audioPanel() {
+    const a = E.audio, sugg = E.tl ? suggestedPauses() : [];
+    const applied = a.silence_ranges.reduce((t, [s, e]) => t + (e - s), 0);
+    const silenceHint = a.silence_trim ? `${a.silence_ranges.length} pause${a.silence_ranges.length === 1 ? "" : "s"} cut, ${applied.toFixed(1)} s saved. Restore any on the timeline.`
+      : `${sugg.length} pause${sugg.length === 1 ? "" : "s"} ≥ ${E.state.cuts.suggest_min_gap} s found in the speech. Off by default.`;
+    const L = E.state.audio.loudness;
+    return `
+      <div class="ed-group">
+        <div class="ed-row"><div><div class="ed-label">Remove silences</div><div class="ed-hint" id="edSilenceHint">${silenceHint}</div></div>
+          ${sw("data-ed-silence", a.silence_trim, "Remove silences")}</div>
+      </div>
+      <div class="ed-group">
+        <div class="ed-row"><div><div class="ed-label">Light compression</div>
+          <div class="ed-hint">Evens out loud peaks (shouts, laughs) before loudness normalisation.</div></div>
+          ${sw("data-ed-compress", a.compress, "Light compression")}</div>
+      </div>
+      <div class="ed-group">
+        <div class="ed-row"><div><div class="ed-label">Loudness</div>
+          <div class="ed-hint">Normalised to ${L.lufs} LUFS with a ${L.true_peak_dbtp} dBTP limiter on every preview and final. Always on.</div></div>
+          <span class="badge completed">Always on</span></div>
+      </div>`;
+  }
+
+  function saver(key, url, getBody) {           // one debounced PUT per editor key
+    E.savers = E.savers || {};
+    const s = E.savers[key] = E.savers[key] || { t: 0 };
+    s.flush = async () => {
+      clearTimeout(s.t); s.t = 0;
+      try { E.state = await api(edUrl(E.jid, E.cid) + url, { method: "PUT", body: JSON.stringify(getBody()) }); paintState(); }
+      catch (e) { paintState("Not saved: " + e.message); throw e; }
+    };
+    clearTimeout(s.t); E.dirty = true; paintHook(); paintState("Saving…");
+    s.t = setTimeout(s.flush, 600);
+  }
+  async function flushSavers() {
+    for (const s of Object.values(E.savers || {})) if (s.t) await s.flush();
+  }
+  const saveProgress = () => saver("progress", "/progress", () => E.progress);
+  const saveAudio = () => saver("audio", "/audio", () => E.audio);
+  function repaintPanel() { const p = document.querySelector(".ed-panel"); if (p) p.innerHTML = panelHtml(E.tab); }
+
   function captionsPanel() {
     const h = E.hook;
     return `
@@ -422,6 +495,12 @@
     // The rendered preview already has the saved card baked in: the CSS overlay only stands in for
     // changes that aren't rendered yet (otherwise two cards would show).
     const show = !!E.dirty && E.hook.on && !!hookText() && t < Number(E.hook.duration);
+    const prog = $("edProg");
+    if (prog) {
+      const on = !!E.dirty && E.progress && E.progress.on, dur = (v && v.duration) || 0;
+      prog.classList.toggle("show", on);
+      if (on) { prog.style.setProperty("--prog", E.progress.color); prog.firstElementChild.style.transform = `scaleX(${dur ? Math.min(1, v.currentTime / dur) : 0})`; }
+    }
     const note = $("edNote");
     if (note) note.textContent = E.dirty ? "The card on the video is a live preview: Render preview bakes it in." : "";
     el.querySelector("span").textContent = hookText();
@@ -482,6 +561,7 @@
       if (E.saveT) await save();
       if (E.cutT) await saveCuts();
       if (E.zoomT) await saveZoom();
+      await flushSavers();
       await api(`/api/jobs/${encodeURIComponent(E.jid)}/candidates/${encodeURIComponent(E.cid)}/regenerate-preview`, { method: "POST" });
       E.state.candidate.status = "preview_queued";
       paintState();
@@ -515,7 +595,7 @@
 
   // ------------------------------------------------------------------ events (delegated, data-*)
   document.addEventListener("click", (e) => {
-    const t = e.target.closest("[data-ed-back],[data-ed-hook-on],[data-ed-hook-dur],[data-ed-render],[data-ed-play],[data-ed-tab],[data-ed-word],[data-ed-pause],[data-ed-mode],[data-ed-suggest],[data-ed-fillers],[data-ed-cuts-reset],[data-ed-zoom-add],[data-ed-zoom-mark],[data-ed-trim],[data-ed-seekarea]");
+    const t = e.target.closest("[data-ed-back],[data-ed-hook-on],[data-ed-hook-dur],[data-ed-render],[data-ed-play],[data-ed-tab],[data-ed-zoom-on],[data-ed-progress-on],[data-ed-progress-color],[data-ed-compress],[data-ed-silence],[data-ed-word],[data-ed-pause],[data-ed-mode],[data-ed-suggest],[data-ed-fillers],[data-ed-cuts-reset],[data-ed-zoom-add],[data-ed-zoom-mark],[data-ed-trim],[data-ed-seekarea]");
     if (!t || !E.state && !t.matches("[data-ed-back]")) return;
     if (t.matches("[data-ed-back]")) {                       // back to the Review page (step 4) for this job
       e.preventDefault(); const jid = E.jid; close(false); location.hash = `#review/${encodeURIComponent(jid || "")}`;
@@ -560,9 +640,31 @@
     if (t.matches("[data-ed-render]")) return renderPreview(t);
     if (t.matches("[data-ed-play]")) { const v = $("edVideo"); if (v) v.paused ? v.play() : v.pause(); return; }
     if (t.matches("[data-ed-tab]") && t.getAttribute("aria-disabled") !== "true") {
+      const order = ["captions", "effects", "audio", "watermark", "export"], from = order.indexOf(E.tab);
       E.tab = t.dataset.edTab;
       document.querySelectorAll("[data-ed-tab]").forEach((b) => b.setAttribute("aria-selected", String(b === t)));
+      const panel = document.querySelector(".ed-panel");
+      panel.setAttribute("aria-labelledby", "edtab-" + E.tab);
+      panel.innerHTML = panelHtml(E.tab);
+      panel.classList.remove("in-l", "in-r"); void panel.offsetWidth;
+      if (!reduced()) panel.classList.add(order.indexOf(E.tab) > from ? "in-r" : "in-l");
       moveSeg();
+      return;
+    }
+    if (t.matches("[data-ed-zoom-on]")) { E.zoom.on = !E.zoom.on; repaintPanel(); zoomChanged(); return; }
+    if (t.matches("[data-ed-progress-on]")) { E.progress.on = !E.progress.on; repaintPanel(); saveProgress(); return; }
+    if (t.matches("[data-ed-progress-color]")) { E.progress.color = t.dataset.edProgressColor; repaintPanel(); saveProgress(); return; }
+    if (t.matches("[data-ed-compress]")) { E.audio.compress = !E.audio.compress; repaintPanel(); saveAudio(); return; }
+    if (t.matches("[data-ed-silence]")) {
+      if (!E.audio.silence_trim) {
+        const ranges = suggestedPauses().map(pauseRange);
+        E.cuts.removed = merge([...E.cuts.removed, ...ranges]);
+        E.audio = { ...E.audio, silence_trim: true, silence_ranges: ranges };
+      } else {
+        E.audio.silence_ranges.forEach(([s, e]) => { E.cuts.removed = subtract(E.cuts.removed, s, e); });
+        E.audio = { ...E.audio, silence_trim: false, silence_ranges: [] };
+      }
+      cutsChanged(); repaintPanel(); saveAudio(); return;
     }
   });
   function setMode(m) {
@@ -596,6 +698,10 @@
     }
   });
   document.addEventListener("input", (e) => {
+    if (e.target.matches && e.target.matches("[data-ed-zoom-intensity]") && E.state) {
+      E.zoom.intensity = Number(e.target.value); const o = $("edZoomOut"); if (o) o.textContent = `${E.zoom.intensity}%`;
+      zoomChanged(); return;
+    }
     if (e.target.id !== "edHookText" || !E.state) return;
     E.hook.text = e.target.value;
     const v = $("edVideo"); if (v && v.currentTime > Number(E.hook.duration)) v.currentTime = 0;
