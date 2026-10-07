@@ -120,3 +120,11 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 146 · 2026-10-07 · P2.5 S2: Approve & schedule sheet (per platform: account, WIB suggested slots, live eligibility), GET schedule-plan / POST schedule (approve gate + planned clip_posts), re-plan re-checks · main.py, index.html
 147 · 2026-10-07 · P2.5 S3: Schedule step live — GET /api/schedule (own planned posts by WIB day, overdue on top), list + desktop week calendar, Reschedule / Send to phone / Mark posted / Drop · main.py, index.html
 148 · 2026-10-07 · P2.5 S4: Telegram reminder REMINDER_LEAD_MIN before a planned post (+ package), once (reminded_at), > 1 h late = missed; new `sender` service; digest "Scheduled today"; card-send labels as own messages · worker.py, main.py, compose, digest, index.html
+149 · 2026-10-07 · Lane-b production merge (202d39a + 1758b6c): stepper Review → Review page, Editor → Editor page; old panel kept as "All edits" (no parity yet) · index.html, review.js
+150 · 2026-10-0x · (lane B) Brief parser: brief text → rules JSON + payout model + unsure fields, AI fallback · shared/brief_parser.py
+151 · 2026-10-0x · (lane B) P4 task 1: hook title card + Editor page shell, editor API (owner-scoped) · editor.js, routes_editor.py, render_steps.py
+152 · 2026-10-0x · (lane B) P4 task 2: timeline (waveform peaks + word chips, seek, playhead) · editor.js, render_steps.py
+153 · 2026-10-0x · (lane B) P4 task 3: cuts (words/pauses, silence suggestions, trim) + cut words leave burned captions · editor.js, render_steps.py
+154 · 2026-10-0x · (lane B) P4 task 5b: filler-word suggestions (never auto-cut) · editor.js
+155 · 2026-10-0x · (lane B) P4 task 6: Review page (flow-preview step 4) + filters remembered per user · review.js, routes
+156 · 2026-10-0x · (lane B) P4 task 4: zoom punch-ins (timeline markers, rendered via retention.py) · editor.js, render_steps.py
