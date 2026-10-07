@@ -1,6 +1,7 @@
 """Daily 09:00 WIB digest for ONE user (P2 part 6b, 142): read-only queries, text for Telegram.
 
 Sections (each only when non-empty; nothing at all → None, no message):
+  • Scheduled today — planned posts with a time today (WIB), P2.5 S4.
   • Ready to post — finished clips × allowed platform without a live post (same rows as the Publish step).
   • Claim now — posted posts whose payouts.claim_advice says claim_now (payout + deadline).
   • Deadlines — waiting posts whose claim window closes within 48 h (views still needed).
@@ -60,8 +61,32 @@ def _posted(cur, user_id):
     return [dict(zip(keys, r)) for r in cur.fetchall()]
 
 
+def _scheduled_today(cur, user_id, now):
+    """P2.5 S4 (148): today's planned posts (WIB day), in time order."""
+    day = now.astimezone(payouts.WIB).date()
+    start = datetime.combine(day, datetime.min.time(), payouts.WIB)
+    cur.execute(
+        """
+        SELECT p.scheduled_for, p.platform, a.handle, p.title FROM clip_posts p
+        LEFT JOIN platform_accounts a ON a.id = p.account_id
+        WHERE p.user_id = %s AND p.status = 'planned' AND p.scheduled_for >= %s AND p.scheduled_for < %s
+        ORDER BY p.scheduled_for
+        """,
+        (user_id, start, start + timedelta(days=1)),
+    )
+    return cur.fetchall()
+
+
 def build(cur, user_id: str, now: datetime) -> str | None:
     lines = []
+    today = _scheduled_today(cur, user_id, now)
+    if today:
+        lines.append(f"🕒 Scheduled today: {len(today)} (reminder before each)")
+        for when, plat, handle, title in today[:MAX_LINES]:
+            lines.append(f"  • {when.astimezone(payouts.WIB):%H:%M} {rule_checks.PLATFORM_LIMITS.get(plat, (0, 0, plat))[2]}"
+                         f"{' @' + handle if handle else ''}: {(title or 'Clip')[:50]}")
+        if len(today) > MAX_LINES:
+            lines.append(f"  … +{len(today) - MAX_LINES} more in Schedule")
     ready = _ready(cur, user_id)
     if ready:
         n = sum(len(m) for _, _, m in ready)

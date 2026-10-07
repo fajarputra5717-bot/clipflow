@@ -474,6 +474,12 @@ def ensure_schema():
         "CREATE INDEX IF NOT EXISTS idx_telegram_sends_queue ON telegram_sends (status, created_at)",
         "CREATE INDEX IF NOT EXISTS idx_telegram_sends_user ON telegram_sends (user_id, candidate_id, platform, created_at DESC)",
         "ALTER TABLE clip_posts ADD COLUMN IF NOT EXISTS expected_rp BIGINT",
+        # P2.5 S4 (148): Telegram reminder at the planned time. reminded_at = queued once (or given up);
+        # reminder_status queued|sent|failed|missed (> 1 h late)|no_chat (retried while still due). Re-plan clears both.
+        "ALTER TABLE clip_posts ADD COLUMN IF NOT EXISTS reminded_at TIMESTAMPTZ",
+        "ALTER TABLE clip_posts ADD COLUMN IF NOT EXISTS reminder_status TEXT",
+        "CREATE INDEX IF NOT EXISTS idx_clip_posts_due ON clip_posts (scheduled_for) "
+        "WHERE status = 'planned' AND reminded_at IS NULL",
         "CREATE INDEX IF NOT EXISTS idx_clip_posts_candidate ON clip_posts (candidate_id)",
         "CREATE UNIQUE INDEX IF NOT EXISTS uq_clip_posts_url ON clip_posts (user_id, url) WHERE url IS NOT NULL",
         # A clip goes to one account once (re-post = drop the old row first).
@@ -489,6 +495,8 @@ def ensure_schema():
             PRIMARY KEY (user_id, key)
         )
         """,
+        # 148: a reminder send points at its planned post (header line). Keep LAST: the readiness check reads it.
+        "ALTER TABLE telegram_sends ADD COLUMN IF NOT EXISTS post_id TEXT",
     ]
 
     try:
@@ -524,8 +532,9 @@ def ensure_schema():
     try:
         with get_db() as conn:
             with conn.cursor() as cur:
-                # The newest table must exist: proof the statement list got through.
-                cur.execute("SELECT to_regclass('public.telegram_sends') IS NOT NULL")
+                # The newest column must exist: proof the statement list got through (148: telegram_sends.post_id).
+                cur.execute("SELECT EXISTS (SELECT 1 FROM information_schema.columns "
+                            "WHERE table_name = 'telegram_sends' AND column_name = 'post_id')")
                 SCHEMA_READY = bool(cur.fetchone()[0])
     except Exception:
         print("[backend] schema readiness check failed:", traceback.format_exc())
@@ -1997,10 +2006,12 @@ def schedule_clip(job_id: str, candidate_id: str, payload: SchedulePlan, request
                         cur.execute(
                             """
                             UPDATE clip_posts SET account_id = %s, scheduled_for = %s, eligible = %s,
-                                   ineligible_reason = %s, updated_at = NOW()
+                                   ineligible_reason = %s, updated_at = NOW(),
+                                   reminded_at = CASE WHEN scheduled_for IS DISTINCT FROM %s THEN NULL ELSE reminded_at END,
+                                   reminder_status = CASE WHEN scheduled_for IS DISTINCT FROM %s THEN NULL ELSE reminder_status END
                             WHERE id = %s AND user_id = %s
                             """,
-                            (account_id, when, eligible, reason, post["id"], user["id"]),
+                            (account_id, when, eligible, reason, when, when, post["id"], user["id"]),
                         )
                         ids.append(post["id"])
                         continue
@@ -2061,7 +2072,7 @@ def get_schedule(request: Request, start: Optional[str] = Query(default=None, al
             cur.execute(
                 f"""
                 SELECT {POST_COLUMNS}, c.status, COALESCE(c.final_path, ''), c.progress, c.thumbnail_path IS NOT NULL,
-                       COALESCE(NULLIF(c.manual_title, ''), NULLIF(c.title, ''), c.ai_title)
+                       COALESCE(NULLIF(c.manual_title, ''), NULLIF(c.title, ''), c.ai_title), p.reminder_status
                 FROM {POST_FROM} LEFT JOIN clip_candidates c ON c.id = p.candidate_id
                 WHERE p.user_id = %s AND p.status = 'planned' AND p.scheduled_for IS NOT NULL
                   AND ((p.scheduled_for >= %s AND p.scheduled_for < %s) OR p.scheduled_for < %s)
@@ -2070,16 +2081,17 @@ def get_schedule(request: Request, start: Optional[str] = Query(default=None, al
                 (user["id"], t0, t1, now),
             )
             rows = cur.fetchall()
+            chat, _ = telegram_chat_for(cur, user)
     n = len(POST_COLUMNS.split(","))
     overdue, days = [], {}
     for r in rows:
         d = _post_row(r[:n])
-        cstatus, final, progress, has_thumb, ctitle = r[n:]
+        cstatus, final, progress, has_thumb, ctitle, reminder = r[n:]
         rules = campaigns.get(d["campaign"]) if d["campaign"] else None
         d.update({"title": ctitle or d["title"], "has_thumbnail": bool(has_thumb),
                   "platform_name": rule_checks.PLATFORM_LIMITS.get(d["platform"], (0, 0, d["platform"]))[2],
                   "campaign_name": campaigns.display_name(rules) if rules else None,
-                  "render": _render_state(cstatus, final, progress)})
+                  "render": _render_state(cstatus, final, progress), "reminder_status": reminder})
         when = datetime.fromisoformat(d["scheduled_for"])
         d["overdue"] = when < now
         if d["overdue"]:
@@ -2091,7 +2103,10 @@ def get_schedule(request: Request, start: Optional[str] = Query(default=None, al
     out_days = [{"date": (first + timedelta(days=i)).isoformat(), "posts": days.get((first + timedelta(days=i)).isoformat(), [])}
                 for i in range(span)]
     return {"from": t0.isoformat(), "to": t1.isoformat(), "now": now.isoformat(),
-            "posting_times": _posting_times(user["id"]), "overdue": overdue, "days": out_days}
+            "posting_times": _posting_times(user["id"]), "overdue": overdue, "days": out_days,
+            # 148: reminders need the bot + the user's own chat; the view says so when either is missing.
+            "telegram_ready": bool((os.getenv("TELEGRAM_BOT_TOKEN") or "").strip() and chat),
+            "reminder_lead_min": int(runtime_setting("REMINDER_LEAD_MIN", user_id=user["id"]) or 15)}
 
 
 # ---------- pre-post checks (P2 part 4, 131) ----------
@@ -2339,6 +2354,8 @@ def update_post(post_id: str, payload: PostUpdate, request: Request):
                     and (sets.get("scheduled_for") or current.get("scheduled_for")):
                 # 146: re-plan → the pre-post checks again, at the planned time.
                 when = sets.get("scheduled_for") or _parse_ts(current["scheduled_for"], "scheduled_for")
+                if "scheduled_for" in sent:
+                    sets["reminded_at"] = sets["reminder_status"] = None   # 148: a new time gets a new reminder
                 sets["eligible"], sets["ineligible_reason"] = _eligibility_for(
                     cur, user["id"], current["candidate_id"], current["platform"], new["account_id"], when)
             if current["status"] == "planned" and new["status"] == "posted" and current["candidate_id"]:
@@ -5677,6 +5694,9 @@ def update_settings(req: SettingsUpdate, request: Request):
     if v and (not v.isdigit() or not 1 <= int(v) <= 8):
         raise HTTPException(status_code=400, detail="Clips per video must be a whole number from 1 to 8")
     validate_watermark_height(req.values)
+    v = str(req.values.get("REMINDER_LEAD_MIN") or "").strip()
+    if v and (not v.isdigit() or not 0 <= int(v) <= 120):
+        raise HTTPException(status_code=400, detail="Reminder lead must be a whole number of minutes from 0 to 120")
     if str(req.values.get("POSTING_TIMES") or "").strip():
         # P2.5 S1: stored normalised ({platform: sorted "HH:MM"} WIB); "" = back to the default.
         try:

@@ -161,6 +161,10 @@ async function mockApi(page, api) {
           ineligible_reason: (api.planWarn || {})[x.platform] || null })) });
         return json({ approved: !api.schedulePlan.approved, posts: body.posts.map((x, i) => ({ id: "plan-" + i, status: "planned", ...x })) });
       } }
+    if (path === "/api/settings" && method === "PUT" && body?.values && "REMINDER_LEAD_MIN" in body.values) {   // P2.5 S4 mock
+      api.settings = { ...(api.settings || {}), REMINDER_LEAD_MIN: { value: body.values.REMINDER_LEAD_MIN, source: "user", scope: "user" } };
+      if (!("POSTING_TIMES" in body.values)) return json({ status: "ok" });
+    }
     if (path === "/api/settings" && method === "PUT" && body?.values && "POSTING_TIMES" in body.values) {   // P2.5 S1 mock
       const v = body.values.POSTING_TIMES;
       if (v.includes("99:")) return json({ detail: "TikTok: '99:00' is not a time (HH:MM, 24 h)" }, 400);

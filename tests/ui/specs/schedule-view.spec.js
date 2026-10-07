@@ -96,3 +96,19 @@ test("week calendar on desktop; list only on phones (screenshots)", async ({ app
   expect(await app.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await app.screenshot({ path: `test-results/schedule-list-${mobile ? 390 : 1280}.png`, fullPage: true });
 });
+
+test("reminders (148): chip per row, banner when Telegram isn't set up, lead line when it is", async ({ app, api }) => {
+  seed(api);
+  const today = api.schedule.days.flatMap((d) => d.posts);
+  today[0].reminder_status = "sent"; today[1].reminder_status = "no_chat"; api.schedule.overdue[0].reminder_status = "missed";
+  api.schedule.telegram_ready = false; api.schedule.reminder_lead_min = 15;
+  await open(app);
+  await expect(app.locator('[data-sched-row="pl-1"] [data-reminder]')).toHaveText("Reminder sent");
+  await expect(app.locator('[data-sched-row="pl-2"] [data-reminder]')).toHaveText("No reminder: add your Telegram chat in Account");
+  await expect(app.locator('[data-sched-row="pl-0"] [data-reminder]')).toHaveText("Reminder missed (server was down)");
+  await expect(app.locator(".sched-tg")).toContainText("isn't set up yet");
+  api.schedule.telegram_ready = true;
+  await app.click("#refreshView");
+  await expect(app.locator(".sched-lead")).toHaveText("Telegram reminder 15 min before each post (Settings → Posting times).");
+  await expect(app.locator(".sched-tg")).toHaveCount(0);
+});

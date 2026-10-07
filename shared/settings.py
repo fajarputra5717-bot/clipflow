@@ -38,6 +38,8 @@ DEFAULT_SETTINGS = {
     # 2026-10-07: common Indonesian lunch/evening peaks; per user, adjustable in Settings → Posting times.
     "POSTING_TIMES": '{"tiktok": ["12:00", "19:00", "21:00"], "instagram": ["11:30", "19:30"], '
                      '"youtube": ["17:00", "20:00"], "facebook": ["12:00", "19:00"]}',
+    # P2.5 S4: Telegram reminder this many minutes before a planned post (owner-approved 15; 0–120, per user).
+    "REMINDER_LEAD_MIN": "15",
     "CLIP_TARGET_DURATION": "35",
     "CLIP_MIN_DURATION": "20",
     "CLIP_MAX_DURATION": "55",
@@ -152,6 +154,7 @@ USER_SETTING_KEYS = {
     "ACTIVE_WATERMARK_ID",
     "HASHTAGS",
     "POSTING_TIMES",
+    "REMINDER_LEAD_MIN",
 }
 
 # User-level keys with NO global fallback: the value names a row the user

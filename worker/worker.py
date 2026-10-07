@@ -9,6 +9,7 @@ import random
 import re
 import statistics
 import subprocess
+import sys
 import threading
 import time
 import traceback
@@ -660,7 +661,22 @@ def process_telegram_send(send):
             telegram_call("sendMessage", {"chat_id": chat, "text": "ClipFlow ✓ Send to phone will deliver your clips to this chat."})
             update_telegram_send(sid, status="sent", progress=100, message="Test message sent", mode="text", sent_at=datetime.now(timezone.utc))
             return
-        c, title, captions, filename = telegram_post_text(send)
+        if send["kind"] == "reminder":
+            if not telegram_reminder_head(send):
+                return  # the post was posted/dropped/re-planned meanwhile: nothing to remind
+            try:
+                c, title, captions, filename = telegram_post_text(send)
+            except TelegramError as exc:
+                if exc.transient:
+                    raise
+                # No final yet (or gone): the reminder still lands, with what to do.
+                telegram_call("sendMessage", {"chat_id": chat, "text": f"⚠ {exc}: open ClipFlow → Schedule to render or re-plan it."})
+                update_telegram_send(sid, status="sent", progress=100, message="Reminder sent (no final to attach)",
+                                     mode="text", sent_at=datetime.now(timezone.utc), error=None)
+                set_reminder_status(send, "sent")
+                return
+        else:
+            c, title, captions, filename = telegram_post_text(send)
         src = Path(c["final_path"])
         if not src.is_absolute():
             src = DATA_ROOT / src
@@ -689,24 +705,28 @@ def process_telegram_send(send):
             telegram_call("sendMessage", {"chat_id": chat, "text": f"{head}\n\nThis clip is over Telegram's 50 MB limit and couldn't be shrunk without wrecking it: download it from ClipFlow → Publish."})
         update_telegram_send(sid, progress=85, message="Sending the caption" if len(captions) == 1 else "Sending the captions")
         for plat, caption in captions:
-            if len(captions) == 1:
-                telegram_call("sendMessage", {"chat_id": chat, "text": caption[:4096] or title})
-            else:  # one message per platform, so each copies on its own
-                label = rule_checks_platform_name(plat)
-                telegram_call("sendMessage", {"chat_id": chat, "text": f"{label}:\n{caption}"[:4096]})
+            if len(captions) > 1:  # the platform label is its own message: a long-press copies the caption alone
+                telegram_call("sendMessage", {"chat_id": chat, "text": f"⬇ {rule_checks_platform_name(plat)} caption"})
+            telegram_call("sendMessage", {"chat_id": chat, "text": caption[:4096] or title})
         msg = {"video": "Sent to your phone", "reencoded": "Sent (re-encoded under 50 MB)", "too_big": "Too big for Telegram: caption + note sent"}[mode]
         update_telegram_send(sid, status="sent", progress=100, message=msg, mode=mode, sent_at=datetime.now(timezone.utc), error=None)
+        if send["kind"] == "reminder":
+            set_reminder_status(send, "sent")
         log(f"Telegram send {sid}: {mode}")
     except TelegramError as exc:
         again = exc.transient and int(send["attempts"] or 0) < TELEGRAM_MAX_ATTEMPTS
         update_telegram_send(sid, status="queued" if again else "failed", progress=0,
                              message="Retrying soon" if again else "Failed", error=str(exc)[:300],
                              retry_after=datetime.now(timezone.utc) + timedelta(minutes=2 * int(send["attempts"] or 1)) if again else None)
+        if send["kind"] == "reminder" and not again:
+            set_reminder_status(send, "failed")
         log(f"Telegram send {sid} {'retry' if again else 'failed'}: {exc}")
     except JobCancelled:
         raise
     except Exception as exc:
         update_telegram_send(sid, status="failed", progress=0, message="Failed", error=f"{type(exc).__name__}: {str(exc)[-250:]}")
+        if send["kind"] == "reminder":
+            set_reminder_status(send, "failed")
         log(f"Telegram send {sid} failed: {exc}")
     finally:
         if tmp:
@@ -718,6 +738,146 @@ def process_telegram_send(send):
 
 def rule_checks_platform_name(slug):
     return rule_checks.PLATFORM_LIMITS.get(slug, (0, 0, slug))[2]
+
+
+# ============================================================
+# REMINDERS (P2.5 S4, 148): a planned post with scheduled_for gets ONE Telegram reminder REMINDER_LEAD_MIN
+# (per user, default 15) before its time, to the owner's own chat: "⏰ Post now: …" + the send-to-phone
+# package for that platform (video ≤ 50 MB or shrunk, caption as its own message). reminded_at is set in
+# the same transaction that queues it. After downtime: still sent when < 1 h late, else only flagged
+# (reminder_status 'missed'). No chat → 'no_chat', retried each pass while the post is still due. Nothing
+# is posted automatically. Runs in the sender (worker.py --telegram-only) so long renders never delay it.
+# ============================================================
+
+REMINDER_LATE_MAX = timedelta(hours=1)
+REMINDER_LEAD_MAX_MIN = 120
+
+
+def reminder_chat(conn, user_id):
+    """The user's own chat (user_settings TELEGRAM_CHAT_ID); an admin falls back to env TELEGRAM_CHAT_ID,
+    a member never does. Same rule as main.py telegram_chat_for (141)."""
+    row = conn.execute(
+        "SELECT u.role, s.value FROM users u LEFT JOIN user_settings s ON s.user_id = u.id AND s.key = 'TELEGRAM_CHAT_ID' "
+        "WHERE u.id = %s AND u.active",
+        (user_id,),
+    ).fetchone()
+    if not row:
+        return None
+    if (row["value"] or "").strip():
+        return row["value"].strip()
+    env_chat = (os.getenv("TELEGRAM_CHAT_ID") or "").strip()
+    return env_chat if row["role"] == "admin" and env_chat else None
+
+
+def queue_due_reminders(now=None):
+    """Queue reminders that are due; returns how many were queued."""
+    now = now or datetime.now(timezone.utc)
+    bot = bool((os.getenv("TELEGRAM_BOT_TOKEN") or "").strip())
+    queued = 0
+    try:
+        with db() as conn:
+            rows = conn.execute(
+                """
+                SELECT p.id, p.user_id, p.candidate_id, p.platform, p.scheduled_for, p.reminder_status
+                FROM clip_posts p
+                WHERE p.status = 'planned' AND p.scheduled_for IS NOT NULL AND p.reminded_at IS NULL
+                  AND p.scheduled_for <= %s
+                ORDER BY p.scheduled_for LIMIT 100
+                FOR UPDATE OF p SKIP LOCKED
+                """,
+                (now + timedelta(minutes=REMINDER_LEAD_MAX_MIN),),
+            ).fetchall()
+            for r in rows:
+                lead = max(0, min(REMINDER_LEAD_MAX_MIN, _settings.get_int("REMINDER_LEAD_MIN", 15, r["user_id"]) or 0))
+                if r["scheduled_for"] > now + timedelta(minutes=lead):
+                    continue
+                if now - r["scheduled_for"] > REMINDER_LATE_MAX:
+                    conn.execute("UPDATE clip_posts SET reminded_at = %s, reminder_status = 'missed' WHERE id = %s", (now, r["id"]))
+                    log(f"Reminder for post {r['id']} missed ({now - r['scheduled_for']} late): flagged, not sent")
+                    continue
+                chat = reminder_chat(conn, r["user_id"]) if bot else None
+                if not chat:
+                    if r["reminder_status"] != "no_chat":
+                        conn.execute("UPDATE clip_posts SET reminder_status = 'no_chat' WHERE id = %s", (r["id"],))
+                    continue
+                conn.execute(
+                    """
+                    INSERT INTO telegram_sends (id, user_id, kind, candidate_id, platform, chat_id, message, post_id)
+                    VALUES (%s, %s, 'reminder', %s, %s, %s, 'Reminder queued', %s)
+                    """,
+                    (str(uuid.uuid4()), r["user_id"], r["candidate_id"], r["platform"], chat, r["id"]),
+                )
+                conn.execute("UPDATE clip_posts SET reminded_at = %s, reminder_status = 'queued' WHERE id = %s", (now, r["id"]))
+                queued += 1
+            conn.commit()
+    except (psycopg.errors.UndefinedColumn, psycopg.errors.UndefinedTable):
+        return 0  # backend hasn't migrated 148 yet
+    if queued:
+        log(f"Reminders queued: {queued}")
+    return queued
+
+
+def set_reminder_status(send, status):
+    if send.get("post_id"):
+        with db() as conn:
+            conn.execute("UPDATE clip_posts SET reminder_status = %s WHERE id = %s AND user_id = %s",
+                         (status, send["post_id"], send["user_id"]))
+            conn.commit()
+
+
+def telegram_reminder_head(send):
+    """Send the "⏰ Post now" line; False (send closed, nothing sent) when the post isn't planned any more."""
+    with db() as conn:
+        p = conn.execute(
+            """
+            SELECT p.status, p.platform, p.scheduled_for, p.campaign, a.handle FROM clip_posts p
+            LEFT JOIN platform_accounts a ON a.id = p.account_id WHERE p.id = %s AND p.user_id = %s
+            """,
+            (send.get("post_id"), send["user_id"]),
+        ).fetchone()
+    if not p or p["status"] != "planned" or not p["scheduled_for"]:
+        update_telegram_send(send["id"], status="sent", progress=100, message="Not needed any more (posted, dropped or moved)",
+                             mode="text", sent_at=datetime.now(timezone.utc))
+        return False
+    rules = campaigns.get(p["campaign"]) if p["campaign"] else None
+    when = p["scheduled_for"].astimezone(timezone(timedelta(hours=7))).strftime("%H:%M")
+    parts = [f"{rule_checks_platform_name(p['platform'])}{' @' + p['handle'] if p['handle'] else ''}", f"{when} WIB"]
+    if rules:
+        parts.append(campaigns.display_name(rules))
+    telegram_call("sendMessage", {"chat_id": send["chat_id"], "text": "⏰ Post now: " + " · ".join(parts)})
+    update_telegram_send(send["id"], progress=10, message="Reminder sent; sending the clip")
+    return True
+
+
+def telegram_loop():
+    """The sender (compose service `sender`, 148): Telegram sends + reminders only, so a long analysis or render
+    in the main worker never delays a reminder. The main worker skips both when TELEGRAM_SENDER=separate."""
+    log("Telegram sender started (reminders + send to phone)")
+    try:
+        requeue_telegram_sends()
+    except psycopg.errors.UndefinedTable:
+        pass
+    last_reminders = 0.0
+    while True:
+        try:
+            if time.time() - last_reminders >= 30:
+                last_reminders = time.time()
+                queue_due_reminders()
+            tg = claim_telegram_send()
+            if tg:
+                if tg.get("job_id"):
+                    run_as_owner(tg["job_id"], process_telegram_send, tg)
+                else:
+                    process_telegram_send(tg)
+                continue
+            time.sleep(2)
+        except Exception as exc:
+            log(f"Sender loop error: {exc}")
+            time.sleep(5)
+
+
+def sender_is_separate():
+    return (os.getenv("TELEGRAM_SENDER") or "").strip().lower() == "separate"
 
 
 def run_as_owner(job_id, fn, arg):
@@ -7701,7 +7861,8 @@ def main():
     # (was: reset_orphans(), which failed it outright).
     reclaim_stale(startup=True)
     try:
-        requeue_telegram_sends()
+        if not sender_is_separate():
+            requeue_telegram_sends()
     except psycopg.errors.UndefinedTable:
         log("telegram_sends not created yet (backend migrates it); skipping requeue")
     try:
@@ -7755,8 +7916,9 @@ def main():
 
                 continue
 
-            # 141: Send to phone (Telegram) — after renders and Submagic, before idling.
-            tg = claim_telegram_send()
+            # 141: Send to phone (Telegram) — after renders and Submagic, before idling. With the separate
+            # sender (148, prod) the worker leaves Telegram + reminders to it.
+            tg = None if sender_is_separate() else claim_telegram_send()
             if tg:
                 if tg.get("job_id"):
                     run_as_owner(tg["job_id"], process_telegram_send, tg)
@@ -7767,6 +7929,8 @@ def main():
             # Nothing queued: housekeeping (R-14/R-15), then idle.
             maybe_reclaim_stale()
             maybe_run_sweeps()
+            if not sender_is_separate():
+                maybe_queue_reminders()
 
             time.sleep(
                 2
@@ -7834,6 +7998,20 @@ def main():
 # ENTRY POINT
 # ============================================================
 
+_last_reminder_pass = 0.0
+
+
+def maybe_queue_reminders():
+    """Worker without a separate sender (e.g. staging): reminders at most every 30 s while idle."""
+    global _last_reminder_pass
+    if time.time() - _last_reminder_pass >= 30:
+        _last_reminder_pass = time.time()
+        queue_due_reminders()
+
+
 if __name__ == "__main__":
 
-    main()
+    if "--telegram-only" in sys.argv:
+        telegram_loop()
+    else:
+        main()

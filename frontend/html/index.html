@@ -1325,6 +1325,9 @@ select::-ms-expand{display:none}
 .sweek-post span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;color:var(--muted)}
 .sweek-post.is-warn{border-color:var(--badge-warn-line)}
 .sweek-free{font-size:11px;color:var(--muted2)}
+.sched-tg{margin-top:var(--sp-1);background:var(--badge-warn-bg);color:var(--badge-warn-fg)}
+.sched-tg .plain{color:inherit;text-decoration:underline}
+.sched-lead{margin:var(--sp-1) 0 0}
 /* Approve & schedule sheet (P2.5 S2, 146): one row per platform; times in WIB */
 .plan-intro{margin:0 0 var(--sp-2);font-size:13px;color:var(--muted)}
 .plan-row{border-top:1px solid var(--hairline);padding:12px 0}
@@ -1753,6 +1756,7 @@ select::-ms-expand{display:none}
       <section class="inset-group posting-times" id="postingTimes" aria-labelledby="postingTimesTitle">
         <h3 class="inset-title" id="postingTimesTitle">Posting times</h3>
         <div class="inset-list" id="postingTimesList"></div>
+        <div class="ptime-row ptime-lead"><label class="ptime-name" for="reminderLead">Telegram reminder</label><span class="ptime-add"><input id="reminderLead" type="number" min="0" max="120" step="5" inputmode="numeric"><span class="ptime-none">min before each planned post</span></span></div>
         <div class="ptimes-actions"><button class="primary" type="button" id="postingTimesSave" disabled>Save times</button><button class="secondary" type="button" id="postingTimesReset">Reset to defaults</button></div>
         <p class="hint users-hint" id="postingTimesHint">Suggested times to post on each platform, in WIB (Asia/Jakarta). ClipFlow suggests the next free one when you plan a post.</p>
         <div class="account-msg" id="postingTimesMsg" role="status" aria-live="polite"></div>
@@ -4047,7 +4051,7 @@ function schedRowHtml(p){
       <div class="qn"><div class="qt" title="${esc(p.title)}">${esc(p.title||"Untitled clip")}</div><div class="qc"><span class="pchip">${PLATFORM_ICON[p.platform]||""}${esc(PLATFORM_SHORT[p.platform]||p.platform_name)}</span>${p.account_handle?" · @"+esc(p.account_handle):""}${p.campaign_name?" · "+esc(p.campaign_name):""}</div></div>
       <div class="stime">${esc(fmtWib(p.scheduled_for,false).replace(" WIB",""))}<small>${p.overdue?esc(wibDay(p.scheduled_for))+" · overdue":"WIB"}</small></div>
     </div>
-    <div class="schips">${p.overdue?`<span class="badge failed">Overdue</span>`:""}<span class="badge ${renderLate&&rs.state!=="ready"?"failed":rcls}" data-render-state="${esc(rs.state||"")}">${esc(rs.label||"")}</span>${p.eligible===false?`<span class="badge not-eligible" title="${esc(p.ineligible_reason||"")}">Not eligible: ${esc(p.ineligible_reason||"")}</span>`:""}${schedSent[p.id]?`<span class="badge idle">Sent to phone</span>`:""}</div>
+    <div class="schips">${p.overdue?`<span class="badge failed">Overdue</span>`:""}<span class="badge ${renderLate&&rs.state!=="ready"?"failed":rcls}" data-render-state="${esc(rs.state||"")}">${esc(rs.label||"")}</span>${p.eligible===false?`<span class="badge not-eligible" title="${esc(p.ineligible_reason||"")}">Not eligible: ${esc(p.ineligible_reason||"")}</span>`:""}${reminderChip(p)}${schedSent[p.id]?`<span class="badge idle">Sent to phone</span>`:""}</div>
     <div class="qactions">
       <button class="secondary" type="button" data-sched-replan="${esc(p.id)}">Reschedule</button>
       <button class="secondary" type="button" data-sched-send="${esc(p.id)}" ${rs.state==="ready"?"":"disabled title=\"The final isn't rendered yet\""}>Send to phone</button>
@@ -4059,6 +4063,10 @@ function schedRowHtml(p){
   </div>`;
 }
 let schedSent={};
+// 148: reminder state per planned post (worker/sender sets clip_posts.reminder_status).
+const REMINDER_CHIP={queued:["Reminder on its way","idle"],sent:["Reminder sent","completed"],failed:["Reminder failed","failed"],
+  missed:["Reminder missed (server was down)","attention"],no_chat:["No reminder: add your Telegram chat in Account","attention"]};
+function reminderChip(p){const [t,c]=REMINDER_CHIP[p.reminder_status]||[];return t?`<span class="badge ${c}" data-reminder="${esc(p.reminder_status)}">${esc(t)}</span>`:""}
 function freeSlotsText(){const t=scheduleData.posting_times||{};return Object.entries(t).filter(([,v])=>v.length).map(([k,v])=>`${PLATFORM_SHORT[k]||k} ${v.join(" · ")}`).join("  ·  ")}
 function renderScheduleView(){
   if(!scheduleData)return;
@@ -4075,7 +4083,9 @@ function renderScheduleView(){
     body=d.days.map(day=>`<div class="sday"><h3>${esc(wibDay(day.date+"T12:00:00+07:00"))}${day.date===today?` <span class="is-today">Today</span>`:""}</h3>
       ${day.posts.length?day.posts.map(schedRowHtml).join(""):`<div class="sfree">${day.date<today?"Nothing planned":free?`Free: ${esc(free)} WIB`:"Nothing planned. Add times in Settings → Posting times."}</div>`}</div>`).join("");
   }
-  $("scheduleList").innerHTML=over+(total?"":`<p class="publish-empty">Nothing planned this week. Use <b>Approve &amp; schedule</b> on a clip in <button class="plain" type="button" data-nav="queue">Review</button>.</p>`)+body;
+  const tgNote=total&&d.telegram_ready===false?`<p class="plan-block sched-tg">Reminders go to your own Telegram chat, which isn't set up yet. <button class="plain" type="button" data-account>Add it in Account → Telegram</button></p>`
+    :total&&d.reminder_lead_min!=null?`<p class="plan-intro sched-lead">Telegram reminder ${d.reminder_lead_min?d.reminder_lead_min+" min before":"at"} each post (Settings → Posting times).</p>`:"";
+  $("scheduleList").innerHTML=tgNote+over+(total?"":`<p class="publish-empty">Nothing planned this week. Use <b>Approve &amp; schedule</b> on a clip in <button class="plain" type="button" data-nav="queue">Review</button>.</p>`)+body;
 }
 function schedPost(id){if(!scheduleData)return null;for(const p of scheduleData.overdue)if(p.id===id)return p;for(const d of scheduleData.days)for(const p of d.posts)if(p.id===id)return p;return null}
 document.addEventListener("click",async e=>{
@@ -4122,7 +4132,9 @@ async function loadAccounts(){
 // normalises (shared/schedule.py). Draft edits stay local until Save; Reset = "" (back to the default).
 let postingTimesDraft=null;
 function postingTimesSaved(){try{return JSON.parse((settingsCache.POSTING_TIMES||{}).value||"{}")}catch{return {}}}
-function postingTimesDirty(){return postingTimesDraft!=null&&JSON.stringify(postingTimesDraft)!==JSON.stringify(postingTimesSaved())}
+function leadSaved(){return String((settingsCache.REMINDER_LEAD_MIN||{}).value??"15")}
+function leadDirty(){const i=$("reminderLead");return !!settingsCache.REMINDER_LEAD_MIN&&i.value.trim()!==""&&i.value.trim()!==leadSaved()}
+function postingTimesDirty(){return (postingTimesDraft!=null&&JSON.stringify(postingTimesDraft)!==JSON.stringify(postingTimesSaved()))||leadDirty()}
 function postingTimesMessage(text,ok){const m=$("postingTimesMsg");m.textContent=text||"";m.classList.toggle("is-ok",!!ok);m.classList.toggle("is-error",!!text&&!ok)}
 function renderPostingTimes(){
   if(!settingsCache.POSTING_TIMES){$("postingTimes").hidden=true;return}
@@ -4133,11 +4145,13 @@ function renderPostingTimes(){
     return `<div class="ptime-row" data-ptime-row="${esc(p.slug)}"><span class="ptime-name">${PLATFORM_ICON[p.slug]||""}${esc(p.name)}</span>
       <span class="ptime-chips">${ts.length?ts.map(t=>`<span class="ptime-chip">${esc(t)}<button type="button" data-ptime-remove="${esc(p.slug)}" data-ptime="${esc(t)}" aria-label="Remove ${esc(t)} for ${esc(p.name)}">✕</button></span>`).join(""):`<span class="ptime-none">No suggested times</span>`}</span>
       <span class="ptime-add"><input type="time" step="300" data-ptime-input="${esc(p.slug)}" aria-label="New time for ${esc(p.name)} (WIB)"><button class="secondary" type="button" data-ptime-add="${esc(p.slug)}">Add</button></span></div>`}).join("");
+  const lead=$("reminderLead");lead.closest(".ptime-row").hidden=!settingsCache.REMINDER_LEAD_MIN;if(document.activeElement!==lead)lead.value=leadSaved();
   $("postingTimesSave").disabled=!postingTimesDirty();
 }
+document.addEventListener("input",e=>{if(e.target.id==="reminderLead")$("postingTimesSave").disabled=!postingTimesDirty()});
 async function savePostingTimes(value,btn,okText){
   setBusy(btn,true,"Saving…");postingTimesMessage("");
-  try{await api("/api/settings",{method:"PUT",body:JSON.stringify({values:{POSTING_TIMES:value}})});
+  try{await api("/api/settings",{method:"PUT",body:JSON.stringify({values:value})});
     postingTimesDraft=null;settingsCache=await api("/api/settings");renderPostingTimes();postingTimesMessage(okText,true)}
   catch(err){postingTimesMessage(err.message)}finally{setBusy(btn,false);$("postingTimesSave").disabled=!postingTimesDirty()}
 }
@@ -4149,8 +4163,9 @@ document.addEventListener("click",e=>{
     if(!/^\d{2}:\d{2}$/.test(v)){postingTimesMessage("Pick a time first (HH:MM, WIB).");inp.focus();return}
     postingTimesDraft[p]=[...new Set([...(postingTimesDraft[p]||[]),v])].sort();postingTimesMessage("");renderPostingTimes();
     document.querySelector(`[data-ptime-input="${css(p)}"]`)?.focus();return}
-  if(e.target.closest("#postingTimesSave"))return savePostingTimes(JSON.stringify(postingTimesDraft),$("postingTimesSave"),"Saved.");
-  if(e.target.closest("#postingTimesReset"))return savePostingTimes("",$("postingTimesReset"),"Back to the default times.");
+  if(e.target.closest("#postingTimesSave")){const v={};if(JSON.stringify(postingTimesDraft)!==JSON.stringify(postingTimesSaved()))v.POSTING_TIMES=JSON.stringify(postingTimesDraft);
+    if(leadDirty())v.REMINDER_LEAD_MIN=$("reminderLead").value.trim();return savePostingTimes(v,$("postingTimesSave"),"Saved.")}
+  if(e.target.closest("#postingTimesReset"))return savePostingTimes({POSTING_TIMES:""},$("postingTimesReset"),"Back to the default times.");
 });
 $("accountCreateForm").addEventListener("submit",async e=>{
   e.preventDefault();

@@ -50,3 +50,17 @@ test("posting times: add needs a time; server errors are shown", async ({ app, a
   await app.click("#postingTimesSave");
   await expect(app.locator("#postingTimesMsg")).toContainText("is not a time");
 });
+
+test("reminder lead (148): saved on its own as REMINDER_LEAD_MIN", async ({ app, api }) => {
+  api.settings = { ...(api.settings || {}), POSTING_TIMES: { value: DEFAULTS, source: "default", scope: "user" },
+    REMINDER_LEAD_MIN: { value: "15", source: "default", scope: "user" } };
+  await app.reload();
+  await openSettings(app);
+  await expect(app.locator("#reminderLead")).toHaveValue("15");
+  await app.fill("#reminderLead", "30");
+  await expect(app.locator("#postingTimesSave")).toBeEnabled();
+  await app.click("#postingTimesSave");
+  await expect(app.locator("#postingTimesMsg")).toHaveText("Saved.");
+  expect(api.calls.filter((c) => c.method === "PUT" && c.path === "/api/settings").at(-1).body).toEqual({ values: { REMINDER_LEAD_MIN: "30" } });
+  await expect(app.locator("#postingTimesSave")).toBeDisabled();
+});

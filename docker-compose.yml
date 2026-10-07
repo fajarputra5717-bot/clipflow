@@ -72,6 +72,7 @@ services:
       # faster-whisper models come from the Hugging Face hub; the cache
       # lives in a named volume so image rebuilds don't redownload (R-07).
       HF_HOME: /cache/huggingface
+      TELEGRAM_SENDER: separate   # 148: Telegram sends + reminders run in `sender`, never behind a long render
     volumes:
       - /data:/data
       - hf_cache:/cache/huggingface
@@ -79,6 +80,26 @@ services:
     depends_on:
       postgres: { condition: service_healthy }
       backend: { condition: service_healthy }   # 143: schema migrated first
+    logging: *logging
+
+  # P2.5 S4 (148): the worker image in Telegram-only mode: send-to-phone queue + planned-post reminders.
+  sender:
+    build:
+      context: ./worker
+      additional_contexts:
+        shared: ./shared
+    container_name: riftstorm-sender
+    restart: unless-stopped
+    command: ["python", "-u", "/app/worker.py", "--telegram-only"]
+    env_file: .env
+    environment:
+      <<: *app-env
+    volumes:
+      - /data:/data                           # finals to send; shrunk copies in /data/telegram
+      - ./docs/campaigns:/app/campaigns:ro
+    depends_on:
+      postgres: { condition: service_healthy }
+      backend: { condition: service_healthy }
     logging: *logging
 
   frontend:

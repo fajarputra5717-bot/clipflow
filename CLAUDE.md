@@ -21,7 +21,8 @@ docs/tasks/          original task specs
 /data                media on the data disk (bind-mounted into backend+worker)
 ```
 
-Rebuild/restart one service: `docker compose build worker && docker compose up -d worker`.
+Rebuild/restart one service: `docker compose build worker && docker compose up -d worker`. Worker code also runs in `sender`
+(148): rebuild/import-test/up both.
 Import-test every rebuilt image BEFORE `up` (no job running): `docker compose run --rm --no-deps -T --entrypoint python
 worker -c "import worker"` / `backend -c "import app.main"` (134: a load-time NameError crash-looped the prod worker).
 Schema first (143): only the backend migrates (`ensure_schema()`); `/health` is 503 until it finished, compose's backend
@@ -385,6 +386,9 @@ campaign windows via `payouts.window_problems`). Times are stored TIMESTAMPTZ (U
 `POST …/candidates/{cid}/schedule` = Approve gate + `_queue_final_render()` (the one approve path) + planned rows with
 `_eligibility_for()` at the planned time; re-plan via PATCH re-checks. Mark posted on a planned row PATCHes it. Schedule step (147): `GET /api/schedule` (own planned rows by WIB day + overdue),
 `#scheduleSection` in `TAB_SECTIONS` stepper order; its render fn is `renderScheduleView()` (`renderSchedule()` = the sheet).
+Reminders (148): service `sender` (`riftstorm-sender`, worker image `--telegram-only`) owns `telegram_sends` + 
+`queue_due_reminders()` (worker has `TELEGRAM_SENDER=separate`; without it the worker does both). One reminder per
+planned post: `reminded_at` set in the queueing transaction; > 1 h late = `missed`; re-plan clears it. Own chat only.
 
 ## Frontend shell (R-11/R-12/R-13, lane B 067-073; badge v2.1117)
 
