@@ -13,6 +13,8 @@ function editorState(over = {}) {
     progress: { on: false, color: "#FFD60A", colors: ["#FFD60A", "#FFFFFF", "#FF453A", "#0A84FF"] },
     audio: { compress: false, silence_trim: false, silence_ranges: [], loudness: { lufs: -14, true_peak_dbtp: -1, always_on: true } },
     captions: CAPTIONS(),
+    thumbnail: { options: [0, 1, 2].map((i) => ({ index: i, url: `/api/jobs/job-done/candidates/cand-a/thumbnail-options/${i}` })),
+                 picked: null, locked: false, current_url: "/api/jobs/job-done/candidates/cand-a/thumbnail", generating: false },
     ...over,
   };
 }
@@ -355,5 +357,50 @@ test.describe("Editor Captions tab", () => {
     expect(api.calls.some((c) => c.path.endsWith("/new-hook"))).toBe(false);
     await app.locator("[data-ed-new-hook]").click();
     await expect.poll(() => api.calls.some((c) => c.method === "POST" && c.path === CAND + "/new-hook")).toBe(true);
+  });
+});
+
+// P4 task 7b: Thumbnail tab = AI options + upload + pick (one list; a pick locks it for later renders).
+test.describe("Editor Thumbnail tab", () => {
+  test.use({ reducedMotion: "reduce" });
+  const CAND = "/api/jobs/job-done/candidates/cand-a";
+  async function openThumb(app, api) {
+    await mockEditor(app, api);
+    await app.evaluate(() => { location.hash = "#editor/job-done/cand-a"; });
+    await app.locator('[data-ed-tab="thumbnail"]').click();
+    await expect(app.locator("[data-ed-thumb-pick]")).toHaveCount(3);
+  }
+
+  test("tap an option to pick it (PATCH selected_thumbnail_index); the tab bar keeps every label whole", async ({ app, api }) => {
+    await openThumb(app, api);
+    await app.locator('[data-ed-thumb-pick="1"]').click();
+    await expect(app.locator('[data-ed-thumb-pick="1"]')).toHaveAttribute("aria-pressed", "true");
+    await expect(app.locator("#edThumbNote")).toHaveText("Picked: renders keep this thumbnail.");
+    await expect.poll(() => api.calls.find((c) => c.method === "PATCH" && c.path === CAND)?.body).toEqual({ selected_thumbnail_index: 1 });
+    const clipped = await app.locator(".ed-seg button").evaluateAll((bs) => bs.filter((b) => b.scrollWidth > b.clientWidth + 1).length);
+    expect(clipped).toBe(0);
+    expect(await app.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(0);
+  });
+
+  test("Generate with AI queues generation and refreshes the options when it finishes", async ({ app, api }) => {
+    await openThumb(app, api);
+    await app.locator("[data-ed-thumb-gen]").click();
+    await expect.poll(() => api.calls.some((c) => c.method === "POST" && c.path === CAND + "/generate-thumbnails-ai")).toBe(true);
+    await expect(app.locator("[data-ed-thumb-gen]")).toBeDisabled();
+    api.editor.thumbnail = { ...api.editor.thumbnail, options: [...api.editor.thumbnail.options, { index: 3, url: CAND + "/thumbnail-options/3" }] };
+    await expect(app.locator("[data-ed-thumb-pick]")).toHaveCount(4, { timeout: 8000 });
+    await expect(app.locator("[data-ed-thumb-gen]")).toBeEnabled();
+  });
+
+  test("upload adds an option and picks it", async ({ app, api }) => {
+    await openThumb(app, api);
+    await app.route(/\/thumbnail-upload$/, (r) => {
+      api.editor.thumbnail = { ...api.editor.thumbnail, picked: 3, locked: true,
+        options: [...api.editor.thumbnail.options, { index: 3, url: CAND + "/thumbnail-options/3" }] };
+      return r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ index: 3 }) });
+    });
+    await app.locator("[data-ed-thumb-upload]").setInputFiles({ name: "t.png", mimeType: "image/png", buffer: Buffer.from("89504e47", "hex") });
+    await expect.poll(() => api.calls.find((c) => c.method === "PATCH" && c.path === CAND)?.body).toEqual({ selected_thumbnail_index: 3 });
+    await expect(app.locator('[data-ed-thumb-pick="3"]')).toHaveAttribute("aria-pressed", "true");
   });
 });

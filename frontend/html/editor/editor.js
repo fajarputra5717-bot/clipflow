@@ -8,8 +8,9 @@
   "use strict";
   const $ = (id) => document.getElementById(id);
   const RENDERING = ["preview_queued", "preview_rendering", "render_queued", "rendering"];
-  const TABS = [["captions", "Captions"], ["effects", "Effects"], ["audio", "Audio"], ["watermark", "Watermark"], ["export", "Export"]];
-  const READY_TABS = new Set(["captions", "effects", "audio"]);   // Watermark / Export arrive later
+  const TABS = [["captions", "Captions"], ["effects", "Effects"], ["audio", "Audio"], ["watermark", "Watermark"], ["thumbnail", "Thumbnail"], ["export", "Export"]];
+  const READY_TABS = new Set(["captions", "effects", "audio", "thumbnail"]);   // Watermark / Export arrive later (7c/7d)
+  const THUMBING = ["thumbnail_queued", "thumbnail_rendering"];
   const edUrl = (jid, cid) => `/api/jobs/${encodeURIComponent(jid)}/candidates/${encodeURIComponent(cid)}/editor`;
   const reduced = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const PPS = 100;                              // timeline pixels per second
@@ -63,13 +64,14 @@
       loadCaptions();
       render();
       if (RENDERING.includes(E.state.candidate.status)) watchRender();
+      else if (THUMBING.includes(E.state.candidate.status)) watchThumbs();
     } catch (e) {
       s.innerHTML = `<div class="panel error-box">Can't open this clip: ${esc(e.message)} <a href="#" data-ed-back>Back</a></div>`;
     }
   }
 
   function close(setHash = true) {
-    clearTimeout(E.saveT); clearTimeout(E.cutT); clearTimeout(E.zoomT); clearInterval(E.pollT); cancelAnimationFrame(E.raf); E.tl = null; E.nowWord = -1; E.drag = null;
+    clearTimeout(E.saveT); clearTimeout(E.cutT); clearTimeout(E.zoomT); clearInterval(E.pollT); clearInterval(E.thumbT); cancelAnimationFrame(E.raf); E.tl = null; E.nowWord = -1; E.drag = null;
     const s = $("editorSection");
     if (s) { s.hidden = true; s.classList.add("hidden"); s.innerHTML = ""; }
     E.hidden.forEach(([v, hadHidden]) => v.classList.toggle("hidden", hadHidden));
@@ -395,7 +397,9 @@
     paintPlayhead(false); paintHook();
   }
 
-  function panelHtml(tab) { return tab === "effects" ? effectsPanel() : tab === "audio" ? audioPanel() : captionsPanel(); }
+  function panelHtml(tab) {
+    return tab === "effects" ? effectsPanel() : tab === "audio" ? audioPanel() : tab === "thumbnail" ? thumbnailPanel() : captionsPanel();
+  }
   const sw = (attr, on, label) => `<button class="ed-switch" type="button" role="switch" aria-checked="${on}" aria-label="${label}" ${attr}></button>`;
 
   function effectsPanel() {
@@ -644,6 +648,73 @@
     } catch (e) { setBusy(btn, false); paintState(e.message); }
   }
 
+  // ------------------------------------------------------------------ thumbnail (task 7b)
+  // AI-generated and uploaded options are one list, picked the same way. A pick sets thumbnail_locked,
+  // so later preview/final renders keep it (CLAUDE.md Thumbnails).
+  function thumbnailPanel() {
+    const T = E.state.thumbnail, v = encodeURIComponent(E.state.candidate.updated_at || ""), gen = T.generating;
+    return `
+      <div class="ed-group">
+        <div class="ed-label">Thumbnail</div>
+        <div class="ed-hint">AI-styled options with the hook headline, or upload your own. Tap one to use it.</div>
+        <div class="ed-thumb-actions">
+          <button type="button" class="sm" data-ed-thumb-gen ${gen ? "disabled" : ""}>${gen ? "Generating…" : T.options.length ? "Generate new options" : "Generate with AI"}</button>
+          <label class="btn sm secondary ed-upload" ${gen ? 'aria-disabled="true"' : ""}>Upload image<input type="file" accept="image/*" data-ed-thumb-upload ${gen ? "disabled" : ""} hidden></label>
+        </div>
+        ${T.options.length ? `<div class="ed-thumbs" role="group" aria-label="Thumbnail options">${T.options.map((o) => `
+          <button type="button" class="ed-thumb" data-ed-thumb-pick="${o.index}" aria-pressed="${T.picked === o.index}" aria-label="Use thumbnail option ${o.index + 1}">
+            <img src="${esc(mediaUrl(`${o.url}?v=${v}`))}" alt="" loading="lazy"><span class="ed-thumb-check" aria-hidden="true">✓</span></button>`).join("")}</div>`
+          : `<div class="ed-thumb-empty">${T.current_url ? `<img src="${esc(mediaUrl(`${T.current_url}?v=${v}`))}" alt="Current thumbnail">` : ""}
+              <span>No options yet. Until you pick one, the thumbnail is a frame from the preview.</span></div>`}
+        <div class="ed-hint" id="edThumbNote">${T.locked ? "Picked: renders keep this thumbnail." : T.options.length ? "Not picked yet: renders use a frame from the preview." : ""}</div>
+      </div>`;
+  }
+  const candUrl = () => `/api/jobs/${encodeURIComponent(E.jid)}/candidates/${encodeURIComponent(E.cid)}`;
+  async function refreshState() {
+    const st = await api(edUrl(E.jid, E.cid));
+    if (!E.cid) return;
+    E.state = st; if (E.tab === "thumbnail") repaintPanel();
+  }
+  async function pickThumb(i, btn) {
+    const T = E.state.thumbnail, before = T.picked;
+    T.picked = i; T.locked = true; repaintPanel();
+    try { await api(candUrl(), { method: "PATCH", body: JSON.stringify({ selected_thumbnail_index: i }) }); paintState(); }
+    catch (e) { T.picked = before; repaintPanel(); paintState("Thumbnail not saved: " + e.message); }
+  }
+  async function genThumbs(btn) {
+    setBusy(btn, true, "Starting…");
+    try {
+      await api(candUrl() + "/generate-thumbnails-ai", { method: "POST" });
+      E.state.candidate.status = "thumbnail_queued"; E.state.thumbnail.generating = true; repaintPanel(); watchThumbs();
+    } catch (e) { setBusy(btn, false); paintState("Thumbnails failed to start: " + e.message); }
+  }
+  function watchThumbs() {            // progress itself is the island (/api/activity); this only refreshes the tab
+    clearInterval(E.thumbT);
+    E.thumbT = setInterval(async () => {
+      try {
+        const st = await api(edUrl(E.jid, E.cid));
+        if (!E.cid) return clearInterval(E.thumbT);
+        if (THUMBING.includes(st.candidate.status)) return;
+        clearInterval(E.thumbT); E.state = st; if (E.tab === "thumbnail") repaintPanel();
+        paintState(st.candidate.status === "failed" ? "Thumbnail generation failed" : undefined);
+      } catch (_) { /* keep polling */ }
+    }, window.POLL_INTERVAL || 2200);
+  }
+  async function uploadThumb(input) {
+    const file = input.files && input.files[0]; if (!file) return;
+    const label = input.closest(".ed-upload");
+    setBusy(label, true, "Uploading…");
+    try {
+      const form = new FormData(); form.append("file", file);
+      const r = await authFetch(candUrl() + "/thumbnail-upload", { method: "POST", body: form });
+      let d = null; try { d = await r.json(); } catch (_) { /* no body */ }
+      if (!r.ok) throw new Error((d && d.detail) || `HTTP ${r.status}`);
+      if (typeof d.index === "number") await api(candUrl(), { method: "PATCH", body: JSON.stringify({ selected_thumbnail_index: d.index }) });
+      await refreshState();
+    } catch (e) { paintState("Upload failed: " + e.message); }
+    finally { input.value = ""; setBusy(label, false); }
+  }
+
   function hookText() { return (E.hook.text || E.hook.default_text || "").trim(); }
 
   function paintHook() {
@@ -692,6 +763,7 @@
     const seg = document.querySelector(".ed-seg"); if (!seg) return;
     const b = seg.querySelector('[aria-selected="true"]'), ind = seg.querySelector(".ed-seg-ind");
     ind.style.width = b.offsetWidth + "px"; ind.style.transform = `translateX(${b.offsetLeft}px)`;
+    if (seg.scrollWidth > seg.clientWidth) seg.scrollTo({ left: b.offsetLeft - (seg.clientWidth - b.offsetWidth) / 2, behavior: reduced() ? "auto" : "smooth" });
   }
 
   // ------------------------------------------------------------------ save + render
@@ -754,7 +826,7 @@
 
   // ------------------------------------------------------------------ events (delegated, data-*)
   document.addEventListener("click", (e) => {
-    const t = e.target.closest("[data-ed-back],[data-ed-hook-on],[data-ed-hook-dur],[data-ed-render],[data-ed-play],[data-ed-tab],[data-ed-zoom-on],[data-ed-progress-on],[data-ed-progress-color],[data-ed-compress],[data-ed-silence],[data-ed-word],[data-ed-pause],[data-ed-mode],[data-ed-suggest],[data-ed-fillers],[data-ed-cuts-reset],[data-ed-zoom-add],[data-ed-zoom-mark],[data-ed-trim],[data-ed-seekarea],[data-ed-preset],[data-ed-cap-all],[data-ed-kw],[data-ed-kw-color],[data-ed-fix-typos],[data-ed-cap-reset],[data-ed-capy-on],[data-ed-new-hook]");
+    const t = e.target.closest("[data-ed-back],[data-ed-hook-on],[data-ed-hook-dur],[data-ed-render],[data-ed-play],[data-ed-tab],[data-ed-zoom-on],[data-ed-progress-on],[data-ed-progress-color],[data-ed-compress],[data-ed-silence],[data-ed-word],[data-ed-pause],[data-ed-mode],[data-ed-suggest],[data-ed-fillers],[data-ed-cuts-reset],[data-ed-zoom-add],[data-ed-zoom-mark],[data-ed-trim],[data-ed-seekarea],[data-ed-preset],[data-ed-cap-all],[data-ed-kw],[data-ed-kw-color],[data-ed-fix-typos],[data-ed-cap-reset],[data-ed-capy-on],[data-ed-new-hook],[data-ed-thumb-pick],[data-ed-thumb-gen]");
     if (!t || !E.state && !t.matches("[data-ed-back]")) return;
     if (t.matches("[data-ed-back]")) {                       // back to the Review page (step 4) for this job
       e.preventDefault(); const jid = E.jid; close(false); location.hash = `#review/${encodeURIComponent(jid || "")}`;
@@ -784,6 +856,8 @@
       repaintCaptions("[data-ed-capy-on]"); saveCapClip(); return;
     }
     if (t.matches("[data-ed-new-hook]")) return capNewHook(t);
+    if (t.matches("[data-ed-thumb-pick]")) return pickThumb(Number(t.dataset.edThumbPick), t);
+    if (t.matches("[data-ed-thumb-gen]")) return genThumbs(t);
     if (t.matches("[data-ed-hook-dur]")) {
       E.hook.duration = Number(t.dataset.edHookDur);
       document.querySelectorAll("[data-ed-hook-dur]").forEach((b) => b.setAttribute("aria-pressed", String(b === t)));
@@ -818,7 +892,7 @@
     if (t.matches("[data-ed-render]")) return renderPreview(t);
     if (t.matches("[data-ed-play]")) { const v = $("edVideo"); if (v) v.paused ? v.play() : v.pause(); return; }
     if (t.matches("[data-ed-tab]") && t.getAttribute("aria-disabled") !== "true") {
-      const order = ["captions", "effects", "audio", "watermark", "export"], from = order.indexOf(E.tab);
+      const order = TABS.map(([id]) => id), from = order.indexOf(E.tab);
       E.tab = t.dataset.edTab;
       document.querySelectorAll("[data-ed-tab]").forEach((b) => b.setAttribute("aria-selected", String(b === t)));
       const panel = document.querySelector(".ed-panel");
@@ -907,6 +981,9 @@
     b.textContent = "STAGING · test data, not production";
     document.body.appendChild(b); document.body.classList.add("is-staging");
   }).catch(() => {});
+  document.addEventListener("change", (e) => {
+    if (E.state && e.target.matches && e.target.matches("[data-ed-thumb-upload]")) uploadThumb(e.target);
+  });
   document.addEventListener("toggle", (e) => {                 // keep "Style, font…" open across repaints
     if (E.cap && e.target.matches && e.target.matches("[data-ed-style-more]")) E.cap.styleOpen = e.target.open;
   }, true);

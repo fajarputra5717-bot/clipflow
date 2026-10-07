@@ -65,7 +65,7 @@ def _load(cur, jid: str, cid: str, user: dict) -> dict:
                c.start_time, c.end_time, c.duration_seconds, c.edit_spec, c.preview_path, c.final_path,
                c.updated_at, s.title, j.custom_title, j.platform, j.campaign, j.status,
                c.subtitle_text, c.subtitle_override, j.subtitle_style, j.subtitle_font, j.subtitle_size,
-               j.subtitle_animation, j.burn_subtitles
+               j.subtitle_animation, j.burn_subtitles, c.thumbnail_options, c.thumbnail_path, c.thumbnail_locked
         FROM clip_candidates c JOIN jobs j ON j.id = c.job_id
         LEFT JOIN source_videos s ON s.id = j.source_video_id
         WHERE c.id::text = %s AND c.job_id::text = %s AND {where}
@@ -78,7 +78,8 @@ def _load(cur, jid: str, cid: str, user: dict) -> dict:
     keys = ["id", "job_id", "status", "title", "manual_title", "ai_title", "reason", "start_time", "end_time",
             "duration_seconds", "edit_spec", "preview_path", "final_path", "updated_at", "job_source_title",
             "job_custom_title", "platform", "campaign", "job_status", "subtitle_text", "subtitle_override",
-            "subtitle_style", "subtitle_font", "subtitle_size", "subtitle_animation", "burn_subtitles"]
+            "subtitle_style", "subtitle_font", "subtitle_size", "subtitle_animation", "burn_subtitles",
+            "thumbnail_options", "thumbnail_path", "thumbnail_locked"]
     c = dict(zip(keys, row))
     try:   # 112: what "Auto" caption position means for a full-frame clip (the owner's setting)
         c["auto_caption_y"] = float(_core().runtime_setting("FULLFRAME_CAPTION_Y", user_id=user["id"]) or 78)
@@ -112,6 +113,7 @@ def _state(c: dict) -> dict:
         "audio": {"compress": False, "silence_trim": False, "silence_ranges": [], **edit_specs.audio_of(spec),
                   "loudness": {"lufs": -14.0, "true_peak_dbtp": -1.0, "always_on": True}},
         "captions": _captions_state(c, spec),
+        "thumbnail": _thumbnail_state(c),
         "hook_title": {
             "on": bool(ht.get("on", False)), "text": ht.get("text", ""),
             "duration": ht.get("duration", edit_specs.HOOK_TITLE_DEFAULT_DURATION),
@@ -145,6 +147,22 @@ def _captions_state(c: dict, spec: dict) -> dict:
         "text": override or (c.get("subtitle_text") or ""),
         "burn": c.get("burn_subtitles") is not False,
         "options": caption_options.options(),
+    }
+
+
+def _thumbnail_state(c: dict) -> dict:
+    """Task 7b: AI + uploaded options (one list, picked the same way), which one is picked, and whether the
+    pick is locked (renders then keep it). Writes: main's generate-thumbnails-ai, thumbnail-upload and the
+    candidate PATCH selected_thumbnail_index (sets thumbnail_path + thumbnail_locked)."""
+    opts = c.get("thumbnail_options") if isinstance(c.get("thumbnail_options"), list) else []
+    base = f"/api/jobs/{c['job_id']}/candidates/{c['id']}"
+    picked = next((i for i, p in enumerate(opts) if p and p == c.get("thumbnail_path")), None)
+    return {
+        "options": [{"index": i, "url": f"{base}/thumbnail-options/{i}"} for i in range(len(opts))],
+        "picked": picked if c.get("thumbnail_locked") else None,
+        "locked": bool(c.get("thumbnail_locked")),
+        "current_url": f"{base}/thumbnail" if c.get("thumbnail_path") else None,
+        "generating": c.get("status") in ("thumbnail_queued", "thumbnail_rendering"),
     }
 
 
