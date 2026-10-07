@@ -18,3 +18,19 @@ Staging = lane-b 53f34b9 (= main 234f4a0, 144 + editor). Members lane-c-a / lane
 | Production after 144 deploy | PASS | 5/5 riftstorm-* running, 0 restarts |
 
 Open Lows (not blocking): 234f4a0 #1 Telegram multi-platform caption label; member chooses any Telegram chat id.
+
+## Addendum 2026-10-07: 144 + 145 write checks on staging 202d39a (= main 8a31e61 + lane-b)
+UI-driven as lane-c-b on Fandra final fbab64d9 (tests/ui/specs/qa-p2-writes.spec.js, staging-only guard): **PASS**.
+- Panel (144): Mark posted (account + link) → chip "Posted @lane_c_b_ig" → views 41000 → Mark claimed → Mark paid.
+  API afterwards: status paid, views 41000, claimed_views 41000, paid_rp 156000 (prefilled expected), eligible.
+- Send to phone (144): staging has no bot token, so POST answers 409 "Telegram isn't set up on this server" and
+  nothing is queued. That's correct on staging. Composition checked in the staging worker with no send:
+  telegram_post_text for a card send (platform NULL) gives 1 file (fandra-octo_<slug>.mp4) + 3 captions
+  (tiktok/instagram/youtube), and the worker sends the video once. A platform send gives 1 caption. Hashtags are in
+  exact order at the end. A real send stays with the owner on production.
+- Posting times (145): lane-c-b added TikTok 18:30 in Settings → "Saved." and source=user. lane-c-a still has the
+  defaults (source=default). Per user, no bleed.
+- Cross-user: lane-c-a GET/PATCH/DELETE on B's post 404, send-to-phone on B's clip 404, POST /api/posts on B's clip
+  404, A's publish queue excludes B's clip.
+Verdict unchanged: **P2 PASS** (now including 144 and 145). New Low: Send to phone shows on a server without a bot token
+and fails with an alert only after the click (staging only in practice).
