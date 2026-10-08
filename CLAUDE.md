@@ -396,7 +396,8 @@ campaign windows via `payouts.window_problems`). Times are stored TIMESTAMPTZ (U
 `POST …/candidates/{cid}/schedule` = Approve gate + `_queue_final_render()` (the one approve path) + planned rows with
 `_eligibility_for()` at the planned time; re-plan via PATCH re-checks. Mark posted on a planned row PATCHes it. Schedule step (147): `GET /api/schedule` (own planned rows by WIB day + overdue),
 `#scheduleSection` in `TAB_SECTIONS` stepper order; its render fn is `renderScheduleView()` (`renderSchedule()` = the sheet).
-Reminders (148): service `sender` (`riftstorm-sender`, worker image `--telegram-only`) owns `telegram_sends` + 
+Track (181): `GET /api/track` = `shared/track.py` (own posts → tiles, by campaign/platform, top clips; money only via
+payouts, pre-formatted), step `#track`. Reminders (148): service `sender` (`riftstorm-sender`, worker image `--telegram-only`) owns `telegram_sends` + 
 `queue_due_reminders()` (worker has `TELEGRAM_SENDER=separate`; without it the worker does both). One reminder per
 planned post: `reminded_at` set in the queueing transaction; > 1 h late = `missed`; re-plan clears it. Own chat only.
 

@@ -25,7 +25,7 @@ from starlette.concurrency import run_in_threadpool
 from app import auth
 
 from shared.ai import router as ai_router
-from shared import brief_parser, campaign_status, campaign_view, campaigns, descriptions, edit_spec as edit_specs, hook_ranges, languages, origins, payouts, post_advice, posts as post_rules, rule_checks, schedule
+from shared import brief_parser, campaign_status, track, campaign_view, campaigns, descriptions, edit_spec as edit_specs, hook_ranges, languages, origins, payouts, post_advice, posts as post_rules, rule_checks, schedule
 from shared.errors import AINotConfiguredError
 from shared.fonts import normalize_caption_font
 from shared.settings import (
@@ -4198,6 +4198,24 @@ def update_campaign(slug: str, payload: CampaignUpdate, request: Request):
             conn.commit()
         campaigns.invalidate()
     return get_campaign(slug, request)
+
+
+@app.get("/api/track")
+def get_track(request: Request):
+    """181 (P3 part 8): the caller's own posts → tiles, per-campaign / per-platform breakdown, top clips by views.
+    Built by shared/track.py; every amount via payouts, pre-formatted. Views = each post's latest count."""
+    user = current_user(request)
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id, candidate_id, job_id, campaign, title, platform, status, views, paid_rp, expected_rp, url "
+                "FROM clip_posts WHERE user_id = %s AND status IN ('posted', 'claimed', 'paid')",
+                (user["id"],),
+            )
+            keys = ("id", "candidate_id", "job_id", "campaign", "title", "platform", "status", "views", "paid_rp",
+                    "expected_rp", "url")
+            posts = [dict(zip(keys, r)) for r in cur.fetchall()]
+    return track.build(posts, campaigns.get)
 
 
 # 166 (P3 part 4): New campaign = paste brief → brief_parser (patterns first, AI only for gaps) → admin confirms every

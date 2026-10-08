@@ -57,6 +57,7 @@ const STEPS = [
   ["5-editor-empty", (a) => a.evaluate(() => { location.hash = "#editor"; })],
   ["6-schedule", (a) => a.evaluate(() => { location.hash = ""; return window.showTab("schedule"); })],
   ["7-publish", (a) => a.evaluate(() => window.showTab("publish"))],
+  ["8-track", (a) => a.evaluate(() => { location.hash = "#track"; })],
 ];
 test("screenshot tour", async ({ app, api }, info) => {
   test.setTimeout(90_000);

@@ -150,3 +150,4 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 178 · 2026-10-09 · Lane B's editor.css sizes mapped to /ui/tokens.css (type scale, control/chip heights; --ed-top) · editor.css
 179 · 2026-10-09 · Old job list/detail + edit drawer deleted (Editor page covers every piece); render-warning chips moved to Review cards; specs moved to the Review page · index.html, review.js, tests
 180 · 2026-10-09 · Preview captions: outline/shadow/side margins scale with the preview width like the font (previews looked 2× bolder; Lane C Medium) · worker make_ass
+181 · 2026-10-09 · P3 part 8: Track dashboard — shared/track.py (payouts-only money), GET /api/track, stepper step 8 live · shared, main.py, index.html, tests

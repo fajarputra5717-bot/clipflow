@@ -1477,8 +1477,11 @@ body:has(#editorSection:not(.hidden)) .ed-foot{bottom:calc(var(--pill-btn) + 30p
   .acct-btn{padding:0;justify-content:center;background:transparent}
   .acct-name,.acct-chev{display:none}
   .acct-burger{display:block}
-  .flow-pill{left:8px;right:8px;transform:none;max-width:none;display:flex;justify-content:center}
-  .flow-pill .flow{max-width:100%}
+  .flow-pill{left:4px;right:4px;padding:2px;transform:none;max-width:none;display:flex;justify-content:center}
+  .flow-pill .flow{max-width:100%;gap:0}
+  .flow-pill .flow-node,.flow-pill .flow-node:hover:not(:disabled){gap:4px}
+  .flow-pill .flow li.active .flow-node{padding-right:8px}
+  .flow-pill .flow-label{font-size:12px;max-width:52px;overflow:hidden;text-overflow:ellipsis}   /* 7 steps × 44 px + a label in 390 px */
   body:has(.ed-foot:focus-within) .flow-pill{opacity:0;visibility:hidden;pointer-events:none;transform:translateY(20px);transition:opacity var(--dur-2) var(--ease-out),transform var(--dur-3) var(--ease-out),visibility 0s linear var(--dur-2)}
   body:has(.ed-foot:focus-within) .ed-foot{bottom:calc(12px + env(safe-area-inset-bottom))}
 }
@@ -1514,6 +1517,27 @@ body:has(#editorSection:not(.hidden)) .ed-foot{bottom:calc(var(--pill-btn) + 30p
 .jc .job-auto-queue{font-size:var(--fs-small);background:none;border:0;padding:0;margin:0;min-height:0;color:var(--muted)}
 .jc .job-actions{flex:none;display:flex;gap:var(--s-1);align-self:center}
 .jc:hover{border-color:var(--accent)}
+/* 181: Track */
+.tr-tiles{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:var(--s-3);margin:var(--s-3) 0 var(--s-4)}
+.tr-tile{padding:var(--s-3);border-radius:var(--r-lg);background:var(--panel2);border:1px solid var(--line);min-width:0}
+.tr-k{font-size:var(--fs-small);color:var(--muted);font-weight:600}
+.tr-v{font:700 var(--fs-h1)/1.2 var(--font-display);margin-top:2px;overflow-wrap:anywhere}
+.tr-s{font-size:var(--fs-small);color:var(--muted)}
+.tr-table{display:grid;font-size:var(--fs-base)}
+.tr-row{display:grid;grid-template-columns:minmax(0,2fr) repeat(4,minmax(0,1fr));gap:var(--s-2);padding:6px 0;border-top:1px solid var(--line);align-items:center}
+.tr-row span:not(.tr-name){text-align:right;font-variant-numeric:tabular-nums}
+.tr-head{border-top:0;font-size:var(--fs-small);color:var(--muted);font-weight:600}
+.tr-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tr-top{list-style:none;margin:0;padding:0;display:grid}
+.tr-top li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px var(--s-3);padding:var(--s-2) 0;border-top:1px solid var(--line)}
+.tr-top li:first-child{border-top:0}
+.tr-title{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tr-meta{font-size:var(--fs-small);color:var(--muted);grid-column:1}
+.tr-num{grid-column:2;grid-row:1;text-align:right;font-variant-numeric:tabular-nums}
+.tr-amt{grid-column:2;grid-row:2;text-align:right;font-size:var(--fs-small)}
+.tr-amt small{color:var(--muted)}
+@media(max-width:900px){.tr-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:600px){.tr-row{grid-template-columns:minmax(0,1.4fr) repeat(4,minmax(0,1fr));font-size:var(--fs-small)}}
 </style>
 <link rel="stylesheet" href="editor/editor.css"><!-- Editor + Review pages (149) -->
 </head>
@@ -1681,6 +1705,12 @@ body:has(#editorSection:not(.hidden)) .ed-foot{bottom:calc(var(--pill-btn) + 30p
             <div class="publish-filters"><div class="seg" role="group" aria-label="Week"><button type="button" data-sched-week="-1" aria-label="Previous week">‹</button><button type="button" data-sched-week="0" id="schedWeekLabel">This week</button><button type="button" data-sched-week="1" aria-label="Next week">›</button></div>
               <div class="seg sched-viewseg" role="group" aria-label="View"><button type="button" data-sched-view="list" aria-pressed="true">List</button><button type="button" data-sched-view="week" aria-pressed="false">Week</button></div></div></div>
           <div id="scheduleList" aria-live="polite"></div>
+        </div>
+      </section>
+      <section id="trackSection" class="view-section hidden" aria-labelledby="trackTitle">
+        <div class="panel publish-panel">
+          <div class="section-head"><div><div class="eyebrow">Step 8 · Track</div><h2 id="trackTitle">Views → earnings</h2><p class="muted small">Your posted clips: latest views, what they pay and what's been paid. Amounts follow each campaign's payout rules.</p></div></div>
+          <div id="trackBody" aria-live="polite"></div>
         </div>
       </section>
       <section id="pickSection" class="view-section hidden" aria-labelledby="pickTitle">
@@ -2979,7 +3009,7 @@ async function refreshRunningJobs(){
 function startJobMonitor(){if(jobMonitorTimer)clearInterval(jobMonitorTimer);refreshRunningJobs();jobMonitorTimer=setInterval(refreshRunningJobs,POLL_INTERVAL)}
 function stopJobMonitor(){if(jobMonitorTimer){clearInterval(jobMonitorTimer);jobMonitorTimer=null}}
 
-function syncPageTitle(){const t=$("pageTitle");if(t)t.textContent=editorOpen()?"Editor":currentTab==="queue"?"Review":currentTab==="publish"?"Publish":currentTab==="schedule"?"Schedule":currentTab==="campaign"?"Campaign":"Analyze";syncPageContext()}
+function syncPageTitle(){const t=$("pageTitle");if(t)t.textContent=editorOpen()?"Editor":currentTab==="queue"?"Review":currentTab==="publish"?"Publish":currentTab==="schedule"?"Schedule":currentTab==="campaign"?"Campaign":currentTab==="track"?"Track":"Analyze";syncPageContext()}
 
 // Switching views while scrolled keeps the large title collapsed and puts the new section's top right
 // under the toolbar (instead of leaving it wherever the old view was scrolled to).
@@ -2987,7 +3017,7 @@ function freezeUnderHeader(){
   if(window.scrollY>TITLE_RANGE)window.scrollTo({top:TITLE_RANGE,behavior:scrollMode()});
 }
 
-const TAB_SECTIONS=[["campaign","campaignSection"],["current","currentSection"],["queue","queueSection"],["schedule","scheduleSection"],["publish","publishSection"]];
+const TAB_SECTIONS=[["campaign","campaignSection"],["current","currentSection"],["queue","queueSection"],["schedule","scheduleSection"],["publish","publishSection"],["track","trackSection"]];
 async function showTab(tab){
   freezeUnderHeader();
   if(tab===currentTab){
@@ -2999,6 +3029,8 @@ async function showTab(tab){
       campaignOpen=null;loadCampaignStep();   // the stepper's Campaign = back to the cards
     }else if(tab==="schedule"){
       loadSchedule();
+    }else if(tab==="track"){
+      loadTrack();
     }else{
       await refreshRunningJobs();
     }
@@ -3040,6 +3072,7 @@ async function showTab(tab){
   setTimeout(()=>next.classList.remove("switching-in"),400);
 
   if(tab==="publish"){loadPublish();return}
+  if(tab==="track"){loadTrack();return}
   if(tab==="schedule"){loadSchedule();return}
   if(tab==="campaign"){campaignOpen=null;loadCampaignStep();return}
   if(tab==="current"){
@@ -3948,7 +3981,7 @@ let openSheetId=null,sheetOpener=null;
 function selectedNav(){return openSheetId==="settingsSheet"?"settings":openSheetId==="watermarkSheet"?"watermarks":currentTab}
 function syncNav(){
   const sel=selectedNav();
-  document.querySelectorAll("[data-nav]").forEach(b=>{if(b.dataset.nav===sel)b.setAttribute("aria-current",b.dataset.nav==="current"||b.dataset.nav==="queue"||b.dataset.nav==="publish"||b.dataset.nav==="schedule"||b.dataset.nav==="campaign"?"page":"true");else b.removeAttribute("aria-current")});
+  document.querySelectorAll("[data-nav]").forEach(b=>{if(b.dataset.nav===sel)b.setAttribute("aria-current",b.dataset.nav==="current"||b.dataset.nav==="queue"||b.dataset.nav==="publish"||b.dataset.nav==="schedule"||b.dataset.nav==="campaign"||b.dataset.nav==="track"?"page":"true");else b.removeAttribute("aria-current")});
   renderFlow();syncPageTitle();syncPageContext();
 }
 // UI shell (P1 task 0): the flow-preview stepper IS the top-level navigation. Analyze = the Import view,
@@ -3967,7 +4000,7 @@ const FLOW_STEPS=[
   {id:"editor",label:"Editor",sub:"Captions, export",icon:"edit"},
   {id:"schedule",label:"Schedule",sub:"Planned posts, WIB",icon:"cal",nav:"schedule"},
   {id:"publish",label:"Publish",sub:"One card per clip",icon:"send",nav:"publish"},
-  {id:"track",label:"Track",sub:"Views → earnings",icon:"chart",phase:"P3"},
+  {id:"track",label:"Track",sub:"Views → earnings",icon:"chart",nav:"track"},
 ];
 // Lane-b merge (149): the Editor page (#editor/<job>/<clip>, editor/editor.js) is the Editor step; the old drawer
 // stays reachable from a Review card's "All edits" until P4 gives each drawer feature a home in the page.
@@ -3977,7 +4010,7 @@ function editorOpen(){return editorPageOpen()}
 window.addEventListener("hashchange",()=>{const m=location.hash.match(/^#editor\/([^/]+)\/([^/?#]+)/);if(m)lastEditorClip=[m[1],m[2]];syncNav()});
 function renderFlow(){
   const ol=$("flow");if(!ol)return;
-  const active=editorOpen()?"editor":currentTab==="queue"?"review":currentTab==="publish"?"publish":currentTab==="schedule"?"schedule":currentTab==="campaign"?"campaign":"analyze",idx=FLOW_STEPS.findIndex(s=>s.id===active);
+  const active=editorOpen()?"editor":currentTab==="queue"?"review":currentTab==="publish"?"publish":currentTab==="schedule"?"schedule":currentTab==="campaign"?"campaign":currentTab==="track"?"track":"analyze",idx=FLOW_STEPS.findIndex(s=>s.id===active);
   const canEdit=true;   // 171: with no clip open the Editor step shows "Pick a clip"
   const html=FLOW_STEPS.map((s,i)=>{
     const off=!!s.phase||(s.id==="editor"&&!canEdit),sub=s.phase?`Coming in ${s.phase}`:s.id==="editor"&&!canEdit?"Open a clip in Review":s.sub;
@@ -3997,8 +4030,8 @@ function openFlowEditor(){   // 171/179: the last opened clip, else Pick a clip 
 // 171), #editor/<job>/<clip> (editor.js), #schedule, #publish. Back/forward/reload restore it; a bare URL opens the
 // last view used (per user). This listener is registered before the lane-b scripts (deferred), so it closes the
 // other lane-b page FIRST and their hidden-section restores never fight (169's "old job list over the Editor").
-const TAB_HASH={campaign:"#campaign",current:"#analyze",schedule:"#schedule",publish:"#publish"};
-const HASH_TAB={analyze:"current",schedule:"schedule",publish:"publish"};
+const TAB_HASH={campaign:"#campaign",current:"#analyze",schedule:"#schedule",publish:"#publish",track:"#track"};
+const HASH_TAB={analyze:"current",schedule:"schedule",publish:"publish",track:"track"};
 function userKey(k){return `clipflow_${k}_${currentUser?.id||"anon"}`}
 function lsGet(k){try{return localStorage.getItem(userKey(k))}catch{return null}}
 function lsSet(k,v){try{localStorage.setItem(userKey(k),v)}catch{}}
@@ -4031,6 +4064,37 @@ async function routeHash(){
 }
 window.addEventListener("hashchange",routeHash);
 
+// ---- 181 (P3 part 8): Track = GET /api/track (shared/track.py): tiles, per-campaign / per-platform breakdown, top
+// clips. Every amount arrives formatted by payouts; nothing is computed here.
+let trackData=null;
+async function loadTrack(){
+  try{trackData=await api("/api/track");renderTrack()}
+  catch(err){$("trackBody").innerHTML=`<div class="error-box">${esc(err.message)}</div>`}
+}
+function trackTable(title,rows,first){
+  if(!rows.length)return "";
+  return `<section class="cd-box tr-box"><h3>${esc(title)}</h3><div class="tr-table" role="table" aria-label="${esc(title)}">
+    <div class="tr-row tr-head" role="row"><span role="columnheader">${esc(first)}</span><span role="columnheader">Posts</span><span role="columnheader">Views</span><span role="columnheader">Expected</span><span role="columnheader">Paid</span></div>
+    ${rows.map(r=>`<div class="tr-row" role="row"><span role="cell" class="tr-name">${esc(r.name)}</span><span role="cell">${esc(r.posts)}</span><span role="cell">${esc(r.views_fmt)}</span><span role="cell">${esc(r.expected_fmt)}</span><span role="cell">${esc(r.paid_fmt)}</span></div>`).join("")}</div></section>`;
+}
+function renderTrack(){
+  const d=trackData||{},t=d.tiles||{};
+  if(!t.posts){$("trackBody").innerHTML=`<p class="publish-empty">Nothing posted yet. Mark a clip as posted in Publish and its views and earnings show up here.</p>`;return}
+  const tile=(k,v,sub)=>`<div class="tr-tile"><div class="tr-k">${esc(k)}</div><div class="tr-v">${esc(v)}</div>${sub?`<div class="tr-s">${esc(sub)}</div>`:""}</div>`;
+  const state={paid:"Paid",claimed:"Claimed",estimate:"If claimed now",unknown:"Unknown payout"};
+  $("trackBody").innerHTML=`<div class="tr-tiles">
+      ${tile("Views",t.views_fmt,`${t.posts} post${t.posts===1?"":"s"}`)}
+      ${tile("Paid",t.paid_fmt,`${t.paid} paid`)}
+      ${tile("Expected",t.expected_fmt,"claimed + not yet claimed")}
+      ${tile("Claimed vs paid",`${t.claimed} / ${t.paid}`,"claims sent / paid")}
+      ${tile("At cap",String(t.at_cap),"posts earning the max")}
+    </div>
+    ${(d.skipped_currencies||[]).length?`<p class="camp-detail">Not in the totals (no exchange rate): ${esc(d.skipped_currencies.join(", "))}</p>`:""}
+    <div class="cd-grid">${trackTable("By campaign",d.campaigns||[],"Campaign")}${trackTable("By platform",d.platforms||[],"Platform")}</div>
+    <section class="cd-box tr-box" style="margin-top:var(--s-3)"><h3>Top clips by views</h3><ol class="tr-top">
+      ${(d.top||[]).map(c=>`<li><span class="tr-title">${esc(c.title)}</span><span class="tr-meta"><span class="pchip">${PLATFORM_ICON[c.platform]||""}${esc(PLATFORM_SHORT[c.platform]||c.platform_name)}</span>${c.campaign_name?` · ${esc(c.campaign_name)}`:""}</span>
+        <span class="tr-num">${esc(c.views_fmt)} views</span><span class="tr-amt">${esc(c.amount_fmt)} <small>${esc(state[c.amount_state]||"")}</small>${c.at_cap?` <span class="badge completed">At cap</span>`:""}</span></li>`).join("")}</ol></section>`;
+}
 // ---- 171: Editor with no clip = "Pick a clip": the Review grid, compact, same saved filters (GET/PUT
 // /api/review/filter, GET /api/review/clips). A card is a link to #editor/<job>/<clip>.
 const PICK={filter:null,jobs:[],seq:0,saveT:0};
@@ -4134,7 +4198,7 @@ document.addEventListener("click",e=>{
   }
   const rb=e.target.closest("#refreshView");if(rb){
     if(!REDUCED_MOTION.matches){rb.classList.remove("spinning");void rb.offsetWidth;rb.classList.add("spinning");setTimeout(()=>rb.classList.remove("spinning"),450)}
-    if(currentTab==="current")loadCurrentJobs();else if(currentTab==="publish")loadPublish();else if(currentTab==="schedule")loadSchedule();else if(currentTab==="campaign")loadCampaignStep();else{window.clipflowReview?.open();refreshRunningJobs()}
+    if(currentTab==="current")loadCurrentJobs();else if(currentTab==="publish")loadPublish();else if(currentTab==="schedule")loadSchedule();else if(currentTab==="campaign")loadCampaignStep();else if(currentTab==="track")loadTrack();else{window.clipflowReview?.open();refreshRunningJobs()}
   }
 });
 window.addEventListener("resize",()=>requestAnimationFrame(syncNav),{passive:true});

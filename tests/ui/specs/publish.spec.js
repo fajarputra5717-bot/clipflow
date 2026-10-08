@@ -104,7 +104,7 @@ test("Mark posted from a chip's panel: no account â†’ Settings hint; with one â†
 test("169: the stepper pill keeps every shown step on one row inside the viewport", async ({ app }) => {
   const r = await app.locator("#flow li").evaluateAll((els) => els.filter((e) => e.offsetParent)
     .map((e) => { const b = e.getBoundingClientRect(); return [Math.round(b.top), b.left >= 0 && b.right <= innerWidth]; }));
-  expect(r.length).toBe(test.info().project.name === "mobile" ? 6 : 8);   // phone hides the two "Coming in P3" steps
+  expect(r.length).toBe(test.info().project.name === "mobile" ? 7 : 8);   // phone hides the unbuilt "Coming in P3" step
   expect(new Set(r.map((x) => x[0])).size).toBe(1);
   expect(r.every((x) => x[1])).toBe(true);
 });
