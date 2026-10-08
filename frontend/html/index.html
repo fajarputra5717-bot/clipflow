@@ -1313,6 +1313,8 @@ select::-ms-expand{display:none}
 .camp-meter i{display:block;height:100%;border-radius:3px;background:var(--accent);transform-origin:left}
 .camp-meter-label{font-size:12px;color:var(--muted)}
 .camp-card.is-ended{opacity:.72}
+.edit-moved{margin:var(--sp-1) 0 var(--sp-2);padding:10px 12px;border-radius:12px;background:var(--badge-run-bg);color:var(--badge-run-fg);font-size:13px}
+.edit-moved a{color:inherit;font-weight:600}
 /* 162: campaign-driven labels + the collapsed Expired group (Publish) */
 .pcard-earn{margin-left:6px;font-size:11px;padding:2px 8px;vertical-align:1px}
 .pexpired>summary{cursor:pointer;list-style:none;min-height:var(--hit);display:flex;align-items:center}
@@ -1949,7 +1951,8 @@ const SUBTITLE_ANIMATIONS=[
 let activeJobId=null,pollTimer=null,jobMonitorTimer=null,currentTab="current";
 const editMoreOpen={};  // "<cid>:desc|thumb" -> open, survives re-renders
 const editTab={};       // "<cid>" -> active edit tab, survives re-renders
-const EDIT_TABS=[["captions","Captions"],["effects","Effects"],["audio","Audio"],["watermark","Watermark"],["export","Export"]];
+// 165: Captions / Effects / Audio moved to the Editor page (P4 tasks 5 + 7a); the old panel keeps what has no home yet.
+const EDIT_TABS=[["export","Export"],["watermark","Watermark"]];
 const REDUCED_MOTION=window.matchMedia("(prefers-reduced-motion: reduce)");
 function scrollMode(){return REDUCED_MOTION.matches?"auto":"smooth"}
 // JS waits that exist only to let a CSS animation play collapse to 0 under reduced motion (067).
@@ -2614,9 +2617,6 @@ function renderCandidate(c,jid,platform,job={}){
       <span>${esc(c.message||"This clip failed.")}</span>
       <button class="secondary" data-retry-candidate="${esc(jid)}" data-cid="${esc(c.id)}" type="button">Retry</button>
     </div>`:""}
-    <div class="candidate-hook-row">
-      <button class="secondary ai-highlight${busy?" is-busy":""}" data-hook="${esc(jid)}" data-cid="${esc(c.id)}" type="button" ${busy?'disabled aria-busy="true"':""}>${busy?"Finding hook…":"Get another hook"}</button>
-    </div>
     ${renderSubmagicRow(c,jid)}
 
     <div class="preview-layout">
@@ -2636,32 +2636,7 @@ function renderCandidate(c,jid,platform,job={}){
         <div class="edit-title"><strong>Candidate editing</strong><span>changes regenerate this preview</span></div>
         ${editTabsHtml(c.id)}
 
-        ${editPanelOpen(c.id,"captions")}
-        <div class="edit-section">
-          <div class="edit-section-head">
-            <h4>Subtitle</h4>
-            <button class="mini-ai-btn ai-highlight" data-fix-subtitle="${esc(jid)}" data-cid="${esc(c.id)}" type="button" ${busy?"disabled":""}>${busy?"Working…":"Fix typos (AI)"}</button>
-          </div>
-          <label class="edit-subtle-label">Indonesian · ALL CAPS · karaoke word-highlight</label>
-          <textarea id="sub-${esc(c.id)}" data-initial="${esc(sub)}" data-transcript="${esc(transcriptSub)}">${esc(sub)}</textarea>
-          ${captionPresetsHtml(c.id,jid,styleName,animName,jobStyle,jobAnim,!!c.edit_spec?.caption)}
-          <div class="edit-style-row">
-            <div><label>Font style</label><select id="style-${esc(c.id)}">${SUBTITLE_STYLES.map(([v,l])=>`<option value="${v}" ${v===styleName?"selected":""}>${l}</option>`).join("")}</select></div>
-            <div><label>Font</label><select id="font-${esc(c.id)}">${SUBTITLE_FONTS.map(x=>`<option ${x===fontName?"selected":""} style="font-family:${esc(SUBTITLE_FONT_PREVIEW_STACK[x]||"inherit")};font-weight:${SUBTITLE_FONT_WEIGHT[x]||700}">${esc(x)}</option>`).join("")}</select></div>
-            <div><label>Size</label><input id="size-${esc(c.id)}" type="number" min="12" max="120" value="${esc(size)}"></div>
-            <div><label>Animation</label><select id="anim-${esc(c.id)}">${SUBTITLE_ANIMATIONS.map(([v,l])=>`<option value="${v}" ${v===animName?"selected":""}>${l}</option>`).join("")}</select></div>
-          </div>
-          <div class="caption-preview" id="capPreview-${esc(c.id)}">
-            <div class="caption-preview-text" id="capPreviewText-${esc(c.id)}"></div>
-          </div>
-          ${keywordBoxHtml(c.id)}
-          ${captionPosHtml(c)}
-          <div class="hint">Live preview reflects your actual subtitle text, style, font, size and animation. "Fix typos (AI)" only updates this box — nothing is saved or re-rendered until you hit Apply changes.</div>
-        </div>
-        </div>
-
-        ${editPanelOpen(c.id,"effects")}${comingSoonHtml("Effects","Hook title card, auto zoom punch-ins, transitions on cuts, progress bar and loudness normalise.")}</div>
-        ${editPanelOpen(c.id,"audio")}${comingSoonHtml("Audio","Remove silences and filler words, background music.")}</div>
+        <p class="edit-moved">Captions (style, presets, keywords, position, text + Fix typos), new hook, Effects and Audio are in the <a href="#editor/${esc(jid)}/${esc(c.id)}" data-open-editor>Editor</a>.</p>
 
         ${editPanelOpen(c.id,"export")}
         <div class="edit-section">
@@ -2751,18 +2726,18 @@ function renderCandidate(c,jid,platform,job={}){
 // Edit drawer tabs: buttons + panels are re-rendered with the card, the active tab lives in editTab[cid].
 // Inactive panels stay in the DOM (hidden), so Apply still reads every input.
 function editTabsHtml(cid){
-  const cur=editTab[cid]||"captions",i=Math.max(0,EDIT_TABS.findIndex(t=>t[0]===cur));
+  const cur=editTab[cid]||EDIT_TABS[0][0],i=Math.max(0,EDIT_TABS.findIndex(t=>t[0]===cur));
   return `<div class="edit-tabs" role="tablist" aria-label="Edit clip" style="--i:${i}"><span class="edit-tabs-ind" aria-hidden="true"></span>${EDIT_TABS.map(([id,n])=>
     `<button type="button" role="tab" id="et-${esc(cid)}-${id}" aria-controls="etp-${esc(cid)}-${id}" aria-selected="${id===cur}" tabindex="${id===cur?0:-1}" data-edit-tab="${id}" data-cid="${esc(cid)}">${n}</button>`).join("")}</div>`;
 }
 function editPanelOpen(cid,id){
-  return `<div class="edit-tabpanel" role="tabpanel" id="etp-${esc(cid)}-${id}" aria-labelledby="et-${esc(cid)}-${id}" ${(editTab[cid]||"captions")===id?"":"hidden"}>`;
+  return `<div class="edit-tabpanel" role="tabpanel" id="etp-${esc(cid)}-${id}" aria-labelledby="et-${esc(cid)}-${id}" ${(editTab[cid]||EDIT_TABS[0][0])===id?"":"hidden"}>`;
 }
 function comingSoonHtml(title,what){
   return `<div class="edit-section coming-soon"><div class="edit-section-head"><h4>${esc(title)}</h4><span class="tag">Coming soon</span></div><div class="hint">${esc(what)} Arrives with retention editing.</div></div>`;
 }
 function switchEditTab(cid,id,focus){
-  const from=EDIT_TABS.findIndex(t=>t[0]===(editTab[cid]||"captions")),to=EDIT_TABS.findIndex(t=>t[0]===id);
+  const from=EDIT_TABS.findIndex(t=>t[0]===(editTab[cid]||EDIT_TABS[0][0])),to=EDIT_TABS.findIndex(t=>t[0]===id);
   if(to<0||from===to)return;
   editTab[cid]=id;
   const card=$(`candidate-${cid}`);if(!card)return;
@@ -3209,33 +3184,19 @@ function toggleCandidateEdit(cid){
   const b=el.querySelector("[data-edit]");if(b){b.textContent=open?"Close edit":"Edit";b.setAttribute("aria-expanded",String(open))}
   renderFlow();syncPageTitle();
 }
+// 165: the old panel applies only what it still holds (description, thumbnail, watermark + burn-in). Caption
+// style/font/size/animation, subtitle text, keywords and position are the Editor page's now: never sent from here,
+// or an Apply would overwrite the Editor's choices with this panel's stale inputs.
 async function applyEdits(jid,cid){
-  const subEl=$("sub-"+cid),sub=(subEl?.value||"").trim().toUpperCase();
   const desc=($("desc-"+cid)?.value||"").trim();
-  const style=$("style-"+cid)?.value||"outline";
-  const font=$("font-"+cid)?.value||"Liberation Sans Bold";
-  const size=Math.max(12,Math.min(120,Number($("size-"+cid)?.value||42)));
-  const animation=$("anim-"+cid)?.value||"karaoke";
   const thumbIdx=thumbSelection[cid];
   const patch={description:desc};
-  // QA #1: send the override only when the text changed; back to the transcript = clear it,
-  // so the worker keeps Whisper's word timings (karaoke) for every line.
-  const normSub=t=>String(t||"").toUpperCase().split("\n").map(l=>l.trim().replace(/\s+/g," ")).filter(Boolean).join("\n");
-  if(subEl&&normSub(sub)!==normSub(subEl.dataset.initial))patch.subtitle_override=normSub(sub)===normSub(subEl.dataset.transcript)?"":sub;
   if(thumbIdx!==undefined)patch.selected_thumbnail_index=thumbIdx;
   const b=document.querySelector(`[data-apply="${css(jid)}"][data-cid="${css(cid)}"]`);
   if(b?.disabled)return;
   setBusy(b,true,"Applying…");
   try{
     await api(`/api/jobs/${jid}/candidates/${cid}`,{method:"PATCH",body:JSON.stringify(patch)});
-    // 108: style+animation are this clip's own (edit_spec.caption; cleared when equal to the job's); font/size stay job-level.
-    const pw=document.querySelector(`.cap-presets[data-cid="${css(cid)}"]`),jobStyle=pw?.dataset.jobStyle||style,jobAnim=pw?.dataset.jobAnim||animation;
-    const spec={caption:style===jobStyle&&animation===jobAnim?null:{style,animation}};
-    const kst=kwState[cid];if(kst?.dirty){spec.keywords=[...kst.set];if(kst.color)spec.keyword_color=kst.color}  // 111 (116: auto colour stays unset)
-    const cy=captionPosPatch(cid);if(cy!==undefined)spec.caption_y=cy;  // 112
-    await api(`/api/jobs/${jid}/candidates/${cid}`,{method:"PATCH",body:JSON.stringify({edit_spec:spec})});
-    if(kst)kst.dirty=false;
-    await api(`/api/jobs/${jid}/subtitle-style`,{method:"PATCH",body:JSON.stringify({subtitle_style:jobStyle,subtitle_font:font,subtitle_size:size,subtitle_animation:jobAnim})});
     const renderOpts=changedRenderOptions(cid);
     if(Object.keys(renderOpts).length)await api(`/api/jobs/${jid}/render-options`,{method:"PATCH",body:JSON.stringify(renderOpts)});
     await api(`/api/jobs/${jid}/candidates/${cid}/regenerate-preview`,{method:"POST"});

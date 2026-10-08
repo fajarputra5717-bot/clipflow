@@ -134,3 +134,4 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 160 · 2026-10-07 · Fix: Get another hook clears the old moment's time-based edit_spec keys (cuts, keywords, zoom markers, silence ranges, hook card text), styles kept (Lane B report) · main.py
 161 · 2026-10-07 · P3 part 5: campaign detail page — shared/campaign_view.py (plain-language payout, weeks, questions, budget, claim), campaign watermark preview route, admin Pause/Resume · campaign_view.py, main.py, index.html
 162 · 2026-10-07 · P3 part 6: clip labels from campaign_status.clip_labels (Week closed / Campaign ended), collapsed Expired group on Review + Publish, digest skips expired; new hook also clears silence_trim (Lane C Low) · campaign_status, main.py, routes_editor, review.js, index.html, digest
+165 · 2026-10-07 · Old drawer drops Captions/Effects/Audio (homes in the Editor, 163/164); Apply sends only description/thumbnail/render options · index.html, tests

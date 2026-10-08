@@ -213,7 +213,7 @@ test.describe("Editor page", () => {
     await mockEditor(app, api);
     await app.evaluate(async () => { await window.showTab("queue"); });   // the old panel's "Open editor" (All edits path)
     await app.locator('[data-queue-open="job-done"]').click();
-    await app.locator('#candidate-cand-a [data-open-editor]').click();
+    await app.locator('#candidate-cand-a [data-open-editor]').first().click();
     await expect(app.locator("#editorSection")).toBeVisible();
     await expect(app.locator("#pageTitle")).toHaveText("Editor");
     await expect(app.locator(".ed-title")).toHaveText("First mock clip");

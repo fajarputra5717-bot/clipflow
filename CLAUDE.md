@@ -398,7 +398,8 @@ planned post: `reminded_at` set in the queueing transaction; > 1 h late = `misse
   Editor → `#editor/<job>/<clip>` (`editor/editor.js`; hook title, timeline, cuts, fillers, zoom via `worker/render_steps.py`
   + `backend/app/routes_editor.py`). `editorOpen()` = page or old panel. The OLD job detail + edit panel stays reachable only
   via a Review card's "All edits" (`openClassicEdit`) until P4 gives each drawer feature a home in the Editor page: remove a
-  drawer piece only then. UI specs reach the old panel with `classicQueue()`.
+  drawer piece only then (165: Captions/Effects/Audio gone; it keeps Export, Watermark, description, thumbnail, and
+  `applyEdits()` never sends caption fields). UI specs reach the old panel with `classicQueue()`.
 - **Navigation (106, P1 task 0):** the flow-preview **stepper** (`#flowNav`, `renderFlow()`, `FLOW_STEPS`) is the
   top-level navigation (sticky under the toolbar, compact while it is collapsed via `body:has(.toolbar.is-collapsed)`, 121): Analyze (`data-nav="current"`, the Import view), Review (`data-nav="queue"`, the job
   list/detail, formerly "Publish"), Publish (`data-nav="publish"`, 130), Editor (`data-flow-editor`: opens the visible job's clip drawer; disabled
