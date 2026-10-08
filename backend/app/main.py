@@ -25,7 +25,7 @@ from starlette.concurrency import run_in_threadpool
 from app import auth
 
 from shared.ai import router as ai_router
-from shared import campaign_status, campaign_view, campaigns, descriptions, edit_spec as edit_specs, hook_ranges, languages, origins, payouts, post_advice, posts as post_rules, rule_checks, schedule
+from shared import brief_parser, campaign_status, campaign_view, campaigns, descriptions, edit_spec as edit_specs, hook_ranges, languages, origins, payouts, post_advice, posts as post_rules, rule_checks, schedule
 from shared.errors import AINotConfiguredError
 from shared.fonts import normalize_caption_font
 from shared.settings import (
@@ -4197,6 +4197,107 @@ def update_campaign(slug: str, payload: CampaignUpdate, request: Request):
                     raise HTTPException(status_code=404, detail="Campaign not found")
             conn.commit()
         campaigns.invalidate()
+    return get_campaign(slug, request)
+
+
+# 166 (P3 part 4): New campaign = paste brief → brief_parser (patterns first, AI only for gaps) → admin confirms every
+# `unsure` field → POST /api/campaigns. Parse metadata never reaches the stored rules.
+PARSE_META_KEYS = ("unsure", "ai_derived", "ai_reasons", "_text", "source", "brief_pending", "slug", "visibility",
+                   "created_by", "paused")
+
+
+def _require_campaign_admin(request: Request) -> dict:
+    user = current_user(request)
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Only an admin can create campaigns")
+    return user
+
+
+def _slugify(name: str) -> str:
+    s = re.sub(r"[^a-z0-9]+", "-", (name or "").lower()).strip("-")[:63].strip("-")
+    return s or "campaign"
+
+
+def _rules_preview(rules: dict) -> dict:
+    now = datetime.now(timezone.utc)
+    return {"view": campaign_view.build(rules, now), "payout_text": payouts.describe(payouts.model_from_rules(rules))}
+
+
+class BriefParse(BaseModel):
+    text: str = Field(min_length=1, max_length=50_000)
+
+
+@app.post("/api/campaigns/parse-brief")
+def parse_campaign_brief(payload: BriefParse, request: Request):
+    """Brief → rules for the New campaign form. Nothing is saved. AI fills only what the patterns missed, and every
+    AI field lands in `unsure` (source "ai") so the admin confirms it."""
+    _require_campaign_admin(request)
+    today = datetime.now(payouts.WIB).date()
+    rules = brief_parser.parse_brief(payload.text, today=today, ai=brief_parser.router_ai())
+    unsure = rules.get("unsure") or []
+    name = (rules.get("name") or "").strip()
+    slug = _slugify(name or rules.get("campaign") or "")
+    base, n = slug, 2
+    while campaigns.get(slug):
+        slug, n = f"{base[:60]}-{n}", n + 1
+    clean = {k: v for k, v in rules.items() if k not in PARSE_META_KEYS}
+    return {"rules": clean, "unsure": unsure, "ai_derived": rules.get("ai_derived") or [],
+            "ai_reasons": rules.get("ai_reasons") or [], "name": name, "slug": slug, **_rules_preview(clean)}
+
+
+class RulesPreview(BaseModel):
+    rules: dict
+
+
+@app.post("/api/campaigns/preview")
+def preview_campaign_rules(payload: RulesPreview, request: Request):
+    """The plain-language view of edited rules before saving (same builder as the detail page)."""
+    _require_campaign_admin(request)
+    try:
+        return _rules_preview({k: v for k, v in payload.rules.items() if k not in PARSE_META_KEYS})
+    except Exception as exc:  # half-edited JSON shapes: say so instead of a 500
+        raise HTTPException(status_code=400, detail=f"These rules can't be read yet: {exc}"[:300])
+
+
+class CampaignCreate(BaseModel):
+    slug: str = Field(min_length=1, max_length=63)
+    name: str = Field(min_length=1, max_length=120)
+    rules: dict
+    brief_text: str = Field(min_length=1, max_length=50_000)
+    visibility: str = "shared"
+    unsure: list[dict] = Field(default_factory=list)
+    confirmed: list[str] = Field(default_factory=list)
+
+
+@app.post("/api/campaigns", status_code=201)
+def create_campaign(payload: CampaignCreate, request: Request):
+    """Admin saves a confirmed campaign. Every `unsure` field must be in `confirmed` (409 otherwise); the brief is kept
+    verbatim; created_by = the admin."""
+    user = _require_campaign_admin(request)
+    slug = payload.slug.strip().lower()
+    if not campaigns.SLUG_RE.match(slug):
+        raise HTTPException(status_code=400, detail="Short name: lowercase letters, digits and dashes only")
+    if payload.visibility not in ("shared", "private"):
+        raise HTTPException(status_code=400, detail="visibility must be shared or private")
+    open_fields = sorted({str(u.get("field")) for u in payload.unsure} - set(payload.confirmed))
+    if open_fields:
+        raise HTTPException(status_code=409, detail=f"Confirm these first: {', '.join(open_fields)}")
+    plats = payload.rules.get("platforms", [])
+    bad = [p for p in plats if p not in rule_checks.PLATFORM_LIMITS] if isinstance(plats, list) else [plats]
+    if bad or not plats:
+        raise HTTPException(status_code=400, detail=f"Pick at least one known platform{f' (unknown: {bad})' if bad else ''}")
+    rules = {k: v for k, v in payload.rules.items() if k not in PARSE_META_KEYS}
+    rules.update(campaign=slug, name=payload.name.strip())
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO campaigns (slug, name, rules, brief_text, created_by, visibility) "
+                "VALUES (%s, %s, %s::jsonb, %s, %s, %s) ON CONFLICT (slug) DO NOTHING",
+                (slug, payload.name.strip(), json.dumps(rules), payload.brief_text, user["id"], payload.visibility))
+            if not cur.rowcount:
+                raise HTTPException(status_code=409, detail="A campaign with this short name already exists")
+        conn.commit()
+    campaigns.invalidate()
     return get_campaign(slug, request)
 
 

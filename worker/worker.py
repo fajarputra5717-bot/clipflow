@@ -26,7 +26,7 @@ from faster_whisper import WhisperModel
 from psycopg.rows import dict_row
 
 from shared.ai import router as ai_router
-from shared import campaigns, descriptions, edit_spec as edit_specs, languages, posts as post_rules, retention, rule_checks
+from shared import campaigns, descriptions, ytdlp, edit_spec as edit_specs, languages, posts as post_rules, retention, rule_checks
 from shared.errors import FAILURE_TRANSIENT, failure_class
 from shared.fonts import caption_font_bold, normalize_caption_font
 from shared.settings import RuntimeSettings
@@ -1062,9 +1062,10 @@ def youtube_info(youtube_url, with_format=True):
     """`yt-dlp -j` metadata (title, sizes, …) without downloading; None on failure.
     with_format: resolve download_video()'s formats (sizes); False = title only."""
     try:
-        args = ["yt-dlp", "-j", "--no-playlist", "--no-warnings"]
+        args = ["yt-dlp", "-j", "--no-playlist", "--no-warnings", *ytdlp.base_args(setting)]
         if with_format:
             args += ["-f", YTDLP_FORMAT]
+        ytdlp.wait_turn(setting, check_cancelled)   # 167: space every yt-dlp call (bot check)
         _, output = run_command(args + ["--", youtube_url])
         return json.loads(output.strip().splitlines()[-1])
     except JobCancelled:
@@ -2033,6 +2034,44 @@ def is_transient_download_error(message):
     return bool(_TRANSIENT_DOWNLOAD_RE.search(message or ""))
 
 
+_last_blocked_alert = 0.0
+
+
+def alert_admin(text):
+    """Best-effort Telegram line to the admin chat (env TELEGRAM_CHAT_ID), at most once an hour per process."""
+    global _last_blocked_alert
+    chat = (os.getenv("TELEGRAM_CHAT_ID") or "").strip()
+    if not chat or time.time() - _last_blocked_alert < 3600:
+        return
+    _last_blocked_alert = time.time()
+    try:
+        telegram_call("sendMessage", {"chat_id": chat, "text": text, "disable_web_page_preview": "true"}, timeout=15)
+    except Exception as exc:
+        log(f"Admin alert not sent: {exc}")
+
+
+def download_after_bot_check(command, youtube_url, job_id):
+    """167: YouTube's bot check. Retry once with the cookies file when one is mounted; otherwise (or if that fails
+    too) fail the job with a clear message (permanent: a loop would make the block worse) + alert the admin."""
+    args, tmp = ytdlp.cookies_args(setting)
+    if tmp:
+        log("yt-dlp hit the bot check; retrying once with the cookies file")
+        try:
+            ytdlp.wait_turn(setting, check_cancelled)
+            run_command(command[:1] + args + command[1:])
+            return
+        except RuntimeError as exc:
+            if not ytdlp.is_bot_check(exc):
+                raise
+        finally:
+            os.unlink(tmp)
+    log(f"WARNING: YouTube bot check blocked job {job_id} ({'cookies tried' if tmp else 'no cookies file'})")
+    alert_admin(f"ClipFlow: YouTube blocked a download (bot check), job {job_id}.\n{youtube_url}\n"
+                + ("The cookies file didn't help: export fresh YouTube cookies." if tmp else
+                   "No cookies file is mounted (YTDLP_COOKIES_FILE). Retry the job in about an hour."))
+    raise RuntimeError(ytdlp.BLOCKED_MESSAGE)
+
+
 def download_video(
     youtube_url,
     job_id,
@@ -2080,6 +2119,8 @@ def download_video(
 
         "--no-playlist",
 
+        *ytdlp.base_args(setting),   # 167: mweb client + bgutil PO token
+
         "--merge-output-format",
         "mp4",
 
@@ -2099,11 +2140,17 @@ def download_video(
 
         try:
 
+            ytdlp.wait_turn(setting, check_cancelled)
+
             run_command(command)
 
             break
 
         except RuntimeError as exc:
+
+            if ytdlp.is_bot_check(exc):
+                download_after_bot_check(command, youtube_url, job_id)
+                break
 
             if (
                 attempt >= YTDLP_MAX_ATTEMPTS

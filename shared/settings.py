@@ -115,6 +115,12 @@ DEFAULT_SETTINGS = {
     # and of work orphaned by a worker restart, per job/candidate.
     "JOB_MAX_ATTEMPTS": "3",
     "STALE_CLAIM_MINUTES": "5",
+    # yt-dlp vs YouTube's bot check (167, shared/ytdlp.py): client + bgutil PO-token sidecar, spacing between
+    # calls across processes, optional cookies file (read-only mount) used only to retry after a bot check.
+    "YTDLP_PLAYER_CLIENT": "mweb",
+    "YTDLP_POT_URL": "http://pot:4416",
+    "YTDLP_MIN_GAP_SECONDS": "20",
+    "YTDLP_COOKIES_FILE": "/run/secrets/clipflow/youtube-cookies.txt",
 }
 
 SECRET_SETTING_KEYS = {

@@ -1,4 +1,4 @@
-# (number assigned by Lane A at merge) · P4 task 7a — Editor Captions tab: presets, keywords, text, style, new hook (lane B)
+# 164 · P4 task 7a — Editor Captions tab: presets, keywords, text, style, new hook (lane B)
 
 - Captions tab (flow-preview step 5): preset tiles (this clip's own style + animation, 108; equal to the job's =
   cleared) + "Apply to all clips" (`POST …/caption-preset`, two-tap confirm); keyword highlight (word chips +

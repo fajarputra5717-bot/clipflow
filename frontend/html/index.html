@@ -1313,6 +1313,24 @@ select::-ms-expand{display:none}
 .camp-meter i{display:block;height:100%;border-radius:3px;background:var(--accent);transform-origin:left}
 .camp-meter-label{font-size:12px;color:var(--muted)}
 .camp-card.is-ended{opacity:.72}
+.edit-moved{margin:var(--sp-1) 0 var(--sp-2);padding:10px 12px;border-radius:12px;background:var(--badge-run-bg);color:var(--badge-run-fg);font-size:13px}
+.edit-moved a{color:inherit;font-weight:600}
+/* 166: New campaign (brief → rules, confirm before saving) */
+.cn-bar{display:flex;justify-content:flex-end;margin-top:var(--sp-1)}
+.cn-brief{width:100%;min-height:280px;font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace}
+.cn-actions{display:flex;align-items:center;gap:var(--sp-2);margin-top:var(--sp-2);flex-wrap:wrap}
+.cn-field{margin-top:var(--sp-2);padding:2px 0;border-radius:12px}
+.cn-field.is-unsure{padding:8px 10px;background:var(--badge-warn-bg);box-shadow:inset 3px 0 0 var(--badge-warn-line)}
+.cn-field input,.cn-field textarea{width:100%}
+.cn-plat[aria-pressed="true"]{outline:2px solid var(--accent);outline-offset:-1px;background:var(--badge-run-bg)}
+.cn-plat{cursor:pointer;min-height:var(--hit)}
+.cn-unsure{list-style:none;margin:var(--sp-1) 0 0;padding:0;display:grid;gap:6px}
+.cn-unsure label{display:flex;gap:10px;align-items:flex-start;padding:8px 10px;border-radius:12px;background:var(--fill);min-height:var(--hit);cursor:pointer}
+.cn-unsure label span:nth-child(2){flex:1;min-width:0;overflow-wrap:anywhere}
+.cn-unsure input{margin-top:3px;width:18px;height:18px;flex:none}
+.cn-ok{font-size:12px;color:var(--muted);flex:none}
+.cn-unsure input:checked~.cn-ok{color:var(--badge-good-fg)}
+.cn-json textarea{width:100%;min-height:260px;margin-top:var(--sp-1);font:12px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace}
 /* 162: campaign-driven labels + the collapsed Expired group (Publish) */
 .pcard-earn{margin-left:6px;font-size:11px;padding:2px 8px;vertical-align:1px}
 .pexpired>summary{cursor:pointer;list-style:none;min-height:var(--hit);display:flex;align-items:center}
@@ -1949,7 +1967,8 @@ const SUBTITLE_ANIMATIONS=[
 let activeJobId=null,pollTimer=null,jobMonitorTimer=null,currentTab="current";
 const editMoreOpen={};  // "<cid>:desc|thumb" -> open, survives re-renders
 const editTab={};       // "<cid>" -> active edit tab, survives re-renders
-const EDIT_TABS=[["captions","Captions"],["effects","Effects"],["audio","Audio"],["watermark","Watermark"],["export","Export"]];
+// 165: Captions / Effects / Audio moved to the Editor page (P4 tasks 5 + 7a); the old panel keeps what has no home yet.
+const EDIT_TABS=[["export","Export"],["watermark","Watermark"]];
 const REDUCED_MOTION=window.matchMedia("(prefers-reduced-motion: reduce)");
 function scrollMode(){return REDUCED_MOTION.matches?"auto":"smooth"}
 // JS waits that exist only to let a CSS animation play collapse to 0 under reduced motion (067).
@@ -2614,9 +2633,6 @@ function renderCandidate(c,jid,platform,job={}){
       <span>${esc(c.message||"This clip failed.")}</span>
       <button class="secondary" data-retry-candidate="${esc(jid)}" data-cid="${esc(c.id)}" type="button">Retry</button>
     </div>`:""}
-    <div class="candidate-hook-row">
-      <button class="secondary ai-highlight${busy?" is-busy":""}" data-hook="${esc(jid)}" data-cid="${esc(c.id)}" type="button" ${busy?'disabled aria-busy="true"':""}>${busy?"Finding hook…":"Get another hook"}</button>
-    </div>
     ${renderSubmagicRow(c,jid)}
 
     <div class="preview-layout">
@@ -2636,32 +2652,7 @@ function renderCandidate(c,jid,platform,job={}){
         <div class="edit-title"><strong>Candidate editing</strong><span>changes regenerate this preview</span></div>
         ${editTabsHtml(c.id)}
 
-        ${editPanelOpen(c.id,"captions")}
-        <div class="edit-section">
-          <div class="edit-section-head">
-            <h4>Subtitle</h4>
-            <button class="mini-ai-btn ai-highlight" data-fix-subtitle="${esc(jid)}" data-cid="${esc(c.id)}" type="button" ${busy?"disabled":""}>${busy?"Working…":"Fix typos (AI)"}</button>
-          </div>
-          <label class="edit-subtle-label">Indonesian · ALL CAPS · karaoke word-highlight</label>
-          <textarea id="sub-${esc(c.id)}" data-initial="${esc(sub)}" data-transcript="${esc(transcriptSub)}">${esc(sub)}</textarea>
-          ${captionPresetsHtml(c.id,jid,styleName,animName,jobStyle,jobAnim,!!c.edit_spec?.caption)}
-          <div class="edit-style-row">
-            <div><label>Font style</label><select id="style-${esc(c.id)}">${SUBTITLE_STYLES.map(([v,l])=>`<option value="${v}" ${v===styleName?"selected":""}>${l}</option>`).join("")}</select></div>
-            <div><label>Font</label><select id="font-${esc(c.id)}">${SUBTITLE_FONTS.map(x=>`<option ${x===fontName?"selected":""} style="font-family:${esc(SUBTITLE_FONT_PREVIEW_STACK[x]||"inherit")};font-weight:${SUBTITLE_FONT_WEIGHT[x]||700}">${esc(x)}</option>`).join("")}</select></div>
-            <div><label>Size</label><input id="size-${esc(c.id)}" type="number" min="12" max="120" value="${esc(size)}"></div>
-            <div><label>Animation</label><select id="anim-${esc(c.id)}">${SUBTITLE_ANIMATIONS.map(([v,l])=>`<option value="${v}" ${v===animName?"selected":""}>${l}</option>`).join("")}</select></div>
-          </div>
-          <div class="caption-preview" id="capPreview-${esc(c.id)}">
-            <div class="caption-preview-text" id="capPreviewText-${esc(c.id)}"></div>
-          </div>
-          ${keywordBoxHtml(c.id)}
-          ${captionPosHtml(c)}
-          <div class="hint">Live preview reflects your actual subtitle text, style, font, size and animation. "Fix typos (AI)" only updates this box — nothing is saved or re-rendered until you hit Apply changes.</div>
-        </div>
-        </div>
-
-        ${editPanelOpen(c.id,"effects")}${comingSoonHtml("Effects","Hook title card, auto zoom punch-ins, transitions on cuts, progress bar and loudness normalise.")}</div>
-        ${editPanelOpen(c.id,"audio")}${comingSoonHtml("Audio","Remove silences and filler words, background music.")}</div>
+        <p class="edit-moved">Captions (style, presets, keywords, position, text + Fix typos), new hook, Effects and Audio are in the <a href="#editor/${esc(jid)}/${esc(c.id)}" data-open-editor>Editor</a>.</p>
 
         ${editPanelOpen(c.id,"export")}
         <div class="edit-section">
@@ -2751,18 +2742,18 @@ function renderCandidate(c,jid,platform,job={}){
 // Edit drawer tabs: buttons + panels are re-rendered with the card, the active tab lives in editTab[cid].
 // Inactive panels stay in the DOM (hidden), so Apply still reads every input.
 function editTabsHtml(cid){
-  const cur=editTab[cid]||"captions",i=Math.max(0,EDIT_TABS.findIndex(t=>t[0]===cur));
+  const cur=editTab[cid]||EDIT_TABS[0][0],i=Math.max(0,EDIT_TABS.findIndex(t=>t[0]===cur));
   return `<div class="edit-tabs" role="tablist" aria-label="Edit clip" style="--i:${i}"><span class="edit-tabs-ind" aria-hidden="true"></span>${EDIT_TABS.map(([id,n])=>
     `<button type="button" role="tab" id="et-${esc(cid)}-${id}" aria-controls="etp-${esc(cid)}-${id}" aria-selected="${id===cur}" tabindex="${id===cur?0:-1}" data-edit-tab="${id}" data-cid="${esc(cid)}">${n}</button>`).join("")}</div>`;
 }
 function editPanelOpen(cid,id){
-  return `<div class="edit-tabpanel" role="tabpanel" id="etp-${esc(cid)}-${id}" aria-labelledby="et-${esc(cid)}-${id}" ${(editTab[cid]||"captions")===id?"":"hidden"}>`;
+  return `<div class="edit-tabpanel" role="tabpanel" id="etp-${esc(cid)}-${id}" aria-labelledby="et-${esc(cid)}-${id}" ${(editTab[cid]||EDIT_TABS[0][0])===id?"":"hidden"}>`;
 }
 function comingSoonHtml(title,what){
   return `<div class="edit-section coming-soon"><div class="edit-section-head"><h4>${esc(title)}</h4><span class="tag">Coming soon</span></div><div class="hint">${esc(what)} Arrives with retention editing.</div></div>`;
 }
 function switchEditTab(cid,id,focus){
-  const from=EDIT_TABS.findIndex(t=>t[0]===(editTab[cid]||"captions")),to=EDIT_TABS.findIndex(t=>t[0]===id);
+  const from=EDIT_TABS.findIndex(t=>t[0]===(editTab[cid]||EDIT_TABS[0][0])),to=EDIT_TABS.findIndex(t=>t[0]===id);
   if(to<0||from===to)return;
   editTab[cid]=id;
   const card=$(`candidate-${cid}`);if(!card)return;
@@ -3209,33 +3200,19 @@ function toggleCandidateEdit(cid){
   const b=el.querySelector("[data-edit]");if(b){b.textContent=open?"Close edit":"Edit";b.setAttribute("aria-expanded",String(open))}
   renderFlow();syncPageTitle();
 }
+// 165: the old panel applies only what it still holds (description, thumbnail, watermark + burn-in). Caption
+// style/font/size/animation, subtitle text, keywords and position are the Editor page's now: never sent from here,
+// or an Apply would overwrite the Editor's choices with this panel's stale inputs.
 async function applyEdits(jid,cid){
-  const subEl=$("sub-"+cid),sub=(subEl?.value||"").trim().toUpperCase();
   const desc=($("desc-"+cid)?.value||"").trim();
-  const style=$("style-"+cid)?.value||"outline";
-  const font=$("font-"+cid)?.value||"Liberation Sans Bold";
-  const size=Math.max(12,Math.min(120,Number($("size-"+cid)?.value||42)));
-  const animation=$("anim-"+cid)?.value||"karaoke";
   const thumbIdx=thumbSelection[cid];
   const patch={description:desc};
-  // QA #1: send the override only when the text changed; back to the transcript = clear it,
-  // so the worker keeps Whisper's word timings (karaoke) for every line.
-  const normSub=t=>String(t||"").toUpperCase().split("\n").map(l=>l.trim().replace(/\s+/g," ")).filter(Boolean).join("\n");
-  if(subEl&&normSub(sub)!==normSub(subEl.dataset.initial))patch.subtitle_override=normSub(sub)===normSub(subEl.dataset.transcript)?"":sub;
   if(thumbIdx!==undefined)patch.selected_thumbnail_index=thumbIdx;
   const b=document.querySelector(`[data-apply="${css(jid)}"][data-cid="${css(cid)}"]`);
   if(b?.disabled)return;
   setBusy(b,true,"Applying…");
   try{
     await api(`/api/jobs/${jid}/candidates/${cid}`,{method:"PATCH",body:JSON.stringify(patch)});
-    // 108: style+animation are this clip's own (edit_spec.caption; cleared when equal to the job's); font/size stay job-level.
-    const pw=document.querySelector(`.cap-presets[data-cid="${css(cid)}"]`),jobStyle=pw?.dataset.jobStyle||style,jobAnim=pw?.dataset.jobAnim||animation;
-    const spec={caption:style===jobStyle&&animation===jobAnim?null:{style,animation}};
-    const kst=kwState[cid];if(kst?.dirty){spec.keywords=[...kst.set];if(kst.color)spec.keyword_color=kst.color}  // 111 (116: auto colour stays unset)
-    const cy=captionPosPatch(cid);if(cy!==undefined)spec.caption_y=cy;  // 112
-    await api(`/api/jobs/${jid}/candidates/${cid}`,{method:"PATCH",body:JSON.stringify({edit_spec:spec})});
-    if(kst)kst.dirty=false;
-    await api(`/api/jobs/${jid}/subtitle-style`,{method:"PATCH",body:JSON.stringify({subtitle_style:jobStyle,subtitle_font:font,subtitle_size:size,subtitle_animation:jobAnim})});
     const renderOpts=changedRenderOptions(cid);
     if(Object.keys(renderOpts).length)await api(`/api/jobs/${jid}/render-options`,{method:"PATCH",body:JSON.stringify(renderOpts)});
     await api(`/api/jobs/${jid}/candidates/${cid}/regenerate-preview`,{method:"POST"});
@@ -4159,12 +4136,121 @@ document.addEventListener("click",async e=>{
   if(pz&&campaignDetail){setBusy(pz,true);try{campaignDetail={...campaignDetail,...await api("/api/campaigns/"+encodeURIComponent(campaignDetail.slug),{method:"PUT",body:JSON.stringify({paused:pz.dataset.campaignPause==="true"})})};renderCampaignDetail();loadCampaigns()}catch(err){setBusy(pz,false);alert(err.message)}}
 });
 function renderCampaignStep(){
+  if(campaignNew)return renderCampaignNew();
   if(campaignOpen)return openCampaign(campaignOpen);
   const order={active:0,ending_soon:0,paused:1,ended:2};
   const list=[...campaignStep].sort((a,b)=>(order[a.status?.code]??1)-(order[b.status?.code]??1));
-  $("campaignList").innerHTML=list.length?`<div class="camp-grid">${list.map(campaignCardHtml).join("")}</div>`
-    :`<p class="publish-empty">No campaigns yet.</p>`;
+  const add=currentUser?.role==="admin"?`<div class="cn-bar"><button type="button" data-campaign-new>New campaign</button></div>`:"";
+  $("campaignList").innerHTML=add+(list.length?`<div class="camp-grid">${list.map(campaignCardHtml).join("")}</div>`
+    :`<p class="publish-empty">No campaigns yet.</p>`);
 }
+
+// ---- New campaign (P3 part 4, 166): paste brief → POST parse-brief (patterns first, AI only for gaps; the call shows
+// in the island) → form pre-filled; every `unsure` field (AI ones tagged) needs its Confirm tick before Save.
+// The plain-language preview comes from the server (campaign_view, payouts), never computed here.
+let campaignNew=null; // {text} while pasting, + {parsed, confirmed:Set} while reviewing
+const CN_FIELDS={name:"name",platforms:"platforms",hashtags:"hashtags"};
+function cnUnsureFor(key){return (campaignNew?.parsed?.unsure||[]).some(u=>String(u.field).split(".")[0]===key)}
+function cnPreviewHtml(p){
+  const v=p.view||{};
+  return `${p.payout_text?`<p class="camp-pay">${esc(p.payout_text)}</p>`:""}${cdList(v.payout)}
+    ${v.period?`<p class="camp-detail">${esc(v.period)}</p>`:""}
+    ${(v.weeks||[]).length?`<div class="cd-chips">${v.weeks.map(w=>`<span class="cd-chip cd-week is-${esc(w.state)}">${esc(w.id)} <small>${esc(w.dates)}</small></span>`).join("")}</div>`:""}
+    ${(v.content_rules||[]).length?`<h4>Content rules</h4>${cdList(v.content_rules)}`:""}${(v.budget||[]).length?`<h4>Budget</h4>${cdList(v.budget)}`:""}`;
+}
+function renderCampaignNew(){
+  const n=campaignNew,box=$("campaignList");
+  if(!n.parsed){
+    box.innerHTML=`<div class="cd cn">
+      <button class="cd-back" type="button" data-cn-cancel>← Campaigns</button>
+      <h2>New campaign</h2>
+      <p class="cd-sub">Paste the brand's brief as it was sent. ClipFlow reads the rules from it; you check them before anything is saved.</p>
+      <label class="field" for="cnBrief">Brief</label>
+      <textarea id="cnBrief" class="cn-brief" spellcheck="false" placeholder="Paste the whole brief here…">${esc(n.text||"")}</textarea>
+      <div class="cn-actions"><button type="button" data-cn-parse>Read brief</button><span class="account-msg" id="cnMsg" role="status"></span></div>
+    </div>`;
+    return;
+  }
+  const p=n.parsed,r=p.rules||{},unsure=p.unsure||[],plats=new Set(r.platforms||[]);
+  const tags=(r.hashtags?.required_in_order||[]).join("\n");
+  const flag=k=>cnUnsureFor(k)?" is-unsure":"";
+  box.innerHTML=`<div class="cd cn">
+    <button class="cd-back" type="button" data-cn-cancel>← Campaigns</button>
+    <div class="cd-head"><h2>New campaign</h2><button class="secondary" type="button" data-cn-rebrief>Edit brief</button></div>
+    ${unsure.length?`<section class="cd-box cn-check"><h3>Check these first (${unsure.length})</h3>
+      <p class="camp-detail">The brief didn't settle these${p.ai_derived.length?", or AI filled them in":""}. Fix them below or in All rules, then tick Confirm.</p>
+      <ul class="cn-unsure">${unsure.map(u=>`<li><label><input type="checkbox" data-cn-confirm="${esc(u.field)}" ${n.confirmed.has(String(u.field))?"checked":""}>
+        <span><b>${esc(u.field)}</b>${u.source==="ai"?` <span class="badge attention">AI</span>`:""}<br><small>${esc(u.why||"")}</small></span><span class="cn-ok">Confirm</span></label></li>`).join("")}</ul></section>`
+      :`<p class="camp-detail">Every rule was read from the brief; nothing needs checking.</p>`}
+    <div class="cd-grid">
+      <div class="cd-col"><section class="cd-box"><h3>Campaign</h3>
+        <div class="cn-field${flag("name")}"><label class="field" for="cnName">Name</label><input id="cnName" maxlength="120" value="${esc(p.name||r.name||"")}"></div>
+        <div class="cn-field"><label class="field" for="cnSlug">Short name <span class="field-opt">· used in links, can't change later</span></label><input id="cnSlug" maxlength="63" value="${esc(p.slug||"")}" spellcheck="false" autocapitalize="off"></div>
+        <div class="cn-field"><span class="field">Who sees it</span><div class="seg" role="group" aria-label="Who sees it">
+          ${[["shared","Everyone"],["private","Only me + admins"]].map(([v,l])=>`<button type="button" aria-pressed="${(n.visibility||"shared")===v}" data-cn-vis="${v}">${l}</button>`).join("")}</div></div>
+        <div class="cn-field${flag("platforms")}"><span class="field">Platforms</span><div class="cd-chips">
+          ${Object.keys(PLATFORM_SHORT).map(k=>`<button type="button" class="cd-chip cn-plat" aria-pressed="${plats.has(k)}" data-cn-plat="${k}">${PLATFORM_ICON[k]||""}${esc(PLATFORM_SHORT[k])}</button>`).join("")}</div></div>
+        <div class="cn-field${flag("hashtags")}"><label class="field" for="cnTags">Hashtags, in order <span class="field-opt">· one per line</span></label><textarea id="cnTags" rows="4" spellcheck="false">${esc(tags)}</textarea></div>
+      </section>
+      <details class="cd-box cn-json"><summary>All rules (JSON)</summary><textarea id="cnRules" spellcheck="false">${esc(JSON.stringify(r,null,2))}</textarea></details></div>
+      <div class="cd-col"><section class="cd-box"><div class="row"><h3>How it reads</h3><button class="secondary" type="button" data-cn-preview>Update</button></div>
+        <div id="cnPreview">${cnPreviewHtml(p)}</div></section></div>
+    </div>
+    <div class="cn-actions"><button type="button" data-cn-save>Save campaign</button><span class="account-msg" id="cnMsg" role="status"></span></div>
+  </div>`;
+  cnSyncSave();
+}
+function cnSyncSave(){
+  const b=document.querySelector("[data-cn-save]");if(!b||!campaignNew?.parsed)return;
+  const left=(campaignNew.parsed.unsure||[]).filter(u=>!campaignNew.confirmed.has(String(u.field))).length;
+  b.disabled=left>0;b.title=left?`Confirm ${left} more`:"";
+}
+function cnRules(){  // the JSON box is the base; the form fields win for what they show
+  const r=JSON.parse($("cnRules").value||"{}");
+  r.name=$("cnName").value.trim();
+  r.platforms=[...document.querySelectorAll('[data-cn-plat][aria-pressed="true"]')].map(b=>b.dataset.cnPlat);
+  const tags=$("cnTags").value.split("\n").map(t=>t.trim()).filter(Boolean).map(t=>t.startsWith("#")?t:"#"+t);
+  r.hashtags={...(r.hashtags||{}),required_in_order:tags};
+  return r;
+}
+function cnMsg(t,err){const m=$("cnMsg");if(m){m.textContent=t||"";m.classList.toggle("is-error",!!err)}}
+document.addEventListener("click",async e=>{
+  if(e.target.closest("[data-campaign-new]")){campaignNew={text:""};return renderCampaignNew()}
+  if(!campaignNew)return;
+  if(e.target.closest("[data-cn-cancel]")){campaignNew=null;return renderCampaignStep()}
+  if(e.target.closest("[data-cn-rebrief]")){campaignNew={text:campaignNew.text};return renderCampaignNew()}
+  const pb=e.target.closest("[data-cn-parse]");
+  if(pb){
+    const text=$("cnBrief").value.trim();if(!text){cnMsg("Paste the brief first.",true);$("cnBrief").focus();return}
+    campaignNew.text=text;setBusy(pb,true,"Reading…");
+    setCandidateActiveTask(null,"campaign-brief",{actionLabel:"Reading brief",status:"running",progress:null,indeterminate:true,title:"New campaign"});
+    try{const parsed=await api("/api/campaigns/parse-brief",{method:"POST",body:JSON.stringify({text})});
+      if(campaignNew?.text===text){campaignNew={text,parsed,confirmed:new Set(),visibility:"shared"};renderCampaignNew()}}
+    catch(err){setBusy(pb,false);cnMsg(err.message,true)}
+    finally{clearCandidateActiveTask("campaign-brief")}
+    return;
+  }
+  const vb=e.target.closest("[data-cn-vis]");
+  if(vb){campaignNew.visibility=vb.dataset.cnVis;document.querySelectorAll("[data-cn-vis]").forEach(b=>b.setAttribute("aria-pressed",String(b===vb)));return}
+  const pl=e.target.closest("[data-cn-plat]");if(pl){pl.setAttribute("aria-pressed",String(pl.getAttribute("aria-pressed")!=="true"));return}
+  const pv=e.target.closest("[data-cn-preview]");
+  if(pv){let rules;try{rules=cnRules()}catch{return cnMsg("All rules isn't valid JSON.",true)}
+    setBusy(pv,true);try{$("cnPreview").innerHTML=cnPreviewHtml(await api("/api/campaigns/preview",{method:"POST",body:JSON.stringify({rules})}));cnMsg("")}
+    catch(err){cnMsg(err.message,true)}finally{setBusy(pv,false)}return}
+  const sv=e.target.closest("[data-cn-save]");
+  if(sv&&!sv.disabled){let rules;try{rules=cnRules()}catch{return cnMsg("All rules isn't valid JSON.",true)}
+    const n=campaignNew,body={slug:$("cnSlug").value.trim().toLowerCase(),name:rules.name,rules,brief_text:n.text,visibility:n.visibility,
+      unsure:n.parsed.unsure||[],confirmed:[...n.confirmed]};
+    if(!body.name)return cnMsg("Give the campaign a name.",true);
+    setBusy(sv,true,"Saving…");
+    try{const c=await api("/api/campaigns",{method:"POST",body:JSON.stringify(body)});campaignNew=null;loadCampaigns();openCampaign(c.slug)}
+    catch(err){setBusy(sv,false);cnSyncSave();cnMsg(err.message,true)}
+  }
+});
+document.addEventListener("change",e=>{
+  const c=e.target.closest?.("[data-cn-confirm]");if(!c||!campaignNew?.confirmed)return;
+  campaignNew.confirmed[c.checked?"add":"delete"](c.dataset.cnConfirm);cnSyncSave();
+});
 
 // ---- Schedule view (P2.5 S3, 147): GET /api/schedule = own planned posts by WIB day + overdue on top.
 // Actions per row: Reschedule (the Approve & schedule sheet), Send to phone (141, that platform's caption),

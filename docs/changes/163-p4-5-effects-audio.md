@@ -1,4 +1,4 @@
-# (number assigned by Lane A at merge) · P4 task 5 — Effects + Audio tabs live (lane B)
+# 163 · P4 task 5 — Effects + Audio tabs live (lane B)
 
 - Editor page tabs Effects and Audio are live (Watermark/Export still "later"). Each control saves at once (debounced
   PUT, flushed before Render preview); tab switch slides the panel (reduced motion: none).

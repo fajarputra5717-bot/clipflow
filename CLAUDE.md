@@ -98,6 +98,13 @@ it `purged`; orphan sweep is dry-run unless `ORPHAN_SWEEP_DRY_RUN=false`.
 Never sweep finals/thumbnails. New file kinds: name them with the job or
 candidate id (or store the path in the DB) or the orphan sweep flags them.
 
+## YouTube downloads (167)
+
+Every yt-dlp call goes through `shared/ytdlp.py`: `base_args(setting)` (mweb client + bgutil PO token from the `pot`
+service) and `ytdlp.wait_turn(setting, check)` (cross-process spacing) before it; new callers (source_watch) too.
+Bot check → one cookies retry if `secrets/youtube-cookies.txt` exists, else permanent "YouTube blocked" + admin alert.
+yt-dlp + bgutil are pinned: bump monthly and rerun the download check in docs/changes/167.
+
 ## Cancellation (R-08)
 
 `POST /api/jobs/{id}/cancel` sets `cancelled`; the worker's
@@ -170,7 +177,8 @@ also served to the browser at `/fonts/` (nginx alias).
 Source = the `campaigns` table (157: slug, name, rules JSONB, brief_text, created_by, visibility shared|private, paused;
 a shared catalogue, no user_id), read via `shared/campaigns.py` (`set_db_loader()` in backend/worker/sender/notifier, 5 s
 cache, `invalidate()` after a write). `docs/campaigns/<slug>.rules.json` (+ `.md`) = first-run seed + fallback only (no sync).
-Lists for a user filter with `campaigns.visible_to()` (other's private → 404); `get(slug)` ignores visibility; paused = no new jobs. `jobs.campaign` = slug (NULL = none). Campaign watermark preset is snapshotted on the job
+New (166): admin `POST /api/campaigns/parse-brief` → form → `POST /api/campaigns` (409 until every `unsure` field is
+confirmed; parse metadata never stored). Lists for a user filter with `campaigns.visible_to()` (other's private → 404); `get(slug)` ignores visibility; paused = no new jobs. `jobs.campaign` = slug (NULL = none). Campaign watermark preset is snapshotted on the job
 (`watermark_asset_id` + R-05 width/opacity + position) — resolve with `resolve_watermark_path(job["watermark_asset_id"])`.
 Hashtags (093): `hashtags.required_in_order`, exact ORDER, appended at the END of the caption (position is
 not a rule). Campaign-only prompt additions; the non-campaign hook prompt must stay byte-identical. Clip-checkable
@@ -398,7 +406,8 @@ planned post: `reminded_at` set in the queueing transaction; > 1 h late = `misse
   Editor → `#editor/<job>/<clip>` (`editor/editor.js`; hook title, timeline, cuts, fillers, zoom via `worker/render_steps.py`
   + `backend/app/routes_editor.py`). `editorOpen()` = page or old panel. The OLD job detail + edit panel stays reachable only
   via a Review card's "All edits" (`openClassicEdit`) until P4 gives each drawer feature a home in the Editor page: remove a
-  drawer piece only then. UI specs reach the old panel with `classicQueue()`.
+  drawer piece only then (165: Captions/Effects/Audio gone; it keeps Export, Watermark, description, thumbnail, and
+  `applyEdits()` never sends caption fields). UI specs reach the old panel with `classicQueue()`.
 - **Navigation (106, P1 task 0):** the flow-preview **stepper** (`#flowNav`, `renderFlow()`, `FLOW_STEPS`) is the
   top-level navigation (sticky under the toolbar, compact while it is collapsed via `body:has(.toolbar.is-collapsed)`, 121): Analyze (`data-nav="current"`, the Import view), Review (`data-nav="queue"`, the job
   list/detail, formerly "Publish"), Publish (`data-nav="publish"`, 130), Editor (`data-flow-editor`: opens the visible job's clip drawer; disabled

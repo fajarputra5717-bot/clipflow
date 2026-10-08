@@ -1,4 +1,4 @@
-"""Editor API (lane B, roadmap P4). Mounted by one line in main.py (`# lane-b hook`).
+"""Editor API (lane B, roadmap P4). Mounted by one line in main.py.
 
 Ownership (P1.5): every route takes the caller through ONE dependency, `get_current_user`, which is
 main's `current_user(request)` (session cookie / API token, set by the require_user middleware).

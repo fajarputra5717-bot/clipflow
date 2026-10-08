@@ -154,6 +154,15 @@ async function mockApi(page, api) {
     }
     { const m = path.match(/^\/api\/auth\/tokens\/([^/]+)$/);
       if (m && method === "DELETE") { api.tokens = (api.tokens || []).filter((t) => t.id !== m[1]); return json({ ok: true }); } }
+    if (path === "/api/campaigns/parse-brief" && method === "POST") return json(api.parsedBrief);   // P3 part 4 mocks (166)
+    if (path === "/api/campaigns/preview" && method === "POST") return json({ payout_text: "Preview: " + (body.rules.platforms || []).join(","), view: { payout: [], weeks: [] } });
+    if (path === "/api/campaigns" && method === "POST") {
+      const open = (body.unsure || []).map((u) => u.field).filter((f) => !body.confirmed.includes(f));
+      if (open.length) return json({ detail: "Confirm these first: " + open.join(", ") }, 409);
+      api.createdCampaign = body;
+      api.campaignDetail = { ...(api.campaignDetail || {}), [body.slug]: { slug: body.slug, name: body.name, status: { code: "active", label: "Active", detail: "" }, mine: {}, view: {}, brief_text: body.brief_text, can_edit: true } };
+      return json(api.campaignDetail[body.slug], 201);
+    }
     { const m = path.match(/^\/api\/campaigns\/([^/]+)(\/watermark)?$/);   // P3 part 5 mocks
       if (m && m[2]) return route.fulfill({ status: 200, contentType: "image/png", body: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=", "base64") });
       if (m && method === "GET") { const d = (api.campaignDetail || {})[m[1]]; return d ? json(d) : json({ detail: "Campaign not found" }, 404); }

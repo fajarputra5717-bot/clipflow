@@ -16,3 +16,6 @@ tests/output/
 
 # Playwright UI recordings (072/073): kept on disk for review, never committed
 docs/ui-recordings/
+
+# 167: YouTube cookies for yt-dlp (never commit)
+/secrets/
