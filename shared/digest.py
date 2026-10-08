@@ -11,7 +11,7 @@ Money comes formatted from shared/payouts.py; scoping: every query filters by us
 
 from datetime import datetime, timedelta
 
-from shared import campaigns, payouts, post_advice, posts as post_rules, rule_checks
+from shared import campaign_status, campaigns, payouts, post_advice, posts as post_rules, rule_checks
 
 MAX_LINES = 5
 
@@ -21,7 +21,7 @@ def _fmt_when(dt: datetime) -> str:
     return f"{w:%a %d %b %H:%M} WIB"
 
 
-def _ready(cur, user_id):
+def _ready(cur, user_id, now=None):
     cur.execute(
         """
         SELECT c.id, j.campaign, j.platform, COALESCE(NULLIF(c.manual_title, ''), NULLIF(c.title, ''), c.ai_title)
@@ -41,6 +41,8 @@ def _ready(cur, user_id):
     out = []
     for cid, camp, job_platform, title in clips:
         rules = campaigns.get(camp) if camp else None
+        if rules and now and campaign_status.status(rules, now)["code"] == "ended":
+            continue   # 162: expired (campaign posting over): not "ready to post" any more
         plats = post_rules.clip_platforms(rules, job_platform)
         missing = [p for p in plats if (cid, p) not in live]
         if missing:
@@ -87,7 +89,7 @@ def build(cur, user_id: str, now: datetime) -> str | None:
                          f"{' @' + handle if handle else ''}: {(title or 'Clip')[:50]}")
         if len(today) > MAX_LINES:
             lines.append(f"  … +{len(today) - MAX_LINES} more in Schedule")
-    ready = _ready(cur, user_id)
+    ready = _ready(cur, user_id, now)
     if ready:
         n = sum(len(m) for _, _, m in ready)
         lines.append(f"📤 Ready to post: {n} ({len(ready)} clip{'s' if len(ready) != 1 else ''})")

@@ -1313,6 +1313,44 @@ select::-ms-expand{display:none}
 .camp-meter i{display:block;height:100%;border-radius:3px;background:var(--accent);transform-origin:left}
 .camp-meter-label{font-size:12px;color:var(--muted)}
 .camp-card.is-ended{opacity:.72}
+/* 162: campaign-driven labels + the collapsed Expired group (Publish) */
+.pcard-earn{margin-left:6px;font-size:11px;padding:2px 8px;vertical-align:1px}
+.pexpired>summary{cursor:pointer;list-style:none;min-height:var(--hit);display:flex;align-items:center}
+.pexpired>summary::-webkit-details-marker{display:none}
+.pexpired>summary h3::before{content:"▸ "}
+.pexpired[open]>summary h3::before{content:"▾ "}
+.pexpired-camp h4{margin:var(--sp-1) 0 0;font-size:13px;color:var(--muted)}
+.pexpired .pcard{opacity:.8}
+.camp-card{cursor:pointer;transition:border-color var(--dur-2) var(--ease-out)}
+.camp-card:hover{border-color:var(--accent)}
+.camp-card .camp-open{align-self:flex-start;margin-top:4px;min-height:36px;padding:0 14px;border-radius:999px;font-size:13px}
+/* Campaign detail (P3 part 5, 161): text comes from shared/campaign_view.py; the page only lays it out */
+.cd-head{display:flex;flex-wrap:wrap;align-items:center;gap:8px var(--sp-2)}
+.cd-head h2{margin:0;flex:1;min-width:0}
+.cd-back,[data-theme="dark"] .cd-back{background:none;border:0;padding:0;min-height:var(--hit);color:var(--accent);font-weight:600;box-shadow:none}
+.cd-sub{font-size:14px;color:var(--muted);margin:4px 0 0}
+.cd-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:var(--sp-2);margin-top:var(--sp-2)}
+@media (max-width:860px){.cd-grid{grid-template-columns:1fr}}
+.cd-col{display:flex;flex-direction:column;gap:var(--sp-2);min-width:0}
+.cd-box{background:var(--panel2);border:1px solid var(--line);border-radius:16px;padding:var(--sp-2);min-width:0}
+.cd-box h3{margin:0 0 8px;font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+.cd-box ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px;font-size:14px}
+.cd-box p{margin:0 0 6px;font-size:14px}
+.cd-pay li:first-child{font-weight:600;list-style:none;margin-left:-18px}
+.cd-chips{display:flex;flex-wrap:wrap;gap:6px}
+.cd-chip{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:var(--fill);font-size:13px;font-weight:600}
+.cd-chip svg{width:14px;height:14px}
+.cd-chip small{font-weight:500;color:var(--muted)}
+.cd-week.is-open{background:var(--badge-run-bg);color:var(--badge-run-fg);box-shadow:inset 0 0 0 1px var(--badge-run-line)}
+.cd-week.is-closed{opacity:.55}
+.cd-wm{display:flex;align-items:center;gap:var(--sp-2)}
+.cd-wm img{max-width:160px;max-height:80px;object-fit:contain;background:repeating-conic-gradient(var(--fill) 0 25%,transparent 0 50%) 0 0/12px 12px;border-radius:8px;padding:6px}
+.cd-q{font-size:14px}
+.cd-q dt{font-weight:600;margin-top:6px}
+.cd-q dd{margin:0;color:var(--muted)}
+.cd-q .is-open dt::after{content:" · open";color:var(--badge-warn-fg);font-weight:500}
+.cd-brief summary{cursor:pointer;font-weight:600;min-height:var(--hit);display:flex;align-items:center}
+.cd-brief pre{white-space:pre-wrap;word-break:break-word;font:inherit;font-size:14px;margin:0;max-height:480px;overflow:auto}
 /* Schedule view (P2.5 S3, 147): list by WIB day (default, phones) + week calendar (desktop ≥ 1000 px) */
 .sched-viewseg{display:none}
 @media (min-width:1000px){.sched-viewseg{display:inline-flex}}
@@ -3638,7 +3676,7 @@ async function showTab(tab){
     }else if(tab==="publish"){
       loadPublish();
     }else if(tab==="campaign"){
-      loadCampaignStep();
+      campaignOpen=null;loadCampaignStep();   // the stepper's Campaign = back to the cards
     }else if(tab==="schedule"){
       loadSchedule();
     }else{
@@ -3684,7 +3722,7 @@ async function showTab(tab){
 
   if(tab==="publish"){loadPublish();return}
   if(tab==="schedule"){loadSchedule();return}
-  if(tab==="campaign"){loadCampaignStep();return}
+  if(tab==="campaign"){campaignOpen=null;loadCampaignStep();return}
   if(tab==="current"){
     overlayOpen=false;
     updateJobIsland();
@@ -3917,7 +3955,7 @@ document.addEventListener("click",e=>{
   const c=e.target.closest("[data-claim-cancel]");if(c){delete claimOpen[c.dataset.claimCancel];renderPublish()}
 });
 const POST_STATUS={ready:["Ready","idle"],planned:["Planned","idle"],posted:["Posted","completed"],claimed:["Claimed","attention"],paid:["Paid","completed"]};
-let publishGroups=[],publishFilter="left",publishCampaign="all",publishOpen={},publishPanel={}; // publishPanel: cid → open platform
+let publishGroups=[],publishFilter="left",publishCampaign="all",publishOpen={},publishPanel={},publishExpiredOpen=false; // publishPanel: cid → open platform
 function publishRowKey(r){return r.candidate_id+":"+r.platform}
 function rowStatus(r){const s=r.post?.status;return !s||s==="dropped"?"ready":s}
 // Copy that works in iOS Safari: the Clipboard API is called synchronously inside the tap (no await before it);
@@ -3981,7 +4019,7 @@ function publishCardHtml(c,rows){
         <div class="qt" title="${esc(c.title)}">${esc(c.title||"Untitled clip")}</div>
         ${c.job_title?`<div class="pcard-src" title="${esc(c.job_title)}">${esc(c.job_title)}</div>`:""}
         <div class="pcard-cap" title="${esc(c.caption)}">${esc((c.caption||"").replace(/\s+/g," "))}</div>
-        <div class="pcard-sum">Posted on ${s.posted||0} of ${s.total||rows.length}${s.expected_fmt?` · ${esc(s.expected_fmt)} expected`:""}</div>
+        <div class="pcard-sum">Posted on ${s.posted||0} of ${s.total||rows.length}${s.expected_fmt?` · ${esc(s.expected_fmt)} expected`:""}${c.earn?` <span class="badge cancelled pcard-earn" title="This clip can no longer earn in its campaign">${esc(c.earn.label)}</span>`:""}</div>
       </div>
     </div>
     <div class="qactions">
@@ -4012,9 +4050,14 @@ function renderPublish(){
   $("publishFilter").innerHTML=(camps.length>1?`<div class="seg" role="group" aria-label="Filter campaign">${[["all","All campaigns"],...camps].map(([id,n])=>`<button type="button" data-publish-campaign="${esc(id)}" aria-pressed="${publishCampaign===id}">${esc(n)}</button>`).join("")}</div>`:"")
     +`<div class="seg" role="group" aria-label="Filter clips">${[["left","Left to post"],["all","All"]].map(([id,n])=>`<button type="button" data-publish-filter="${id}" aria-pressed="${publishFilter===id}">${n}</button>`).join("")}</div>`;
   let total=0;
-  const html=publishGroups.filter(g=>publishCampaign==="all"||(g.campaign||"")===publishCampaign).map(g=>{
-    const cards=(g.cards||[]).map(c=>[c,g.rows.filter(r=>r.candidate_id===c.candidate_id)]).filter(([c,rs])=>{total++;return publishFilter==="all"||cardLeft(rs)||publishPanel[c.candidate_id]})  // an open card stays until closed;
-    return cards.length?`<div class="qgroup"><h3>${esc(g.campaign_name)}</h3>${cards.map(([c,rs])=>publishCardHtml(c,rs)).join("")}</div>`:""}).join("");
+  const shown=publishGroups.filter(g=>publishCampaign==="all"||(g.campaign||"")===publishCampaign);
+  const html=shown.filter(g=>!g.expired).map(g=>{
+    // an open card stays until closed
+    const cards=(g.cards||[]).map(c=>[c,g.rows.filter(r=>r.candidate_id===c.candidate_id)]).filter(([c,rs])=>{total++;return publishFilter==="all"||cardLeft(rs)||publishPanel[c.candidate_id]});
+    return cards.length?`<div class="qgroup"><h3>${esc(g.campaign_name)}</h3>${cards.map(([c,rs])=>publishCardHtml(c,rs)).join("")}</div>`:""}).join("")
+    // 162: ended campaigns leave the active queue: one collapsed "Expired" group at the bottom, nothing deleted
+    +(()=>{const ex=shown.filter(g=>g.expired&&(g.cards||[]).length);if(!ex.length)return "";const n=ex.reduce((a,g)=>a+g.cards.length,0);
+      return `<details class="qgroup pexpired" ${publishExpiredOpen?"open":""} data-publish-expired><summary><h3>Expired · ${n} clip${n===1?"":"s"} (campaign ended)</h3></summary>${ex.map(g=>`<div class="pexpired-camp"><h4>${esc(g.campaign_name)}</h4>${g.cards.map(c=>publishCardHtml(c,g.rows.filter(r=>r.candidate_id===c.candidate_id))).join("")}</div>`).join("")}</details>`})();
   const sheetRow=PUBLISH_SHEET_MQ.matches?openPanelRow():null;
   $("publishSheetHost").innerHTML=sheetRow?publishPanelHtml(sheetRow):"";
   $("publishList").innerHTML=html||`<div class="publish-empty">${total?`Every clip here is posted on all its platforms. <button class="plain" type="button" data-publish-filter="all">Show all</button>`:`No finished clips yet. Approve a clip in <button class="plain" type="button" data-nav="queue">Review</button>; it lands here once its final render is done.`}</div>`;
@@ -4072,10 +4115,51 @@ function campaignCardHtml(c){
     <div class="camp-plats">${(c.platforms||[]).map(p=>`<span class="pchip">${PLATFORM_ICON[p]||""}${esc(PLATFORM_SHORT[p]||p)}</span>`).join("")}</div>
     <div class="camp-kv"><span><b>${m.posted||0}</b> posted</span><span><b>${m.claimed||0}</b> claimed</span><span><b>${esc(m.paid_fmt||"Rp 0")}</b> paid</span>${m.planned?`<span><b>${m.planned}</b> planned</span>`:""}</div>
     ${c.budget_text?`<div class="camp-meter-label">Budget ${esc(c.budget_text)}</div>`:""}
+    <button class="secondary camp-open" type="button" data-campaign-open="${esc(c.slug)}">Details</button>
     ${cm?`<div class="camp-meter" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(cm.fraction*100)}" aria-label="${esc(cm.label)}"><i style="transform:scaleX(${cm.fraction})"></i></div><div class="camp-meter-label">${esc(cm.label)}</div>`:""}
   </article>`;
 }
+let campaignOpen=null,campaignDetail=null; // 161: slug of the open detail page + its GET /api/campaigns/{slug}
+async function openCampaign(slug){
+  campaignOpen=slug;campaignDetail=null;$("campaignList").innerHTML=`<p class="publish-empty">Loading…</p>`;
+  try{campaignDetail=await api("/api/campaigns/"+encodeURIComponent(slug));if(campaignOpen===slug)renderCampaignDetail()}
+  catch(err){$("campaignList").innerHTML=`<div class="error-box">${esc(err.message)} <button class="plain" type="button" data-campaign-back>Back</button></div>`}
+  window.scrollTo({top:Math.min(window.scrollY,TITLE_RANGE),behavior:scrollMode()});
+}
+function cdBox(title,body){return body?`<section class="cd-box"><h3>${esc(title)}</h3>${body}</section>`:""}
+function cdList(items){return items&&items.length?`<ul>${items.map(t=>`<li>${esc(t)}</li>`).join("")}</ul>`:""}
+function renderCampaignDetail(){
+  const c=campaignDetail,v=c.view||{},st=c.status||{},m=c.mine||{},cm=c.cap_meter,q=v.questions||{open:[],answered:[]};
+  const mine=`<div class="camp-kv"><span><b>${m.posted||0}</b> posted</span><span><b>${m.claimed||0}</b> claimed</span><span><b>${esc(m.paid_fmt||"Rp 0")}</b> paid</span><span><b>${esc(m.expected_fmt||"Rp 0")}</b> expected (claimed)</span>${m.planned?`<span><b>${m.planned}</b> planned</span>`:""}</div>`
+    +(cm?`<div class="camp-meter" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(cm.fraction*100)}" aria-label="${esc(cm.label)}"><i style="transform:scaleX(${cm.fraction})"></i></div><div class="camp-meter-label">${esc(cm.label)}</div>`:"");
+  const weeks=(v.weeks||[]).length?`<div class="cd-chips">${v.weeks.map(w=>`<span class="cd-chip cd-week is-${esc(w.state)}">${esc(w.id)} <small>${esc(w.dates)}${w.state==="open"?` · ${w.days_left} day${w.days_left===1?"":"s"} left`:w.state==="closed"?" · closed":""}</small></span>`).join("")}</div>`:"";
+  const wm=v.watermark?`<div class="cd-wm">${v.watermark.has_asset?`<img src="${esc(mediaUrl("/api/campaigns/"+encodeURIComponent(c.slug)+"/watermark"))}" alt="${esc(v.watermark.name||"Campaign watermark")}" loading="lazy">`:""}<div><b>${esc(v.watermark.name||"")}</b><div class="camp-detail">${v.watermark.required?"Required on every clip":"Optional"}</div></div></div>`:"";
+  const qs=q.open.length||q.answered.length?`<dl class="cd-q">${q.answered.map(a=>`<div><dt>${esc(a.topic)}</dt><dd>${esc(a.text)}${a.date?` <small>(admin, ${esc(a.date)})</small>`:""}</dd></div>`).join("")}${q.open.map(o=>`<div class="is-open"><dt>${esc(o.topic)}</dt><dd>${esc(o.text)}</dd></div>`).join("")}</dl>`:"";
+  const claim=v.claim?`<p><a href="${esc(v.claim.form)}" target="_blank" rel="noopener">Open the claim form</a></p>${v.claim.requires?`<p class="camp-detail">Needs: ${esc(v.claim.requires)}</p>`:""}`:"";
+  $("campaignList").innerHTML=`<div class="cd">
+    <button class="cd-back" type="button" data-campaign-back>← Campaigns</button>
+    <div class="cd-head"><h2>${esc(c.name)}</h2><span class="badge ${CAMP_BADGE[st.code]||"idle"}">${esc(st.label||"")}</span>
+      ${c.can_edit?`<button class="secondary" type="button" data-campaign-pause="${c.paused?"false":"true"}">${c.paused?"Resume":"Pause"}</button>`:""}</div>
+    <p class="cd-sub">${esc(st.detail||"")}${v.period?` · ${esc(v.period)}`:""}${c.visibility==="private"?" · private":""}</p>
+    <div class="cd-grid">
+      <div class="cd-col">${cdBox("Payout",`<ul class="cd-pay">${(v.payout||[]).map(t=>`<li>${esc(t)}</li>`).join("")}</ul>`)}
+        ${cdBox("Your numbers",mine)}${cdBox("Posting weeks",weeks)}${cdBox("Budget",cdList(v.budget))}${cdBox("Claim",claim)}</div>
+      <div class="cd-col">${cdBox("Platforms",`<div class="cd-chips">${(v.platforms||[]).map(p=>`<span class="cd-chip">${PLATFORM_ICON[p.slug]||""}${esc(p.name)}</span>`).join("")}</div>`)}
+        ${cdBox("Hashtags, in this order (at the end of the caption)",(v.hashtags||[]).length?`<div class="cd-chips">${v.hashtags.map((h,i)=>`<span class="cd-chip"><small>${i+1}</small>${esc(h)}</span>`).join("")}</div>`:"")}
+        ${cdBox("Watermark",wm)}${cdBox("Content rules",cdList(v.content_rules))}${cdBox("Checked by hand",cdList(v.manual))}${cdBox("Questions",qs)}</div>
+    </div>
+    <details class="cd-box cd-brief" style="margin-top:var(--sp-2)"><summary>Brief (verbatim)</summary>${c.brief_text?`<pre>${esc(c.brief_text)}</pre>`:`<p class="camp-detail">The brief text isn't stored yet.</p>`}</details>
+  </div>`;
+}
+document.addEventListener("click",async e=>{
+  const o=e.target.closest("[data-campaign-open],[data-campaign-card]");
+  if(o&&!e.target.closest("a")){const slug=o.dataset.campaignOpen||o.dataset.campaignCard;return openCampaign(slug)}
+  if(e.target.closest("[data-campaign-back]")){campaignOpen=null;return loadCampaignStep()}
+  const pz=e.target.closest("[data-campaign-pause]");
+  if(pz&&campaignDetail){setBusy(pz,true);try{campaignDetail={...campaignDetail,...await api("/api/campaigns/"+encodeURIComponent(campaignDetail.slug),{method:"PUT",body:JSON.stringify({paused:pz.dataset.campaignPause==="true"})})};renderCampaignDetail();loadCampaigns()}catch(err){setBusy(pz,false);alert(err.message)}}
+});
 function renderCampaignStep(){
+  if(campaignOpen)return openCampaign(campaignOpen);
   const order={active:0,ending_soon:0,paused:1,ended:2};
   const list=[...campaignStep].sort((a,b)=>(order[a.status?.code]??1)-(order[b.status?.code]??1));
   $("campaignList").innerHTML=list.length?`<div class="camp-grid">${list.map(campaignCardHtml).join("")}</div>`
@@ -4373,7 +4457,7 @@ document.addEventListener("keydown",e=>{
     e.preventDefault();switchEditTab(cid,EDIT_TABS[j][0],true);
   }
 });
-document.addEventListener("toggle",e=>{const d=e.target;if(d.tagName!=="DETAILS")return;d.querySelector(":scope > summary")?.setAttribute("aria-expanded",String(d.open));if(d.matches("[data-edit-more]"))editMoreOpen[d.dataset.cid+":"+d.dataset.editMore]=d.open},true);
+document.addEventListener("toggle",e=>{const d=e.target;if(d.tagName!=="DETAILS")return;if(d.matches("[data-publish-expired]"))publishExpiredOpen=d.open;d.querySelector(":scope > summary")?.setAttribute("aria-expanded",String(d.open));if(d.matches("[data-edit-more]"))editMoreOpen[d.dataset.cid+":"+d.dataset.editMore]=d.open},true);
 // Sidebar: desktop = collapsible column (remembered), narrow = drawer.
 const SIDEBAR_MQ=window.matchMedia("(max-width:999px)");
 const SIDEBAR_STORAGE="clipflow_sidebar_collapsed_v1";

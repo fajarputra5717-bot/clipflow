@@ -47,3 +47,57 @@ test("paused campaign is disabled in the Analyze form", async ({ app, api }) => 
   await expect(app.locator('#jobCampaign option[value="ime-roleplay"]')).toHaveText("IME Roleplay X Motion Klip (paused)");
   await expect(app.locator('#jobCampaign option[value="fandra-octo"]')).toBeEnabled();
 });
+
+// P3 part 5 (161): campaign detail page: sections from GET /api/campaigns/{slug} .view (shared/campaign_view.py).
+const detail = (o) => ({ ...camp({ status: { code: "active", label: "Active", detail: "Week 2 · 7 days left" } }), brief_text: "IME Roleplay X Motion Klip\nBayaran Rp 200.000 per video…", rules: {},
+  view: { status: { code: "active", label: "Active", detail: "Week 2 · 7 days left" }, period: null,
+    payout: ["Rp 200.000 per post at 40.000 views, max 2 per platform account/month", "Claim inside the week the clip was posted."],
+    platforms: [{ slug: "tiktok", name: "TikTok" }, { slug: "youtube", name: "YouTube Shorts" }],
+    hashtags: ["#imeroleplay", "#imestrong", "#motionklip"], watermark: { required: true, name: "Motion Klip", has_asset: true },
+    weeks: [{ id: "W1", dates: "1–7 Oct", state: "closed" }, { id: "W2", dates: "8–14 Oct", state: "open", days_left: 7 }, { id: "W3", dates: "15–21 Oct", state: "upcoming" }],
+    content_rules: ["No SARA", "No misleading context"], manual: ["Discord server tag \"MKLP\" required to claim"],
+    questions: { open: [{ topic: "Weekly carry over", text: "does unused weekly budget carry over? (unanswered)" }],
+      answered: [{ topic: "Uploads oct 29 31", text: "not eligible", date: "2026-10-02" }] },
+    claim: { form: "https://forms.gle/x", requires: "Discord tag" }, budget: ["Rp 20.000.000 per month."] }, ...o });
+
+test("campaign detail: payout, my numbers, weeks (open highlighted), hashtags in order, watermark, questions, brief; admin pause", async ({ app, api }) => {
+  api.campaigns = [camp()];
+  api.campaignDetail = { "ime-roleplay": detail() };
+  await app.reload();
+  await app.locator('#flow [data-nav="campaign"]').click();
+  await app.locator('[data-campaign-card="ime-roleplay"] h3').click();
+  await expect(app.locator(".cd-head h2")).toHaveText("IME Roleplay X Motion Klip");
+  await expect(app.locator(".cd-sub")).toHaveText("Week 2 · 7 days left");
+  await expect(app.locator(".cd-pay li").first()).toHaveText("Rp 200.000 per post at 40.000 views, max 2 per platform account/month");
+  await expect(app.locator(".cd-week.is-open")).toContainText("W2 8–14 Oct · 7 days left");
+  await expect(app.locator(".cd-week.is-closed")).toContainText("W1");
+  await expect(app.locator(".cd-chip", { hasText: "#" })).toHaveText(["1#imeroleplay", "2#imestrong", "3#motionklip"]);
+  await expect(app.locator(".cd-wm img")).toHaveAttribute("src", /\/api\/campaigns\/ime-roleplay\/watermark/);
+  await expect(app.locator(".cd-q .is-open dt")).toHaveText("Weekly carry over");
+  await expect(app.locator(".cd-q dd").first()).toContainText("not eligible (admin, 2026-10-02)");
+  await expect(app.locator(".cd-box a", { hasText: "claim form" })).toHaveAttribute("href", "https://forms.gle/x");
+  await app.locator(".cd-brief summary").click();
+  await expect(app.locator(".cd-brief pre")).toContainText("Bayaran Rp 200.000");
+  await app.click("[data-campaign-pause]");
+  await expect(app.locator(".cd-head .badge")).toHaveText("Paused");
+  expect(api.calls.filter((c) => c.method === "PUT" && c.path === "/api/campaigns/ime-roleplay").at(-1).body).toEqual({ paused: true });
+  await expect(app.locator("[data-campaign-pause]")).toHaveText("Resume");
+  expect(await app.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await app.screenshot({ path: `test-results/campaign-detail-${test.info().project.name}.png`, fullPage: true });
+  await app.click("[data-campaign-back]");
+  await expect(app.locator(".camp-card")).toHaveCount(1);
+});
+
+test("campaign detail: members see no Pause; unknown campaign shows the error with Back", async ({ app, api }) => {
+  api.campaigns = [camp({ can_edit: false }), camp({ slug: "gone", name: "Gone" })];
+  api.campaignDetail = { "ime-roleplay": detail({ can_edit: false }) };
+  await app.reload();
+  await app.locator('#flow [data-nav="campaign"]').click();
+  await app.locator('[data-campaign-open="ime-roleplay"]').click();
+  await expect(app.locator(".cd-head h2")).toBeVisible();
+  await expect(app.locator("[data-campaign-pause]")).toHaveCount(0);
+  await app.locator('#flow [data-nav="campaign"]').click();          // stepper Campaign = back to the cards
+  await expect(app.locator(".camp-card")).toHaveCount(2);
+  await app.locator('[data-campaign-open="gone"]').click();
+  await expect(app.locator("#campaignList .error-box")).toContainText("Campaign not found");
+});

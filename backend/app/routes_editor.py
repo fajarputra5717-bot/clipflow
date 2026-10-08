@@ -210,7 +210,16 @@ def _save_spec_key(job_id, candidate_id, user, key, value):
 def editor_state(job_id: str, candidate_id: str, user: dict = Depends(get_current_user)):
     core = _core()
     with core.get_db() as conn, conn.cursor() as cur:
-        return _state(_load(cur, job_id, candidate_id, user))
+        c = _load(cur, job_id, candidate_id, user)
+        state = _state(c)
+        # 162: campaign label for the Editor header ("Week closed" / "Campaign ended" + expired), one rule
+        from datetime import datetime, timezone
+        from shared import campaign_status, campaigns
+        rules = campaigns.get(c["campaign"]) if c["campaign"] else None
+        cur.execute("SELECT posted_at FROM clip_posts WHERE candidate_id = %s AND user_id = %s", (candidate_id, user["id"]))
+        posts = [{"posted_at": r[0]} for r in cur.fetchall()]
+        state["campaign_labels"] = campaign_status.clip_labels(rules, posts, datetime.now(timezone.utc))
+        return state
 
 
 class HookTitleIn(BaseModel):
@@ -451,7 +460,8 @@ def review_clips(campaign: str = "all", job: str = "all", status: str = "to_revi
     first by hook score, then the ones that can no longer earn."""
     from datetime import datetime, timezone
     from shared import campaigns, payouts, rule_checks
-    from shared.review_state import campaign_status, earn_state
+    from shared import campaign_status as campaign_status_mod
+    from shared.review_state import campaign_status
     core = _core()
     now = datetime.now(timezone.utc)
     where, params = owner_filter(user)
@@ -491,7 +501,7 @@ def review_clips(campaign: str = "all", job: str = "all", status: str = "to_revi
             rules_cache[slug] = (rules, payouts.model_from_rules(rules) if rules else None)
         rules, model = rules_cache[slug]
         c["rule_checks"] = rule_checks.check(rules, c) if rules else []
-        c["earn"] = earn_state(rules, model, posts.get(c["id"], []), now) if rules else None
+        c.update(campaign_status_mod.clip_labels(rules, posts.get(c["id"], []), now))   # 162: earn + expired
         c.update(campaign=slug, job_title=jtitle or "Untitled video", job_date=jdate.isoformat() if jdate else None,
                  job_status=jstatus, updated_at=c["updated_at"].isoformat() if c["updated_at"] else None,
                  score=float(c["score"]) if c["score"] is not None else None)

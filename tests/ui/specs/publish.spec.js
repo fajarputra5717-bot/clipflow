@@ -230,3 +230,19 @@ test("layout: chips wrap on one card, panel inline on desktop / bottom sheet on 
   else await panel.locator(".ppanel-close").click();
   await expect(app.locator(".ppanel")).toHaveCount(0);
 });
+
+test("162: earn label on a card; an ended campaign's clips sit in a collapsed Expired group", async ({ app, api }) => {
+  seed(api);
+  api.publishGroups.push({ campaign: "old", campaign_name: "Old campaign", expired: true,
+    rows: [row({ candidate_id: "cand-old", title: "Old clip", campaign: "old" })] });
+  api.cardEarn = { "cand-a": { code: "week_closed", label: "Week closed" } };
+  await openPublish(app);
+  await expect(card(app, "cand-a").locator(".pcard-earn")).toHaveText("Week closed");
+  const ex = app.locator("[data-publish-expired]");
+  await expect(ex.locator("summary")).toHaveText("Expired · 1 clip (campaign ended)");
+  await expect(ex).not.toHaveAttribute("open", "");
+  await expect(card(app, "cand-old")).toBeHidden();
+  await ex.locator("summary").click();
+  await expect(card(app, "cand-old")).toBeVisible();
+  await expect(app.locator(".qgroup:not(.pexpired) h3")).not.toContainText(["Old campaign"]);
+});

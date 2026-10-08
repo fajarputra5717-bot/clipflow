@@ -140,6 +140,9 @@
     if (seq !== R.loadSeq || !R.open) return;                  // a newer filter won
     R.data = d;
     const h = d.header;
+    // 162: clips of an ended campaign leave the active grid for a collapsed "Expired" group (nothing deleted)
+    const active = d.clips.filter((c) => !c.expired), expired = d.clips.filter((c) => c.expired);
+    const slot = (c) => `<article class="rv-clip" id="rv-${esc(c.id)}"></article>`;
     const statusLine = h.kind === "campaign" && h.status ? `<p class="rv-camp-status">${esc(shortName(h.title))} · ${esc(h.status.text)}</p>` : "";
     $("rvBody").innerHTML = `
       <section class="panel rv-panel">
@@ -150,9 +153,12 @@
             <p class="rv-desc">Clips are sorted by hook score. A clip can be scheduled only when every campaign rule passes.</p></div>
           <span class="badge attention rv-count" id="rvCount"></span>
         </div>
-        ${d.clips.length ? `<div class="rv-grid" id="rvGrid">${d.clips.map((c) => `<article class="rv-clip" id="rv-${esc(c.id)}"></article>`).join("")}</div>`
-                         : emptyState()}
+        ${active.length ? `<div class="rv-grid" id="rvGrid">${active.map(slot).join("")}</div>` : expired.length ? "" : emptyState()}
+        ${expired.length ? `<details class="rv-expired" ${R.expiredOpen ? "open" : ""}><summary>Expired · ${expired.length} clip${expired.length === 1 ? "" : "s"} (campaign ended)</summary>
+          <div class="rv-grid">${expired.map(slot).join("")}</div></details>` : ""}
       </section>`;
+    const ex = $("rvBody").querySelector(".rv-expired");
+    if (ex) ex.addEventListener("toggle", () => { R.expiredOpen = ex.open; });
     patch(d);
     R.pollT = setInterval(poll, window.POLL_INTERVAL || 2200);
   }

@@ -46,6 +46,8 @@ def status(rules, now: datetime) -> dict:
     last = last_posting_day(rules)
     left = (last - today).days + 1 if last else None
     detail = review_state.campaign_status(rules, now)["text"]
+    if detail == "Open until the budget runs out" and "budget" not in str((rules.get("period") or {}).get("until") or ""):
+        detail = "No end date set"   # the rules don't say the budget ends it (e.g. a pilot with TBD period)
     if rules.get("paused"):
         code = "paused"
     elif last and today > last:
@@ -56,3 +58,17 @@ def status(rules, now: datetime) -> dict:
         code = "active"
     return {"code": code, "label": LABELS[code], "detail": detail,
             "last_day": last.isoformat() if last else None, "days_left": left}
+
+
+def clip_labels(rules, posts, now: datetime) -> dict:
+    """P3 part 6 (162): what Review, Editor and Publish show for one clip of this campaign.
+    earn    Lane B's review_state.earn_state: {code week_closed|campaign_ended, label} or None (can still earn)
+    expired the campaign's posting is over (status 'ended'): the clip leaves the active queues for a collapsed
+            "Expired" group. Nothing is deleted. posts = [{posted_at, ...}] of this clip (the user's own)."""
+    if not rules:
+        return {"earn": None, "expired": False}
+    model = payouts.model_from_rules(rules)
+    expired = status(rules, now)["code"] == "ended"
+    earn = {"code": "campaign_ended", "label": "Campaign ended"} if expired else \
+        review_state.earn_state(rules, model, posts or [], now)   # ended = past the last posting day (IME after W4)
+    return {"earn": earn, "expired": expired}

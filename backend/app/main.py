@@ -25,7 +25,7 @@ from starlette.concurrency import run_in_threadpool
 from app import auth
 
 from shared.ai import router as ai_router
-from shared import campaign_status, campaigns, descriptions, edit_spec as edit_specs, hook_ranges, languages, origins, payouts, post_advice, posts as post_rules, rule_checks, schedule
+from shared import campaign_status, campaign_view, campaigns, descriptions, edit_spec as edit_specs, hook_ranges, languages, origins, payouts, post_advice, posts as post_rules, rule_checks, schedule
 from shared.errors import AINotConfiguredError
 from shared.fonts import normalize_caption_font
 from shared.settings import (
@@ -79,6 +79,7 @@ MEDIA_PATH_RE = re.compile(
     r"jobs/[^/]+/candidates/[^/]+/"
     r"(preview|render|thumbnail|thumbnail-options/\d+)"
     r"|assets/watermarks/[^/]+/file"
+    r"|campaigns/[^/]+/watermark"   # 161: the campaign's watermark preview (detail page)
     r")$"
 )
 
@@ -1876,6 +1877,11 @@ def publish_queue(request: Request):
             "platforms": plats, "summary": _card_summary([posts.get((cid, p)) for p in plats]),
             "last_send": max(clip_sends, key=lambda v: v["_at"]) if clip_sends else None,
         })
+        # 162: "Week closed" / "Campaign ended" on the card; an ended campaign's group is "expired" (collapsed in the UI)
+        labels = campaign_status.clip_labels(rules, [{"posted_at": post_advice.as_ts(posts[(cid, p)]["posted_at"])}
+                                                     for p in plats if posts.get((cid, p)) and posts[(cid, p)]["posted_at"]], now)
+        g["cards"][-1].update(earn=labels["earn"], expired=labels["expired"])
+        g["expired"] = labels["expired"]
         for plat in plats:
             caption, trimmed = post_rules.trim_caption(body, tags, post_rules.CAPTION_LIMITS.get(plat, 2200))
             model = payouts.model_from_rules(rules) if rules else None
@@ -3873,7 +3879,8 @@ def new_hook(
                         -- style choices (caption preset/position, keyword colour, on/off switches) stay.
                         edit_spec = NULLIF(
                             (COALESCE(edit_spec, '{}'::jsonb) - 'cuts' - 'keywords')
-                                #- '{zoom,markers}' #- '{audio,silence_ranges}' #- '{hook_title,text}',
+                                #- '{zoom,markers}' #- '{audio,silence_ranges}' #- '{audio,silence_trim}'
+                                #- '{hook_title,text}',   -- silence_trim off too: its ranges were the old moment's (Lane C Low)
                             '{}'::jsonb),
                         -- 110: the new-hook prompt has no score (no prompt change);
                         -- clear the old hook's so the UI shows no stale estimate.
@@ -4126,7 +4133,27 @@ def get_campaign(slug: str, request: Request):
         {"brief_text": None, "created_at": None, "updated_at": None}
     clean = {k: v for k, v in rules.items() if k not in ("slug", "brief_pending", "visibility", "created_by", "paused")}
     now = datetime.now(timezone.utc)
-    return {**_campaign_out(rules, user, now, _campaign_stats(user["id"], now)), **meta, "rules": clean}
+    # 161: the detail page's sections in plain language (shared/campaign_view.py; money via payouts only)
+    return {**_campaign_out(rules, user, now, _campaign_stats(user["id"], now)), **meta, "rules": clean,
+            "view": campaign_view.build(rules, now)}
+
+
+@app.get("/api/campaigns/{slug}/watermark")
+def get_campaign_watermark(slug: str, request: Request):
+    """161: the campaign's watermark asset for everyone who can see the campaign (the asset row is the admin's
+    own upload; campaigns are shared, so their mark is too). No asset / missing file → 404."""
+    rules = _visible_campaign(slug, current_user(request))
+    wm = campaigns.watermark(rules) or {}
+    if not wm.get("asset_id"):
+        raise HTTPException(status_code=404, detail="This campaign has no watermark asset")
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT path FROM watermark_assets WHERE id::text = %s", (str(wm["asset_id"]),))
+            row = cur.fetchone()
+    path = DATA_ROOT / row[0] if row else None
+    if not path or not path.exists():
+        raise HTTPException(status_code=404, detail="Watermark file missing")
+    return FileResponse(path, media_type="image/png")
 
 
 class CampaignUpdate(BaseModel):

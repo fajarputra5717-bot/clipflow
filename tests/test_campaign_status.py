@@ -31,6 +31,14 @@ class Ime(unittest.TestCase):
             s = cs.status(self.R, wib(2026, 10, d))
             self.assertEqual((s["code"], s["label"], s["detail"]), ("ended", "Ended", "Ended 28 Oct"))
 
+    def test_clip_labels(self):
+        self.assertEqual(cs.clip_labels(self.R, [], wib(2026, 10, 9)), {"earn": None, "expired": False})
+        posted_w1 = [{"posted_at": wib(2026, 10, 3, 12)}]
+        self.assertEqual(cs.clip_labels(self.R, posted_w1, wib(2026, 10, 9))["earn"]["label"], "Week closed")
+        self.assertEqual(cs.clip_labels(self.R, [], wib(2026, 10, 30)),
+                         {"earn": {"code": "campaign_ended", "label": "Campaign ended"}, "expired": True})
+        self.assertEqual(cs.clip_labels(None, [], wib(2026, 10, 30)), {"earn": None, "expired": False})
+
     def test_paused_wins(self):
         self.assertEqual(cs.status({**self.R, "paused": True}, wib(2026, 10, 7))["label"], "Paused")
 

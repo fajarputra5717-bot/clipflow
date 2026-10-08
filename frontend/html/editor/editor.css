@@ -244,3 +244,9 @@ button.is-armed{background:var(--badge-failed-bg,#ff453a);color:#fff}
 .ed-thumb-empty{display:flex;gap:12px;align-items:center;padding:12px;border-radius:12px;background:var(--fill);font-size:13px;color:var(--muted)}
 .ed-thumb-empty img{width:54px;aspect-ratio:9/16;object-fit:cover;border-radius:8px;flex:none}
 #edThumbNote{margin-top:10px}
+
+/* 162: Review page "Expired" group (clips of ended campaigns), collapsed */
+.rv-expired { margin-top: var(--sp-3); }
+.rv-expired > summary { cursor: pointer; min-height: var(--hit); display: flex; align-items: center; font-size: 13px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.rv-expired .rv-clip { opacity: .8; }

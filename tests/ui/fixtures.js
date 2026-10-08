@@ -84,7 +84,8 @@ async function mockApi(page, api) {
       if (!api.telegram?.ready) return json({ detail: "Add your Telegram chat id in Account first" }, 409);
       return json({ id: "tg-1", status: "queued" });
     }
-    if (path === "/api/publish-queue" && method === "GET") return json({ groups: (api.publishGroups || []).map((g) => ({ ...g, cards: g.cards || publishCards(g.rows, api) })) });
+    if (path === "/api/publish-queue" && method === "GET") return json({ groups: (api.publishGroups || []).map((g) => ({ ...g,
+      cards: (g.cards || publishCards(g.rows, api)).map((c) => ({ ...c, earn: (api.cardEarn || {})[c.candidate_id] || c.earn || null, expired: !!g.expired })) })) });
     { const m = path.match(/^\/api\/posts\/([^/]+)$/);
       if (m && method === "PATCH") {
         const row = (api.publishGroups || []).flatMap((g) => g.rows).find((r) => r.post?.id === m[1]);
@@ -153,6 +154,10 @@ async function mockApi(page, api) {
     }
     { const m = path.match(/^\/api\/auth\/tokens\/([^/]+)$/);
       if (m && method === "DELETE") { api.tokens = (api.tokens || []).filter((t) => t.id !== m[1]); return json({ ok: true }); } }
+    { const m = path.match(/^\/api\/campaigns\/([^/]+)(\/watermark)?$/);   // P3 part 5 mocks
+      if (m && m[2]) return route.fulfill({ status: 200, contentType: "image/png", body: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=", "base64") });
+      if (m && method === "GET") { const d = (api.campaignDetail || {})[m[1]]; return d ? json(d) : json({ detail: "Campaign not found" }, 404); }
+      if (m && method === "PUT") { const d = (api.campaignDetail || {})[m[1]]; Object.assign(d, body, body.paused != null ? { status: { ...d.status, code: body.paused ? "paused" : "active", label: body.paused ? "Paused" : "Active" } } : {}); return json(d); } }
     if (path === "/api/schedule" && method === "GET") return json(api.schedule || { overdue: [], days: [], posting_times: {} });   // P2.5 S3
     { const m = path.match(/^\/api\/jobs\/([^/]+)\/candidates\/([^/]+)\/(schedule-plan|schedule)$/);   // P2.5 S2 mocks
       if (m && m[3] === "schedule-plan" && method === "GET") return json(api.schedulePlan);
