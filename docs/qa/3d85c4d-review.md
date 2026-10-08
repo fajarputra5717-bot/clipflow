@@ -1,0 +1,4 @@
+# lane-b up to 3d85c4d (4f0a75a 7b, 2bcd73d 7c-7e, 05d7f8e, 3d12912 task 6, 3d85c4d redesign) · Lane C · 2026-10-09
+Staging up (:8080/:8001; backend image ≈ 05d7f8e, frontend = bind-mounted 3d85c4d). Playwright vs staging with 3d85c4d specs: 187 passed, 5 skipped, 0 failed. No High found by reading.
+Open (blocks the OK): real staging renders (preview + final: zoom, progress bar, filler cuts, compression; frames, karaoke after cuts, LUFS/TP) and Export-tab actions (description AI, Submagic, version restore, Approve 409) were NOT run: no staging login for QA (reading the staging admin password was denied, not worked around). Details of the source_watch.py findings: docs/qa/lane-b-3d12912-partial.md (2 Medium, 2 Low); also Medium: it ignores shared/ytdlp (see 452c7d8-review.md).
+Merge: NOT OK (renders and Export actions unverified; source_watch Mediums should be fixed before it is wired in).
