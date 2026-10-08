@@ -15,6 +15,8 @@ function editorState(over = {}) {
     captions: CAPTIONS(),
     thumbnail: { options: [0, 1, 2].map((i) => ({ index: i, url: `/api/jobs/job-done/candidates/cand-a/thumbnail-options/${i}` })),
                  picked: null, locked: false, current_url: "/api/jobs/job-done/candidates/cand-a/thumbnail", generating: false },
+    watermark: { width: 320, opacity: 1, custom: false },
+    export: { burn: true, description: "", submagic: { status: null, preview_url: null, error: null } },
     ...over,
   };
 }
@@ -402,5 +404,39 @@ test.describe("Editor Thumbnail tab", () => {
     await app.locator("[data-ed-thumb-upload]").setInputFiles({ name: "t.png", mimeType: "image/png", buffer: Buffer.from("89504e47", "hex") });
     await expect.poll(() => api.calls.find((c) => c.method === "PATCH" && c.path === CAND)?.body).toEqual({ selected_thumbnail_index: 3 });
     await expect(app.locator('[data-ed-thumb-pick="3"]')).toHaveAttribute("aria-pressed", "true");
+  });
+});
+
+// P4 task 7c/7d: Watermark tab (job size/opacity) + Export tab (burn, description, Submagic, versions, approve).
+test.describe("Editor Watermark + Export tabs", () => {
+  test.use({ reducedMotion: "reduce" });
+  const CAND = "/api/jobs/job-done/candidates/cand-a", JOB = "/api/jobs/job-done";
+  async function openTab(app, api, tab) {
+    await mockEditor(app, api);
+    await app.evaluate(() => { location.hash = "#editor/job-done/cand-a"; });
+    await app.locator(`[data-ed-tab="${tab}"]`).click();
+  }
+  test("watermark sliders PATCH render-options", async ({ app, api }) => {
+    await openTab(app, api, "watermark");
+    await app.locator('[data-ed-wm="width"]').fill("500");
+    await expect(app.locator("#edWmW")).toHaveText("500 px");
+    await expect.poll(() => api.calls.find((c) => c.method === "PATCH" && c.path === JOB + "/render-options")?.body)
+      .toEqual({ watermark_width: 500, watermark_opacity: 1 });
+  });
+  test("export: burn toggle, description save, version history restore", async ({ app, api }) => {
+    await openTab(app, api, "export");
+    await app.locator("[data-ed-burn]").click();
+    await expect.poll(() => api.calls.find((c) => c.method === "PATCH" && c.path === JOB + "/render-options")?.body).toEqual({ burn_subtitles: false });
+    await app.locator("#edDesc").fill("Hello caption");
+    await expect.poll(() => api.calls.find((c) => c.method === "PATCH" && c.path === CAND)?.body).toEqual({ description: "Hello caption" });
+    await app.locator("[data-ed-versions]").click();
+    await expect(app.locator("#edVersions")).toContainText("No versions yet");
+    await app.locator('[data-ed-sm="start"]').click();
+    await expect.poll(() => api.calls.some((c) => c.method === "POST" && c.path === CAND + "/submagic/start")).toBe(true);
+  });
+  test("approve calls the approve route and shows a gate error", async ({ app, api }) => {
+    await openTab(app, api, "export");
+    await app.locator("[data-ed-approve]").click();
+    await expect.poll(() => api.calls.some((c) => c.method === "POST" && c.path === CAND + "/approve")).toBe(true);
   });
 });

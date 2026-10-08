@@ -127,11 +127,7 @@ test.describe("Review/Editor navigation (149)", () => {
     await expect.poll(() => app.evaluate(() => location.hash)).toBe("#editor/job-a/c94");
     await app.locator('#flow [data-nav="queue"]').click();
     await expect(app.locator("#rvFilters select").first()).toBeVisible();
-    api.jobs["job-a"] = { ...api.jobs["job-done"], id: "job-a", candidates: [{ ...api.jobs["job-done"].candidates[0], id: "c94" }] };
-    await app.locator('[data-rv-classic="job-a"][data-cid="c94"]').click();
-    await expect(app.locator("#reviewSection")).toBeHidden();
-    await expect(app.locator("#candidate-c94")).toHaveClass(/editing/);
-    await expect(app.locator("#flow li.active .flow-label")).toHaveText("Editor");
+    await expect(app.locator("[data-rv-classic]")).toHaveCount(0);   // 7e: every drawer feature has a home in the Editor
   });
 });
 

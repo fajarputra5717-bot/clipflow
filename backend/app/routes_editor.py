@@ -65,7 +65,9 @@ def _load(cur, jid: str, cid: str, user: dict) -> dict:
                c.start_time, c.end_time, c.duration_seconds, c.edit_spec, c.preview_path, c.final_path,
                c.updated_at, s.title, j.custom_title, j.platform, j.campaign, j.status,
                c.subtitle_text, c.subtitle_override, j.subtitle_style, j.subtitle_font, j.subtitle_size,
-               j.subtitle_animation, j.burn_subtitles, c.thumbnail_options, c.thumbnail_path, c.thumbnail_locked
+               j.subtitle_animation, j.burn_subtitles, c.thumbnail_options, c.thumbnail_path, c.thumbnail_locked,
+               j.watermark_width, j.watermark_opacity, c.description, c.submagic_status, c.submagic_preview_url,
+               c.submagic_error
         FROM clip_candidates c JOIN jobs j ON j.id = c.job_id
         LEFT JOIN source_videos s ON s.id = j.source_video_id
         WHERE c.id::text = %s AND c.job_id::text = %s AND {where}
@@ -79,12 +81,18 @@ def _load(cur, jid: str, cid: str, user: dict) -> dict:
             "duration_seconds", "edit_spec", "preview_path", "final_path", "updated_at", "job_source_title",
             "job_custom_title", "platform", "campaign", "job_status", "subtitle_text", "subtitle_override",
             "subtitle_style", "subtitle_font", "subtitle_size", "subtitle_animation", "burn_subtitles",
-            "thumbnail_options", "thumbnail_path", "thumbnail_locked"]
+            "thumbnail_options", "thumbnail_path", "thumbnail_locked", "watermark_width", "watermark_opacity",
+            "description", "submagic_status", "submagic_preview_url", "submagic_error"]
     c = dict(zip(keys, row))
     try:   # 112: what "Auto" caption position means for a full-frame clip (the owner's setting)
         c["auto_caption_y"] = float(_core().runtime_setting("FULLFRAME_CAPTION_Y", user_id=user["id"]) or 78)
     except (TypeError, ValueError):
         c["auto_caption_y"] = 78.0
+    for key, default in (("WATERMARK_WIDTH", 320), ("WATERMARK_OPACITY", 1.0)):   # the owner's global default
+        try:
+            c["default_" + key.lower()] = float(_core().runtime_setting(key, user_id=user["id"]) or default)
+        except (TypeError, ValueError):
+            c["default_" + key.lower()] = float(default)
     return c
 
 
@@ -114,6 +122,8 @@ def _state(c: dict) -> dict:
                   "loudness": {"lufs": -14.0, "true_peak_dbtp": -1.0, "always_on": True}},
         "captions": _captions_state(c, spec),
         "thumbnail": _thumbnail_state(c),
+        "watermark": _watermark_state(c),
+        "export": _export_state(c),
         "hook_title": {
             "on": bool(ht.get("on", False)), "text": ht.get("text", ""),
             "duration": ht.get("duration", edit_specs.HOOK_TITLE_DEFAULT_DURATION),
@@ -164,6 +174,23 @@ def _thumbnail_state(c: dict) -> dict:
         "current_url": f"{base}/thumbnail" if c.get("thumbnail_path") else None,
         "generating": c.get("status") in ("thumbnail_queued", "thumbnail_rendering"),
     }
+
+
+def _watermark_state(c: dict) -> dict:
+    """Task 7c: the job-level size/opacity (shared by every clip of the job; NULL = the owner's global
+    setting). Writes: main's PATCH …/render-options (marks finals outdated)."""
+    w, o = c.get("watermark_width"), c.get("watermark_opacity")
+    return {"width": int(w if w is not None else c["default_watermark_width"]),
+            "opacity": round(float(o if o is not None else c["default_watermark_opacity"]), 2),
+            "custom": w is not None or o is not None}
+
+
+def _export_state(c: dict) -> dict:
+    """Task 7d: burn-in toggle (job), description, Submagic pass. Writes go through main's routes
+    (render-options, candidate PATCH, generate-description, submagic/*, versions, approve)."""
+    return {"burn": c.get("burn_subtitles") is not False, "description": c.get("description") or "",
+            "submagic": {"status": c.get("submagic_status"), "preview_url": c.get("submagic_preview_url"),
+                         "error": c.get("submagic_error")}}
 
 
 def _cuts_state(spec: dict, duration) -> dict:

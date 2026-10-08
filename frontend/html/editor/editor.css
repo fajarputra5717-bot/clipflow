@@ -250,3 +250,11 @@ button.is-armed{background:var(--badge-failed-bg,#ff453a);color:#fff}
 .rv-expired > summary { cursor: pointer; min-height: var(--hit); display: flex; align-items: center; font-size: 13px; font-weight: 600;
   text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
 .rv-expired .rv-clip { opacity: .8; }
+/* Watermark + Export tabs (task 7c/7d) */
+.ed-wm-bar{height:6px;border-radius:3px;background:var(--fill);overflow:hidden}
+.ed-wm-bar span{display:block;height:100%;background:var(--accent,currentColor);border-radius:3px}
+.ed-version{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:var(--hit);font-size:14px}
+.ed-version .ed-hint{display:block}
+.ed-actions{display:flex;flex-wrap:wrap;gap:8px}
+.ed-bad{color:var(--bad)}
+#edDesc{width:100%;box-sizing:border-box}

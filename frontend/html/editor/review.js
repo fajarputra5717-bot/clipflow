@@ -225,7 +225,6 @@
           <button type="button" class="primary" data-rv-approve="${esc(c.id)}" data-rv-jid="${esc(c.job_id)}" ${canApprove ? "" : "disabled"}>Approve</button>
           <a class="secondary btn-link rv-open" href="#editor/${esc(c.job_id)}/${esc(c.id)}">Open editor</a>
           ${!blocking ? `<button type="button" class="secondary" data-approve-schedule="${esc(c.job_id)}" data-cid="${esc(c.id)}">${RUNNING.includes(c.status) || c.status === "completed" ? "Schedule" : "Approve &amp; schedule"}</button>` : ""}
-          <button type="button" class="secondary" data-rv-classic="${esc(c.job_id)}" data-cid="${esc(c.id)}" title="Caption style, thumbnails, description, versions, Submagic (until they move into the Editor)">All edits</button>
         </div>
         <p class="rv-hint">${esc(hint)}</p>
       </div>`;
