@@ -142,3 +142,8 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 170 · 2026-10-09 · Every view in the URL hash (reload/back/forward restore it; bare URL = last view per user); router closes the other lane-b page first (fixes the old list above the Editor) · index.html, tests
 171 · 2026-10-09 · Editor with no clip = Pick a clip (compact Review grid, same saved filters); the pill reopens the last clip · index.html, tests
 172 · 2026-10-09 · Analyze job cards = compact Review-style cards linking to #review/<job>; old 'Tap a job…' copy gone · index.html, tests
+173 · 2026-10-09 · (lane B) P4 task 7b: Editor Thumbnail tab (AI options, upload, pick) · editor.js, routes_editor
+174 · 2026-10-09 · (lane B) P4 task 7c–7e: Watermark + Export tabs; "All edits" button removed from Review · editor.js, review.js
+175 · 2026-10-09 · (lane B) Compact Review + Editor pages (⋯ menu cards, 3/2/1 columns, mobile density, deep links) · editor.css/js, review.js
+176 · 2026-10-09 · (lane B) P4 task 6: shared/source_watch.py (new uploads + finished livestreams per channel; uses shared/ytdlp) · shared, tests
+177 · 2026-10-09 · (lane B) QA Lows: loudness trim pass toward −14 LUFS, filler suggestions ≥ 80 ms, review score row wraps · worker, retention, review.js

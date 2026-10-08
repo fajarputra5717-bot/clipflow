@@ -19,3 +19,5 @@ docs/ui-recordings/
 
 # 167: YouTube cookies for yt-dlp (never commit)
 /secrets/
+# stray Playwright screenshots (lane-b 2026-10-09)
+tests/ui/undefined/

@@ -409,6 +409,15 @@ def loudnorm_filter(measured: Optional[dict], *, i: float = LOUDNORM_I, tp: floa
             f":offset={_f(m['target_offset'])}:linear=true:print_format=summary,{tail}")
 
 
+def gain_filter(gain_db: float, *, tp: float = LOUDNORM_TP, out_rate: int = 48000,
+                codec_headroom_db: float = CODEC_HEADROOM_DB) -> str:
+    """Corrective pass: a plain gain (measured error from ebur128 on the finished file) -> the same true-peak
+    limiter chain. For outputs a loudnorm pass left off target (limiter / AAC / compression eat loudness)."""
+    limit = _f(round(10 ** ((tp - codec_headroom_db) / 20), 4))
+    return (f"volume={_f(round(gain_db, 2))}dB,alimiter=limit={limit}:attack=1:release=50:level=0,"
+            f"aresample={out_rate},aformat=channel_layouts=mono|stereo")
+
+
 def ebur128_measure_cmd(src: str) -> FFmpegStep:
     """Verification meter (BS.1770 integrated + true peak) for a finished file -> parse_ebur128().
     Use this, not loudnorm's own JSON, to check an output: loudnorm's pass-1 numbers read up to

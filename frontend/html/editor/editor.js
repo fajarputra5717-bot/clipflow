@@ -8,8 +8,10 @@
   "use strict";
   const $ = (id) => document.getElementById(id);
   const RENDERING = ["preview_queued", "preview_rendering", "render_queued", "rendering"];
-  const TABS = [["captions", "Captions"], ["effects", "Effects"], ["audio", "Audio"], ["watermark", "Watermark"], ["export", "Export"]];
-  const READY_TABS = new Set(["captions", "effects", "audio"]);   // Watermark / Export arrive later
+  const TABS = [["captions", "Captions"], ["effects", "Effects"], ["audio", "Audio"], ["watermark", "Watermark"], ["thumbnail", "Thumbnail"], ["export", "Export"]];
+  const READY_TABS = new Set(["captions", "effects", "audio", "watermark", "thumbnail", "export"]);
+  const THUMBING = ["thumbnail_queued", "thumbnail_rendering"];
+  const SM_BUSY = ["queued_upload", "uploading", "transcribing", "queued_export", "exporting", "queued_apply", "applying"];
   const edUrl = (jid, cid) => `/api/jobs/${encodeURIComponent(jid)}/candidates/${encodeURIComponent(cid)}/editor`;
   const reduced = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const PPS = 100;                              // timeline pixels per second
@@ -63,13 +65,16 @@
       loadCaptions();
       render();
       if (RENDERING.includes(E.state.candidate.status)) watchRender();
+      else if (THUMBING.includes(E.state.candidate.status)) watchThumbs();
+      E.versions = null;
+      if (SM_BUSY.includes(E.state.export.submagic.status)) watchSubmagic();
     } catch (e) {
       s.innerHTML = `<div class="panel error-box">Can't open this clip: ${esc(e.message)} <a href="#" data-ed-back>Back</a></div>`;
     }
   }
 
   function close(setHash = true) {
-    clearTimeout(E.saveT); clearTimeout(E.cutT); clearTimeout(E.zoomT); clearInterval(E.pollT); cancelAnimationFrame(E.raf); E.tl = null; E.nowWord = -1; E.drag = null;
+    clearTimeout(E.saveT); clearTimeout(E.cutT); clearTimeout(E.zoomT); clearInterval(E.pollT); clearInterval(E.thumbT); clearInterval(E.smT); cancelAnimationFrame(E.raf); E.tl = null; E.nowWord = -1; E.drag = null;
     const s = $("editorSection");
     if (s) { s.hidden = true; s.classList.add("hidden"); s.innerHTML = ""; }
     E.hidden.forEach(([v, hadHidden]) => v.classList.toggle("hidden", hadHidden));
@@ -90,10 +95,9 @@
     const s = $("editorSection"), st = E.state, c = st.candidate;
     s.innerHTML = `
       <div class="ed-head">
-        <a class="ed-back" href="#review/${esc(E.jid)}" data-ed-back>← Review</a>
-        <div class="ed-eyebrow">Editor${st.job.title ? " · " + esc(st.job.title) : ""}</div>
-        <h2 class="ed-title">${esc(c.title || "Untitled clip")}</h2>
-        ${c.reason ? `<p class="ed-reason">${esc(c.reason)}</p>` : ""}
+        <div class="ed-headrow"><a class="ed-back" href="#review/${esc(E.jid)}" data-ed-back>← Review</a>
+          <h2 class="ed-title">${esc(c.title || "Untitled clip")}</h2>
+          ${st.job.title ? `<span class="ed-jobname">${esc(st.job.title)}</span>` : ""}</div>
       </div>
       <div class="ed-grid">
         <div class="ed-player">
@@ -119,7 +123,7 @@
           <div class="ed-panel" role="tabpanel" aria-labelledby="edtab-${E.tab}">${panelHtml(E.tab)}</div>
         </div>
       </div>
-      <div class="ed-tl" id="edTl" aria-label="Timeline"><div class="ed-hint">Loading the timeline…</div></div>
+      <details class="ed-tlwrap" open><summary>Timeline</summary><div class="ed-tl" id="edTl" aria-label="Timeline"><div class="ed-hint">Loading the timeline…</div></div></details>
       <div class="ed-foot">
         <span class="ed-state" id="edState"></span>
         <span class="ed-spacer"></span>
@@ -395,7 +399,9 @@
     paintPlayhead(false); paintHook();
   }
 
-  function panelHtml(tab) { return tab === "effects" ? effectsPanel() : tab === "audio" ? audioPanel() : captionsPanel(); }
+  function panelHtml(tab) {
+    return tab === "effects" ? effectsPanel() : tab === "audio" ? audioPanel() : tab === "thumbnail" ? thumbnailPanel() : tab === "watermark" ? watermarkPanel() : tab === "export" ? exportPanel() : captionsPanel();
+  }
   const sw = (attr, on, label) => `<button class="ed-switch" type="button" role="switch" aria-checked="${on}" aria-label="${label}" ${attr}></button>`;
 
   function effectsPanel() {
@@ -644,6 +650,196 @@
     } catch (e) { setBusy(btn, false); paintState(e.message); }
   }
 
+  // ------------------------------------------------------------------ thumbnail (task 7b)
+  // AI-generated and uploaded options are one list, picked the same way. A pick sets thumbnail_locked,
+  // so later preview/final renders keep it (CLAUDE.md Thumbnails).
+  function thumbnailPanel() {
+    const T = E.state.thumbnail, v = encodeURIComponent(E.state.candidate.updated_at || ""), gen = T.generating;
+    return `
+      <div class="ed-group">
+        <div class="ed-label">Thumbnail</div>
+        <div class="ed-hint">AI-styled options with the hook headline, or upload your own. Tap one to use it.</div>
+        <div class="ed-thumb-actions">
+          <button type="button" class="sm" data-ed-thumb-gen ${gen ? "disabled" : ""}>${gen ? "Generating…" : T.options.length ? "Generate new options" : "Generate with AI"}</button>
+          <label class="btn sm secondary ed-upload" ${gen ? 'aria-disabled="true"' : ""}>Upload image<input type="file" accept="image/*" data-ed-thumb-upload ${gen ? "disabled" : ""} hidden></label>
+        </div>
+        ${T.options.length ? `<div class="ed-thumbs" role="group" aria-label="Thumbnail options">${T.options.map((o) => `
+          <button type="button" class="ed-thumb" data-ed-thumb-pick="${o.index}" aria-pressed="${T.picked === o.index}" aria-label="Use thumbnail option ${o.index + 1}">
+            <img src="${esc(mediaUrl(`${o.url}?v=${v}`))}" alt="" loading="lazy"><span class="ed-thumb-check" aria-hidden="true">✓</span></button>`).join("")}</div>`
+          : `<div class="ed-thumb-empty">${T.current_url ? `<img src="${esc(mediaUrl(`${T.current_url}?v=${v}`))}" alt="Current thumbnail">` : ""}
+              <span>No options yet. Until you pick one, the thumbnail is a frame from the preview.</span></div>`}
+        <div class="ed-hint" id="edThumbNote">${T.locked ? "Picked: renders keep this thumbnail." : T.options.length ? "Not picked yet: renders use a frame from the preview." : ""}</div>
+      </div>`;
+  }
+  // ------------------------------------------------------------------ watermark (task 7c)
+  // Size + opacity are job-level (shared by every clip of the job; NULL = the owner's global setting).
+  // PATCH render-options marks finals outdated; they apply on the next preview/final render.
+  function watermarkPanel() {
+    const W = E.state.watermark;
+    return `
+      <div class="ed-group">
+        <div class="ed-label">Watermark</div>
+        <div class="ed-hint">Shared by every clip of this job · ${W.custom ? "custom for this job" : "global default"}. Applied on the next preview and final render.</div>
+        <label class="ed-range"><span>Size</span><input type="range" min="200" max="900" step="10" value="${W.width}" data-ed-wm="width" aria-label="Watermark width in pixels"><output id="edWmW">${W.width} px</output></label>
+        <label class="ed-range"><span>Opacity</span><input type="range" min="10" max="100" step="5" value="${Math.round(W.opacity * 100)}" data-ed-wm="opacity" aria-label="Watermark opacity"><output id="edWmO">${Math.round(W.opacity * 100)} %</output></label>
+        <div class="ed-wm-bar" aria-hidden="true"><span id="edWmBar" style="width:${(W.width / 1080 * 100).toFixed(1)}%;opacity:${W.opacity}"></span></div>
+        <div class="ed-hint">Width in pixels on the 1080-wide video; the bar shows its share of the frame.</div>
+      </div>`;
+  }
+  function saveWm() {
+    const W = E.state.watermark; W.custom = true;
+    saver("wm", `/api/jobs/${encodeURIComponent(E.jid)}/render-options`, () => ({ watermark_width: W.width, watermark_opacity: W.opacity }), "PATCH");
+  }
+
+  // ------------------------------------------------------------------ export (task 7d)
+  const SM_LABEL = { queued_upload: "Uploading to Submagic…", uploading: "Uploading to Submagic…", transcribing: "Transcribing with Submagic…",
+    queued_export: "Rendering with Submagic…", exporting: "Rendering with Submagic…", queued_apply: "Applying Submagic render…", applying: "Applying Submagic render…" };
+  function submagicHtml(sm) {
+    const st = sm.status;
+    if (SM_BUSY.includes(st)) return `<button type="button" class="secondary" disabled>${SM_LABEL[st]}</button>`;
+    if (st === "transcribed") return `<button type="button" data-ed-sm="export">Render with Submagic</button>
+      <div class="ed-hint">This starts Submagic's real (billable on their end) render. You review it before using it anywhere.</div>`;
+    if (st === "completed") return `<div class="ed-actions">${sm.preview_url ? `<a class="btn secondary" href="${esc(sm.preview_url)}" target="_blank" rel="noopener">Review on Submagic ↗</a>` : ""}
+      <button type="button" data-ed-sm="use">Use as final render</button></div>
+      <div class="ed-hint">Only "Use as final render" replaces this clip's output.</div>`;
+    return `<button type="button" class="secondary" data-ed-sm="start">✨ Try Submagic edit (captions, zooms, B-roll)</button>
+      ${st === "failed" && sm.error ? `<div class="ed-hint ed-bad">${esc(sm.error)}</div>` : ""}
+      ${st === "applied" ? `<div class="ed-hint">Using Submagic's render as this clip's final video. You can try again for a fresh one.</div>` : ""}`;
+  }
+  function versionsHtml() {
+    const V = E.versions;
+    if (!V) return `<button type="button" class="secondary sm" data-ed-versions>Show version history</button>`;
+    if (V === "loading") return `<div class="ed-hint">Loading…</div>`;
+    if (!V.length) return `<div class="ed-hint">No versions yet: one is recorded each time you render a preview, request a final render or use a Submagic render.</div>`;
+    return V.map((v) => `<div class="ed-version"><div><strong>v${v.version}</strong> ${esc(v.label)}<span class="ed-hint">${v.created_at ? new Date(v.created_at).toLocaleString() : ""}</span></div>
+      <button type="button" class="secondary sm" data-ed-restore="${v.version}">Restore</button></div>`).join("");
+  }
+  function exportPanel() {
+    const X = E.state.export, c = E.state.candidate;
+    return `
+      <div class="ed-group">
+        <div class="ed-row"><div><div class="ed-label" id="edBurnLbl">Burn subtitles into the video</div>
+          <div class="ed-hint">Off exports a clean video without captions. Shared by every clip of this job.</div></div>
+          <button class="ed-switch" type="button" role="switch" aria-checked="${X.burn}" aria-labelledby="edBurnLbl" data-ed-burn></button></div>
+      </div>
+      <div class="ed-group">
+        <div class="ed-label">Description</div>
+        <div class="ed-hint">Shorts / Reels caption.</div>
+        <textarea id="edDesc" rows="4" data-ed-desc placeholder="Generate a caption with AI, or write your own…">${esc(X.description)}</textarea>
+        <div class="ed-thumb-actions"><button type="button" class="sm" data-ed-gen-desc>Generate description (AI)</button></div>
+      </div>
+      <div class="ed-group"><div class="ed-label">Submagic (optional)</div><div id="edSm">${submagicHtml(X.submagic)}</div></div>
+      <div class="ed-group"><div class="ed-label">Version history</div><div id="edVersions">${versionsHtml()}</div></div>
+      <div class="ed-group">
+        <div class="ed-label">Final render</div>
+        <div class="ed-hint">Approve renders the final video. Campaign rules must pass (the server tells you which do not).</div>
+        <div class="ed-actions"><button type="button" class="primary" data-ed-approve ${RENDERING.includes(c.status) ? "disabled" : ""}>Approve</button></div>
+        <div class="ed-hint" id="edApproveNote"></div>
+      </div>`;
+  }
+  function saveDesc() {
+    saver("desc", candUrl(), () => ({ description: E.state.export.description }), "PATCH");
+  }
+  async function genDesc(btn) {
+    setBusy(btn, true, "Writing…");
+    try {
+      await flushSavers();
+      const r = await api(candUrl() + "/generate-description", { method: "POST" });
+      E.state.export.description = r.description || ""; const ta = $("edDesc"); if (ta) ta.value = E.state.export.description;
+      saveDesc();
+    } catch (e) { paintState("AI description failed: " + e.message); }
+    finally { setBusy(btn, false); }
+  }
+  async function smAction(act, btn) {
+    if (act === "use" && !armed(btn, "Tap again: replaces this clip's final")) return;
+    setBusy(btn, true, "Starting…");
+    try {
+      await api(`${candUrl()}/submagic/${act === "use" ? "use-as-final" : act}`, { method: "POST" });
+      await refreshState(); repaintPanel(); watchSubmagic();
+    } catch (e) { setBusy(btn, false); paintState("Submagic: " + e.message); }
+  }
+  function watchSubmagic() {
+    clearInterval(E.smT);
+    E.smT = setInterval(async () => {
+      try {
+        const st = await api(edUrl(E.jid, E.cid));
+        if (!E.cid) return clearInterval(E.smT);
+        E.state.export = st.export; E.state.candidate = st.candidate;
+        if (E.tab === "export") { const el = $("edSm"); if (el) el.innerHTML = submagicHtml(st.export.submagic); }
+        if (!SM_BUSY.includes(st.export.submagic.status)) clearInterval(E.smT);
+      } catch (_) { /* keep polling */ }
+    }, 2500);
+  }
+  async function loadVersions() {
+    E.versions = "loading"; repaintPanel();
+    try { E.versions = (await api(candUrl() + "/versions")).versions || []; }
+    catch (e) { E.versions = null; paintState("Versions: " + e.message); }
+    if (E.tab === "export") repaintPanel();
+  }
+  async function restoreVersion(v, btn) {
+    if (!armed(btn, "Tap again: restores text, description, thumbnail")) return;
+    setBusy(btn, true, "Restoring…");
+    try {
+      await api(`${candUrl()}/versions/${v}/restore`, { method: "POST" });
+      E.reloadAfterRender = true; E.state.candidate.status = "preview_queued"; paintState(); watchRender();
+    } catch (e) { setBusy(btn, false); paintState("Restore failed: " + e.message); }
+  }
+  async function approveClip(btn) {
+    setBusy(btn, true, "Approving…");
+    const note = $("edApproveNote");
+    try {
+      await flushSavers();
+      await api(candUrl() + "/approve", { method: "POST" });
+      if (note) note.textContent = "Final render requested. Progress shows in the island.";
+    } catch (e) { if (note) note.textContent = "Not approved: " + e.message; }
+    finally { setBusy(btn, false); }
+  }
+  const candUrl = () => `/api/jobs/${encodeURIComponent(E.jid)}/candidates/${encodeURIComponent(E.cid)}`;
+  async function refreshState() {
+    const st = await api(edUrl(E.jid, E.cid));
+    if (!E.cid) return;
+    E.state = st; if (E.tab === "thumbnail") repaintPanel();
+  }
+  async function pickThumb(i, btn) {
+    const T = E.state.thumbnail, before = T.picked;
+    T.picked = i; T.locked = true; repaintPanel();
+    try { await api(candUrl(), { method: "PATCH", body: JSON.stringify({ selected_thumbnail_index: i }) }); paintState(); }
+    catch (e) { T.picked = before; repaintPanel(); paintState("Thumbnail not saved: " + e.message); }
+  }
+  async function genThumbs(btn) {
+    setBusy(btn, true, "Starting…");
+    try {
+      await api(candUrl() + "/generate-thumbnails-ai", { method: "POST" });
+      E.state.candidate.status = "thumbnail_queued"; E.state.thumbnail.generating = true; repaintPanel(); watchThumbs();
+    } catch (e) { setBusy(btn, false); paintState("Thumbnails failed to start: " + e.message); }
+  }
+  function watchThumbs() {            // progress itself is the island (/api/activity); this only refreshes the tab
+    clearInterval(E.thumbT);
+    E.thumbT = setInterval(async () => {
+      try {
+        const st = await api(edUrl(E.jid, E.cid));
+        if (!E.cid) return clearInterval(E.thumbT);
+        if (THUMBING.includes(st.candidate.status)) return;
+        clearInterval(E.thumbT); E.state = st; if (E.tab === "thumbnail") repaintPanel();
+        paintState(st.candidate.status === "failed" ? "Thumbnail generation failed" : undefined);
+      } catch (_) { /* keep polling */ }
+    }, window.POLL_INTERVAL || 2200);
+  }
+  async function uploadThumb(input) {
+    const file = input.files && input.files[0]; if (!file) return;
+    const label = input.closest(".ed-upload");
+    setBusy(label, true, "Uploading…");
+    try {
+      const form = new FormData(); form.append("file", file);
+      const r = await authFetch(candUrl() + "/thumbnail-upload", { method: "POST", body: form });
+      let d = null; try { d = await r.json(); } catch (_) { /* no body */ }
+      if (!r.ok) throw new Error((d && d.detail) || `HTTP ${r.status}`);
+      if (typeof d.index === "number") await api(candUrl(), { method: "PATCH", body: JSON.stringify({ selected_thumbnail_index: d.index }) });
+      await refreshState();
+    } catch (e) { paintState("Upload failed: " + e.message); }
+    finally { input.value = ""; setBusy(label, false); }
+  }
+
   function hookText() { return (E.hook.text || E.hook.default_text || "").trim(); }
 
   function paintHook() {
@@ -692,6 +888,7 @@
     const seg = document.querySelector(".ed-seg"); if (!seg) return;
     const b = seg.querySelector('[aria-selected="true"]'), ind = seg.querySelector(".ed-seg-ind");
     ind.style.width = b.offsetWidth + "px"; ind.style.transform = `translateX(${b.offsetLeft}px)`;
+    if (seg.scrollWidth > seg.clientWidth) seg.scrollTo({ left: b.offsetLeft - (seg.clientWidth - b.offsetWidth) / 2, behavior: reduced() ? "auto" : "smooth" });
   }
 
   // ------------------------------------------------------------------ save + render
@@ -754,7 +951,7 @@
 
   // ------------------------------------------------------------------ events (delegated, data-*)
   document.addEventListener("click", (e) => {
-    const t = e.target.closest("[data-ed-back],[data-ed-hook-on],[data-ed-hook-dur],[data-ed-render],[data-ed-play],[data-ed-tab],[data-ed-zoom-on],[data-ed-progress-on],[data-ed-progress-color],[data-ed-compress],[data-ed-silence],[data-ed-word],[data-ed-pause],[data-ed-mode],[data-ed-suggest],[data-ed-fillers],[data-ed-cuts-reset],[data-ed-zoom-add],[data-ed-zoom-mark],[data-ed-trim],[data-ed-seekarea],[data-ed-preset],[data-ed-cap-all],[data-ed-kw],[data-ed-kw-color],[data-ed-fix-typos],[data-ed-cap-reset],[data-ed-capy-on],[data-ed-new-hook]");
+    const t = e.target.closest("[data-ed-back],[data-ed-hook-on],[data-ed-hook-dur],[data-ed-render],[data-ed-play],[data-ed-tab],[data-ed-zoom-on],[data-ed-progress-on],[data-ed-progress-color],[data-ed-compress],[data-ed-silence],[data-ed-word],[data-ed-pause],[data-ed-mode],[data-ed-suggest],[data-ed-fillers],[data-ed-cuts-reset],[data-ed-zoom-add],[data-ed-zoom-mark],[data-ed-trim],[data-ed-seekarea],[data-ed-preset],[data-ed-cap-all],[data-ed-kw],[data-ed-kw-color],[data-ed-fix-typos],[data-ed-cap-reset],[data-ed-capy-on],[data-ed-new-hook],[data-ed-thumb-pick],[data-ed-thumb-gen],[data-ed-burn],[data-ed-gen-desc],[data-ed-sm],[data-ed-versions],[data-ed-restore],[data-ed-approve]");
     if (!t || !E.state && !t.matches("[data-ed-back]")) return;
     if (t.matches("[data-ed-back]")) {                       // back to the Review page (step 4) for this job
       e.preventDefault(); const jid = E.jid; close(false); location.hash = `#review/${encodeURIComponent(jid || "")}`;
@@ -784,6 +981,8 @@
       repaintCaptions("[data-ed-capy-on]"); saveCapClip(); return;
     }
     if (t.matches("[data-ed-new-hook]")) return capNewHook(t);
+    if (t.matches("[data-ed-thumb-pick]")) return pickThumb(Number(t.dataset.edThumbPick), t);
+    if (t.matches("[data-ed-thumb-gen]")) return genThumbs(t);
     if (t.matches("[data-ed-hook-dur]")) {
       E.hook.duration = Number(t.dataset.edHookDur);
       document.querySelectorAll("[data-ed-hook-dur]").forEach((b) => b.setAttribute("aria-pressed", String(b === t)));
@@ -818,7 +1017,7 @@
     if (t.matches("[data-ed-render]")) return renderPreview(t);
     if (t.matches("[data-ed-play]")) { const v = $("edVideo"); if (v) v.paused ? v.play() : v.pause(); return; }
     if (t.matches("[data-ed-tab]") && t.getAttribute("aria-disabled") !== "true") {
-      const order = ["captions", "effects", "audio", "watermark", "export"], from = order.indexOf(E.tab);
+      const order = TABS.map(([id]) => id), from = order.indexOf(E.tab);
       E.tab = t.dataset.edTab;
       document.querySelectorAll("[data-ed-tab]").forEach((b) => b.setAttribute("aria-selected", String(b === t)));
       const panel = document.querySelector(".ed-panel");
@@ -829,6 +1028,15 @@
       moveSeg();
       return;
     }
+    if (t.matches("[data-ed-burn]")) {
+      const X = E.state.export; X.burn = !X.burn; E.state.captions.burn = X.burn; repaintPanel();
+      saver("burn", `/api/jobs/${encodeURIComponent(E.jid)}/render-options`, () => ({ burn_subtitles: X.burn }), "PATCH"); return;
+    }
+    if (t.matches("[data-ed-gen-desc]")) return genDesc(t);
+    if (t.matches("[data-ed-sm]")) return smAction(t.dataset.edSm, t);
+    if (t.matches("[data-ed-versions]")) return loadVersions();
+    if (t.matches("[data-ed-restore]")) return restoreVersion(t.dataset.edRestore, t);
+    if (t.matches("[data-ed-approve]")) return approveClip(t);
     if (t.matches("[data-ed-zoom-on]")) { E.zoom.on = !E.zoom.on; repaintPanel(); zoomChanged(); return; }
     if (t.matches("[data-ed-progress-on]")) { E.progress.on = !E.progress.on; repaintPanel(); saveProgress(); return; }
     if (t.matches("[data-ed-progress-color]")) { E.progress.color = t.dataset.edProgressColor; repaintPanel(); saveProgress(); return; }
@@ -880,6 +1088,14 @@
       E.zoom.intensity = Number(e.target.value); const o = $("edZoomOut"); if (o) o.textContent = `${E.zoom.intensity}%`;
       zoomChanged(); return;
     }
+    if (E.state && e.target.matches && e.target.matches("[data-ed-wm]")) {
+      const W = E.state.watermark, w = e.target.dataset.edWm === "width";
+      if (w) W.width = Number(e.target.value); else W.opacity = Number(e.target.value) / 100;
+      $("edWmW").textContent = `${W.width} px`; $("edWmO").textContent = `${Math.round(W.opacity * 100)} %`;
+      const b = $("edWmBar"); if (b) { b.style.width = `${(W.width / 1080 * 100).toFixed(1)}%`; b.style.opacity = W.opacity; }
+      saveWm(); return;
+    }
+    if (E.state && e.target.matches && e.target.matches("[data-ed-desc]")) { E.state.export.description = e.target.value; saveDesc(); return; }
     if (E.state && E.cap && e.target.matches) {
       const k = e.target.matches("[data-ed-cap]") ? e.target.dataset.edCap : null;
       if (e.target.matches("[data-ed-cap-text]")) { E.cap.text = e.target.value; saveCapClip(); return; }
@@ -907,6 +1123,9 @@
     b.textContent = "STAGING · test data, not production";
     document.body.appendChild(b); document.body.classList.add("is-staging");
   }).catch(() => {});
+  document.addEventListener("change", (e) => {
+    if (E.state && e.target.matches && e.target.matches("[data-ed-thumb-upload]")) uploadThumb(e.target);
+  });
   document.addEventListener("toggle", (e) => {                 // keep "Style, font…" open across repaints
     if (E.cap && e.target.matches && e.target.matches("[data-ed-style-more]")) E.cap.styleOpen = e.target.open;
   }, true);

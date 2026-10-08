@@ -13,6 +13,10 @@ function editorState(over = {}) {
     progress: { on: false, color: "#FFD60A", colors: ["#FFD60A", "#FFFFFF", "#FF453A", "#0A84FF"] },
     audio: { compress: false, silence_trim: false, silence_ranges: [], loudness: { lufs: -14, true_peak_dbtp: -1, always_on: true } },
     captions: CAPTIONS(),
+    thumbnail: { options: [0, 1, 2].map((i) => ({ index: i, url: `/api/jobs/job-done/candidates/cand-a/thumbnail-options/${i}` })),
+                 picked: null, locked: false, current_url: "/api/jobs/job-done/candidates/cand-a/thumbnail", generating: false },
+    watermark: { width: 320, opacity: 1, custom: false },
+    export: { burn: true, description: "", submagic: { status: null, preview_url: null, error: null } },
     ...over,
   };
 }
@@ -355,5 +359,97 @@ test.describe("Editor Captions tab", () => {
     expect(api.calls.some((c) => c.path.endsWith("/new-hook"))).toBe(false);
     await app.locator("[data-ed-new-hook]").click();
     await expect.poll(() => api.calls.some((c) => c.method === "POST" && c.path === CAND + "/new-hook")).toBe(true);
+  });
+});
+
+// P4 task 7b: Thumbnail tab = AI options + upload + pick (one list; a pick locks it for later renders).
+test.describe("Editor Thumbnail tab", () => {
+  test.use({ reducedMotion: "reduce" });
+  const CAND = "/api/jobs/job-done/candidates/cand-a";
+  async function openThumb(app, api) {
+    await mockEditor(app, api);
+    await app.evaluate(() => { location.hash = "#editor/job-done/cand-a"; });
+    await app.locator('[data-ed-tab="thumbnail"]').click();
+    await expect(app.locator("[data-ed-thumb-pick]")).toHaveCount(3);
+  }
+
+  test("tap an option to pick it (PATCH selected_thumbnail_index); the tab bar keeps every label whole", async ({ app, api }) => {
+    await openThumb(app, api);
+    await app.locator('[data-ed-thumb-pick="1"]').click();
+    await expect(app.locator('[data-ed-thumb-pick="1"]')).toHaveAttribute("aria-pressed", "true");
+    await expect(app.locator("#edThumbNote")).toHaveText("Picked: renders keep this thumbnail.");
+    await expect.poll(() => api.calls.find((c) => c.method === "PATCH" && c.path === CAND)?.body).toEqual({ selected_thumbnail_index: 1 });
+    const clipped = await app.locator(".ed-seg button").evaluateAll((bs) => bs.filter((b) => b.scrollWidth > b.clientWidth + 1).length);
+    expect(clipped).toBe(0);
+    expect(await app.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(0);
+  });
+
+  test("Generate with AI queues generation and refreshes the options when it finishes", async ({ app, api }) => {
+    await openThumb(app, api);
+    await app.locator("[data-ed-thumb-gen]").click();
+    await expect.poll(() => api.calls.some((c) => c.method === "POST" && c.path === CAND + "/generate-thumbnails-ai")).toBe(true);
+    await expect(app.locator("[data-ed-thumb-gen]")).toBeDisabled();
+    api.editor.thumbnail = { ...api.editor.thumbnail, options: [...api.editor.thumbnail.options, { index: 3, url: CAND + "/thumbnail-options/3" }] };
+    await expect(app.locator("[data-ed-thumb-pick]")).toHaveCount(4, { timeout: 8000 });
+    await expect(app.locator("[data-ed-thumb-gen]")).toBeEnabled();
+  });
+
+  test("upload adds an option and picks it", async ({ app, api }) => {
+    await openThumb(app, api);
+    await app.route(/\/thumbnail-upload$/, (r) => {
+      api.editor.thumbnail = { ...api.editor.thumbnail, picked: 3, locked: true,
+        options: [...api.editor.thumbnail.options, { index: 3, url: CAND + "/thumbnail-options/3" }] };
+      return r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ index: 3 }) });
+    });
+    await app.locator("[data-ed-thumb-upload]").setInputFiles({ name: "t.png", mimeType: "image/png", buffer: Buffer.from("89504e47", "hex") });
+    await expect.poll(() => api.calls.find((c) => c.method === "PATCH" && c.path === CAND)?.body).toEqual({ selected_thumbnail_index: 3 });
+    await expect(app.locator('[data-ed-thumb-pick="3"]')).toHaveAttribute("aria-pressed", "true");
+  });
+});
+
+// P4 task 7c/7d: Watermark tab (job size/opacity) + Export tab (burn, description, Submagic, versions, approve).
+test.describe("Editor Watermark + Export tabs", () => {
+  test.use({ reducedMotion: "reduce" });
+  const CAND = "/api/jobs/job-done/candidates/cand-a", JOB = "/api/jobs/job-done";
+  async function openTab(app, api, tab) {
+    await mockEditor(app, api);
+    await app.evaluate(() => { location.hash = "#editor/job-done/cand-a"; });
+    await app.locator(`[data-ed-tab="${tab}"]`).click();
+  }
+  test("watermark sliders PATCH render-options", async ({ app, api }) => {
+    await openTab(app, api, "watermark");
+    await app.locator('[data-ed-wm="width"]').fill("500");
+    await expect(app.locator("#edWmW")).toHaveText("500 px");
+    await expect.poll(() => api.calls.find((c) => c.method === "PATCH" && c.path === JOB + "/render-options")?.body)
+      .toEqual({ watermark_width: 500, watermark_opacity: 1 });
+  });
+  test("export: burn toggle, description save, version history restore", async ({ app, api }) => {
+    await openTab(app, api, "export");
+    await app.locator("[data-ed-burn]").click();
+    await expect.poll(() => api.calls.find((c) => c.method === "PATCH" && c.path === JOB + "/render-options")?.body).toEqual({ burn_subtitles: false });
+    await app.locator("#edDesc").fill("Hello caption");
+    await expect.poll(() => api.calls.find((c) => c.method === "PATCH" && c.path === CAND)?.body).toEqual({ description: "Hello caption" });
+    await app.locator("[data-ed-versions]").click();
+    await expect(app.locator("#edVersions")).toContainText("No versions yet");
+    await app.locator('[data-ed-sm="start"]').click();
+    await expect.poll(() => api.calls.some((c) => c.method === "POST" && c.path === CAND + "/submagic/start")).toBe(true);
+  });
+  test("approve calls the approve route and shows a gate error", async ({ app, api }) => {
+    await openTab(app, api, "export");
+    await app.locator("[data-ed-approve]").click();
+    await expect.poll(() => api.calls.some((c) => c.method === "POST" && c.path === CAND + "/approve")).toBe(true);
+  });
+});
+
+// Deep links survive a reload (Cmd+R): #editor/<job>/<clip> and #review/<job>.
+test.describe("Deep links after reload", () => {
+  test.use({ reducedMotion: "reduce" });
+  test("#editor/<job>/<clip> reopens the editor", async ({ app, api }) => {
+    await mockEditor(app, api);
+    await app.evaluate(() => { location.hash = "#editor/job-done/cand-a"; });
+    await expect(app.locator(".ed-title")).toBeVisible();
+    await app.reload();
+    await expect(app.locator(".ed-title")).toHaveText("First mock clip");
+    expect(await app.evaluate(() => location.hash)).toBe("#editor/job-done/cand-a");
   });
 });

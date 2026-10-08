@@ -49,7 +49,6 @@ test.describe("Review page", () => {
   test.use({ reducedMotion: "reduce" });
   test("campaign + all jobs: one grid across jobs, campaign header, source labels, earn last", async ({ app, api }) => {
     await open(app, api);
-    await expect(app.locator(".rv-eyebrow")).toHaveText("Step 4 · Review");
     await expect(app.locator(".rv-title")).toHaveText("IME Roleplay X Motion Klip");
     await expect(app.locator(".rv-camp-status")).toHaveText("IME Roleplay · Week 2 · 6 days left");
     await expect(app.locator(".rv-desc").first()).toHaveText("Clips are sorted by hook score. A clip can be scheduled only when every campaign rule passes.");
@@ -115,6 +114,7 @@ test.describe("Review/Editor navigation (149)", () => {
     await expect(app.locator("#queueSection")).toBeHidden();
     await expect(app.locator('[data-approve-schedule="job-a"][data-cid="c94"]')).toHaveText("Approve & schedule");
     await expect(app.locator('[data-approve-schedule][data-cid="c63"]')).toHaveCount(0);       // blocked clip: no schedule
+    await app.locator(".rv-more > summary").first().click();      // ⋯ menu: Open editor + Approve & schedule
     await app.locator(".rv-open").first().click();
     await expect(app.locator("#flow li.active .flow-label")).toHaveText("Editor");
     await expect(app.locator("#pageTitle")).toHaveText("Editor");
@@ -127,11 +127,7 @@ test.describe("Review/Editor navigation (149)", () => {
     await expect.poll(() => app.evaluate(() => location.hash)).toBe("#editor/job-a/c94");
     await app.locator('#flow [data-nav="queue"]').click();
     await expect(app.locator("#rvFilters select").first()).toBeVisible();
-    api.jobs["job-a"] = { ...api.jobs["job-done"], id: "job-a", candidates: [{ ...api.jobs["job-done"].candidates[0], id: "c94" }] };
-    await app.locator('[data-rv-classic="job-a"][data-cid="c94"]').click();
-    await expect(app.locator("#reviewSection")).toBeHidden();
-    await expect(app.locator("#candidate-c94")).toHaveClass(/editing/);
-    await expect(app.locator("#flow li.active .flow-label")).toHaveText("Editor");
+    await expect(app.locator("[data-rv-classic]")).toHaveCount(0);   // 7e: every drawer feature has a home in the Editor
   });
 });
 
@@ -143,9 +139,9 @@ test.describe("Expired group (162)", () => {
       await open(app, api);
       await expect(app.locator("#rvGrid .rv-clip")).toHaveCount(4);
       const ex = app.locator(".rv-expired");
-      await expect(ex.locator("summary")).toHaveText("Expired · 1 clip (campaign ended)");
+      await expect(ex.locator(":scope > summary")).toHaveText("Expired · 1 clip (campaign ended)");
       await expect(app.locator("#rv-c50")).toBeHidden();
-      await ex.locator("summary").click();
+      await ex.locator(":scope > summary").click();
       await expect(app.locator("#rv-c50 .rv-earn")).toHaveText("Campaign ended");
     } finally { IME.pop(); }
   });
