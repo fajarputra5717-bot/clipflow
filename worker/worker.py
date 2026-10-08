@@ -4446,6 +4446,8 @@ ANIMATION_ENTRANCE_TAGS = {
 #   - "typewriter": words accumulate left-to-right within the line as
 #     they're spoken.
 # Keep the key set in sync with SUBTITLE_ANIMATIONS in main.py.
+CAPTION_SIDE_MARGIN_1080 = 40   # ASS MarginL/R at 1080 wide; make_ass() scales it to the canvas (180)
+
 ANIMATIONS = {
     "karaoke": {
         "label": "Karaoke Sweep", "mode": "flow", "entrance": "pop_line",
@@ -4616,10 +4618,18 @@ def make_ass(
         },
     }
 
-    setting = styles.get(
+    setting = dict(styles.get(
         style,
         styles["bold"],
-    )
+    ))
+
+    # 180 (Lane C Medium): outline/shadow/side margins are defined for the 1080-wide final. The caller already scales
+    # font_size to the canvas (540 px previews get half), so every other pixel metric scales the same way; before,
+    # previews kept the 1080 outline and looked ~2x bolder than the final. Final (1080) = unchanged values.
+    px = canvas_width / FINAL_WIDTH
+    setting["outline"] = round(setting["outline"] * px, 2)
+    setting["shadow"] = round(setting["shadow"] * px, 2)
+    side_margin = int(round(CAPTION_SIDE_MARGIN_1080 * px))
 
     effective_size = max(
         12,
@@ -4762,7 +4772,7 @@ def make_ass(
             f"{setting['border_style']},"
             f"{setting['outline']},"
             f"{setting['shadow']},"
-            f"2,40,40,{margin_v},1"
+            f"2,{side_margin},{side_margin},{margin_v},1"
         ),
 
         "",
