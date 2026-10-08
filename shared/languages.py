@@ -94,10 +94,13 @@ def _norm(word):
     return _PUNCT.sub("", str(word or "").lower())
 
 
+FILLER_MIN_SPAN = 0.08   # s: a shorter span can't be cut (the cuts endpoint drops it), so it is never suggested
+
+
 def filler_spans(words, code=None):
     """Filler suggestions in a word list [{text|word, start, end}, ...] → [{i0, i1, start, end, text}]
     (i0..i1 inclusive word indexes). code = the job's language; None/unknown = every list.
-    Longest match first, no overlaps."""
+    Longest match first, no overlaps; spans under FILLER_MIN_SPAN are skipped."""
     lists = [_FILLER_RE[code]] if code in _FILLER_RE else list(_FILLER_RE.values())
     seqs = sorted((s for lst in lists for s in lst), key=len, reverse=True)
     toks = [_norm(w.get("text") if isinstance(w, dict) and "text" in w else w.get("word")) for w in words]
@@ -107,6 +110,9 @@ def filler_spans(words, code=None):
                     and all(p.match(toks[i + k]) for k, p in enumerate(s))), None)
         if hit:
             j = i + len(hit) - 1
+            if float(words[j]["end"]) - float(words[i]["start"]) < FILLER_MIN_SPAN:
+                i = j + 1
+                continue
             out.append({"i0": i, "i1": j, "start": float(words[i]["start"]), "end": float(words[j]["end"]),
                         "text": " ".join(str(words[k].get("text") or words[k].get("word") or "") for k in range(i, j + 1))})
             i = j + 1

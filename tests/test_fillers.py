@@ -10,6 +10,10 @@ def words(*toks):
 
 
 class Fillers(unittest.TestCase):
+    def test_spans_under_80_ms_are_skipped(self):
+        w = [{"text": "eh", "start": 1.0, "end": 1.05}, {"text": "jadi", "start": 1.1, "end": 1.5}, {"text": "anu", "start": 2.0, "end": 2.08}]
+        self.assertEqual([(s["i0"], s["i1"]) for s in L.filler_spans(w, "id")], [(2, 2)])
+
     def test_indonesian_incl_stretched_and_multiword(self):
         w = words("Eeeh,", "jadi", "anu", "itu", "apa", "namanya", "keren", "gitu.")
         spans = L.filler_spans(w, "id")
