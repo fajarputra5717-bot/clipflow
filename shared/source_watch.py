@@ -1,6 +1,6 @@
 """Source watch (P4 task 6): new uploads and finished livestreams of a YouTube channel via yt-dlp, no API key.
 
-    items = check_channel("@FandraOcto")      # [{video_id, url, title, duration, published_at, is_live_done}]
+    items = check_channel("@FandraOcto", setting)      # [{video_id, url, title, duration, published_at, is_live_done}]
 
 How: `yt-dlp --flat-playlist -J` on the channel's /videos and /streams tabs (cheap, one request each; title,
 duration, live status), minus what the state file already knows. Upload times come from the channel's public
@@ -10,6 +10,8 @@ than the feed window has published_at None. Dedup state: `$SOURCE_WATCH_DIR` (de
 - First check of a channel only records what exists ("baseline") and returns [] so a backlog is never
   imported; pass `backfill=N` to return the latest N instead.
 - A live or upcoming stream is skipped and NOT marked seen: it is returned once it has finished.
+- yt-dlp goes through shared/ytdlp.py like downloads do (client + PO token, spacing, cookies retry); `setting`
+  is the caller's setting(name) (worker `setting`, backend `runtime_setting`).
 - Raises SourceWatchError when the channel cannot be listed. A feed failure only leaves published_at None.
 Callers own scheduling, ownership and per-user dedupe (jobs by URL); this module only answers "what is new".
 """
@@ -22,6 +24,8 @@ import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Optional
+
+from shared import ytdlp
 
 TABS = ("videos", "streams")
 LIST_LIMIT = 15            # newest N per tab: enough for any poll interval, keeps the request cheap
@@ -52,17 +56,38 @@ def channel_base(channel: str) -> str:
     raise SourceWatchError(f"Not a YouTube channel: {channel!r}")
 
 
-def _run(args: list[str]) -> dict:
+def _exec(args: list[str]) -> subprocess.CompletedProcess:
     try:
-        p = subprocess.run(["yt-dlp", "--no-warnings", *args], capture_output=True, text=True, timeout=YTDLP_TIMEOUT)
+        return subprocess.run(["yt-dlp", "--no-warnings", *args], capture_output=True, text=True, timeout=YTDLP_TIMEOUT)
     except subprocess.TimeoutExpired as exc:
         raise SourceWatchError("yt-dlp timed out") from exc
-    if p.returncode != 0:
-        raise SourceWatchError((p.stderr or "yt-dlp failed").strip()[-300:])
-    try:
-        return json.loads(p.stdout)
-    except ValueError as exc:
-        raise SourceWatchError("yt-dlp returned no JSON") from exc
+
+
+def make_runner(setting: Callable, check: Optional[Callable] = None) -> Callable[[list[str]], dict]:
+    """The same yt-dlp hardening as downloads (167, shared/ytdlp.py): mweb client + PO-token provider, calls spaced
+    across all processes, and ONE retry with the cookies file when the bot check hits. `setting` = the caller's
+    setting(name) reader; `check` = e.g. the worker's check_cancelled (runs while waiting for a turn)."""
+    def run(args: list[str]) -> dict:
+        ytdlp.wait_turn(setting, check)
+        p = _exec([*ytdlp.base_args(setting), *args])
+        if p.returncode != 0 and ytdlp.is_bot_check(p.stderr):
+            cookies, tmp = ytdlp.cookies_args(setting)
+            if not tmp:
+                raise SourceWatchError(ytdlp.BLOCKED_MESSAGE)
+            try:
+                ytdlp.wait_turn(setting, check)
+                p = _exec([*ytdlp.base_args(setting), *cookies, *args])
+            finally:
+                os.unlink(tmp)
+            if p.returncode != 0 and ytdlp.is_bot_check(p.stderr):
+                raise SourceWatchError(ytdlp.BLOCKED_MESSAGE)
+        if p.returncode != 0:
+            raise SourceWatchError((p.stderr or "yt-dlp failed").strip()[-300:])
+        try:
+            return json.loads(p.stdout)
+        except ValueError as exc:
+            raise SourceWatchError("yt-dlp returned no JSON") from exc
+    return run
 
 
 _FEED_ENTRY = re.compile(r"<yt:videoId>([^<]+)</yt:videoId>.*?<published>([^<]+)</published>", re.S)
@@ -93,9 +118,14 @@ def _save(path: Path, state: dict) -> None:
     os.replace(tmp, path)   # atomic: a crash never leaves half a file
 
 
-def check_channel(channel: str, *, backfill: int = 0, runner: Callable[[list[str]], dict] = _run,
+def check_channel(channel: str, setting: Optional[Callable] = None, *, check: Optional[Callable] = None, backfill: int = 0,
+                  runner: Optional[Callable[[list[str]], dict]] = None,
                   feed: Callable[[str], dict] = _feed,
                   directory: Optional[Path] = None, now: Optional[datetime] = None) -> list[dict]:
+    if runner is None:
+        if setting is None:
+            raise TypeError("check_channel needs `setting` (the caller's runtime-setting reader)")
+        runner = make_runner(setting, check)
     base = channel_base(channel)
     entries: list[dict] = []
     channel_id = None

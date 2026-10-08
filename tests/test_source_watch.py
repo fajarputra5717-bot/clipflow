@@ -102,5 +102,56 @@ class T(unittest.TestCase):
         self.assertEqual(self.check(Fake([entry("v1")])), [])
 
 
+class Hardening(unittest.TestCase):
+    """make_runner goes through shared/ytdlp: PO-token args + spacing, cookies retry once on the bot check."""
+    BOT = "ERROR: [youtube] x: Sign in to confirm you\u2019re not a bot."
+
+    def run_with(self, results, cookies=None):
+        import subprocess
+        from unittest import mock
+        calls, turns = [], []
+        cfg = {"YTDLP_PLAYER_CLIENT": "mweb", "YTDLP_POT_URL": "http://pot:4416", "YTDLP_COOKIES_FILE": cookies or ""}
+        it = iter(results)
+
+        def fake_exec(args):
+            calls.append(args)
+            rc, out, err = next(it)
+            return subprocess.CompletedProcess(args, rc, out, err)
+        with mock.patch.object(sw, "_exec", fake_exec), mock.patch.object(sw.ytdlp, "wait_turn", lambda s, c=None: turns.append(1)):
+            try:
+                r = sw.make_runner(cfg.get)(["-J", "u"])
+            except sw.SourceWatchError as e:
+                r = e
+        return r, calls, len(turns)
+
+    def test_args_and_spacing(self):
+        r, calls, turns = self.run_with([(0, '{"ok": 1}', "")])
+        self.assertEqual(r, {"ok": 1})
+        self.assertIn("youtube:player_client=mweb", calls[0])
+        self.assertIn("youtubepot-bgutilhttp:base_url=http://pot:4416", calls[0])
+        self.assertEqual(turns, 1)
+
+    def test_bot_check_without_cookies_is_a_clear_error(self):
+        r, calls, _ = self.run_with([(1, "", self.BOT)])
+        self.assertIsInstance(r, sw.SourceWatchError)
+        self.assertEqual(str(r), sw.ytdlp.BLOCKED_MESSAGE)
+        self.assertEqual(len(calls), 1)
+
+    def test_bot_check_retries_once_with_cookies(self):
+        with tempfile.NamedTemporaryFile("w", suffix=".txt") as f:
+            f.write("# Netscape HTTP Cookie File\n")
+            f.flush()
+            r, calls, turns = self.run_with([(1, "", self.BOT), (0, '{"ok": 2}', "")], cookies=f.name)
+            self.assertEqual(r, {"ok": 2})
+            self.assertNotIn("--cookies", calls[0])
+            self.assertIn("--cookies", calls[1])
+            self.assertEqual(turns, 2)
+            r, calls, _ = self.run_with([(1, "", self.BOT), (1, "", self.BOT)], cookies=f.name)
+            self.assertEqual(str(r), sw.ytdlp.BLOCKED_MESSAGE)
+            self.assertEqual(len(calls), 2)
+
+
+
+
 if __name__ == "__main__":
     unittest.main()
