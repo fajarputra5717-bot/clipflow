@@ -329,3 +329,5 @@ a.rv-frame:focus-visible{outline:none;box-shadow:var(--ring)}
   .ed-tlwrap>summary{display:flex;align-items:center;min-height:36px;margin-top:var(--sp-2);font-weight:600;font-size:13px;cursor:pointer}
 }
 @media (max-width:600px){.ed-foot{bottom:calc(68px + env(safe-area-inset-bottom,0px))}.ed-page{padding-bottom:168px}}
+.rv-row{flex-wrap:wrap;row-gap:2px}
+.rv-score,.rv-est{white-space:nowrap}
