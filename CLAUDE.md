@@ -170,7 +170,8 @@ also served to the browser at `/fonts/` (nginx alias).
 Source = the `campaigns` table (157: slug, name, rules JSONB, brief_text, created_by, visibility shared|private, paused;
 a shared catalogue, no user_id), read via `shared/campaigns.py` (`set_db_loader()` in backend/worker/sender/notifier, 5 s
 cache, `invalidate()` after a write). `docs/campaigns/<slug>.rules.json` (+ `.md`) = first-run seed + fallback only (no sync).
-Lists for a user filter with `campaigns.visible_to()` (other's private → 404); `get(slug)` ignores visibility; paused = no new jobs. `jobs.campaign` = slug (NULL = none). Campaign watermark preset is snapshotted on the job
+New (166): admin `POST /api/campaigns/parse-brief` → form → `POST /api/campaigns` (409 until every `unsure` field is
+confirmed; parse metadata never stored). Lists for a user filter with `campaigns.visible_to()` (other's private → 404); `get(slug)` ignores visibility; paused = no new jobs. `jobs.campaign` = slug (NULL = none). Campaign watermark preset is snapshotted on the job
 (`watermark_asset_id` + R-05 width/opacity + position) — resolve with `resolve_watermark_path(job["watermark_asset_id"])`.
 Hashtags (093): `hashtags.required_in_order`, exact ORDER, appended at the END of the caption (position is
 not a rule). Campaign-only prompt additions; the non-campaign hook prompt must stay byte-identical. Clip-checkable
