@@ -1483,6 +1483,22 @@ body:has(#editorSection:not(.hidden)) .ed-foot{bottom:calc(var(--pill-btn) + 30p
   body:has(.ed-foot:focus-within) .ed-foot{bottom:calc(12px + env(safe-area-inset-bottom))}
 }
 @media (prefers-reduced-motion:reduce){.flow-pill,.acct-menu{transition:none}}
+/* 171: Pick a clip (Editor with no clip) = compact Review grid */
+.pk-filters{display:flex;flex-wrap:wrap;gap:var(--s-3);align-items:flex-end;margin:var(--s-3) 0 var(--s-4)}
+.pk-f{display:flex;flex-direction:column;gap:var(--s-1);min-width:0}
+.pk-f>span{font-size:var(--fs-small);color:var(--muted);font-weight:600}
+.pk-f select{min-width:180px;max-width:100%}
+.pk-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:var(--s-3)}
+.pk-card{display:flex;gap:var(--s-3);align-items:center;padding:var(--s-2);border-radius:var(--r-lg);background:var(--panel2);border:1px solid var(--line);color:var(--text);text-decoration:none;min-height:var(--hit);transition:transform var(--dur-1) var(--ease),border-color var(--dur-2) var(--ease)}
+.pk-card:hover{border-color:var(--accent)}
+.pk-card:active{transform:scale(var(--press))}
+.pk-thumb{flex:none;width:54px;height:96px;border-radius:var(--r-sm);background:#1c1c1e;overflow:hidden}
+.pk-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.pk-meta{display:flex;flex-direction:column;gap:2px;min-width:0}
+.pk-title{font-weight:600;font-size:var(--fs-base);overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.pk-sub{font-size:var(--fs-small);color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pk-score{font-size:var(--fs-small);color:var(--accent);font-weight:600}
+@media(max-width:600px){.pk-f,.pk-f select{width:100%}.pk-grid{grid-template-columns:1fr}}
 </style>
 <link rel="stylesheet" href="editor/editor.css"><!-- Editor + Review pages (149) -->
 </head>
@@ -1652,6 +1668,13 @@ body:has(#editorSection:not(.hidden)) .ed-foot{bottom:calc(var(--pill-btn) + 30p
             <div class="publish-filters"><div class="seg" role="group" aria-label="Week"><button type="button" data-sched-week="-1" aria-label="Previous week">‹</button><button type="button" data-sched-week="0" id="schedWeekLabel">This week</button><button type="button" data-sched-week="1" aria-label="Next week">›</button></div>
               <div class="seg sched-viewseg" role="group" aria-label="View"><button type="button" data-sched-view="list" aria-pressed="true">List</button><button type="button" data-sched-view="week" aria-pressed="false">Week</button></div></div></div>
           <div id="scheduleList" aria-live="polite"></div>
+        </div>
+      </section>
+      <section id="pickSection" class="view-section hidden" aria-labelledby="pickTitle">
+        <div class="panel publish-panel">
+          <div class="section-head"><div><div class="eyebrow">Step 5 · Editor</div><h2 id="pickTitle">Pick a clip</h2><p class="muted small">Choose a clip to edit. ClipFlow reopens the last one you edited next time.</p></div></div>
+          <div class="pk-filters" id="pickFilters" role="group" aria-label="Filter clips"></div>
+          <div id="pickBody" aria-live="polite"></div>
         </div>
       </section>
       <section id="publishSection" class="view-section hidden" aria-labelledby="publishTitle">
@@ -4059,8 +4082,8 @@ function renderCampaignDetail(){
 }
 document.addEventListener("click",async e=>{
   const o=e.target.closest("[data-campaign-open],[data-campaign-card]");
-  if(o&&!e.target.closest("a")){const slug=o.dataset.campaignOpen||o.dataset.campaignCard;return openCampaign(slug)}
-  if(e.target.closest("[data-campaign-back]")){campaignOpen=null;return loadCampaignStep()}
+  if(o&&!e.target.closest("a")){const slug=o.dataset.campaignOpen||o.dataset.campaignCard;return go("#campaign/"+encodeURIComponent(slug))}
+  if(e.target.closest("[data-campaign-back]"))return go("#campaign");
   const pz=e.target.closest("[data-campaign-pause]");
   if(pz&&campaignDetail){setBusy(pz,true);try{campaignDetail={...campaignDetail,...await api("/api/campaigns/"+encodeURIComponent(campaignDetail.slug),{method:"PUT",body:JSON.stringify({paused:pz.dataset.campaignPause==="true"})})};renderCampaignDetail();loadCampaigns()}catch(err){setBusy(pz,false);alert(err.message)}}
 });
@@ -4144,9 +4167,9 @@ function cnRules(){  // the JSON box is the base; the form fields win for what t
 }
 function cnMsg(t,err){const m=$("cnMsg");if(m){m.textContent=t||"";m.classList.toggle("is-error",!!err)}}
 document.addEventListener("click",async e=>{
-  if(e.target.closest("[data-campaign-new]")){campaignNew={text:""};return renderCampaignNew()}
+  if(e.target.closest("[data-campaign-new]"))return go("#campaign/new");
   if(!campaignNew)return;
-  if(e.target.closest("[data-cn-cancel]")){campaignNew=null;return renderCampaignStep()}
+  if(e.target.closest("[data-cn-cancel]")){campaignNew=null;return go("#campaign")}
   if(e.target.closest("[data-cn-rebrief]")){campaignNew={text:campaignNew.text};return renderCampaignNew()}
   const pb=e.target.closest("[data-cn-parse]");
   if(pb){
@@ -4172,7 +4195,7 @@ document.addEventListener("click",async e=>{
       unsure:n.parsed.unsure||[],confirmed:[...n.confirmed]};
     if(!body.name)return cnMsg("Give the campaign a name.",true);
     setBusy(sv,true,"Saving…");
-    try{const c=await api("/api/campaigns",{method:"POST",body:JSON.stringify(body)});campaignNew=null;loadCampaigns();openCampaign(c.slug)}
+    try{const c=await api("/api/campaigns",{method:"POST",body:JSON.stringify(body)});campaignNew=null;loadCampaigns();go("#campaign/"+encodeURIComponent(c.slug))}
     catch(err){setBusy(sv,false);cnSyncSave();cnMsg(err.message,true)}
   }
 });
@@ -4500,6 +4523,8 @@ window.addEventListener("load",async()=>{
   // Session + media token first, so the first render already has working <img>/<video> URLs.
   // Token is per user, stable for 12 h and valid 12-24 h; refresh hourly.
   await ensureSession();await refreshMediaToken();setInterval(refreshMediaToken,60*60*1000);
+  try{const lc=JSON.parse(lsGet("last_clip")||"null");if(Array.isArray(lc)&&lc.length===2&&!lastEditorClip)lastEditorClip=lc}catch{}
+  routeHash();   // 170: reload / deep link / bare URL (= the last view used)
   await loadSettings();await loadWatermarkAssets();await loadCampaigns();await loadCurrentJobs();await loadQueue();loadAnalyzeEstimate();
 
   // Always start the lightweight running-job monitor, including when an
@@ -4587,7 +4612,7 @@ const FLOW_STEPS=[
 // Lane-b merge (149): the Editor page (#editor/<job>/<clip>, editor/editor.js) is the Editor step; the old drawer
 // stays reachable from a Review card's "All edits" until P4 gives each drawer feature a home in the page.
 let lastEditorClip=null;
-function editorPageOpen(){return /^#editor\//.test(location.hash)}
+function editorPageOpen(){return /^#editor(\/|$)/.test(location.hash)}   // 171: #editor alone = Pick a clip
 function drawerOpen(){return currentTab==="queue"&&!!document.querySelector("#queueDetail:not(.hidden) .candidate-card.editing")}
 function editorOpen(){return editorPageOpen()||drawerOpen()}
 window.addEventListener("hashchange",()=>{const m=location.hash.match(/^#editor\/([^/]+)\/([^/?#]+)/);if(m)lastEditorClip=[m[1],m[2]];syncNav()});
@@ -4595,7 +4620,7 @@ function editorTarget(){return currentTab==="queue"?document.querySelector("#que
 function renderFlow(){
   const ol=$("flow");if(!ol)return;
   const active=editorOpen()?"editor":currentTab==="queue"?"review":currentTab==="publish"?"publish":currentTab==="schedule"?"schedule":currentTab==="campaign"?"campaign":"analyze",idx=FLOW_STEPS.findIndex(s=>s.id===active);
-  const canEdit=!!editorTarget()||!!lastEditorClip||editorPageOpen();
+  const canEdit=true;   // 171: with no clip open the Editor step shows "Pick a clip"
   const html=FLOW_STEPS.map((s,i)=>{
     const off=!!s.phase||(s.id==="editor"&&!canEdit),sub=s.phase?`Coming in ${s.phase}`:s.id==="editor"&&!canEdit?"Open a clip in Review":s.sub;
     const attrs=s.nav?`data-nav="${s.nav}"`:s.id==="editor"?"data-flow-editor":"";
@@ -4616,11 +4641,101 @@ async function openClassicEdit(jid,cid){
 }
 document.addEventListener("click",e=>{const c=e.target.closest("[data-rv-classic]");if(c){e.preventDefault();openClassicEdit(c.dataset.rvClassic,c.dataset.cid)}});
 function openFlowEditor(){
-  if(!drawerOpen()&&!editorTarget()&&lastEditorClip){location.hash=`#editor/${lastEditorClip[0]}/${lastEditorClip[1]}`;return}
+  // 171: the classic panel (Review card → "All edits") keeps its drawer; otherwise the last opened clip, else Pick a clip
+  if(!drawerOpen()&&!editorTarget()){go(lastEditorClip?`#editor/${encodeURIComponent(lastEditorClip[0])}/${encodeURIComponent(lastEditorClip[1])}`:"#editor");return}
   const open=document.querySelector("#queueDetail:not(.hidden) .candidate-card.editing"),card=open||editorTarget();if(!card)return;
   if(!open)toggleCandidateEdit(card.id.replace(/^candidate-/,""));
   card.scrollIntoView({behavior:scrollMode(),block:"start"});
 }
+// ---- 170: the URL is the view. #campaign[/<slug>|/new], #analyze, #review[/<job>] (review.js), #editor (Pick a clip,
+// 171), #editor/<job>/<clip> (editor.js), #schedule, #publish. Back/forward/reload restore it; a bare URL opens the
+// last view used (per user). This listener is registered before the lane-b scripts (deferred), so it closes the
+// other lane-b page FIRST and their hidden-section restores never fight (169's "old job list over the Editor").
+const TAB_HASH={campaign:"#campaign",current:"#analyze",schedule:"#schedule",publish:"#publish"};
+const HASH_TAB={analyze:"current",schedule:"schedule",publish:"publish"};
+function userKey(k){return `clipflow_${k}_${currentUser?.id||"anon"}`}
+function lsGet(k){try{return localStorage.getItem(userKey(k))}catch{return null}}
+function lsSet(k,v){try{localStorage.setItem(userKey(k),v)}catch{}}
+function go(hash){if(location.hash===hash)routeHash();else location.hash=hash}
+let routeSeq=0;
+async function routeHash(){
+  const h=location.hash,seq=++routeSeq;
+  if(!h||h==="#"){if(!currentUser)return;const last=lsGet("last_view");
+    history.replaceState(null,"",location.pathname+location.search+(last&&last!=="#"?last:"#analyze"));
+    window.dispatchEvent(new HashChangeEvent("hashchange"));return}
+  if(currentUser)lsSet("last_view",h);
+  let m=h.match(/^#editor\/([^/]+)\/([^/?#]+)/);
+  if(m){window.clipflowReview?.close();hidePick();lastEditorClip=[decodeURIComponent(m[1]),decodeURIComponent(m[2])];
+    if(currentUser)lsSet("last_clip",JSON.stringify(lastEditorClip));return}
+  if(/^#review(\/|$)/.test(h)){window.clipflowEditor?.close(false);hidePick();return}
+  window.clipflowReview?.close();window.clipflowEditor?.close(false);
+  if(h==="#editor")return showPick();
+  hidePick();
+  if((m=h.match(/^#campaign(?:\/([^/?#]+))?$/))){
+    const slug=m[1]&&decodeURIComponent(m[1]);
+    if(currentTab!=="campaign")await showTab("campaign");
+    if(seq!==routeSeq)return;
+    if(slug==="new"){campaignOpen=null;if(!campaignNew)campaignNew={text:""};return renderCampaignNew()}
+    campaignNew=null;
+    if(slug)return openCampaign(slug);
+    campaignOpen=null;return loadCampaignStep();
+  }
+  const tab=HASH_TAB[h.slice(1)];
+  if(tab)return showTab(tab);
+}
+window.addEventListener("hashchange",routeHash);
+
+// ---- 171: Editor with no clip = "Pick a clip": the Review grid, compact, same saved filters (GET/PUT
+// /api/review/filter, GET /api/review/clips). A card is a link to #editor/<job>/<clip>.
+const PICK={filter:null,jobs:[],seq:0,saveT:0};
+function pickSectionsBut(keep){document.querySelectorAll("main > .view-section").forEach(x=>{if(x.id!==keep)x.classList.add("hidden")})}
+async function showPick(){
+  pickSectionsBut("pickSection");$("pickSection").classList.remove("hidden");syncNav();
+  if(!PICK.filter){
+    $("pickBody").innerHTML=`<p class="publish-empty">Loading clips…</p>`;
+    try{const [f,jobs]=await Promise.all([api("/api/review/filter"),api("/api/jobs?scope=queue")]);PICK.filter=f||{campaign:"all",job:"all",status:"to_review"};PICK.jobs=jobs||[]}
+    catch(err){$("pickBody").innerHTML=`<div class="error-box">${esc(err.message)}</div>`;return}
+  }
+  paintPickFilters();loadPick();
+}
+function hidePick(){
+  const p=$("pickSection");if(!p||p.classList.contains("hidden"))return;
+  p.classList.add("hidden");
+  $((TAB_SECTIONS.find(x=>x[0]===currentTab)||TAB_SECTIONS[0])[1])?.classList.remove("hidden");
+  syncNav();
+}
+function paintPickFilters(){
+  const f=PICK.filter,camps=[...new Set([...(campaignsCache||[]).map(c=>c.slug),...PICK.jobs.map(j=>j.campaign).filter(Boolean)])];
+  const cname=s=>(campaignsCache||[]).find(c=>c.slug===s)?.name||s;
+  const jobs=PICK.jobs.filter(j=>f.campaign==="all"||(f.campaign==="none"?!j.campaign:j.campaign===f.campaign));
+  if(f.job!=="all"&&!jobs.some(j=>String(j.id)===String(f.job)))f.job="all";
+  $("pickFilters").innerHTML=`<label class="pk-f"><span>Campaign</span><select data-pick-filter="campaign"><option value="all">All campaigns</option>
+      ${camps.map(s=>`<option value="${esc(s)}" ${f.campaign===s?"selected":""}>${esc(cname(s))}</option>`).join("")}<option value="none" ${f.campaign==="none"?"selected":""}>No campaign</option></select></label>
+    <label class="pk-f"><span>Job</span><select data-pick-filter="job"><option value="all">All jobs</option>
+      ${jobs.map(j=>`<option value="${esc(j.id)}" ${String(j.id)===String(f.job)?"selected":""}>${esc(jobDisplayTitle(j))}</option>`).join("")}</select></label>
+    <div class="pk-f"><span id="pkStatusLbl">Status</span><div class="seg" role="group" aria-labelledby="pkStatusLbl">
+      ${[["to_review","To review"],["approved","Approved"],["all","All"]].map(([v,n])=>`<button type="button" data-pick-status="${v}" aria-pressed="${f.status===v}">${n}</button>`).join("")}</div></div>`;
+}
+async function loadPick(){
+  const f=PICK.filter,seq=++PICK.seq;let d;
+  try{d=await api(`/api/review/clips?campaign=${encodeURIComponent(f.campaign)}&job=${encodeURIComponent(f.job)}&status=${encodeURIComponent(f.status)}`)}
+  catch(err){if(seq===PICK.seq)$("pickBody").innerHTML=`<div class="error-box">${esc(err.message)}</div>`;return}
+  if(seq!==PICK.seq)return;
+  const clips=(d.clips||[]).filter(c=>!c.expired);
+  $("pickBody").innerHTML=clips.length?`<div class="pk-grid">${clips.map(c=>{
+    const t=c.manual_title||c.title||c.ai_title||"Untitled clip",th=mediaUrl(`/api/jobs/${encodeURIComponent(c.job_id)}/candidates/${encodeURIComponent(c.id)}/thumbnail?v=${encodeURIComponent(c.updated_at||"")}`);
+    return `<a class="pk-card" href="#editor/${encodeURIComponent(c.job_id)}/${encodeURIComponent(c.id)}" data-pick-clip>
+      <span class="pk-thumb"><img src="${esc(th)}" alt="" loading="lazy" onerror="this.remove()"></span>
+      <span class="pk-meta"><span class="pk-title">${esc(t)}</span><span class="pk-sub">${esc(c.job_title||"")}</span>
+      ${c.score!=null?`<span class="pk-score">Hook ${esc(c.score)}</span>`:""}</span></a>`}).join("")}</div>`
+    :`<p class="publish-empty">No clips match these filters.</p>`;
+}
+function setPickFilter(patch){
+  PICK.filter={...PICK.filter,...patch};paintPickFilters();loadPick();
+  clearTimeout(PICK.saveT);PICK.saveT=setTimeout(()=>api("/api/review/filter",{method:"PUT",body:JSON.stringify(PICK.filter)}).catch(()=>{}),400);
+}
+document.addEventListener("change",e=>{const s=e.target.closest?.("[data-pick-filter]");if(s)setPickFilter(s.dataset.pickFilter==="campaign"?{campaign:s.value,job:"all"}:{job:s.value})});
+document.addEventListener("click",e=>{const b=e.target.closest("[data-pick-status]");if(b)setPickFilter({status:b.dataset.pickStatus})});
 function openSheet(id,opener){
   const layer=$(id);if(!layer||openSheetId===id)return;
   if(openSheetId)closeSheet(false);
@@ -4667,8 +4782,8 @@ document.addEventListener("click",e=>{
     const v=nav.dataset.nav;
     if(v==="settings"||v==="watermarks"){openSheet(v==="settings"?"settingsSheet":"watermarkSheet",nav.closest("#accountMenu")?$("accountMenuBtn"):nav);return}
     closeSheet(false);
-    if(/^#(review|editor)/.test(location.hash))history.replaceState(null,"",location.pathname+location.search);
     if(v==="queue"&&window.clipflowReview){window.clipflowReview.open();return}   // 149: Review = the Review page
+    if(TAB_HASH[v]){go(TAB_HASH[v]);return}   // 170: the URL is the view
     showTab(v);
   }
   const rb=e.target.closest("#refreshView");if(rb){

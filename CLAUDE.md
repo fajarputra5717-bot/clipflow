@@ -427,6 +427,9 @@ planned post: `reminded_at` set in the queueing transaction; > 1 h late = `misse
   `jobs.layout`); campaign `default_layout`/`default_language` pre-fill with a "from campaign" tag unless touched;
   estimate from `GET /api/analysis-estimate`. POST /api/jobs payload unchanged (analyze.spec pins it).
   `initToolbar()` (scroll → `--p` on `#toolbar`) stays the only scroll driver.
+- **URL = view (170/171):** `go(hash)` + `routeHash()` (registered before lane-b's scripts: it closes the other lane-b
+  page first). New view → give it a hash there. Bare URL → last view per user. `#editor` alone = Pick a clip
+  (`#pickSection`, same saved Review filters); `lastEditorClip` (per user) = what the pill's Editor reopens.
 - **Dynamic Island (073):** `#island` (fixed, top 8 px, centred, z 1000,
   black in both themes) is driven only by `updateJobIsland()` (same name
   as before; every caller still works). `hidden` when nothing runs. Modes

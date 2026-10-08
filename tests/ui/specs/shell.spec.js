@@ -14,7 +14,7 @@ test.describe("UI shell stepper", () => {
       await expect(li.locator("button")).toHaveAttribute("aria-label", `${label} (Coming in ${phase})`);
     }
     const editor = app.locator("#flow [data-flow-editor]");
-    await expect(editor).toBeDisabled();
+    await expect(editor).toBeEnabled();                                  // 171: no clip yet → Pick a clip
     await app.locator('#flow [data-nav="queue"]').click();               // 149: Review = the Review page
     await expect(app.locator("#reviewSection")).toBeVisible();
     await expect(app.locator("#pageTitle")).toHaveText("Review");

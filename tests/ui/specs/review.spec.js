@@ -120,7 +120,7 @@ test.describe("Review/Editor navigation (149)", () => {
     await expect(app.locator("#pageTitle")).toHaveText("Editor");
     await app.locator('#flow [data-nav="current"]').click();
     await expect(app.locator("#pageTitle")).toHaveText("Analyze");
-    expect(await app.evaluate(() => location.hash)).toBe("");
+    expect(await app.evaluate(() => location.hash)).toBe("#analyze");                  // 170: every view has a hash
     const ed = app.locator("#flow [data-flow-editor]");
     await expect(ed).toBeEnabled();                                   // remembers the last clip
     await ed.click();
