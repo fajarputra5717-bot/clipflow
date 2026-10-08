@@ -83,6 +83,7 @@ services:
       - ./frontend/html:/usr/share/nginx/html:ro
       - ./frontend/conf.d:/etc/nginx/conf.d:ro
       - ./worker/fonts:/usr/share/nginx/fonts:ro
+      - ./shared/ui:/usr/share/nginx/ui:ro      # 168: /ui/tokens.css (same mount as production)
     depends_on: [backend]
     logging: *logging
 
