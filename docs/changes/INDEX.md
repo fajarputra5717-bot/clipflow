@@ -136,3 +136,4 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 162 · 2026-10-07 · P3 part 6: clip labels from campaign_status.clip_labels (Week closed / Campaign ended), collapsed Expired group on Review + Publish, digest skips expired; new hook also clears silence_trim (Lane C Low) · campaign_status, main.py, routes_editor, review.js, index.html, digest
 165 · 2026-10-07 · Old drawer drops Captions/Effects/Audio (homes in the Editor, 163/164); Apply sends only description/thumbnail/render options · index.html, tests
 166 · 2026-10-09 · P3 part 4: New campaign — paste brief → parse (patterns + AI gaps) → confirm every unsure field → save (admin); preview endpoint · main.py, index.html
+167 · 2026-10-09 · yt-dlp vs YouTube bot check: mweb + bgutil PO-token sidecar (pot), pinned yt-dlp, spaced calls across processes, cookies retry, permanent 'YouTube blocked' + admin alert · shared/ytdlp.py, worker, compose

@@ -145,7 +145,8 @@ _PERMANENT_FAILURE_RE = _re.compile(
     r"Video unavailable|Private video|This video (is|has been) removed"
     r"|Sign in to confirm your age|is not a valid URL|Unsupported URL"
     r"|Invalid data found|does not contain any stream|Unsupported codec"
-    r"|Not enough disk space|removed by disk retention",
+    r"|Not enough disk space|removed by disk retention"
+    r"|YouTube blocked this download",   # 167: bot check; retry by hand later, never in a loop
     _re.IGNORECASE,
 )
 

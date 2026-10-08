@@ -98,6 +98,13 @@ it `purged`; orphan sweep is dry-run unless `ORPHAN_SWEEP_DRY_RUN=false`.
 Never sweep finals/thumbnails. New file kinds: name them with the job or
 candidate id (or store the path in the DB) or the orphan sweep flags them.
 
+## YouTube downloads (167)
+
+Every yt-dlp call goes through `shared/ytdlp.py`: `base_args(setting)` (mweb client + bgutil PO token from the `pot`
+service) and `ytdlp.wait_turn(setting, check)` (cross-process spacing) before it; new callers (source_watch) too.
+Bot check → one cookies retry if `secrets/youtube-cookies.txt` exists, else permanent "YouTube blocked" + admin alert.
+yt-dlp + bgutil are pinned: bump monthly and rerun the download check in docs/changes/167.
+
 ## Cancellation (R-08)
 
 `POST /api/jobs/{id}/cancel` sets `cancelled`; the worker's

@@ -10,4 +10,6 @@ google-genai>=1.0
 anthropic>=0.40
 requests>=2.32
 pillow>=10.4
-yt-dlp[default]
+# 167: pinned; bump monthly (pip index versions yt-dlp), rebuild worker, run the download check in docs/changes/167
+yt-dlp[default]==2026.8.19
+bgutil-ytdlp-pot-provider==2.0.2

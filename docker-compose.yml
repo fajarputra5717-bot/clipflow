@@ -77,9 +77,19 @@ services:
       - /data:/data
       - hf_cache:/cache/huggingface
       - ./docs/campaigns:/app/campaigns:ro   # campaign rules (081), re-read on change
+      - ./secrets:/run/secrets/clipflow:ro    # 167: optional youtube-cookies.txt (gitignored), bot-check retry only
     depends_on:
       postgres: { condition: service_healthy }
       backend: { condition: service_healthy }   # 143: schema migrated first
+      pot: { condition: service_started }
+    logging: *logging
+
+  # 167: bgutil PO-token provider for yt-dlp (YouTube bot check). Internal only, no published port.
+  # Pinned; bump together with the worker's bgutil-ytdlp-pot-provider version.
+  pot:
+    image: brainicism/bgutil-ytdlp-pot-provider:2.0.2
+    container_name: riftstorm-pot
+    restart: unless-stopped
     logging: *logging
 
   # P2.5 S4 (148): the worker image in Telegram-only mode: send-to-phone queue + planned-post reminders.
