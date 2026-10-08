@@ -147,7 +147,7 @@
     $("rvBody").innerHTML = `
       <section class="panel rv-panel">
         <div class="rv-head">
-          <div><div class="rv-eyebrow">Step 4 · Review</div>
+          <div>
             <h2 class="rv-title">${esc(h.title || (h.kind === "job" ? "Untitled video" : "Clips"))}</h2>
             ${statusLine}
             <p class="rv-desc">Clips are sorted by hook score. A clip can be scheduled only when every campaign rule passes.</p></div>
@@ -213,8 +213,8 @@
       : chips.length ? (blocking ? `Fix ${blocking} rule${blocking === 1 ? "" : "s"} to approve.` : "All campaign rules pass.") : "No campaign rules for this job.";
     const src = R.filter.job === "all" ? `<div class="rv-src">${esc(c.job_title)} · ${esc(day(c.job_date))}</div>` : "";
     return `
-      <div class="rv-frame">${thumb ? `<img src="${thumb}" alt="" loading="lazy" onerror="this.remove()">` : ""}
-        <span class="rv-time">${fmtLen(outputSeconds(c))}</span></div>
+      <a class="rv-frame" href="#editor/${esc(c.job_id)}/${esc(c.id)}" aria-label="Open ${esc(title)} in the editor">${thumb ? `<img src="${thumb}" alt="" loading="lazy" onerror="this.remove()">` : ""}
+        <span class="rv-time">${fmtLen(outputSeconds(c))}</span></a>
       <div class="rv-info">
         ${src}
         <div class="rv-row">${c.score != null ? `<span class="rv-score" title="AI estimate of the hook strength">Hook ${Math.round(c.score)}</span><span class="rv-est">AI estimate</span>` : ""}<span class="rv-spacer"></span>${earn}${state}</div>
@@ -223,8 +223,11 @@
         ${chips.length ? `<div class="rv-checks">${chips.map((ch) => chipHtml(c, ch)).join("")}</div>` : ""}
         <div class="rv-actions">
           <button type="button" class="primary" data-rv-approve="${esc(c.id)}" data-rv-jid="${esc(c.job_id)}" ${canApprove ? "" : "disabled"}>Approve</button>
-          <a class="secondary btn-link rv-open" href="#editor/${esc(c.job_id)}/${esc(c.id)}">Open editor</a>
-          ${!blocking ? `<button type="button" class="secondary" data-approve-schedule="${esc(c.job_id)}" data-cid="${esc(c.id)}">${RUNNING.includes(c.status) || c.status === "completed" ? "Schedule" : "Approve &amp; schedule"}</button>` : ""}
+          <details class="rv-more"><summary aria-label="More actions" title="More actions">⋯</summary>
+            <div class="rv-menu">
+              <a class="rv-open" href="#editor/${esc(c.job_id)}/${esc(c.id)}">Open editor</a>
+              ${!blocking ? `<button type="button" data-approve-schedule="${esc(c.job_id)}" data-cid="${esc(c.id)}">${RUNNING.includes(c.status) || c.status === "completed" ? "Schedule" : "Approve &amp; schedule"}</button>` : ""}
+            </div></details>
         </div>
         <p class="rv-hint">${esc(hint)}</p>
       </div>`;
@@ -253,6 +256,7 @@
 
   document.addEventListener("click", (e) => {
     if (R.open && e.target.closest("[data-nav],[data-flow-editor]")) { hide(); return; }
+    if (R.open) document.querySelectorAll(".rv-more[open]").forEach((d) => { if (!d.contains(e.target) || e.target.closest(".rv-menu > *")) d.open = false; });
     const t = e.target.closest("[data-rv-status],[data-rv-fix],[data-rv-approve],[data-rv-analyze]");
     if (!t || !R.open) return;
     if (t.matches("[data-rv-status]")) return setFilter({ status: t.dataset.rvStatus });

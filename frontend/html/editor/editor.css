@@ -1,6 +1,5 @@
 /* Editor page (lane B, P4) — flow-preview step 5. Loaded by one <link> in index.html (<!-- lane-b hook -->).
    Tokens only (067/107): --panel, --fill, --sp-*, --dur-*, --ease-*, --hit, materials. */
-.ed-page{padding-bottom:calc(var(--sp-5) * 2)}
 .ed-loading{color:var(--muted)}
 .ed-head{margin-bottom:var(--sp-2)}
 .ed-back{display:inline-flex;align-items:center;min-height:var(--hit);color:var(--accent);text-decoration:none;font-weight:600}
@@ -52,7 +51,6 @@
 .ed-spacer{flex:1}
 @media (max-width:900px){
   .ed-grid{grid-template-columns:minmax(0,1fr)}
-  .ed-player{position:static;width:min(100%,280px);margin:0 auto}
 }
 @media (max-width:600px){
   .ed-foot{border-radius:20px;flex-wrap:wrap}
@@ -265,3 +263,69 @@ button.is-armed{background:var(--badge-failed-bg,#ff453a);color:#fff}
   .ed-group{padding:var(--sp-2) 0}
   .ed-grid{gap:var(--sp-2)}
 }
+
+/* ===== Compact redesign (Review cards + pro Editor layout). The shell owns the page title + stepper. ===== */
+/* Review: thumbnail = link to the editor, one primary button + ⋯ menu, 24 px chips, 3/2/1 columns */
+.rv-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+@media (min-width:1440px){.rv-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media (max-width:899px){.rv-grid{grid-template-columns:minmax(0,1fr)}}
+.rv-clip{grid-template-columns:112px minmax(0,1fr);gap:12px;padding:12px;border-radius:16px}
+@media (min-width:600px){.rv-clip{padding:14px}}
+a.rv-frame{display:block;border-radius:10px}
+a.rv-frame:focus-visible{outline:none;box-shadow:var(--ring)}
+.rv-ctitle{font:600 15px/1.3 var(--font-display)}
+.rv-reason{font-size:12px;margin:4px 0 0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.rv-checks{gap:4px;margin-top:8px}
+.rv-checks .badge,.rv-clip .badge{min-height:24px;padding:2px 8px;font-size:11px;line-height:18px;box-sizing:border-box}
+.rv-fix{min-height:24px;padding:0 6px;font-size:12px}
+.rv-actions{gap:8px;margin-top:10px;flex-wrap:nowrap}
+.rv-actions .primary{min-height:36px;padding:0 18px}
+.rv-hint{margin:4px 0 0}
+.rv-more{position:relative}
+.rv-more>summary{list-style:none;display:grid;place-items:center;width:36px;height:36px;border-radius:50%;background:var(--fill);color:var(--text);font:700 18px/1 var(--font-text);cursor:pointer}
+.rv-more>summary::-webkit-details-marker{display:none}
+.rv-more>summary:focus-visible{outline:none;box-shadow:var(--ring)}
+.rv-menu{position:absolute;left:0;top:calc(100% + 6px);z-index:25;min-width:190px;display:flex;flex-direction:column;padding:6px;border-radius:14px;
+  background:var(--material-thick);-webkit-backdrop-filter:var(--material-blur);backdrop-filter:var(--material-blur);border:1px solid var(--hairline);box-shadow:0 16px 40px rgba(0,0,0,.18)}
+.rv-menu>*{display:flex;align-items:center;min-height:40px;padding:0 12px;border:0;border-radius:10px;background:transparent;color:var(--text);font:500 14px var(--font-text);text-decoration:none;text-align:left;cursor:pointer}
+.rv-menu>*:hover{background:var(--fill)}
+.rv-open{min-height:40px;padding:0 12px;border-radius:10px;background:transparent;font-weight:500}
+.rv-head{margin-bottom:var(--sp-1)}
+
+/* Editor: video left (sticky, fills the height), inspector ~380 px right, timeline full width, action bar clear of content */
+.ed-page{padding-bottom:104px}
+.ed-head{margin-bottom:var(--sp-1)}
+.ed-headrow{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.ed-headrow .ed-back{min-height:32px}
+.ed-title{font-size:20px;margin:0}
+.ed-jobname{font-size:12px;color:var(--muted);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ed-grid{grid-template-columns:minmax(0,1fr) 380px;gap:20px}
+.ed-player{position:sticky;top:76px;display:flex;flex-direction:column;align-items:center;height:calc(100vh - 76px - 96px);min-height:360px;
+  padding:12px;border-radius:18px;background:var(--fill);box-sizing:border-box}
+.ed-frame{flex:1 1 0;min-height:0;width:auto;max-width:100%;aspect-ratio:9/16;border-radius:14px}
+.ed-pctrl{margin-top:8px;width:100%;justify-content:center}
+.ed-note{flex-basis:auto}
+.ed-panel{padding-top:var(--sp-1)}
+.ed-group{padding:10px 0}
+.ed-seg button{min-height:32px;font-size:12px}
+.ed-presets{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.ed-preset{min-height:0;padding:4px;gap:3px;border-radius:10px;font-size:11px}
+.ed-ptile{height:28px;border-radius:7px}
+.ed-ptile .ed-capsample{font-size:10px}
+.ed-kwword{min-height:24px;padding:0 8px;font-size:11px;border-radius:6px}
+.ed-kwword::after{inset:-4px -2px}
+.ed-kw{gap:4px;margin-top:6px;max-height:120px}
+.ed-chip{min-height:28px;padding:0 10px;font-size:12px}
+.ed-row{min-height:36px}
+.ed-switch{width:42px;height:26px}
+.ed-switch::after{width:22px;height:22px}
+.ed-switch[aria-checked="true"]::after{transform:translateX(16px)}
+.ed-tlwrap>summary{display:none}
+.ed-tlwrap .ed-tl{margin-top:var(--sp-2)}
+.ed-foot{padding:8px 8px 8px 16px}
+@media (max-width:899px){
+  .ed-grid{grid-template-columns:minmax(0,1fr);gap:var(--sp-1)}
+  .ed-player{top:var(--ed-top,0px);z-index:15;width:100%;height:40vh;min-height:220px;margin:0;padding:8px;background:var(--bg,var(--panel));border-radius:0 0 16px 16px;box-shadow:0 6px 16px rgba(0,0,0,.08)}
+  .ed-tlwrap>summary{display:flex;align-items:center;min-height:36px;margin-top:var(--sp-2);font-weight:600;font-size:13px;cursor:pointer}
+}
+@media (max-width:600px){.ed-foot{bottom:calc(68px + env(safe-area-inset-bottom,0px))}.ed-page{padding-bottom:168px}}

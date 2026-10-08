@@ -95,10 +95,9 @@
     const s = $("editorSection"), st = E.state, c = st.candidate;
     s.innerHTML = `
       <div class="ed-head">
-        <a class="ed-back" href="#review/${esc(E.jid)}" data-ed-back>← Review</a>
-        <div class="ed-eyebrow">Editor${st.job.title ? " · " + esc(st.job.title) : ""}</div>
-        <h2 class="ed-title">${esc(c.title || "Untitled clip")}</h2>
-        ${c.reason ? `<p class="ed-reason">${esc(c.reason)}</p>` : ""}
+        <div class="ed-headrow"><a class="ed-back" href="#review/${esc(E.jid)}" data-ed-back>← Review</a>
+          <h2 class="ed-title">${esc(c.title || "Untitled clip")}</h2>
+          ${st.job.title ? `<span class="ed-jobname">${esc(st.job.title)}</span>` : ""}</div>
       </div>
       <div class="ed-grid">
         <div class="ed-player">
@@ -124,7 +123,7 @@
           <div class="ed-panel" role="tabpanel" aria-labelledby="edtab-${E.tab}">${panelHtml(E.tab)}</div>
         </div>
       </div>
-      <div class="ed-tl" id="edTl" aria-label="Timeline"><div class="ed-hint">Loading the timeline…</div></div>
+      <details class="ed-tlwrap" open><summary>Timeline</summary><div class="ed-tl" id="edTl" aria-label="Timeline"><div class="ed-hint">Loading the timeline…</div></div></details>
       <div class="ed-foot">
         <span class="ed-state" id="edState"></span>
         <span class="ed-spacer"></span>
