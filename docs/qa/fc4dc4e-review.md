@@ -1,0 +1,9 @@
+# main 95dd801 (169) .. fc4dc4e (179) + 1c9b3cb (180) · post-merge check of lane-b 19ca39c · Lane C · 2026-10-09
+Prod: riftstorm-* all running, restarts=0. Backend (started 19:29Z) main.py + routes_editor.py md5 = fc4dc4e; worker (19:56Z) worker.py md5 = main HEAD 1c9b3cb. No crash loop.
+Playwright from git archive fc4dc4e (mocked API): 188 passed, 4 skipped, 0 failed. No High found.
+UX audit re-run (390 + 1280, light/dark, hash-driven views, harness spec qa-ux): 
+- FIXED (170): reload keeps every view (#analyze/#review/#schedule/#publish/#editor/<job>/<clip>); Back/Forward walk the stepper history; bare URL = last view; Schedule at 390 no longer scrolls horizontally; no horizontal scroll on any view; keyboard focus ring visible on all 7 views at both widths.
+- Medium · touch targets got smaller with the compact redesign. At 390: Editor keyword words 24, colour swatches 26, switch 26x42, Seek/Cut chips 28, Review "Trim/Add tags" fixes 24, "Timeline" summary 36, Analyze option chips 36, Schedule/Publish toolbar 36, in-text "Review" link 21. At 1280: top-bar Watermarks/Settings/account 36, stepper nodes 36, Editor tabs 32, Review filter chips 34. Target 44 (owner rule); only the primary buttons reach it.
+- Low · my mobile Settings/Watermarks sheet check could not find the old [data-nav] buttons in shell v2 (now in the top bar/account menu): sheet overflow at 390 NOT re-verified.
+1c9b3cb (180): make_ass scales outline/shadow/side margins by canvas_width/1080: closes my Medium (preview captions ~2x bolder). Read the diff + change doc (preview ASS outline 4.5 / margins 20 vs final 9 / 40); finals unchanged. NOT rendered by QA (no prod token, staging not restaged).
+Not verified: fresh prod e2e (needs a per-user admin cf_ token), 179's removed code paths beyond the suite (grep: no openClassicEdit/data-rv-classic/toggleCandidateEdit left in review.js/editor.js).
