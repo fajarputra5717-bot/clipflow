@@ -235,9 +235,17 @@ async function nav(page, name) {
 async function openAccount(page) { await page.click("#accountMenuBtn"); await page.click("#accountMenu [data-account]"); }
 async function menuItem(page, sel) { await page.click("#accountMenuBtn"); await page.click(`#accountMenu ${sel}`); }
 
-// 149: the stepper's Review opens the Review page; the old job list + drawer ("All edits") is opened directly.
-async function classicQueue(page) {
-  await page.evaluate(async () => { window.clipflowReview?.close(); history.replaceState(null, "", location.pathname); await window.showTab("queue"); });
+// 179: the old job list + drawer are gone; tests reach a clip through the Review page. mockReviewClips() answers
+// /api/review/filter + /api/review/clips with `clips` (defaults filled in) and opens #review.
+const reviewClip = (o) => ({ job_id: "job-done", clip_index: 0, status: "review", title: null, manual_title: null, ai_title: "Mock clip",
+  reason: "Strong hook.", start_time: 0, end_time: 34, duration_seconds: null, edit_spec: null, updated_at: "2026-10-07T10:00:00+00:00",
+  campaign: null, job_title: "Mock stream", job_date: "2026-10-05T10:00:00+07:00", job_status: "review", earn: null, rule_checks: [], ...o });
+async function mockReviewClips(page, api, clips) {
+  const f = (body) => (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
+  await page.route(/\/api\/review\/filter$/, f({ campaign: "all", job: "all", status: "to_review" }));
+  await page.route(/\/api\/review\/clips\?/, f({ header: { kind: "all", title: "All clips", to_review: clips.length }, clips: clips.map(reviewClip) }));
+  await page.evaluate(() => { location.hash = "#review"; });
+  await base.expect(page.locator("#rvFilters select").first()).toBeVisible();
 }
 
 // The "nothing is clickable" regression (CLAUDE.md: every closed overlay layer must be
@@ -288,4 +296,4 @@ function publishCards(rows, api) {
   return out;
 }
 
-module.exports = { test, expect: base.expect, job, candidate, nav, openAccount, menuItem, blockingProblems, mockApi, newState, classicQueue };
+module.exports = { test, expect: base.expect, job, candidate, nav, openAccount, menuItem, blockingProblems, mockApi, newState, mockReviewClips, reviewClip };

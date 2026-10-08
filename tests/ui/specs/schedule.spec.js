@@ -1,6 +1,6 @@
 // P2.5 S2 (146): "Approve & schedule" next to Approve → sheet with one row per platform (account, suggested WIB
 // slots, editable time), live not-eligible notes (dry_run), Save → POST …/schedule {posts, approve} → final render.
-const { test, expect, nav, classicQueue } = require("../fixtures");
+const { test, expect, nav, mockReviewClips } = require("../fixtures");
 test.use({ reducedMotion: "reduce" });
 
 const at = (d, hm) => new Date(`${d}T${hm}:00+07:00`).toISOString();
@@ -14,19 +14,17 @@ function plan(api, over = {}) {
       post: { id: "p-yt", status: "planned", account_id: "acc-yt", account_handle: "imeyt", scheduled_for: at("2026-10-09", "17:00") } },
   ], ...over };
 }
-async function openSheet(app) {
-  await classicQueue(app);
-  await app.locator('[data-queue-open="job-done"]').click();
-  const cand = app.locator("#candidate-cand-a");
-  await cand.locator("[data-edit]").first().click();
-  await cand.locator("[data-approve-schedule]").click();
+async function openSheet(app, api) {   // 179: from the Review page (the old drawer is gone)
+  await mockReviewClips(app, api, [{ id: "cand-a" }]);
+  await app.locator("#rv-cand-a .rv-more summary").click();                // compact cards: it sits in the ⋯ menu (175)
+  await app.locator('[data-approve-schedule="job-done"][data-cid="cand-a"]').click();
   await expect(app.locator("#scheduleSheet")).toHaveClass(/open/);
 }
 
 test("approve & schedule: suggestions in WIB, account switch, edit time, warnings, save", async ({ app, api }) => {
   plan(api);
   api.planWarn = { tiktok: "Outside IME Roleplay week window (W1–W4: 1 Oct–28 Oct)" };
-  await openSheet(app);
+  await openSheet(app, api);
   const tt = app.locator('[data-plan-row="tiktok"]');
   await expect(tt.locator("[data-plan-slot]")).toHaveText(["Thu 8 Oct 19:00 WIB", "Thu 8 Oct 21:00 WIB", "Fri 9 Oct 12:00 WIB"]);
   await expect(tt.locator("[data-plan-when]")).toHaveValue("2026-10-08T19:00");
@@ -48,7 +46,7 @@ test("approve & schedule: suggestions in WIB, account switch, edit time, warning
 
 test("schedule: platform toggle, slot pick, blocked clip can't save", async ({ app, api }) => {
   plan(api);
-  await openSheet(app);
+  await openSheet(app, api);
   const tt = app.locator('[data-plan-row="tiktok"]');
   await tt.locator("[data-plan-slot]").nth(2).click();
   await expect(tt.locator("[data-plan-when]")).toHaveValue("2026-10-09T12:00");
@@ -58,14 +56,15 @@ test("schedule: platform toggle, slot pick, blocked clip can't save", async ({ a
   await expect(app.locator("#scheduleSave")).toBeDisabled();
   await app.keyboard.press("Escape");
   plan(api, { blocking: ["Hashtags missing or out of order"] });
-  await app.locator("#candidate-cand-a [data-approve-schedule]").click();
+  await app.locator("#rv-cand-a .rv-more summary").click();
+  await app.locator("#rv-cand-a [data-approve-schedule]").click();
   await expect(app.locator(".plan-block")).toContainText("Hashtags missing");
   await expect(app.locator("#scheduleSave")).toBeDisabled();
 });
 
 test("schedule sheet fits a phone (no horizontal scroll)", async ({ app, api }) => {
   plan(api);
-  await openSheet(app);
+  await openSheet(app, api);
   await expect(app.locator('[data-plan-row="tiktok"] [data-plan-slot]').first()).toBeVisible();
   expect(await app.evaluate(() => { const b = document.querySelector("#scheduleBody"); return b.scrollWidth <= b.clientWidth; })).toBe(true);
   await app.screenshot({ path: `test-results/schedule-sheet-${test.info().project.name}.png` });

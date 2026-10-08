@@ -213,19 +213,6 @@ test.describe("Editor zoom punch-ins", () => {
 });
 
 test.describe("Editor page", () => {
-  test("Open editor from Review shows the editor as its own view", async ({ app, api }) => {
-    await mockEditor(app, api);
-    await app.evaluate(async () => { await window.showTab("queue"); });   // the old panel's "Open editor" (All edits path)
-    await app.locator('[data-queue-open="job-done"]').click();
-    await app.locator('#candidate-cand-a [data-open-editor]').first().click();
-    await expect(app.locator("#editorSection")).toBeVisible();
-    await expect(app.locator("#pageTitle")).toHaveText("Editor");
-    await expect(app.locator(".ed-title")).toHaveText("First mock clip");
-    await expect(app.locator("#queueSection")).toBeHidden();
-    await app.locator("[data-ed-back]").click();
-    await expect(app.locator("#editorSection")).toBeHidden();
-  });
-
   test("hook title card: toggle, text, duration are saved", async ({ app, api }) => {
     await mockEditor(app, api);
     await app.evaluate(() => { location.hash = "#editor/job-done/cand-a"; });

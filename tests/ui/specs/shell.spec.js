@@ -1,4 +1,4 @@
-const { test, expect, classicQueue, nav } = require("../fixtures");
+const { test, expect, nav } = require("../fixtures");
 
 // UI shell (P1 task 0): the flow-preview stepper is the top-level navigation.
 test.describe("UI shell stepper", () => {
@@ -19,12 +19,8 @@ test.describe("UI shell stepper", () => {
     await expect(app.locator("#reviewSection")).toBeVisible();
     await expect(app.locator("#pageTitle")).toHaveText("Review");
     await expect(app.locator("#flow li.active .flow-label")).toHaveText("Review");
-    await classicQueue(app);                                           // the old panel ("All edits" path)
-    await app.locator('[data-queue-open="job-done"]').click();
-    await expect(app.locator("#candidate-cand-a")).toBeVisible();
-    await expect(editor).toBeEnabled();
-    await editor.click();
-    await expect(app.locator("#candidate-cand-a")).toHaveClass(/editing/);
+    await editor.click();                                              // 171: no clip yet → Pick a clip
+    await expect(app.locator("#pickSection")).toBeVisible();
     await expect(app.locator("#flow li.active .flow-label")).toHaveText("Editor");
     await expect(app.locator("#pageTitle")).toHaveText("Editor");
     await app.locator('#flow [data-nav="current"]').click();

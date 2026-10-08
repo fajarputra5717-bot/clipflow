@@ -16,14 +16,10 @@ test("live app loads, lists jobs and opens one read-only", async ({ page }) => {
   await page.goto("/");
   await page.waitForResponse((r) => r.url().includes("/api/jobs?scope=current") && r.ok());
   expect(await blockingProblems(page, ["#youtubeUrl"])).toEqual([]);
-  await nav(page, "queue");
-  const first = page.locator("[data-queue-open]").first();
-  if (await first.count()) {
-    await first.click();
-    await expect(page.locator("#queueDetail")).toBeVisible();
-    const edit = page.locator("#queueDetail [data-edit]").first();
-    if (await edit.count()) { await edit.click(); await expect(edit).toHaveAttribute("aria-expanded", "true"); await edit.click(); }
-  }
+  await nav(page, "queue");                                          // 179: Review page (the old list/drawer are gone)
+  await expect(page.locator("#reviewSection")).toBeVisible();
+  const open = page.locator("#reviewSection .rv-open").first();
+  if (await open.count()) { await open.click(); await expect(page.locator("#editorSection")).toBeVisible(); }
   expect(errors).toEqual([]);
   expect(blocked, "live mode must not write").toEqual([]);
 });

@@ -402,12 +402,13 @@ planned post: `reminded_at` set in the queueing transaction; > 1 h late = `misse
 
 ## Frontend shell (R-11/R-12/R-13, lane B 067-073; badge v2.1117)
 
-- **Review + Editor pages (149, lane-b merge):** stepper Review → `#review` (`editor/review.js`, `window.clipflowReview.open/close`),
-  Editor → `#editor/<job>/<clip>` (`editor/editor.js`; hook title, timeline, cuts, fillers, zoom via `worker/render_steps.py`
-  + `backend/app/routes_editor.py`). `editorOpen()` = page or old panel. The OLD job detail + edit panel stays reachable only
-  via a Review card's "All edits" (`openClassicEdit`) until P4 gives each drawer feature a home in the Editor page: remove a
-  drawer piece only then (165: Captions/Effects/Audio gone; it keeps Export, Watermark, description, thumbnail, and
-  `applyEdits()` never sends caption fields). UI specs reach the old panel with `classicQueue()`.
+- **Review + Editor pages (149; drawer gone since 179):** Review → `#review[/<job>]` (`editor/review.js`,
+  `window.clipflowReview.open/close`), Editor → `#editor/<job>/<clip>` (`editor/editor.js`: captions, effects, audio,
+  thumbnail, watermark, export, hook title, timeline/cuts/fillers/zoom via `worker/render_steps.py` +
+  `backend/app/routes_editor.py`). The old job list/detail + edit drawer, `openClassicEdit`, `classicQueue()` are
+  deleted; `#queueSection` is an empty host that review.js's `showTab("queue")` uses. Island clip tasks open
+  `#review/<job>`. Render warnings (loudness, final outdated) show on Review cards. Tests reach clips via
+  `mockReviewClips()` (fixtures).
 - **Shell v2 (169) — same on every page incl. Review/Editor:** no sidebar, no tab bar, no large title.
   Thin sticky `#toolbar.appbar` (48 px, `--appbar-h`): logo (`data-nav-home` → Analyze) · `#pageContext` (campaign /
   job title read from the rendered page by `pageContextText()`, else the page name; stops short of the island) ·
@@ -465,13 +466,7 @@ planned post: `reminded_at` set in the queueing transaction; > 1 h late = `misse
 - **Busy state:** every async button/upload label goes through
   `setBusy(el, busy, label?)`. It disables the control, sets `aria-busy` and
   `.is-busy` (spinner), and restores the label. Don't hand-swap `textContent`.
-- **Edit drawer:** tabs (082) Captions/Effects/Audio/Watermark/Export, active tab in `editTab[cid]`;
-  inactive panels stay in the DOM (`hidden`) because `applyEdits()` reads their inputs. Shown via `display` + `drawerIn` keyframe. Re-renders
-  while editing must add `.no-enter` (see `watchCandidate`). Description/
-  Thumbnail are `<details data-edit-more>`. Their open state lives in
-  `editMoreOpen["<cid>:desc|thumb"]` (capture `toggle` listener) so
-  re-renders keep it. Apply/Final render sit in the sticky `.edit-actions`.
-  Glass only on the drawer and that row, never over the video.
+- **Edit drawer:** removed in 179 (every piece lives in the Editor page; parity: docs/changes/149, 163–164, 173–174).
 - **Status badges:** `badgeClass()` → idle (queued, `*_queued`) / running / attention (review,
   partial_failure) / completed / failed / cancelled. Colours are `--badge-*` tokens in both
   theme blocks, each pair measured ≥4.5:1 on `--panel` incl. the shimmer peak. Re-measure on change.

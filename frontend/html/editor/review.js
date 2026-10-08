@@ -221,6 +221,7 @@
         <h3 class="rv-ctitle">${esc(title)}</h3>
         ${c.reason ? `<p class="rv-reason">${reasonHtml(c.reason)}</p>` : ""}
         ${chips.length ? `<div class="rv-checks">${chips.map((ch) => chipHtml(c, ch)).join("")}</div>` : ""}
+        ${(c.render_warnings || []).length ? `<div class="render-warnings" role="status">${c.render_warnings.map((w) => `<span class="render-warn" title="${esc(w.message || "")}">⚠ ${esc(w.message || w.code)}</span>`).join("")}</div>` : ""}
         <div class="rv-actions">
           <button type="button" class="primary" data-rv-approve="${esc(c.id)}" data-rv-jid="${esc(c.job_id)}" ${canApprove ? "" : "disabled"}>Approve</button>
           <details class="rv-more"><summary aria-label="More actions" title="More actions">⋯</summary>

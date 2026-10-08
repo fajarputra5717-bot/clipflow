@@ -1,4 +1,4 @@
-const { test, expect, job, nav, classicQueue } = require("../fixtures");
+const { test, expect, job } = require("../fixtures");
 
 test.describe("Job list", () => {
   test("Import list shows running jobs and patches cards in place", async ({ app, api }) => {
@@ -14,21 +14,6 @@ test.describe("Job list", () => {
     expect(await card.evaluate((n, b) => n === b, before)).toBe(true);
   });
 
-  test("Review list renders history and opens a job", async ({ app }) => {
-    await classicQueue(app);
-    await expect(app.locator("#pageTitle")).toHaveText("Review");
-    const row = app.locator('[data-queue-open="job-done"]');
-    await expect(row).toBeVisible();
-    await row.click();
-    await expect(app.locator("#queueDetail")).toBeVisible();
-    await expect(app.locator("#candidate-cand-a")).toBeVisible();
-  });
-});
-
-test("Review cards show the first clip's thumbnail from thumb_candidate_id (135)", async ({ app, api }) => {
-  api.queue = api.queue.map((j) => ({ ...j, thumb_candidate_id: "cand-a", candidates: undefined }));
-  await app.locator('[data-nav="queue"] >> visible=true').first().click();
-  await expect(app.locator('[data-queue-open="job-done"] .queue-thumb img')).toHaveAttribute("src", /\/api\/jobs\/job-done\/candidates\/cand-a\/thumbnail/);
 });
 
 test("172: Analyze cards are compact: thumbnail, title, status chip, campaign, date; the card opens #review/<job>", async ({ app, api }) => {

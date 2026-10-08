@@ -1674,8 +1674,6 @@ body:has(#editorSection:not(.hidden)) .ed-foot{bottom:calc(var(--pill-btn) + 30p
       </section>
 
       <section id="queueSection" class="view-section hidden">
-        <div id="queueJobs" class="view-section"></div>
-        <div id="queueDetail" class="view-section hidden"></div>
       </section>
       <section id="scheduleSection" class="view-section hidden" aria-labelledby="scheduleTitle">
         <div class="panel publish-panel">
@@ -1856,7 +1854,6 @@ const POLL_INTERVAL=2200;
 const STORAGE_KEY="clipflow_active_job_v1";
 const TERMINAL=["completed","failed","cancelled","review","partial_failure"];
 const BUSY=["queued","reanalyze_queued","downloading","download","transcribing","transcription","analyzing","analysis","preview_queued","preview_rendering","preview","render_queued","rendering","thumbnail_queued","thumbnail_rendering"];
-const CONTENT_TYPES=["Funny","Wise","Reality","Hype","Wholesome","Educational"];
 const SUBTITLE_STYLES=[
   ["bold","Bold Social"],
   ["outline","Heavy Outline"],
@@ -1885,9 +1882,6 @@ const SUBTITLE_STYLE_PREVIEW={
   gold:{resting:"#fff",highlight:"#FFC300",weight:800,outline:.5,shadow:false,box:true,sizeMult:1,letterSpacing:"0"}
 };
 // Mirrors shared/fonts.py CAPTION_FONTS (exact names go into the ASS Style line).
-const SUBTITLE_FONTS=["Liberation Sans Bold","Liberation Sans","Noto Sans Bold","Noto Sans","DejaVu Sans Bold","DejaVu Sans",
-  "Montserrat Black","Montserrat ExtraBold","Montserrat Bold","Inter Black","Inter Bold","Oswald Bold",
-  "Poppins ExtraBold","Poppins Bold","Anton","Bebas Neue","Archivo Black"];
 // None of these exact server-rendered fonts are installed in a
 // browser, so mapping the live preview straight to font-family:"Noto
 // Sans Bold" (etc.) silently falls back to the same generic sans for
@@ -2162,9 +2156,6 @@ function patchMiniIsland(el,p,s,label){
   setText(el.querySelector(".mi-stage"),label);setText(el.querySelector(".mi-pct"),v+"%");
   setAttr(el,"aria-valuenow",String(v));setAttr(el,"aria-label",`${label}, ${v}%`);
 }
-function miniIslandStatic(p,s,label){
-  const t=document.createElement("div");t.innerHTML=miniIslandHtml();const el=t.firstElementChild;patchMiniIsland(el,p,s,label);return el.outerHTML;
-}
 function progressRing(p,color,size=34,stroke=4){
   const r=(size-stroke)/2,c=+(2*Math.PI*r).toFixed(3),off=+(c*(1-pct(p)/100)).toFixed(3);
   const gid="ringGrad"+(ringIdSeq++);
@@ -2183,27 +2174,9 @@ function progressRing(p,color,size=34,stroke=4){
   </span>`;
 }
 const PENCIL_ICON='<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
-const ARROW_UP_RIGHT='<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7"/><path d="M8 7h9v9"/></svg>';
-const TRASH_ICON='<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>';
-const CHEVRON_LEFT='<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>';
-const CHEVRON_RIGHT='<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>';
 function isDone(p,s){return pct(p)>=100||s==="completed"||s==="review"}
-function progressCombo(p,s,message,size=34,stroke=4){
-  const msg=`<div class="progress-status"><span class="msg">${esc(message)}</span></div>`;
-  if(isDone(p,s))return `<div class="progress-combo done">${msg}</div>`;
-  return `<div class="progress-combo">${progressRing(p,stageColor(s),size,stroke)}${msg}</div>`;
-}
 function platformLabel(p){return({youtube_shorts:"YouTube Shorts",instagram_reels:"Instagram Reels",tiktok:"TikTok"})[p]||p||"Shorts"}
 function pct(v){return Math.max(0,Math.min(100,Number(v||0)))}
-const PLATFORM_ICONS={
-  youtube_shorts:{cls:"shorts",svg:'<svg viewBox="0 0 24 24"><path fill="white" d="M9 4.7v14.6a1 1 0 0 0 1.55.83l8.9-7.3a1.05 1.05 0 0 0 0-1.66l-8.9-7.3A1 1 0 0 0 9 4.7Z"/></svg>'},
-  instagram_reels:{cls:"reels",svg:'<svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="5" stroke="white" stroke-width="2" fill="none"/><circle cx="12" cy="12" r="3" fill="white"/></svg>'},
-  tiktok:{cls:"tiktok",svg:'<svg viewBox="0 0 24 24"><path fill="white" d="M14 4v9.1a3.3 3.3 0 1 1-2.3-3.15V7.1a6 6 0 1 0 5.2 5.95V8.2c1.15.9 2.5 1.45 4.1 1.55V7.1A5.8 5.8 0 0 1 14 4Z"/></svg>'}
-};
-function platformIcon(p,size){
-  const d=PLATFORM_ICONS[p]||PLATFORM_ICONS.youtube_shorts;
-  return `<span class="platform-icon ${size||""} ${d.cls}" title="${esc(platformLabel(p))}">${d.svg}</span>`;
-}
 function toTitleCase(s){return s.toLowerCase().replace(/\b\w/g,c=>c.toUpperCase())}
 function hookTitle(text){
   const line=String(text||"").trim().split(/\n+/).find(Boolean)||"";
@@ -2217,11 +2190,10 @@ async function renameJob(id){
   if(name===null)return;
   try{
     await api(`/api/jobs/${id}`,{method:"PATCH",body:JSON.stringify({custom_title:name.trim()||null})});
-    if(currentTab==="current")await loadCurrentJobs();else if(currentTab==="queue")await loadQueue();
+    if(currentTab==="current")await loadCurrentJobs();
   }catch(e){alert("Rename failed: "+e.message)}
 }
 // 134: short id (first 8 chars) shown small; the full id stays in the title attribute.
-function shortId(id){return "#"+String(id||"").slice(0,8)}
 function jobDisplayTitle(j){
   const c=(j.candidates||[])[0];
   const fallback=c?(c.manual_title||c.title||c.generated_title||hookTitle(c.subtitle_override||c.subtitle_text)):"";
@@ -2286,13 +2258,6 @@ function selectLanguage(v,auto){selectedLanguage=LANG_NAMES[v]?v:"auto";
     :selectedLanguage==="en"?"Transcribe and write hooks in English.":"Transcribe in Indonesian; hooks and captions stay Indonesian.";
   const t=$("langFromCampaign");if(t)t.hidden=!languageFromCampaign}
 // "Language: Auto → Indonesian · detected id (0.93)"; legacy jobs (no language) were Indonesian.
-function jobLanguageLine(j){
-  const used=j.effective_language||(LANG_NAMES[j.language]?j.language:null);
-  const det=j.detected_language?` · detected ${j.detected_language}${j.language_confidence!=null?` (${Number(j.language_confidence).toFixed(2)})`:""}`:"";
-  if(!j.language)return "Language: Indonesian";
-  if(j.language==="auto")return used?`Language: Auto → ${LANG_NAMES[used]}${det}${used!==j.detected_language?" · fallback":""}`:"Language: Auto (detected during transcription)";
-  return `Language: ${LANG_NAMES[j.language]}`;
-}
 // "Subtitles: Bold · Montserrat Black · 72 px · karaoke" from the user's DEFAULT_SUBTITLE_* (P1.5 user keys);
 // the Import form never sends style/font/size, so the backend applies exactly these.
 function updateSubtitleDefaultsLine(){
@@ -2464,272 +2429,10 @@ function syncCurrentJobs(jobs){
   setText($("jobsCount"),jobs.length);setAttr($("jobsLabel"),"hidden",!jobs.length);
 }
 
-function campaignTag(j){return j.campaign?`<span class="tag campaign-tag" title="Campaign">${esc(campaignName(j.campaign))}</span>`:""}
-function renderQueueJob(j,i=0){
-  const p=pct(j.progress),s=j.status||"completed",busy=isBusy(s),done=isDone(p,s);
-  // 135: the list API names the first clip with a thumbnail (it never sends candidates → cards were grey).
-  const tc=j.thumb_candidate_id||j.candidates?.[0]?.id,thumb=tc?mediaUrl(`${API}/api/jobs/${j.id}/candidates/${tc}/thumbnail`):null;
-  return `<div class="panel queue-card" data-queue-open="${esc(j.id)}" style="--i:${i}">
-    <div class="job-header">
-      <div>
-        <div class="job-title-row"><h3>${esc(jobDisplayTitle(j))}</h3><button class="rename-btn" data-rename="${esc(j.id)}" type="button" aria-label="Rename job" title="Rename job">${PENCIL_ICON}</button></div>
-        <div class="job-id" title="${esc(j.id)}">${esc(shortId(j.id))}</div>
-      </div>
-      <div class="job-header-side">
-        ${campaignTag(j)}${platformIcon(j.platform,"sm")}
-        <span class="badge ${badgeClass(s)}">${esc(stageLabel(s))}</span>
-        ${isCancellable(s)?`<button class="secondary cancel-job-btn" data-cancel-job="${esc(j.id)}" type="button">Cancel</button>`:""}
-        ${s==="failed"?`<button class="secondary cancel-job-btn" data-retry-job="${esc(j.id)}" type="button">Retry</button>`:""}
-      </div>
-    </div>
-    ${done?"":miniIslandStatic(p,s,j.message||stageLabel(s))}
-    <div class="queue-preview">
-      <div class="queue-thumb">${thumb?`<img src="${esc(thumb)}" alt="" loading="lazy" onload="this.classList.add('loaded')">`:""}</div>
-      <div><div class="stage">${esc(jobDay(j))}</div></div>
-    </div>
-    <div class="actions queue-actions">
-      <span></span>
-      <button class="icon-btn danger-ghost" data-delete="${esc(j.id)}" type="button" aria-label="Delete job" title="Delete job">${TRASH_ICON}</button>
-    </div>
-  </div>`;
-}
 
-const SUBMAGIC_BUSY={queued_upload:1,uploading:1,transcribing:1,queued_export:1,exporting:1,queued_apply:1,applying:1};
-function renderSubmagicRow(c,jid){
-  const st=c.submagic_status||null;
-  const cid=c.id;
-  if(!st||st==="failed"||st==="applied"){
-    // Resting state: nothing running yet, or a previous pass ended —
-    // offer to (re)try. "applied" still shows a small confirmation.
-    const appliedNote=st==="applied"?`<div class="hint">Using Submagic's render as this candidate's final video. You can try again to generate a fresh one.</div>`:"";
-    const err=st==="failed"&&c.submagic_error?`<div class="hint error-text">${esc(c.submagic_error)}</div>`:"";
-    return `<div class="candidate-submagic-row">
-      <button class="secondary" data-submagic-start="${esc(jid)}" data-cid="${esc(cid)}" type="button">✨ Try Submagic edit (immersive captions, zooms, B-roll)</button>
-      ${err}${appliedNote}
-    </div>`;
-  }
-  if(st==="queued_upload"||st==="uploading"){
-    return `<div class="candidate-submagic-row"><button class="secondary" type="button" disabled>Uploading to Submagic…</button></div>`;
-  }
-  if(st==="transcribing"){
-    return `<div class="candidate-submagic-row"><button class="secondary" type="button" disabled>Transcribing with Submagic…</button></div>`;
-  }
-  if(st==="transcribed"){
-    return `<div class="candidate-submagic-row">
-      <button data-submagic-export="${esc(jid)}" data-cid="${esc(cid)}" type="button">Render with Submagic</button>
-      <div class="hint">This triggers Submagic's real (billable on their end) render — hook, template, zooms and B-roll all applied. You'll get a link to review before using it anywhere.</div>
-    </div>`;
-  }
-  if(st==="queued_export"||st==="exporting"){
-    return `<div class="candidate-submagic-row"><button class="secondary" type="button" disabled>Rendering with Submagic…</button></div>`;
-  }
-  if(st==="completed"){
-    return `<div class="candidate-submagic-row">
-      <div class="actions">
-        ${c.submagic_preview_url?`<a href="${esc(c.submagic_preview_url)}" target="_blank" rel="noopener"><button class="secondary" type="button">Review on Submagic ↗</button></a>`:""}
-        ${(()=>{const bad=ruleFailures(c);return `<button data-submagic-use="${esc(jid)}" data-cid="${esc(cid)}" type="button" ${bad.length?"disabled":""}>${bad.length?`Fix ${bad.length} rule${bad.length===1?"":"s"} to use as final`:"Use as final render"}</button>`})()}
-      </div>
-      <div class="hint">Watch the Submagic render first — only "Use as final render" replaces this candidate's output.</div>
-    </div>`;
-  }
-  if(st==="queued_apply"||st==="applying"){
-    return `<div class="candidate-submagic-row"><button class="secondary" type="button" disabled>Applying Submagic render…</button></div>`;
-  }
-  return "";
-}
-function watchSubmagic(jid,cid){
-  const key="sw_"+cid;
-  if(window[key])clearInterval(window[key]);
-  let n=0;
-  window[key]=setInterval(async()=>{
-    n++;
-    try{
-      const j=await api("/api/jobs/"+jid),c=(j.candidates||[]).find(x=>String(x.id)===String(cid));
-      if(!c||n>150){clearInterval(window[key]);return}
-      const row=document.querySelector(`#candidate-${css(cid)} .candidate-submagic-row`);
-      if(row)row.outerHTML=renderSubmagicRow(c,jid);
-      if(!SUBMAGIC_BUSY[c.submagic_status]){
-        clearInterval(window[key]);
-        if(currentTab==="queue")await openQueueJob(jid);
-      }
-    }catch(e){clearInterval(window[key])}
-  },2500);
-}
-async function submagicStart(jid,cid){
-  try{await api(`/api/jobs/${jid}/candidates/${cid}/submagic/start`,{method:"POST"});await openQueueJob(jid);watchSubmagic(jid,cid)}
-  catch(e){alert("Couldn't start Submagic: "+e.message)}
-}
-async function submagicExport(jid,cid){
-  try{await api(`/api/jobs/${jid}/candidates/${cid}/submagic/export`,{method:"POST"});await openQueueJob(jid);watchSubmagic(jid,cid)}
-  catch(e){alert("Couldn't start Submagic render: "+e.message)}
-}
-async function submagicUseAsFinal(jid,cid){
-  if(!confirm("Replace this candidate's final render with the Submagic version?"))return;
-  try{await api(`/api/jobs/${jid}/candidates/${cid}/submagic/use-as-final`,{method:"POST"});await openQueueJob(jid);watchSubmagic(jid,cid)}
-  catch(e){alert("Couldn't apply Submagic render: "+e.message)}
-}
-function renderCandidate(c,jid,platform,job={}){
-  const preview=(c.preview_url||c.preview_path)?mediaUrl(`${API}/api/jobs/${jid}/candidates/${c.id}/preview`):null;
-  const final=(c.final_url||c.final_path||c.render_path)?mediaUrl(`${API}/api/jobs/${jid}/candidates/${c.id}/render`):null;
-  const cacheBust=c.updated_at?`?t=${encodeURIComponent(c.updated_at)}`:"";
-  const thumb=mediaUrl(`${API}/api/jobs/${jid}/candidates/${c.id}/thumbnail${cacheBust}`);
-  const src=final||preview;
-  // QA #1: override only exists when the user edited the lines ("" = cleared); otherwise the transcript.
-  const sub=String(c.subtitle_override||c.subtitle_text||"").toUpperCase();
-  const transcriptSub=String(c.subtitle_text||"").toUpperCase();
-  const title=c.manual_title||c.title||c.generated_title||hookTitle(sub)||"AI-Generated Highlight";
-  const type=c.content_type||"Reality";
-  const rating=Math.max(1,Math.min(10,Number(c.rating||5)));
-  // Subtitle style: job-level (jobs.subtitle_*), unless this clip has its own preset (108: edit_spec.caption).
-  const ss=c.subtitle_style??job.subtitle_style,cap=c.edit_spec?.caption||{};
-  const jobStyle=typeof job.subtitle_style==="object"&&job.subtitle_style?(job.subtitle_style.style||"outline"):(job.subtitle_style||"outline");
-  const jobAnim=(typeof job.subtitle_style==="object"&&job.subtitle_style?job.subtitle_style.animation:null)||job.subtitle_animation||"karaoke";
-  if(!kwState[c.id]||!kwState[c.id].dirty)kwState[c.id]={set:new Set(c.edit_spec?.keywords||[]),color:c.edit_spec?.keyword_color||null,dirty:false,initialColor:c.edit_spec?.keyword_color||null};
-  const styleName=cap.style||(typeof ss==="object"&&ss?(ss.style||"outline"):(ss||"outline"));
-  const fontName=c.subtitle_font||job.subtitle_font||ss?.font||"Liberation Sans Bold";
-  const size=Number(c.subtitle_size||job.subtitle_size||ss?.size||42);
-  const animName=cap.animation||(typeof ss==="object"&&ss?ss.animation:null)||c.subtitle_animation||job.subtitle_animation||"karaoke";
-  const burnSubs=job.burn_subtitles!==false;  // R-09: NULL/missing = on
-  const wmW=Number(job.watermark_width??settingsCache.WATERMARK_WIDTH?.value??320)||320;
-  const wmPct=Math.round(100*Number(job.watermark_opacity??settingsCache.WATERMARK_OPACITY?.value??1));
-  const busy=isBusy(c.status);
-  const thumbOptions=Array.isArray(c.thumbnail_options)?c.thumbnail_options:[];
-  const pickedIdx=thumbSelection[c.id];
-  return `<article class="candidate-card" id="candidate-${esc(c.id)}">
-    <div class="candidate-top">
-      <h3 class="candidate-title">${esc(title)}</h3>
-      <div class="candidate-top-actions">
-        <span class="badge ${badgeClass(c.status)}">${esc(stageLabel(c.status||"candidate"))}</span>
-        <button class="secondary preview-edit" data-edit="${esc(c.id)}" type="button" aria-expanded="${document.getElementById("candidate-"+c.id)?.classList.contains("editing")?"true":"false"}">${document.getElementById("candidate-"+c.id)?.classList.contains("editing")?"Close edit":"Edit"}</button>
-        <a class="secondary btn-link" href="#editor/${esc(jid)}/${esc(c.id)}" data-open-editor>Open editor</a>
-      </div>
-    </div>
-    ${clipReasonHtml(c)}
-    ${renderWarningsHtml(c)}
-    ${ruleChipsHtml(c,jid)}
-    ${c.status==="failed"?`<div class="retry-banner ${c.error_class==="transient"?"transient":"permanent"}" role="status">
-      <span>${esc(c.message||"This clip failed.")}</span>
-      <button class="secondary" data-retry-candidate="${esc(jid)}" data-cid="${esc(c.id)}" type="button">Retry</button>
-    </div>`:""}
-    ${renderSubmagicRow(c,jid)}
-
-    <div class="preview-layout">
-      ${src?`<div>
-        <div class="preview-frame">
-          <video controls playsinline preload="metadata" poster="${esc(thumb)}" src="${esc(src)}"></video>
-          <div class="preview-badges"><span class="chip chip-genre">${esc(type)}</span></div>
-          ${c.score==null||c.score===""?`<div class="preview-badges-right"><span class="chip chip-rating">★ ${esc(rating)}/10</span></div>`:""}<!-- 119: one score per card: the AI estimate when there is one -->
-          <div class="preview-footer">${platformIcon(platform,"sm")}</div>
-        </div>
-        <div class="preview-note">Thumbnail appears before playback · ${burnSubs?"subtitle is burned into the video itself.":"subtitles are off for this job (clean video)."}</div>
-      </div>`:`<div class="empty">Preview is not ready yet.</div>`}
-    </div>
-
-    <div class="edit-drawer">
-      <div class="edit-drawer-inner">
-        <div class="edit-title"><strong>Candidate editing</strong><span>changes regenerate this preview</span></div>
-        ${editTabsHtml(c.id)}
-
-        <p class="edit-moved">Captions (style, presets, keywords, position, text + Fix typos), new hook, Effects and Audio are in the <a href="#editor/${esc(jid)}/${esc(c.id)}" data-open-editor>Editor</a>.</p>
-
-        ${editPanelOpen(c.id,"export")}
-        <div class="edit-section">
-          <label class="burn-toggle"><input type="checkbox" id="burn-${esc(c.id)}" ${burnSubs?"checked":""} data-initial="${burnSubs?"1":"0"}"> Burn subtitles into video</label>
-          <div class="hint">Off exports a clean video without captions. Shared by every clip of this job.</div>
-        </div>
-
-        <details class="edit-more" data-edit-more="desc" data-cid="${esc(c.id)}" ${editMoreOpen[c.id+":desc"]?"open":""}>
-          <summary aria-expanded="${editMoreOpen[c.id+":desc"]?"true":"false"}"><h4>Description</h4><span class="muted">${esc(c.description?String(c.description).slice(0,60):"Not written yet")}</span><span class="chev" aria-hidden="true"></span></summary>
-          <div class="edit-more-body">
-            <div class="edit-section-tools">
-              <button class="mini-ai-btn ai-highlight" data-gen-desc="${esc(jid)}" data-cid="${esc(c.id)}" type="button" ${busy?"disabled":""}>Generate description (AI)</button>
-            </div>
-            <label class="edit-subtle-label" for="desc-${esc(c.id)}">Shorts / Reels caption</label>
-            <textarea id="desc-${esc(c.id)}" placeholder="Generate a caption with AI, or write your own…">${esc(c.description||"")}</textarea>
-          </div>
-        </details>
-
-        <details class="edit-more" data-edit-more="thumb" data-cid="${esc(c.id)}" ${editMoreOpen[c.id+":thumb"]?"open":""}>
-          <summary aria-expanded="${editMoreOpen[c.id+":thumb"]?"true":"false"}"><h4>Thumbnail</h4><span class="muted">${thumbOptions.length?`${thumbOptions.length} option${thumbOptions.length===1?"":"s"}${c.thumbnail_locked?" · picked":""}`:"No options yet"}</span><span class="chev" aria-hidden="true"></span></summary>
-          <div class="edit-more-body">
-            <div class="thumb-head-actions edit-section-tools">
-              <button class="mini-ai-btn ai-highlight" data-gen-thumbs="${esc(jid)}" data-cid="${esc(c.id)}" type="button" ${busy?"disabled":""}>${busy&&c.status==="thumbnail_rendering"?"Generating…":"Generate thumbnails (AI)"}</button>
-              <label class="mini-ai-btn thumb-upload-btn" ${busy?"aria-disabled=\"true\"":""}>Upload thumbnail<input type="file" accept="image/*" data-upload-thumb="${esc(jid)}" data-cid="${esc(c.id)}" ${busy?"disabled":""} hidden></label>
-            </div>
-          <label class="edit-subtle-label">AI-styled + hook headline, 3 options — or upload your own</label>
-          ${thumbOptions.length?(()=>{
-            const initialIdx=thumbOptions.findIndex((_,i)=>(pickedIdx===i)||(pickedIdx===undefined&&c.thumbnail_path===thumbOptions[i]));
-            const startIdx=initialIdx>=0?initialIdx:0;
-            return `<div class="thumb-slider" id="thumbSlider-${esc(c.id)}">
-            <button type="button" class="thumb-nav prev" data-thumb-nav="${esc(c.id)}" data-dir="-1" aria-label="Previous thumbnail option" ${startIdx===0?"disabled":""}>${CHEVRON_LEFT}</button>
-            <div class="thumb-slider-viewport">
-              <div class="thumb-slider-track" id="thumbTrack-${esc(c.id)}" data-active="${startIdx}" style="transform:translateX(${-startIdx*100}%)">${thumbOptions.map((_,i)=>{
-                const sel=(pickedIdx===i)||(pickedIdx===undefined&&c.thumbnail_path===thumbOptions[i]);
-                return `<div class="thumb-slide">
-                  <button type="button" class="thumb-option ${sel?"selected":""}" data-pick-thumb="${esc(jid)}" data-cid="${esc(c.id)}" data-idx="${i}" aria-label="Use thumbnail option ${i+1}">
-                    <img src="${esc(mediaUrl(`${API}/api/jobs/${jid}/candidates/${c.id}/thumbnail-options/${i}${cacheBust}`))}" alt="Thumbnail option ${i+1}" loading="lazy" onload="this.classList.add('loaded')" onerror="this.classList.add('broken');this.closest('.thumb-option')?.classList.add('has-broken')">
-                    <div class="thumb-option-footer">${platformIcon(platform,"sm")}</div>
-                    <span class="thumb-broken-note">Preview unavailable</span>
-                    <span class="thumb-check">✓</span>
-                  </button>
-                </div>`;
-              }).join("")}</div>
-            </div>
-            <button type="button" class="thumb-nav next" data-thumb-nav="${esc(c.id)}" data-dir="1" aria-label="Next thumbnail option" ${startIdx===thumbOptions.length-1?"disabled":""}>${CHEVRON_RIGHT}</button>
-          </div>
-          <div class="thumb-dots">${thumbOptions.map((_,i)=>`<button type="button" class="thumb-dot ${i===startIdx?"active":""}" data-thumb-dot="${esc(c.id)}" data-idx="${i}" aria-label="Show option ${i+1}"></button>`).join("")}</div>
-          <div class="hint">Slide to browse, tap the one you want to pick it — then hit Apply changes.</div>`;
-          })()
-          :`<div class="hint">${busy&&c.status==="thumbnail_rendering"?"AI thumbnails are being generated…":"No AI thumbnails yet — generate 3 options above."}</div>`}
-          </div>
-        </details>
-
-        </div>
-
-        ${editPanelOpen(c.id,"watermark")}
-        <div class="edit-section">
-          <div class="edit-section-head"><h4>Watermark</h4><span class="muted small">${wmW}px · ${wmPct}%</span></div>
-            <label class="edit-subtle-label">Shared by every clip of this job · ${job.watermark_width==null&&job.watermark_opacity==null?"global default":"custom for this job"}</label>
-            <div class="edit-style-row">
-              <div><label for="wmw-${esc(c.id)}">Size <span id="wmwVal-${esc(c.id)}">${wmW}px</span></label><input id="wmw-${esc(c.id)}" type="range" min="200" max="900" step="10" value="${wmW}" data-initial="${wmW}"></div>
-              <div><label for="wmo-${esc(c.id)}">Opacity <span id="wmoVal-${esc(c.id)}">${wmPct}%</span></label><input id="wmo-${esc(c.id)}" type="range" min="10" max="100" step="5" value="${wmPct}" data-initial="${wmPct}"></div>
-            </div>
-            <div class="wm-size-bar" aria-hidden="true"><span id="wmBar-${esc(c.id)}" style="width:${(wmW/1080*100).toFixed(1)}%;opacity:${wmPct/100}"></span></div>
-            <div class="hint">Width in pixels on the 1080-wide video; the bar shows its share of the frame. Applied on the next preview and final render.</div>
-        </div>
-        </div>
-
-        <div class="edit-section">
-          <details class="version-history" data-versions-toggle="${esc(jid)}" data-cid="${esc(c.id)}">
-            <summary aria-expanded="false">Version history<span class="chev" aria-hidden="true"></span></summary>
-            <div id="versionsPanel-${esc(c.id)}" class="hint">Loading…</div>
-          </details>
-        </div>
-
-        <div class="actions edit-actions">
-          <button class="${busy?"is-busy":""}" data-apply="${esc(jid)}" data-cid="${esc(c.id)}" type="button" ${busy?'disabled aria-busy="true"':""}>${busy?"Updating…":"Apply changes"}</button>
-          ${(()=>{const bad=ruleFailures(c);return `<button class="secondary" data-approve="${esc(jid)}" data-cid="${esc(c.id)}" type="button" title="Approve renders the final video" ${busy||bad.length?"disabled":""}>${bad.length?`Fix ${bad.length} rule${bad.length===1?"":"s"} to approve`:"Approve"}</button>${bad.length?"":`<button class="secondary" data-approve-schedule="${esc(jid)}" data-cid="${esc(c.id)}" type="button" ${busy?"disabled":""}>${["render_queued","rendering","completed"].includes(c.status)?"Schedule":"Approve &amp; schedule"}</button>`}`})()}
-        </div>
-
-        ${final?`<div class="final-box"><strong>Final render ready</strong><div class="muted">Download the finished clip or send it to YouTube Shorts when OAuth is configured.</div><div class="actions"><a href="${esc(final)}" download="clipflow_${esc(c.id)}.mp4"><button type="button">Download</button></a><button class="secondary" data-upload="${esc(jid)}" data-cid="${esc(c.id)}" type="button">Upload to YouTube</button></div></div>`:""}
-      </div>
-    </div>
-  </article>`;
-}
 
 // Edit drawer tabs: buttons + panels are re-rendered with the card, the active tab lives in editTab[cid].
 // Inactive panels stay in the DOM (hidden), so Apply still reads every input.
-function editTabsHtml(cid){
-  const cur=editTab[cid]||EDIT_TABS[0][0],i=Math.max(0,EDIT_TABS.findIndex(t=>t[0]===cur));
-  return `<div class="edit-tabs" role="tablist" aria-label="Edit clip" style="--i:${i}"><span class="edit-tabs-ind" aria-hidden="true"></span>${EDIT_TABS.map(([id,n])=>
-    `<button type="button" role="tab" id="et-${esc(cid)}-${id}" aria-controls="etp-${esc(cid)}-${id}" aria-selected="${id===cur}" tabindex="${id===cur?0:-1}" data-edit-tab="${id}" data-cid="${esc(cid)}">${n}</button>`).join("")}</div>`;
-}
-function editPanelOpen(cid,id){
-  return `<div class="edit-tabpanel" role="tabpanel" id="etp-${esc(cid)}-${id}" aria-labelledby="et-${esc(cid)}-${id}" ${(editTab[cid]||EDIT_TABS[0][0])===id?"":"hidden"}>`;
-}
-function comingSoonHtml(title,what){
-  return `<div class="edit-section coming-soon"><div class="edit-section-head"><h4>${esc(title)}</h4><span class="tag">Coming soon</span></div><div class="hint">${esc(what)} Arrives with retention editing.</div></div>`;
-}
 function switchEditTab(cid,id,focus){
   const from=EDIT_TABS.findIndex(t=>t[0]===(editTab[cid]||EDIT_TABS[0][0])),to=EDIT_TABS.findIndex(t=>t[0]===id);
   if(to<0||from===to)return;
@@ -2746,76 +2449,18 @@ function switchEditTab(cid,id,focus){
 // Blocking failures gate Approve; the content check is a warning only (the user decides).
 // 110 (P1): the hook score the model returns (0-100, also what analysis ranks by) as "AI estimate", next to
 // the model's reason. Clips from before 110, or after "Get another hook", have no score: no chip.
-function clipReasonHtml(c){
-  const has=c.score!=null&&c.score!=="";if(!has&&!c.reason)return "";
-  const chip=has?`<span class="ai-est" title="The AI's own 0–100 estimate of how strong this hook is"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/></svg>AI estimate <b>${Math.round(Number(c.score))}</b></span>`:"";
-  return `<p class="clip-reason">${chip}${c.reason?`<span>${esc(c.reason)}</span>`:""}</p>`;
-}
-function ruleFailures(c){return (c.rule_checks||[]).filter(x=>x.blocking&&!x.ok)}
-function ruleChipsHtml(c,jid){
-  const rc=c.rule_checks||[];if(!rc.length)return "";
-  const fixLabel={hashtags:"Add hashtags",dismiss:"Dismiss"};
-  const chip=x=>{
-    const kind=x.ok?"ok":x.blocking?"bad":"warn",mark=x.ok?"✓":x.blocking?"✗":"⚠";
-    const fix=!x.ok&&x.fix?`<button class="plain-btn" type="button" data-rule-fix="${esc(x.fix)}" data-jid="${esc(jid)}" data-cid="${esc(c.id)}">${esc(fixLabel[x.fix]||"Fix")}</button>`:"";
-    const why=x.id==="safety"&&!x.ok?`<details class="rule-why"><summary>Why?</summary><p>${esc(x.detail)}</p></details>`:"";
-    return `<span class="rule-row"><span class="rule-chip ${kind}" title="${esc(x.detail||"")}">${mark} ${esc(x.label)}</span>${fix}${why}</span>`;
-  };
-  const bad=ruleFailures(c);
-  return `<div class="rule-chips" role="group" aria-label="Campaign rules">${rc.map(chip).join("")}</div>
-    <p class="approve-hint">${bad.length?`Fix ${bad.length} rule${bad.length===1?"":"s"} to approve.`:"All campaign rules pass."}</p>`;
-}
-async function fixRule(jid,cid,rule,btn){
-  setBusy(btn,true,"…");
-  try{await api(`/api/jobs/${jid}/candidates/${cid}/fix-rule`,{method:"POST",body:JSON.stringify({rule})});await openQueueJob(jid)}
-  catch(e){setBusy(btn,false);alert("Could not fix: "+e.message)}
-}
 
-function renderWarningsHtml(c){
-  const w=Array.isArray(c.render_warnings)?c.render_warnings:[];
-  return w.length?`<div class="render-warnings" role="status">${w.map(x=>`<span class="render-warn" title="${esc(x.message||"")}">⚠ ${esc(x.message||x.code)}</span>`).join("")}</div>`:"";
-}
 
 // 108 (P1): caption preset cards = fixed style+animation pairs (both are real ASS in make_ass()). Picking one
 // sets this clip's Font style + Animation selects (still there as the custom option); Apply stores it as the
 // clip's own preset (edit_spec.caption) or clears it when it equals the job style.
 const CAPTION_PRESETS=[["karaoke","Karaoke","outline","karaoke"],["pop","Word pop","impact","word_pop"],["hormozi","Hormozi","hormozi","bounce"],
   ["clean","Clean","clean","fade_settle"],["neon","Neon","neon","typewriter"],["boxed","Boxed","boxed","word_pop"]];
-function presetTileStyle(style){
-  const c=SUBTITLE_STYLE_PREVIEW[style]||SUBTITLE_STYLE_PREVIEW.bold,o=Math.max(1,c.outline*.45);
-  const stroke=c.box?"":`text-shadow:${[[-1,-1],[1,-1],[-1,1],[1,1],[0,1.4]].map(([x,y])=>`${(x*o).toFixed(1)}px ${(y*o).toFixed(1)}px 0 #000`).join(",")};`;
-  return `--pt-rest:${c.resting};--pt-hi:${c.highlight};font-weight:${c.weight};letter-spacing:${c.letterSpacing};${stroke}${c.box?"--pt-box:1;":""}`;
-}
-function captionPresetsHtml(cid,jid,style,anim,jobStyle,jobAnim,own){
-  const cur=CAPTION_PRESETS.find(p=>p[2]===style&&p[3]===anim);
-  return `<div class="cap-presets" data-cid="${esc(cid)}" data-job-style="${esc(jobStyle)}" data-job-anim="${esc(jobAnim)}">
-    <div class="cap-presets-head"><label>Preset</label><span class="muted small" data-preset-note>${cur?"":"Custom (style + animation below)"}${own?" · this clip only":""}</span>
-      <button class="mini-ai-btn" type="button" data-preset-all="${esc(jid)}" data-cid="${esc(cid)}">Apply to all clips in this job</button></div>
-    <div class="cap-preset-grid" role="group" aria-label="Caption preset">${CAPTION_PRESETS.map(([id,label,st,an])=>`<button type="button" class="cap-preset" data-preset="${id}" data-cid="${esc(cid)}" aria-pressed="${cur&&cur[0]===id?"true":"false"}">
-      <span class="cap-preset-tile${(SUBTITLE_STYLE_PREVIEW[st]||{}).box?" boxed":""}" style="${presetTileStyle(st)}"><span>THIS</span> <span class="hi">CHANGES</span> <span>IT</span></span>
-      <span class="cap-preset-name">${esc(label)}</span><span class="cap-preset-anim">${esc((SUBTITLE_ANIMATIONS.find(a=>a[0]===an)||[,an])[1])}</span></button>`).join("")}</div></div>`;
-}
 function syncPresetCards(cid){
   const st=$("style-"+cid)?.value,an=$("anim-"+cid)?.value,wrap=document.querySelector(`.cap-presets[data-cid="${css(cid)}"]`);if(!wrap)return;
   const cur=CAPTION_PRESETS.find(p=>p[2]===st&&p[3]===an);
   wrap.querySelectorAll("[data-preset]").forEach(b=>b.setAttribute("aria-pressed",String(!!cur&&b.dataset.preset===cur[0])));
   const note=wrap.querySelector("[data-preset-note]");if(note)note.textContent=cur?"":"Custom (style + animation below)";
-}
-function pickCaptionPreset(cid,id){
-  const p=CAPTION_PRESETS.find(x=>x[0]===id);if(!p)return;
-  const st=$("style-"+cid),an=$("anim-"+cid);if(st)st.value=p[2];if(an)an.value=p[3];
-  syncPresetCards(cid);updateCaptionPreview(cid);
-}
-async function applyPresetToAll(jid,cid,btn){
-  const style=$("style-"+cid)?.value,animation=$("anim-"+cid)?.value;if(!style||!animation)return;
-  const name=(CAPTION_PRESETS.find(p=>p[2]===style&&p[3]===animation)||[,"this style"])[1];
-  if(!confirm(`Use ${name} for every clip in this job? Clips waiting for review re-render their preview; finished clips need a new final render.`))return;
-  setBusy(btn,true,"Applying…");
-  try{
-    const r=await api(`/api/jobs/${jid}/caption-preset`,{method:"POST",body:JSON.stringify({style,animation})});
-    (r.queued||[]).forEach(id=>watchCandidate(jid,id));
-    setBusy(btn,false);showToast(`${name} applied to all clips · ${(r.queued||[]).length} preview${(r.queued||[]).length===1?"":"s"} re-rendering`);
-  }catch(e){setBusy(btn,false);alert("Could not apply to all clips: "+e.message)}
 }
 
 // 111 (P1): keyword highlight. AI-picked at preview build (edit_spec.keywords); the strip below the
@@ -2834,30 +2479,7 @@ function kwHtml(cid,word){const st=kwState[cid],t=kwToken(word);return st&&t&&st
 // 112 (P1): per-clip caption position (edit_spec.caption_y, % from top). Auto = today's placement
 // (seam with a camera panel, FULLFRAME_CAPTION_Y full-frame); custom moves captions off in-game HUD.
 // With a camera panel the worker never moves them below the seam.
-function captionPosHtml(c){
-  const y=c.edit_spec?.caption_y,on=y!=null,v=on?y:Number(settingsCache.FULLFRAME_CAPTION_Y?.value||78);
-  return `<div class="cap-pos">
-    <div class="cap-pos-head"><label for="capy-${esc(c.id)}">Caption position</label>
-      <label class="cap-pos-toggle"><input type="checkbox" id="capyon-${esc(c.id)}" data-initial="${on?"1":"0"}" ${on?"checked":""}> Custom for this clip</label></div>
-    <div class="cap-pos-row"><input type="range" id="capy-${esc(c.id)}" min="30" max="85" step="1" value="${esc(v)}" data-initial="${esc(v)}" ${on?"":"disabled"} aria-describedby="capyHint-${esc(c.id)}">
-      <output id="capyVal-${esc(c.id)}">${on?esc(v)+" %":"Auto"}</output></div>
-    <div class="hint" id="capyHint-${esc(c.id)}">% from the top. Lower numbers move captions up (off in-game HUD); platform buttons cover the bottom ~13 %. With a facecam panel captions stay above it.</div></div>`;
-}
-function captionPosPatch(cid){
-  const on=$(`capyon-${cid}`),r=$(`capy-${cid}`);if(!on||!r)return undefined;
-  const was=on.dataset.initial==="1",now=on.checked;
-  if(!now)return was?null:undefined;           // back to Auto (or untouched)
-  if(!was||r.value!==r.dataset.initial)return Number(r.value);
-  return undefined;
-}
 
-function keywordBoxHtml(cid){
-  const st=kwState[cid];
-  return `<div class="kw-box" data-cid="${esc(cid)}">
-    <div class="kw-head"><label>Keyword highlight</label><span class="muted small" id="kwNote-${esc(cid)}"></span>
-      <div class="kw-swatches" role="group" aria-label="Keyword colour">${KW_COLORS.map(([c,n])=>`<button type="button" class="kw-sw" style="--sw:${c}" aria-label="${n}" title="${n}" data-kw-color="${c}" data-cid="${esc(cid)}" aria-pressed="false"></button>`).join("")}</div></div>
-    <div class="kw-strip" id="kwStrip-${esc(cid)}" role="group" aria-label="Caption words: tap to highlight"></div></div>`;
-}
 function renderKwStrip(cid){
   const strip=$(`kwStrip-${cid}`),st=kwState[cid];if(!strip||!st)return;
   const seen=new Set(),words=[];
@@ -2868,8 +2490,6 @@ function renderKwStrip(cid){
   const n=st.set.size,note=$(`kwNote-${cid}`);if(note)note.textContent=n?`${n} highlighted · tap a word to toggle`:"Tap a word to highlight it";
 }
 function toggleKeyword(cid,token){const st=kwState[cid];if(!st)return;st.set.has(token)?st.set.delete(token):st.set.add(token);st.dirty=true;renderKwStrip(cid);updateCaptionPreview(cid)}
-function setKeywordColor(cid,color){const st=kwState[cid];if(!st)return;st.color=color;st.dirty=true;
-  document.querySelectorAll(`[data-kw-color][data-cid="${css(cid)}"]`).forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.kwColor===color)));renderKwStrip(cid);updateCaptionPreview(cid)}
 
 function updateCaptionPreview(cid){
   const styleSel=$(`style-${cid}`),fontSel=$(`font-${cid}`),sizeInput=$(`size-${cid}`),animSel=$(`anim-${cid}`);
@@ -2948,39 +2568,6 @@ function updateCaptionPreview(cid){
   }
 }
 REDUCED_MOTION.addEventListener("change",()=>document.querySelectorAll("[id^=capPreviewText-]").forEach(el=>updateCaptionPreview(el.id.slice("capPreviewText-".length))));
-function initCaptionPreviews(candidates){(candidates||[]).forEach(c=>updateCaptionPreview(c.id))}
-function initVersionHistory(candidates){
-  (candidates||[]).forEach(c=>{
-    const det=document.querySelector(`details[data-versions-toggle][data-cid="${css(c.id)}"]`);
-    if(!det||det._wired)return;
-    det._wired=true;
-    det.addEventListener("toggle",()=>{
-      if(det.open)loadCandidateVersions(det.dataset.versionsToggle,c.id);
-    });
-  });
-}
-async function loadCandidateVersions(jid,cid){
-  const panel=$("versionsPanel-"+cid);
-  if(!panel)return;
-  panel.textContent="Loading…";
-  try{
-    const r=await api(`/api/jobs/${jid}/candidates/${cid}/versions`);
-    const versions=r.versions||[];
-    if(!versions.length){panel.innerHTML=`<div class="hint">No versions yet — one is recorded each time you apply changes, request a final render, or use a Submagic render.</div>`;return}
-    panel.innerHTML=versions.map(v=>`
-      <div class="version-row">
-        <div class="version-row-head"><strong>v${v.version}</strong> ${esc(v.label)}<span class="muted">${v.created_at?new Date(v.created_at).toLocaleString():""}</span></div>
-        <button type="button" class="secondary" data-restore-version="${esc(jid)}" data-cid="${esc(cid)}" data-version="${v.version}">Restore</button>
-      </div>`).join("");
-  }catch(e){panel.innerHTML=`<div class="error-box">${esc(e.message)}</div>`}
-}
-async function restoreCandidateVersion(jid,cid,version){
-  if(!confirm(`Restore version ${version}? This brings back that version's subtitle text, description and thumbnail, and regenerates the preview. Font style/animation settings (shared across the job) aren't affected.`))return;
-  try{
-    await api(`/api/jobs/${jid}/candidates/${cid}/versions/${version}/restore`,{method:"POST"});
-    watchCandidate(jid,cid);
-  }catch(e){alert("Restore failed: "+e.message)}
-}
 
 // The thumbnail slider is transform-driven (see thumbSlideTo below), not
 // native-scroll-based — this used to try to track a native scroll
@@ -2988,7 +2575,6 @@ async function restoreCandidateVersion(jid,cid,version){
 // prev/next and dot buttons did nothing. Slide position/disabled state
 // is baked into the initial render, so there's nothing left to wire up
 // after mount; kept as a no-op so existing call sites don't need touching.
-function initThumbCarousels(candidates){}
 function thumbSlideTo(cid,idx){
   const track=$(`thumbTrack-${cid}`);
   if(!track)return;
@@ -3015,35 +2601,7 @@ function updateWatermarkIndicator(cid){
   if($("wmoVal-"+cid))$("wmoVal-"+cid).textContent=o+"%";
   const bar=$("wmBar-"+cid);if(bar){bar.style.width=(w/1080*100).toFixed(1)+"%";bar.style.opacity=o/100}
 }
-function changedRenderOptions(cid){
-  // Only send what the user moved: an untouched job keeps NULL (= global default).
-  const out={},w=$("wmw-"+cid),o=$("wmo-"+cid);
-  if(w&&w.value!==w.dataset.initial)out.watermark_width=Number(w.value);
-  if(o&&o.value!==o.dataset.initial)out.watermark_opacity=Number(o.value)/100;
-  const burn=$("burn-"+cid);
-  if(burn&&(burn.checked?"1":"0")!==burn.dataset.initial)out.burn_subtitles=burn.checked;
-  return out;
-}
-document.addEventListener("change",e=>{
-  const m=e.target.id&&e.target.id.match(/^(style|font|size|anim|sub)-(.+)$/);
-  if(m)updateCaptionPreview(m[2]);
-  const sm=e.target.id&&e.target.id.match(/^(style|anim)-(.+)$/);if(sm)syncPresetCards(sm[2]);
-  const co=e.target.id&&e.target.id.match(/^capyon-(.+)$/);if(co){const r=$(`capy-${co[1]}`);if(r){r.disabled=!e.target.checked;$(`capyVal-${co[1]}`).textContent=e.target.checked?r.value+" %":"Auto"}}
-  const up=e.target.closest("[data-upload-thumb]");
-  if(up&&up.files&&up.files[0])uploadManualThumbnail(up.dataset.uploadThumb,up.dataset.cid,up.files[0]);
-});
 
-function renderDetail(j){
-  const candidates=j.candidates||[];
-  return `<div class="panel detail-head">
-    <div class="job-header">
-      <div><h2>${esc(jobDisplayTitle(j))}</h2><div class="job-id" title="${esc(j.id)}">${esc(shortId(j.id))}</div><div class="detail-meta"><span class="tag">${esc(stageLabel(j.status))}</span><span class="tag">${platformIcon(j.platform,"sm")}${esc(platformLabel(j.platform))}</span><span class="tag">${esc(String(j.split_ratio||70))}:${esc(String(100-Number(j.split_ratio||70)))}</span><span class="tag">${esc(jobLanguageLine(j).replace(/^Language: /,""))}</span></div></div>
-      <div class="actions" style="margin-top:0">${isCancellable(j.status)?`<button class="secondary cancel-job-btn" data-cancel-job="${esc(j.id)}" type="button">Cancel job</button>`:""}${j.status==="failed"?`<button class="secondary cancel-job-btn" data-retry-job="${esc(j.id)}" type="button">Retry job</button>`:""}<button class="secondary" data-back-queue type="button">Back</button></div>
-    </div>
-    <div class="muted" style="margin-top:7px">${esc(j.youtube_url||"")}</div>
-  </div>
-  <div class="candidate-pair">${candidates.map(c=>renderCandidate(c,j.id,j.platform,j)).join("")||`<div class="panel empty">No candidates are stored for this job.</div>`}</div>`;
-}
 
 async function loadCurrentJobs(){
   try{
@@ -3057,75 +2615,6 @@ async function loadCurrentJobs(){
     if(!box.querySelector(":scope>.job-card")){box.innerHTML=`<div class="panel error-box jobs-error">Cannot load active jobs: ${esc(e.message)}</div>`}
   }
 }
-async function loadQueue(){
-  try{
-    const d=await api("/api/jobs?scope=queue"),all=Array.isArray(d)?d:(d?.jobs||d?.items||[]);
-    // 081: filter by campaign ("" = all, "none" = jobs without one); only offered once a job has a campaign.
-    const used=[...new Set(all.map(j=>j.campaign).filter(Boolean))];
-    if(queueCampaignFilter&&queueCampaignFilter!=="none"&&!used.includes(queueCampaignFilter))queueCampaignFilter="";
-    const jobs=all.filter(j=>!queueCampaignFilter||(queueCampaignFilter==="none"?!j.campaign:j.campaign===queueCampaignFilter));
-    const filter=used.length?`<label class="queue-filter">Campaign <select id="queueCampaignFilter"><option value="">All</option>${used.map(c=>`<option value="${esc(c)}" ${c===queueCampaignFilter?"selected":""}>${esc(campaignName(c))}</option>`).join("")}<option value="none" ${queueCampaignFilter==="none"?"selected":""}>No campaign</option></select></label>`:"";
-    $("queueJobs").innerHTML=filter+(jobs.length?`<div class="queue-list">${jobs.map((j,i)=>renderQueueJob(j,i)).join("")}</div>`:queueCampaignFilter?`<div class="panel empty"><div class="empty-title">No jobs for this campaign</div></div>`:`<div class="panel empty"><div class="empty-title">No jobs to review yet</div><div class="empty-tip">Finished imports land here. Open one and use <b>Edit</b> on a clip to adjust its subtitle, font, style, title and rating, then render, download or publish.</div></div>`);
-  }catch(e){$("queueJobs").innerHTML=`<div class="panel error-box">Cannot load history: ${esc(e.message)}</div>`}
-}
-async function switchQueueView(showDetail){
-  const list=$("queueJobs"),detail=$("queueDetail");
-  const prev=showDetail?list:detail;
-  const next=showDetail?detail:list;
-
-  prev.style.setProperty("--slide-out",showDetail?"-22px":"22px");
-  next.style.setProperty("--slide-in",showDetail?"22px":"-22px");
-
-  prev.classList.remove("switching-in");
-  prev.classList.add("switching-out");
-
-  await new Promise(resolve=>setTimeout(resolve,motionMs(300)));
-
-  prev.classList.remove("switching-out");
-  prev.classList.add("hidden");
-
-  next.classList.remove("hidden");
-  next.classList.remove("switching-in");
-  // Force a new animation frame so the entrance transition is always replayed.
-  void next.offsetWidth;
-  next.classList.add("switching-in");
-
-  setTimeout(()=>next.classList.remove("switching-in"),400);
-  renderFlow();syncPageTitle();
-}
-async function openQueueJob(id){
-  try{
-    const j=await api("/api/jobs/"+id);
-    const alreadyOpen=$("queueJobs").classList.contains("hidden");
-    $("queueDetail").innerHTML=renderDetail(j);
-    initCaptionPreviews(j.candidates||[]);
-    initThumbCarousels(j.candidates||[]);
-    initVersionHistory(j.candidates||[]);
-    if(alreadyOpen){
-      $("queueDetail").classList.remove("hidden");renderFlow();
-    }else{
-      await switchQueueView(true);
-      $("queueDetail").scrollIntoView({behavior:scrollMode(),block:"start"});
-    }
-  }catch(e){alert("Unable to open job: "+e.message)}
-}
-function closeQueueDetail(){
-  if($("queueDetail").classList.contains("hidden"))return;
-  switchQueueView(false);
-}
-async function openAsCurrent(id){
-  saveActive(id);showTab("current");await loadCurrentJobs();startPolling(id)
-}
-async function moveToQueue(id){
-  try{await api("/api/jobs/"+id+"/move-to-queue",{method:"POST"});if(String(activeJobId)===String(id)){stopPolling();saveActive(null)}await loadCurrentJobs();await loadQueue()}catch(e){alert(" failed: "+e.message)}
-}
-async function restoreJob(id){
-  try{await api("/api/jobs/"+id+"/restore",{method:"POST"});saveActive(id);closeQueueDetail();showTab("current");await loadCurrentJobs();startPolling(id)}catch(e){alert("Restore failed: "+e.message)}
-}
-async function deleteJob(id){
-  if(!confirm("Delete this job and its rendered files?"))return;
-  try{await api("/api/jobs/"+id,{method:"DELETE"});if(String(activeJobId)===String(id)){stopPolling();saveActive(null)}closeQueueDetail();await loadCurrentJobs();await loadQueue()}catch(e){alert("Delete failed: "+e.message)}
-}
 async function refreshJob(id){
   try{
     const j=await api("/api/jobs/"+id);
@@ -3135,7 +2624,7 @@ async function refreshJob(id){
     }
     if(TERMINAL.includes(j.status)){
       stopPolling();saveActive(null);
-      await loadCurrentJobs();await loadQueue();
+      await loadCurrentJobs();
       if(currentTab==="queue") await refreshRunningJobs();
       updateJobIsland();
     }
@@ -3151,13 +2640,8 @@ async function retryJob(id,btn){
   try{
     await api(`/api/jobs/${id}/retry`,{method:"POST"});
     startPolling(id);
-    await Promise.allSettled([loadCurrentJobs(),refreshRunningJobs(),currentTab==="queue"?loadQueue():null]);
+    await Promise.allSettled([loadCurrentJobs(),refreshRunningJobs()] );
   }catch(e){setBusy(btn,false);alert("Could not retry: "+e.message)}
-}
-async function retryCandidate(jid,cid,btn){
-  setBusy(btn,true,"Retrying…");
-  try{await api(`/api/jobs/${jid}/candidates/${cid}/retry`,{method:"POST"});watchCandidate(jid,cid)}
-  catch(e){setBusy(btn,false);alert("Could not retry: "+e.message)}
 }
 async function cancelJob(id,btn){
   if(!confirm("Cancel this job? Work in progress stops and can't be resumed."))return;
@@ -3167,37 +2651,13 @@ async function cancelJob(id,btn){
     // Stop this job's pollers: the analysis poll and its candidate watchers.
     if(String(activeJobId)===String(id))stopPolling();
     document.querySelectorAll('[id^="candidate-"]').forEach(el=>{const cid=el.id.slice(10);if(window["cw_"+cid]&&$("queueDetail")?.contains(el)){clearInterval(window["cw_"+cid]);delete window["cw_"+cid]}});
-    await Promise.allSettled([loadCurrentJobs(),refreshRunningJobs(),currentTab==="queue"?loadQueue():null]);
+    await Promise.allSettled([loadCurrentJobs(),refreshRunningJobs()] );
   }catch(e){setBusy(btn,false);alert("Could not cancel: "+e.message)}
 }
 
-function toggleCandidateEdit(cid){
-  const el=$("candidate-"+cid);if(!el)return;
-  el.classList.remove("no-enter");el.classList.toggle("editing");
-  const open=el.classList.contains("editing");
-  const b=el.querySelector("[data-edit]");if(b){b.textContent=open?"Close edit":"Edit";b.setAttribute("aria-expanded",String(open))}
-  renderFlow();syncPageTitle();
-}
 // 165: the old panel applies only what it still holds (description, thumbnail, watermark + burn-in). Caption
 // style/font/size/animation, subtitle text, keywords and position are the Editor page's now: never sent from here,
 // or an Apply would overwrite the Editor's choices with this panel's stale inputs.
-async function applyEdits(jid,cid){
-  const desc=($("desc-"+cid)?.value||"").trim();
-  const thumbIdx=thumbSelection[cid];
-  const patch={description:desc};
-  if(thumbIdx!==undefined)patch.selected_thumbnail_index=thumbIdx;
-  const b=document.querySelector(`[data-apply="${css(jid)}"][data-cid="${css(cid)}"]`);
-  if(b?.disabled)return;
-  setBusy(b,true,"Applying…");
-  try{
-    await api(`/api/jobs/${jid}/candidates/${cid}`,{method:"PATCH",body:JSON.stringify(patch)});
-    const renderOpts=changedRenderOptions(cid);
-    if(Object.keys(renderOpts).length)await api(`/api/jobs/${jid}/render-options`,{method:"PATCH",body:JSON.stringify(renderOpts)});
-    await api(`/api/jobs/${jid}/candidates/${cid}/regenerate-preview`,{method:"POST"});
-    delete thumbSelection[cid];
-    watchCandidate(jid,cid);
-  }catch(e){setBusy(b,false);alert("Could not regenerate preview: "+e.message)}
-}
 function pickThumbnail(jid,cid,idx){
   thumbSelection[cid]=idx;
   const card=document.getElementById("candidate-"+cid);
@@ -3218,57 +2678,6 @@ function clearCandidateActiveTask(cid){
   delete candidateActiveTasks[cid];
   updateJobIsland();renderJobOverlay();
 }
-function watchCandidate(jid,cid){
-  const old=window["cw_"+cid];if(old)clearInterval(old);
-  let n=0;
-  window["cw_"+cid]=setInterval(async()=>{
-    n++;
-    try{
-      const j=await api("/api/jobs/"+jid),c=(j.candidates||[]).find(x=>String(x.id)===String(cid));
-      if(!c||n>90){clearInterval(window["cw_"+cid]);clearCandidateActiveTask(cid);return}
-      const detail=document.getElementById("queueDetail"),card=document.getElementById("candidate-"+cid);
-      if(currentTab==="queue"&&detail&&card){
-        const wasEditing=card.classList.contains("editing");
-        const tmp=document.createElement("div");tmp.innerHTML=renderCandidate(c,jid,j.platform,j);const next=tmp.firstElementChild;
-        if(wasEditing)next.classList.add("editing","no-enter");
-        card.replaceWith(next);
-        updateCaptionPreview(cid);
-        initThumbCarousels([c]);
-        initVersionHistory([c]);
-      }
-      if(isBusy(c.status)){
-        setCandidateActiveTask(jid,cid,{status:c.status,progress:c.progress,message:c.message,
-          title:j.custom_title||c.manual_title||c.title||platformLabel(j.platform)});
-      }else{
-        clearCandidateActiveTask(cid);
-        await openQueueJob(jid);
-      }
-    }catch(e){clearInterval(window["cw_"+cid]);clearCandidateActiveTask(cid)}
-  },2000);
-}
-async function getHook(jid,cid){
-  const b=document.querySelector(`[data-hook="${css(jid)}"][data-cid="${css(cid)}"]`);
-  if(b?.disabled)return;
-  if(!confirm("Replace this candidate with another AI-selected moment?"))return;
-  setBusy(b,true,"Finding hook…")
-  setCandidateActiveTask(jid,cid,{actionLabel:"Finding new hook (AI)",status:"queued",progress:0});
-  try{await api(`/api/jobs/${jid}/candidates/${cid}/new-hook`,{method:"POST"});watchCandidate(jid,cid)}
-  catch(e){setBusy(b,false);clearCandidateActiveTask(cid);alert(/^No new distinct moment/.test(e.message)?e.message:"Get another hook failed: "+e.message)}
-}
-async function fixSubtitleAI(jid,cid){
-  const b=document.querySelector(`[data-fix-subtitle="${css(jid)}"][data-cid="${css(cid)}"]`);
-  if(b?.disabled)return;
-  setBusy(b,true,"Fixing typos…")
-  try{
-    const r=await api(`/api/jobs/${jid}/candidates/${cid}/fix-subtitle-ai`,{method:"POST"});
-    const ta=$("sub-"+cid);
-    if(ta&&r.subtitle_text){
-      ta.value=r.subtitle_text.toUpperCase();
-      updateCaptionPreview(cid);
-    }
-  }catch(e){alert("AI subtitle fix failed: "+e.message)}
-  finally{setBusy(b,false)}
-}
 async function generateDescriptionAI(jid,cid){
   const b=document.querySelector(`[data-gen-desc="${css(jid)}"][data-cid="${css(cid)}"]`);
   if(b?.disabled)return;
@@ -3282,40 +2691,6 @@ async function generateDescriptionAI(jid,cid){
     const ta=$("desc-"+cid);if(ta)ta.value=r.description||"";
   }catch(e){alert("AI description failed: "+e.message)}
   finally{setBusy(b,false);clearCandidateActiveTask(cid)}
-}
-async function generateThumbnailsAI(jid,cid){
-  const b=document.querySelector(`[data-gen-thumbs="${css(jid)}"][data-cid="${css(cid)}"]`);
-  if(b?.disabled)return;
-  setBusy(b,true,"Generating thumbnails…")
-  setCandidateActiveTask(jid,cid,{actionLabel:"Generating AI thumbnails",status:"thumbnail_queued",progress:0});
-  try{
-    delete thumbSelection[cid];
-    await api(`/api/jobs/${jid}/candidates/${cid}/generate-thumbnails-ai`,{method:"POST"});
-    watchCandidate(jid,cid);
-  }catch(e){setBusy(b,false);clearCandidateActiveTask(cid);alert("AI thumbnail generation failed: "+e.message)}
-}
-async function uploadManualThumbnail(jid,cid,file){
-  const input=document.querySelector(`[data-upload-thumb="${css(jid)}"][data-cid="${css(cid)}"]`);
-  const label=input?.closest(".thumb-upload-btn");
-  setBusy(label,true,"Uploading…");
-  try{
-    const form=new FormData();
-    form.append("file",file);
-    const r=await authFetch(`/api/jobs/${jid}/candidates/${cid}/thumbnail-upload`,{method:"POST",body:form});
-    let d=null;try{d=await r.json()}catch{}
-    if(!r.ok)throw new Error(d?.detail||`HTTP ${r.status}`);
-    if(typeof d.index==="number")pickThumbnail(jid,cid,d.index);
-    await openQueueJob(jid);
-  }catch(e){alert("Thumbnail upload failed: "+e.message)}
-  finally{if(input)input.value="";setBusy(label,false)}
-}
-async function approve(jid,cid){
-  const b=document.querySelector(`[data-approve="${css(jid)}"][data-cid="${css(cid)}"]`);
-  if(b?.disabled)return;
-  setBusy(b,true,"Starting render…");
-  setCandidateActiveTask(jid,cid,{actionLabel:"Rendering final",status:"render_queued",progress:0});
-  try{await api(`/api/jobs/${jid}/candidates/${cid}/approve`,{method:"POST"});watchCandidate(jid,cid)}
-  catch(e){setBusy(b,false);clearCandidateActiveTask(cid);alert("Approve failed: "+e.message)}
 }
 // Approve & schedule (P2.5 S2, 146): the plan (GET …/schedule-plan) gives per platform the live post and each
 // active account's next free suggested slots; times are edited and shown in WIB (fixed UTC+7, no DST) and sent
@@ -3400,19 +2775,10 @@ async function saveSchedule(){
   const b=$("scheduleSave"),{jid,cid}=planState,st=$("scheduleStatus");setBusy(b,true,"Saving…");st.textContent="";st.classList.remove("is-error");
   try{const d=await api(`/api/jobs/${encodeURIComponent(jid)}/candidates/${encodeURIComponent(cid)}/schedule`,{method:"POST",body:JSON.stringify({posts:planItems(),approve:true})});
     closeSheet();planState=null;
-    if(d.approved){setCandidateActiveTask(jid,cid,{actionLabel:"Rendering final",status:"render_queued",progress:0});watchCandidate(jid,cid)}
+    if(d.approved){setCandidateActiveTask(jid,cid,{actionLabel:"Rendering final",status:"render_queued",progress:0});setTimeout(()=>clearCandidateActiveTask(cid),motionMs(2500))}   // 179: the island feed (/api/activity) carries the render from here
     else if(currentTab==="publish")loadPublish();
     if(currentTab==="schedule")loadSchedule();
   }catch(err){st.textContent=err.message;st.classList.add("is-error")}finally{setBusy(b,false);if(planState)syncScheduleSave()}
-}
-async function rate(jid,cid,n){
-  try{await api(`/api/jobs/${jid}/candidates/${cid}`,{method:"PATCH",body:JSON.stringify({rating:n})});await openQueueJob(jid)}catch(e){alert("Rating failed: "+e.message)}
-}
-async function uploadCandidate(jid,cid){
-  try{
-    const r=await api(`/api/jobs/${jid}/candidates/${cid}/upload-youtube`,{method:"POST"});
-    alert(r.video_url?`Uploaded: ${r.video_url}`:"Upload request accepted.");
-  }catch(e){alert("Upload to YouTube failed: "+e.message)}
 }
 
 // Job island (R-13): its own fixed-width capsule. Shows the first active
@@ -3442,7 +2808,7 @@ function springEasing(stiffness,damping,mass=1){
 }
 const SPRING={grow:springEasing(260,20),settle:springEasing(300,34),pop:springEasing(420,18)};
 const ISL={mode:"hidden",pinned:false,hover:false,event:null,eventTimer:null,failSeen:true,lastStatus:new Map(),announced:"",lead:null,morph:null};
-let jobIslandAnnounced=""; // kept for older callers
+ // kept for older callers
 const ISL_BUSY=s=>BUSY.includes(s)||s==="processing";
 // Running work leads (stable sort), so the island never shows a queued job while another one is working.
 function islandItems(){const busy=t=>t.kind==="candidate"||badgeClass(t.status)==="running"?0:1;return allActiveTasks().filter(t=>t.kind==="candidate"||ISL_BUSY(t.status)||!TERMINAL.includes(t.status)).sort((a,b)=>busy(a)-busy(b))}
@@ -3608,7 +2974,6 @@ async function refreshRunningJobs(){
     if(currentTab==="current")syncCurrentJobs(next); // same endpoint as loadCurrentJobs: every card stays live
     const disappeared=[...previousIds].some(id=>!runningJobs.some(j=>String(j.id)===id));
     updateJobIsland();renderJobOverlay();
-    if(disappeared && currentTab==="queue") await loadQueue();
   }catch(e){console.error(e)}
 }
 function startJobMonitor(){if(jobMonitorTimer)clearInterval(jobMonitorTimer);refreshRunningJobs();jobMonitorTimer=setInterval(refreshRunningJobs,POLL_INTERVAL)}
@@ -3635,7 +3000,6 @@ async function showTab(tab){
     }else if(tab==="schedule"){
       loadSchedule();
     }else{
-      loadQueue();
       await refreshRunningJobs();
     }
     return;
@@ -3683,8 +3047,6 @@ async function showTab(tab){
     updateJobIsland();
     loadCurrentJobs();
   }else{
-    closeQueueDetail();
-    loadQueue();
     await refreshRunningJobs();
     updateJobIsland();
   }
@@ -3763,7 +3125,6 @@ document.addEventListener("click",e=>{if(e.target.closest("#toastAction")){const
 document.addEventListener("change",e=>{
   if(e.target.id==="watermarkUploadInput"&&e.target.files&&e.target.files[0])uploadWatermarkAsset(e.target.files[0]);
   if(e.target.id==="jobCampaign")updateCampaignHint();
-  if(e.target.id==="queueCampaignFilter"){queueCampaignFilter=e.target.value;loadQueue()}
 });
 const SETTINGS_GROUPS=[
   ["AI & transcription",["GEMINI_API_KEY","GEMINI_ANALYSIS_MODEL","GEMINI_MAX_ATTEMPTS","WHISPER_MODEL","WHISPER_LANGUAGE","RUNWAY_API_KEY","RUNWAY_MODEL"]],
@@ -4127,7 +3488,6 @@ function renderCampaignStep(){
 // in the island) → form pre-filled; every `unsure` field (AI ones tagged) needs its Confirm tick before Save.
 // The plain-language preview comes from the server (campaign_view, payouts), never computed here.
 let campaignNew=null; // {text} while pasting, + {parsed, confirmed:Set} while reviewing
-const CN_FIELDS={name:"name",platforms:"platforms",hashtags:"hashtags"};
 function cnUnsureFor(key){return (campaignNew?.parsed?.unsure||[]).some(u=>String(u.field).split(".")[0]===key)}
 function cnPreviewHtml(p){
   const v=p.view||{};
@@ -4456,34 +3816,12 @@ document.addEventListener("click",e=>{
   const lg=e.target.closest("[data-language]");if(lg)return selectLanguage(lg.dataset.language);
   const cl=e.target.closest("[data-clips]");if(cl)return selectClips(cl.dataset.clips);
   if(e.target.closest("#analyzeButton"))return createJob();
-  const ce=e.target.closest("[data-edit]");if(ce)return toggleCandidateEdit(ce.dataset.edit);
-  const et=e.target.closest("[data-edit-tab]");if(et)return switchEditTab(et.dataset.cid,et.dataset.editTab);
   if(e.target.closest("[data-flow-editor]"))return openFlowEditor();
-  const rf=e.target.closest("[data-rule-fix]");if(rf)return fixRule(rf.dataset.jid,rf.dataset.cid,rf.dataset.ruleFix,rf);
   const kt=e.target.closest("[data-kw-toggle]");if(kt)return toggleKeyword(kt.dataset.cid,kt.dataset.kwToggle);
-  const kc=e.target.closest("[data-kw-color]");if(kc)return setKeywordColor(kc.dataset.cid,kc.dataset.kwColor);
-  const pr=e.target.closest("[data-preset]");if(pr)return pickCaptionPreset(pr.dataset.cid,pr.dataset.preset);
-  const pa=e.target.closest("[data-preset-all]");if(pa)return applyPresetToAll(pa.dataset.presetAll,pa.dataset.cid,pa);
   const rn=e.target.closest("[data-rename]");if(rn)return renameJob(rn.dataset.rename);
   const cj=e.target.closest("[data-cancel-job]");if(cj)return cancelJob(cj.dataset.cancelJob,cj);
   const rj=e.target.closest("[data-retry-job]");if(rj)return retryJob(rj.dataset.retryJob,rj);
-  const rc=e.target.closest("[data-retry-candidate]");if(rc)return retryCandidate(rc.dataset.retryCandidate,rc.dataset.cid,rc);
-  const o=e.target.closest("[data-open]");if(o)return openAsCurrent(o.dataset.open);
-  const m=e.target.closest("[data-move]");if(m)return moveToQueue(m.dataset.move);
-  const qo=e.target.closest("[data-queue-open-button]");if(qo)return openQueueJob(qo.dataset.queueOpenButton);
-  const q=e.target.closest("[data-queue-open]");if(q&&!e.target.closest("button"))return openQueueJob(q.dataset.queueOpen);
-  const r=e.target.closest("[data-restore]");if(r)return restoreJob(r.dataset.restore);
-  const d=e.target.closest("[data-delete]");if(d)return deleteJob(d.dataset.delete);
-  if(e.target.closest("[data-back-queue]"))return closeQueueDetail();
-  const a=e.target.closest("[data-apply]");if(a)return applyEdits(a.dataset.apply,a.dataset.cid);
-  const h=e.target.closest("[data-hook]");if(h)return getHook(h.dataset.hook,h.dataset.cid);
-  const ss=e.target.closest("[data-submagic-start]");if(ss)return submagicStart(ss.dataset.submagicStart,ss.dataset.cid);
-  const se=e.target.closest("[data-submagic-export]");if(se)return submagicExport(se.dataset.submagicExport,se.dataset.cid);
-  const su=e.target.closest("[data-submagic-use]");if(su)return submagicUseAsFinal(su.dataset.submagicUse,su.dataset.cid);
-  const rv=e.target.closest("[data-restore-version]");if(rv)return restoreCandidateVersion(rv.dataset.restoreVersion,rv.dataset.cid,Number(rv.dataset.version));
-  const fs=e.target.closest("[data-fix-subtitle]");if(fs)return fixSubtitleAI(fs.dataset.fixSubtitle,fs.dataset.cid);
   const gd=e.target.closest("[data-gen-desc]");if(gd)return generateDescriptionAI(gd.dataset.genDesc,gd.dataset.cid);
-  const gt=e.target.closest("[data-gen-thumbs]");if(gt)return generateThumbnailsAI(gt.dataset.genThumbs,gt.dataset.cid);
   const pt=e.target.closest("[data-pick-thumb]");if(pt)return pickThumbnail(pt.dataset.pickThumb,pt.dataset.cid,Number(pt.dataset.idx));
   const nav=e.target.closest("[data-thumb-nav]");
   if(nav){
@@ -4493,9 +3831,6 @@ document.addEventListener("click",e=>{
   }
   const dot=e.target.closest("[data-thumb-dot]");
   if(dot)return thumbSlideTo(dot.dataset.thumbDot,Number(dot.dataset.idx));
-  const ap=e.target.closest("[data-approve]");if(ap)return approve(ap.dataset.approve,ap.dataset.cid);
-  const st=e.target.closest("[data-rate]");if(st)return rate(st.dataset.jid,st.dataset.cid,Number(st.dataset.rate));
-  const up=e.target.closest("[data-upload]");if(up)return uploadCandidate(up.dataset.upload,up.dataset.cid);
   if(e.target.closest("#reloadSettings")){loadSettings();return loadWatermarkAssets();}
   const wa=e.target.closest("[data-watermark-activate]");if(wa)return activateWatermarkAsset(wa.dataset.watermarkActivate);
   const wd=e.target.closest("[data-watermark-delete]");if(wd)return deleteWatermarkAsset(wd.dataset.watermarkDelete);
@@ -4504,7 +3839,7 @@ document.addEventListener("click",e=>{
   if(ri){
     const kind=ri.dataset.runningKind,jobId=ri.dataset.runningJobid||ri.dataset.runningJob;
     closeJobOverlay();
-    if(kind==="candidate"){showTab("queue");openQueueJob(jobId)}
+    if(kind==="candidate"){go("#review/"+encodeURIComponent(jobId))}   // 179: the clip's job on the Review page
     else{saveActive(jobId);showTab("current");startPolling(jobId)}
   }
 });
@@ -4551,7 +3886,7 @@ window.addEventListener("load",async()=>{
   await ensureSession();await refreshMediaToken();setInterval(refreshMediaToken,60*60*1000);
   try{const lc=JSON.parse(lsGet("last_clip")||"null");if(Array.isArray(lc)&&lc.length===2&&!lastEditorClip)lastEditorClip=lc}catch{}
   routeHash();   // 170: reload / deep link / bare URL (= the last view used)
-  await loadSettings();await loadWatermarkAssets();await loadCampaigns();await loadCurrentJobs();await loadQueue();loadAnalyzeEstimate();
+  await loadSettings();await loadWatermarkAssets();await loadCampaigns();await loadCurrentJobs();loadAnalyzeEstimate();
 
   // Always start the lightweight running-job monitor, including when an
   // active job was restored from localStorage. Previously the restored-job
@@ -4603,7 +3938,6 @@ function pageContextText(){
   const ed=vis("editorSection");if(ed){const t=ed.querySelector(".ed-eyebrow")?.textContent||"";return t.replace(/^Editor\s*·\s*/,"").trim()}
   const rv=vis("reviewSection");if(rv)return rv.querySelector(".rv-title")?.textContent.trim()||"";
   if(currentTab==="campaign")return campaignNew?"New campaign":campaignOpen?(campaignDetail?.name||""):"";
-  if(currentTab==="queue"&&!editorOpen())return vis("queueDetail")?.querySelector(".job-title-row h3")?.textContent.trim()||"";
   return "";
 }
 function syncPageContext(){const el=$("pageContext");if(!el)return;const t=pageContextText()||$("pageTitle")?.textContent||"";if(el.textContent!==t){el.textContent=t;el.title=t}}
@@ -4639,10 +3973,8 @@ const FLOW_STEPS=[
 // stays reachable from a Review card's "All edits" until P4 gives each drawer feature a home in the page.
 let lastEditorClip=null;
 function editorPageOpen(){return /^#editor(\/|$)/.test(location.hash)}   // 171: #editor alone = Pick a clip
-function drawerOpen(){return currentTab==="queue"&&!!document.querySelector("#queueDetail:not(.hidden) .candidate-card.editing")}
-function editorOpen(){return editorPageOpen()||drawerOpen()}
+function editorOpen(){return editorPageOpen()}
 window.addEventListener("hashchange",()=>{const m=location.hash.match(/^#editor\/([^/]+)\/([^/?#]+)/);if(m)lastEditorClip=[m[1],m[2]];syncNav()});
-function editorTarget(){return currentTab==="queue"?document.querySelector("#queueDetail:not(.hidden) .candidate-card"):null}
 function renderFlow(){
   const ol=$("flow");if(!ol)return;
   const active=editorOpen()?"editor":currentTab==="queue"?"review":currentTab==="publish"?"publish":currentTab==="schedule"?"schedule":currentTab==="campaign"?"campaign":"analyze",idx=FLOW_STEPS.findIndex(s=>s.id===active);
@@ -4658,20 +3990,8 @@ function renderFlow(){
   if(ol.dataset.html!==html){ol.dataset.html=html;ol.innerHTML=html;
     const a=ol.querySelector("li.active");if(a&&window.matchMedia("(max-width:600px)").matches)a.scrollIntoView({behavior:scrollMode(),block:"nearest",inline:"center"})}
 }
-async function openClassicEdit(jid,cid){
-  window.clipflowReview?.close();history.replaceState(null,"",location.pathname+location.search);
-  if(currentTab!=="queue")await showTab("queue");
-  await openQueueJob(jid);
-  if(!document.querySelector(`#candidate-${css(cid)}.editing`))toggleCandidateEdit(cid);
-  document.getElementById("candidate-"+cid)?.scrollIntoView({behavior:scrollMode(),block:"start"});syncNav();
-}
-document.addEventListener("click",e=>{const c=e.target.closest("[data-rv-classic]");if(c){e.preventDefault();openClassicEdit(c.dataset.rvClassic,c.dataset.cid)}});
-function openFlowEditor(){
-  // 171: the classic panel (Review card → "All edits") keeps its drawer; otherwise the last opened clip, else Pick a clip
-  if(!drawerOpen()&&!editorTarget()){go(lastEditorClip?`#editor/${encodeURIComponent(lastEditorClip[0])}/${encodeURIComponent(lastEditorClip[1])}`:"#editor");return}
-  const open=document.querySelector("#queueDetail:not(.hidden) .candidate-card.editing"),card=open||editorTarget();if(!card)return;
-  if(!open)toggleCandidateEdit(card.id.replace(/^candidate-/,""));
-  card.scrollIntoView({behavior:scrollMode(),block:"start"});
+function openFlowEditor(){   // 171/179: the last opened clip, else Pick a clip (the old drawer is gone)
+  go(lastEditorClip?`#editor/${encodeURIComponent(lastEditorClip[0])}/${encodeURIComponent(lastEditorClip[1])}`:"#editor");
 }
 // ---- 170: the URL is the view. #campaign[/<slug>|/new], #analyze, #review[/<job>] (review.js), #editor (Pick a clip,
 // 171), #editor/<job>/<clip> (editor.js), #schedule, #publish. Back/forward/reload restore it; a bare URL opens the
@@ -4814,7 +4134,7 @@ document.addEventListener("click",e=>{
   }
   const rb=e.target.closest("#refreshView");if(rb){
     if(!REDUCED_MOTION.matches){rb.classList.remove("spinning");void rb.offsetWidth;rb.classList.add("spinning");setTimeout(()=>rb.classList.remove("spinning"),450)}
-    if(currentTab==="current")loadCurrentJobs();else if(currentTab==="publish")loadPublish();else if(currentTab==="schedule")loadSchedule();else if(currentTab==="campaign")loadCampaignStep();else{loadQueue();refreshRunningJobs()}
+    if(currentTab==="current")loadCurrentJobs();else if(currentTab==="publish")loadPublish();else if(currentTab==="schedule")loadSchedule();else if(currentTab==="campaign")loadCampaignStep();else{window.clipflowReview?.open();refreshRunningJobs()}
   }
 });
 window.addEventListener("resize",()=>requestAnimationFrame(syncNav),{passive:true});
