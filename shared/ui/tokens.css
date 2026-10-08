@@ -1,0 +1,18 @@
+/* ClipFlow UI tokens (168) — ONE source for type, control sizes, chips, radius and spacing on every page
+   (index.html, editor/, review, Lane B pages). Served by nginx at /ui/tokens.css. Colours stay in each page's
+   theme blocks for now. Phone (≤ 600 px) gets 44 px controls (touch targets). */
+:root{
+  /* type scale */
+  --fs-base:14px;--fs-small:12px;--fs-h1:20px;--fs-h2:16px;
+  --lh-base:1.45;--lh-tight:1.2;
+  /* controls */
+  --control-h:32px;--chip-h:24px;--hit:44px;
+  /* radius */
+  --r-sm:8px;--r-md:12px;--r-lg:16px;--r-pill:999px;
+  /* spacing scale 4/8/12/16/24 */
+  --s-1:4px;--s-2:8px;--s-3:12px;--s-4:16px;--s-5:24px;
+  /* shell (168) */
+  --appbar-h:48px;--pill-btn:36px;--pill-icon:24px;
+  --ed-top:var(--appbar-h);   /* Lane B: sticky editor video sits below the top bar */
+}
+@media (max-width:600px){:root{--control-h:44px;--pill-btn:44px}}

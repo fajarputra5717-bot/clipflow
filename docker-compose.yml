@@ -128,6 +128,7 @@ services:
       # Outside the read-only html root (a nested mountpoint can't be
       # created there); served by `location /fonts/` in default.conf.
       - ./worker/fonts:/usr/share/nginx/fonts:ro
+      - ./shared/ui:/usr/share/nginx/ui:ro   # 168: /ui/tokens.css
     depends_on:
       - backend
     logging: *logging
