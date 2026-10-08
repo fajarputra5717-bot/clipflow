@@ -1,4 +1,4 @@
-const { test, expect, classicQueue } = require("../fixtures");
+const { test, expect, classicQueue, nav } = require("../fixtures");
 
 // UI shell (P1 task 0): the flow-preview stepper is the top-level navigation.
 test.describe("UI shell stepper", () => {
@@ -11,7 +11,7 @@ test.describe("UI shell stepper", () => {
     for (const [label, phase] of [["Auto-import", "P3"], ["Track", "P3"]]) {
       const li = app.locator("#flow li", { has: app.locator(".flow-label", { hasText: new RegExp(`^${label}$`) }) });
       await expect(li.locator("button")).toBeDisabled();
-      await expect(li.locator(".flow-sub")).toHaveText(`Coming in ${phase}`);
+      await expect(li.locator("button")).toHaveAttribute("aria-label", `${label} (Coming in ${phase})`);
     }
     const editor = app.locator("#flow [data-flow-editor]");
     await expect(editor).toBeDisabled();
@@ -29,7 +29,7 @@ test.describe("UI shell stepper", () => {
     await expect(app.locator("#pageTitle")).toHaveText("Editor");
     await app.locator('#flow [data-nav="current"]').click();
     await expect(app.locator("#pageTitle")).toHaveText("Analyze");
-    await app.locator('.toolbar [data-nav="settings"]').click();
+    await nav(app, "settings");
     await expect(app.locator("#settingsSheet")).toHaveClass(/open/);
   });
 });

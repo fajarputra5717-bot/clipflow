@@ -2,7 +2,7 @@
 // actions (Download, Copy title, Send to phone), a platform strip whose chips show each post's status, and a
 // panel per chip (Copy caption, Mark posted, views, claim advice, claimed/paid; bottom sheet on mobile).
 // Filters: campaign + "Left to post" (default) / All. Same data (clip_posts per platform); amounts pre-formatted.
-const { test, expect } = require("../fixtures");
+const { test, expect, openAccount } = require("../fixtures");
 
 const row = (over) => ({ candidate_id: "cand-a", job_id: "job-done", job_title: "Mock stream", title: "Lompatan GILA", caption: "Gila banget\n\n#ime #imeroleplay",
   caption_trimmed: false, hashtags: ["#ime", "#imeroleplay"], platform: "tiktok", platform_name: "TikTok", duration: 34, rendered_at: null,
@@ -101,11 +101,12 @@ test("Mark posted from a chip's panel: no account â†’ Settings hint; with one â†
     { candidate_id: "cand-a", platform: "tiktok", account_id: "acc-tt", status: "posted", url: "https://www.tiktok.com/@imeclips/video/1" });
 });
 
-test("mobile tab bar keeps every item on one row (Publish added)", async ({ app }) => {
-  test.skip(test.info().project.name !== "mobile");
-  const ys = await app.locator("#tabbar .tabbar-item").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)));
-  expect(ys.length).toBe(5);
-  expect(new Set(ys).size).toBe(1);
+test("169: the stepper pill keeps every shown step on one row inside the viewport", async ({ app }) => {
+  const r = await app.locator("#flow li").evaluateAll((els) => els.filter((e) => e.offsetParent)
+    .map((e) => { const b = e.getBoundingClientRect(); return [Math.round(b.top), b.left >= 0 && b.right <= innerWidth]; }));
+  expect(r.length).toBe(test.info().project.name === "mobile" ? 6 : 8);   // phone hides the two "Coming in P3" steps
+  expect(new Set(r.map((x) => x[0])).size).toBe(1);
+  expect(r.every((x) => x[1])).toBe(true);
 });
 
 test("pre-post checks: Blocked (red) and Not eligible (amber) chips; panel lists them, red blocks Mark posted", async ({ app, api }) => {
@@ -179,8 +180,7 @@ test("panel: claim advice, views as of, Mark claimed with views, Mark paid with 
 });
 
 test("Telegram: chat id in Account, test send, Send to phone from the card (video once + every caption)", async ({ app, api }) => {
-  if (test.info().project.name === "mobile") await app.click("[data-sidebar-toggle] >> visible=true");
-  await app.click("[data-account]");
+  await openAccount(app);
   await expect(app.locator("#telegramHint")).toContainText("@clipflow_bot");
   await expect(app.locator("#telegramTest")).toBeDisabled();
   await app.fill("#telegramChat", "not a chat");

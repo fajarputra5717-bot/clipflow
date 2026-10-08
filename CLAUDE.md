@@ -408,34 +408,25 @@ planned post: `reminded_at` set in the queueing transaction; > 1 h late = `misse
   via a Review card's "All edits" (`openClassicEdit`) until P4 gives each drawer feature a home in the Editor page: remove a
   drawer piece only then (165: Captions/Effects/Audio gone; it keeps Export, Watermark, description, thumbnail, and
   `applyEdits()` never sends caption fields). UI specs reach the old panel with `classicQueue()`.
-- **Navigation (106, P1 task 0):** the flow-preview **stepper** (`#flowNav`, `renderFlow()`, `FLOW_STEPS`) is the
-  top-level navigation (sticky under the toolbar, compact while it is collapsed via `body:has(.toolbar.is-collapsed)`, 121): Analyze (`data-nav="current"`, the Import view), Review (`data-nav="queue"`, the job
-  list/detail, formerly "Publish"), Publish (`data-nav="publish"`, 130), Editor (`data-flow-editor`: opens the visible job's clip drawer; disabled
-  until a job detail is open); Campaign/Auto-import/Track (P3) and Track (P3) is disabled with
-  "Coming in Px" — never mock content (mapping: docs/roadmap.md). `#pageTitle` = the active step. Gear in the
-  toolbar (`data-nav="settings"`). `syncNav()` repaints the stepper.
-- **Layout:** `.app-shell` grid = left `<aside id="sidebar">` (tools only since 106:
-  Watermarks/Settings open **sheets** `#watermarkSheet`/`#settingsSheet` via
-  `openSheet()`/`closeSheet()`; `syncNav()` owns `aria-current` + the
-  spring `#navIndicator`; theme toggle in `.sidebar-foot`) + `.container`.
-  Sheets sit outside `#appShell`, which goes `inert` while one is open. Desktop ≥1000 px: collapsible column
-  (`body.sidebar-collapsed`, localStorage). Narrow: off-canvas drawer
-  (`body.sidebar-open`) over `#sidebarScrim`. Toggles are
-  `[data-sidebar-toggle]`; hidden sidebar gets `inert`. **Every closed
-  overlay layer must be `visibility:hidden; pointer-events:none`**:
-  a stray layer once made the whole app unclickable. Analyze step (126) = flow-preview
-  step 3: segmented `<button aria-pressed>` controls + layout cards (`data-layout-card` facecam|full → `jobs.layout`
-  auto/left/right | none; 3 disabled "Coming soon" cards, P4); campaign `default_layout`/`default_language` pre-fill
-  with a "from campaign" tag unless touched; estimate from `GET /api/analysis-estimate` (own jobs; hidden without
-  history). POST /api/jobs payload unchanged (analyze.spec pins it).
-- **Toolbar (072, replaces the tabs pill):** sticky `#toolbar` with ONE title
-  element `#pageTitle` ("Analyze"/"Review"/"Editor", `syncPageTitle()`). `initToolbar()`
-  is the **only** scroll driver: rAF, passive, maps `scrollY/TITLE_RANGE(48)` →
-  `--p` 0..1 continuously (no threshold/hysteresis); CSS derives title
-  translate/scale and `.toolbar-bg` (material + hairline + scroll-edge fade)
-  opacity from `--p` — transform/opacity only. Don't add another scroll
-  driver. ≤600 px: `#tabbar` bottom tab bar (Analyze / Review / Watermarks / Settings, same `[data-nav]`); the
-  stepper scrolls horizontally.
+- **Shell v2 (169) — same on every page incl. Review/Editor:** no sidebar, no tab bar, no large title.
+  Thin sticky `#toolbar.appbar` (48 px, `--appbar-h`): logo (`data-nav-home` → Analyze) · `#pageContext` (campaign /
+  job title read from the rendered page by `pageContextText()`, else the page name; stops short of the island) ·
+  Watermarks + Settings icons (≤ 600 px they move into the menu) · account menu `#accountMenuBtn`/`#accountMenu`
+  (Account, Appearance, Refresh `#refreshView`, What's new + version, Sign out; `setAccountMenu()`). `#pageTitle` =
+  sr-only h1 with the step name (lane-b pages write it too).
+  **Stepper = floating glass pill** `#flowNav.flow-pill` (fixed bottom centre, safe-area aware, `renderFlow()`,
+  `FLOW_STEPS`): icons only (`--pill-icon` 24, `--pill-btn` 36 / 44 phone), only the active step shows its
+  `.flow-label`; disabled steps carry "Coming in Px" in aria-label/title (never mock content); on phones the
+  unbuilt phase steps are hidden. It lifts the editor's sticky `.ed-foot` and hides while `.ed-foot` has focus on
+  phones. Island stays top centre. Tokens: `/ui/tokens.css` (`shared/ui/tokens.css`, 168).
+  Steps: Campaign (`data-nav="campaign"`), Analyze (`current`), Review (`queue` → the Review page), Editor
+  (`data-flow-editor`), Schedule, Publish. `syncNav()` repaints. Sheets (`openSheet()`/`closeSheet()`) sit outside
+  `#appShell`, which goes `inert` while one is open. **Every closed overlay layer must be `visibility:hidden;
+  pointer-events:none`** (menus included): a stray layer once made the whole app unclickable. Analyze step (126) =
+  flow-preview step 3: segmented `<button aria-pressed>` controls + layout cards (`data-layout-card` facecam|full →
+  `jobs.layout`); campaign `default_layout`/`default_language` pre-fill with a "from campaign" tag unless touched;
+  estimate from `GET /api/analysis-estimate`. POST /api/jobs payload unchanged (analyze.spec pins it).
+  `initToolbar()` (scroll → `--p` on `#toolbar`) stays the only scroll driver.
 - **Dynamic Island (073):** `#island` (fixed, top 8 px, centred, z 1000,
   black in both themes) is driven only by `updateJobIsland()` (same name
   as before; every caller still works). `hidden` when nothing runs. Modes
@@ -447,7 +438,7 @@ planned post: `reminded_at` set in the queueing transaction; > 1 h late = `misse
   seen. "+N" split only in compact; it opens `#jobOverlay`. Cancel shows
   only if a global `cancelJob(jobId)` exists: it does (R-08's `window.cancelJob(id, btn)`,
   confirm + `POST /api/jobs/{id}/cancel`; the island passes its button for `setBusy`). Reduced motion: opacity
-  cross-fade only. Sheets make `#appShell`, `#tabbar`, `#island` inert.
+  cross-fade only. Sheets make `#appShell` and `#island` inert.
 - **Progress = the island, only (090, all phases).** Every progress state on the platform (import/analysis,
   preview/final render, loudnorm, Submagic, keyword AI call, brief parsing, auto-import checks, publish kit /
   Send to Telegram, view pulling, auto-posting) shows in the Dynamic Island: its own capsule, stage + %,

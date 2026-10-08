@@ -226,8 +226,14 @@ const test = base.test.extend({
 
 // Visible nav item (sidebar on desktop, bottom tab bar at ≤ 600 px).
 async function nav(page, name) {
-  await page.locator(`[data-nav="${name}"]:visible`).first().click();
+  // 169: on phones Watermarks/Settings live in the account menu (the top bar's centre is the island's)
+  const direct = page.locator(`#toolbar > .toolbar-trail > [data-nav="${name}"]:visible, #flow [data-nav="${name}"]:visible`);
+  if (await direct.count()) return direct.first().click();
+  if (!(await page.locator("#accountMenu.open").count())) await page.click("#accountMenuBtn");
+  await page.locator(`#accountMenu.open [data-nav="${name}"]`).click();
 }
+async function openAccount(page) { await page.click("#accountMenuBtn"); await page.click("#accountMenu [data-account]"); }
+async function menuItem(page, sel) { await page.click("#accountMenuBtn"); await page.click(`#accountMenu ${sel}`); }
 
 // 149: the stepper's Review opens the Review page; the old job list + drawer ("All edits") is opened directly.
 async function classicQueue(page) {
@@ -282,4 +288,4 @@ function publishCards(rows, api) {
   return out;
 }
 
-module.exports = { test, expect: base.expect, job, candidate, nav, blockingProblems, mockApi, newState, classicQueue };
+module.exports = { test, expect: base.expect, job, candidate, nav, openAccount, menuItem, blockingProblems, mockApi, newState, classicQueue };

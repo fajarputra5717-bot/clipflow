@@ -1,9 +1,8 @@
 // P1.5 part 4: API tokens in the Account sheet: create (name required, plaintext shown once), list, two-step revoke.
-const { test, expect } = require("../fixtures");
+const { test, expect, openAccount } = require("../fixtures");
 
 test("create, show once, list and revoke an API token", async ({ app, api }) => {
-  if (test.info().project.name === "mobile") await app.click("[data-sidebar-toggle] >> visible=true");
-  await app.click("[data-account]");
+  await openAccount(app);
   await expect(app.locator("#tokenList")).toContainText("No tokens yet.");
   await app.click("#tokenCreate");
   await expect(app.locator("#tokenMsg")).toHaveText("Give the token a name.");
@@ -23,7 +22,6 @@ test("create, show once, list and revoke an API token", async ({ app, api }) => 
   await expect(app.locator("#tokenList")).toContainText("No tokens yet.");
   // Re-opening the sheet hides the old plaintext.
   await app.keyboard.press("Escape");
-  if (test.info().project.name === "mobile") await app.click("[data-sidebar-toggle] >> visible=true");
-  await app.click("[data-account]");
+  await openAccount(app);
   await expect(app.locator("#tokenNew")).toBeHidden();
 });

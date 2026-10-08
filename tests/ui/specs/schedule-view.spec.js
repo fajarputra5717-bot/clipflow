@@ -1,6 +1,6 @@
 // P2.5 S3 (147): stepper step 6 "Schedule" = own planned posts by WIB day (list; week calendar ≥ 1000 px), overdue
 // on top in red, render state + eligibility chips, free suggested times on empty days, row actions.
-const { test, expect } = require("../fixtures");
+const { test, expect, menuItem } = require("../fixtures");
 test.use({ reducedMotion: "reduce" });
 
 const wibKey = (d) => new Date(d.getTime() + 7 * 3600e3).toISOString().slice(0, 10);
@@ -108,7 +108,7 @@ test("reminders (148): chip per row, banner when Telegram isn't set up, lead lin
   await expect(app.locator('[data-sched-row="pl-0"] [data-reminder]')).toHaveText("Reminder missed (server was down)");
   await expect(app.locator(".sched-tg")).toContainText("isn't set up yet");
   api.schedule.telegram_ready = true;
-  await app.click("#refreshView");
+  await menuItem(app, "#refreshView");
   await expect(app.locator(".sched-lead")).toHaveText("Telegram reminder 15 min before each post (Settings → Posting times).");
   await expect(app.locator(".sched-tg")).toHaveCount(0);
 });

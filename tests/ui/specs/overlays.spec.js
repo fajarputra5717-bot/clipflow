@@ -1,7 +1,7 @@
 // Regression: a closed overlay layer once made the whole app unclickable (CLAUDE.md, Frontend shell).
 const { test, expect, job, nav, blockingProblems } = require("../fixtures");
 
-const PROBES = ["#youtubeUrl", '[data-nav="queue"]', '[data-nav="settings"]'];
+const PROBES = ["#youtubeUrl", '[data-nav="queue"]', "#accountMenuBtn"];
 
 test.describe("Nothing-clickable overlay regression", () => {
   test("no layer blocks the app at rest", async ({ app }) => {
@@ -37,22 +37,19 @@ test.describe("Nothing-clickable overlay regression", () => {
     await expect.poll(() => blockingProblems(app, ["#youtubeUrl"])).toEqual([]);
   });
 
-  test("version popover closes on outside click", async ({ app }, info) => {
-    test.skip(info.project.name === "mobile", "badge sits in the off-canvas sidebar at 390 px");
-    await app.locator("#versionBadge").click();
-    await expect(app.locator("#versionPopover")).toHaveClass(/open/);
-    await app.locator("#youtubeUrl").click();
-    await expect(app.locator("#versionPopover")).not.toHaveClass(/open/);
-    // visibility flips to hidden after the fade-out transition: poll, don't sample once
+  test("169: account menu closes on outside click and on Escape, and releases the page", async ({ app }) => {
+    await app.locator("#accountMenuBtn").click();
+    await expect(app.locator("#accountMenu")).toHaveClass(/open/);
+    await expect(app.locator("#accountMenuBtn")).toHaveAttribute("aria-expanded", "true");
+    await app.mouse.click(5, 300);                                          // outside the menu (it covers the URL field on phones)
+    await expect(app.locator("#accountMenu")).not.toHaveClass(/open/);
     await expect.poll(() => blockingProblems(app, PROBES)).toEqual([]);
-  });
-
-  test("mobile sidebar drawer: scrim closes it and releases the page", async ({ app }, info) => {
-    test.skip(info.project.name !== "mobile", "drawer only exists at narrow widths");
-    await app.locator("[data-sidebar-toggle]:visible").first().click();
-    await expect(app.locator("body")).toHaveClass(/sidebar-open/);
-    await app.locator("#sidebarScrim").click({ position: { x: 370, y: 400 } });
-    await expect(app.locator("body")).not.toHaveClass(/sidebar-open/);
-    await expect.poll(() => blockingProblems(app, ["#youtubeUrl", '#tabbar [data-nav="queue"]'])).toEqual([]);
+    await app.locator("#accountMenuBtn").click();
+    await app.keyboard.press("Escape");
+    await expect(app.locator("#accountMenu")).not.toHaveClass(/open/);
+    await expect(app.locator("#accountMenuBtn")).toBeFocused();
+    await app.locator("#accountMenuBtn").click();
+    await app.locator("#accountMenu .acct-new summary").click();            // What's new (version) lives in the menu
+    await expect(app.locator("#accountMenu .acct-new ul")).toBeVisible();
   });
 });

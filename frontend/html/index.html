@@ -16,6 +16,7 @@
 </script>
 <title>ClipFlow — Video Clipper</title>
 <link rel="icon" href="clipflow-mark.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/ui/tokens.css">
 <style>
 /* Caption display fonts (R-19): worker/fonts mounted read-only at /fonts/ by nginx. */
 @font-face{font-family:"CF Montserrat";src:url("/fonts/montserrat/Montserrat%5Bwght%5D.ttf") format("truetype");font-weight:100 900;font-display:swap}
@@ -489,54 +490,9 @@ button.primary:hover:not(:disabled){background:#0077ed!important}
 .queue-open-hint svg{flex:0 0 auto;color:var(--muted2);transition:transform var(--dur-3) var(--ease),color var(--dur-3) var(--ease)}
 .queue-card:hover .queue-open-hint{color:#0071e3}
 .queue-card:hover .queue-open-hint svg{color:#0071e3;transform:translate(1px,-1px)}
-/* App shell: Apple-Music-style left sidebar + content column.
-   Desktop (>=1000px): the sidebar is a sticky grid column; hiding it
-   (body.sidebar-collapsed) slides it out with transform and drops the
-   column. Narrow: it is an off-canvas drawer over a scrim.
-   Click-through rule (a regression we hit once: "nothing clickable"):
-   every fixed/overlay layer here is pointer-events:none + visibility
-   hidden while closed, and the scrim sits *below* the drawer. */
-.app-shell{display:grid;grid-template-columns:var(--sidebar-w) minmax(0,1fr);min-height:100vh;--sidebar-w:272px}
-body.sidebar-collapsed .app-shell{grid-template-columns:0 minmax(0,1fr)}
+/* 168: no sidebar — thin top bar + stepper pill (see the "168: shell v2" block at the end). */
+.app-shell{min-height:100vh}
 .app-shell > .container{min-width:0}
-.sidebar{
-  position:sticky;top:0;height:100vh;overflow-y:auto;overscroll-behavior:contain;
-  width:var(--sidebar-w);padding:var(--sp-2) var(--sp-2) var(--sp-3);z-index:40;
-  background:var(--material);backdrop-filter:var(--material-blur);-webkit-backdrop-filter:var(--material-blur);border-right:1px solid var(--hairline);
-  display:flex;flex-direction:column;gap:4px;
-  transform:translateX(0);visibility:visible;
-  transition:transform var(--dur-3) var(--ease),visibility 0s linear 0s;
-}
-body.sidebar-collapsed .sidebar{transform:translateX(-100%);visibility:hidden;transition:transform var(--dur-3) var(--ease),visibility 0s linear var(--dur-3)}
-.sidebar-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:2px 2px 10px}
-.sidebar-brand{display:flex;align-items:center;gap:9px;font-size:13px;font-weight:600;letter-spacing:-.01em}
-.sidebar-brand-icon{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;font-size:12px;font-weight:700;color:#fff;background:linear-gradient(145deg,#0071e3,#42a1ff)}
-.sidebar-collapse,.sidebar-open-btn{
-  width:var(--hit);height:var(--hit);min-height:var(--hit);padding:0;border-radius:12px;flex:none;
-  display:grid;place-items:center;color:var(--muted);background:transparent;border-color:transparent!important;box-shadow:none;
-  transition:background var(--dur-1) ease,color var(--dur-1) ease;
-}
-.sidebar-collapse svg,.sidebar-open-btn svg{width:16px;height:16px;stroke-width:2.7}
-.sidebar-collapse:hover:not(:disabled),.sidebar-open-btn:hover:not(:disabled){background:var(--line);color:var(--text);transform:none;box-shadow:none}
-.sidebar-open-btn{display:none}
-[data-theme="dark"] .sidebar-collapse,[data-theme="dark"] .sidebar-open-btn{background:transparent;border-color:transparent!important}
-[data-theme="dark"] .sidebar-collapse:hover:not(:disabled),[data-theme="dark"] .sidebar-open-btn:hover:not(:disabled){background:var(--line);box-shadow:none}
-body.sidebar-collapsed .sidebar-open-btn{display:grid}
-.sidebar-group{padding:12px 0;border-top:1px solid var(--line)}
-.sidebar-group .rail-actions{margin-top:9px}
-.sidebar-group .settings:first-of-type details{margin-top:4px}
-.sidebar-scrim{position:fixed;inset:0;z-index:110;background:rgba(0,0,0,.28);opacity:0;visibility:hidden;pointer-events:none;transition:opacity var(--dur-3) ease,visibility 0s linear var(--dur-3)}
-@media(max-width:999px){
-  .app-shell,body.sidebar-collapsed .app-shell{grid-template-columns:minmax(0,1fr)}
-  .sidebar,body.sidebar-collapsed .sidebar{
-    position:fixed;left:0;top:0;bottom:0;height:auto;width:min(300px,86vw);z-index:120;
-    box-shadow:0 20px 60px rgba(0,0,0,.25);
-    transform:translateX(-105%);visibility:hidden;transition:transform var(--dur-3) var(--ease),visibility 0s linear var(--dur-3);
-  }
-  body.sidebar-open .sidebar{transform:translateX(0);visibility:visible;transition:transform var(--dur-3) var(--ease),visibility 0s linear 0s}
-  body.sidebar-open .sidebar-scrim{opacity:1;visibility:visible;pointer-events:auto;transition:opacity var(--dur-3) ease,visibility 0s linear 0s}
-  .sidebar-open-btn,body.sidebar-collapsed .sidebar-open-btn{display:grid}
-}
 /* Simplified Import: composition / facecam / platform live in one
    "Options" disclosure with a live one-line summary. */
 .import-options{margin-top:var(--sp-2);border:1px solid var(--line);border-radius:16px;padding:0 var(--sp-2);background:var(--panel2)}
@@ -838,33 +794,10 @@ summary > .chev{margin-left:auto}
 .brand-mark{width:28px;height:28px;flex:none;border-radius:7px}
 img.logo{padding:0;background:none;display:block;box-shadow:0 8px 20px rgba(10,132,255,.25);border-radius:12px}
 img.topbar-logo-icon{background:none;padding:0;object-fit:cover}
-.sidebar-head{padding:0 0 var(--sp-1)}
-.side-nav{position:relative;display:flex;flex-direction:column;gap:2px;padding:var(--sp-1) 0}
-.nav-item{
-  position:relative;z-index:1;display:flex;align-items:center;gap:12px;width:100%;
-  min-height:var(--hit);padding:0 12px;border-radius:12px;border:0;box-shadow:none;
-  background:transparent;color:var(--text);font-size:13px;font-weight:500;letter-spacing:-.01em;text-align:left;
-  transition:color var(--dur-2) var(--ease),background var(--dur-2) var(--ease),transform var(--dur-1) var(--ease);
-}
-.nav-item:hover:not(:disabled){background:var(--line);filter:none;box-shadow:none}
-.nav-item:active:not(:disabled){transform:scale(var(--press))}
-.nav-item[aria-current]{color:var(--accent);font-weight:600}
-.nav-item[aria-current]:hover{background:transparent}
 .nav-icon{width:20px;height:20px;flex:none}
 .nav-icon-stack{position:relative;width:20px;height:20px;flex:none}
 .nav-icon-stack .theme-icon-sun,.nav-icon-stack .theme-icon-moon{width:20px;height:20px}
 .nav-value{margin-left:auto;color:var(--muted);font-weight:400;font-size:12px}
-.nav-indicator{
-  position:absolute;left:0;right:0;top:0;height:var(--hit);border-radius:12px;pointer-events:none;
-  background:rgba(0,113,227,.1);opacity:0;
-  transform:translateY(var(--nav-y,0));
-  transition:transform var(--dur-3) var(--ease-spring),opacity var(--dur-2) var(--ease);
-}
-.nav-indicator.ready{opacity:1}
-[data-theme="dark"] .nav-indicator{background:rgba(10,132,255,.2)}
-[data-theme="dark"] .nav-item{background:transparent;border-color:transparent!important}
-[data-theme="dark"] .nav-item:hover:not(:disabled){background:var(--line)}
-.sidebar-foot{margin-top:auto;padding-top:var(--sp-1);border-top:1px solid var(--line)}
 .icon-btn{
   width:var(--hit);height:var(--hit);min-height:var(--hit);padding:0;flex:none;display:grid;place-items:center;
   border-radius:12px;background:transparent;border-color:transparent;box-shadow:none;color:var(--muted);
@@ -1025,52 +958,7 @@ img.topbar-logo-icon{background:none;padding:0;object-fit:cover}
 .toast-action:hover:not(:disabled){background:rgba(255,255,255,.22);box-shadow:none}
 [data-theme="dark"] .toast-action{background:rgba(255,255,255,.14);border-color:transparent!important}
 
-/* ===== 072: large-title toolbar + bottom tab bar ===== */
-.container{margin-top:0}
-.toolbar{
-  --p:0;position:sticky;top:0;z-index:60;height:52px;margin:0 calc(-1 * var(--sp-2));padding:0 var(--sp-2);
-}
-@media(max-width:760px){.toolbar{margin-inline:-7px;padding-inline:7px}} /* bleed = the container's 7 px side margin there, not 16 (was a 9 px horizontal scroll) */
-.toolbar-bg{position:absolute;inset:0;pointer-events:none;opacity:var(--p);
-  background:var(--material);backdrop-filter:var(--material-blur);-webkit-backdrop-filter:var(--material-blur)}
-/* hairline + scroll-edge fade: content dissolves into the bar instead of meeting a hard edge */
-.toolbar-bg::before{content:"";position:absolute;left:0;right:0;bottom:0;height:1px;background:var(--hairline)}
-.toolbar-bg::after{content:"";position:absolute;left:0;right:0;top:100%;height:14px;
-  background:linear-gradient(to bottom,color-mix(in srgb,var(--bg) 75%,transparent),transparent)}
-.toolbar-row{position:relative;display:flex;align-items:center;gap:var(--sp-1);height:100%}
-.page-title{
-  margin:0;flex:none;font-family:var(--font-display);font-size:34px;font-weight:700;letter-spacing:-.025em;line-height:1.1;white-space:nowrap;
-  transform-origin:left center;will-change:transform;
-  transform:translateY(calc((1 - var(--p)) * 46px)) scale(calc(1 - var(--p) * .5));
-}
-.title-spacer{height:52px}
-.toolbar-trail{margin-left:auto;display:flex;align-items:center;gap:4px}
-.version-wrap{position:relative}
-.version-wrap .version-popover{left:auto;right:0}
-.tabbar{display:none}
-@media(max-width:600px){
-  .page-title{font-size:30px}
-  .version-wrap{display:none}
-  body{padding-bottom:calc(64px + env(safe-area-inset-bottom))}
-  .tabbar{
-    position:fixed;left:0;right:0;bottom:0;z-index:90;display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr); /* one row whatever the item count (130: +Publish) */
-    padding:4px 4px calc(4px + env(safe-area-inset-bottom));
-    background:var(--material);backdrop-filter:var(--material-blur);-webkit-backdrop-filter:var(--material-blur);
-    border-top:1px solid var(--hairline);
-  }
-  .tabbar-item{
-    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-height:52px;padding:4px 0;
-    border:0;border-radius:12px;background:transparent;box-shadow:none;color:var(--muted);font-size:10.5px;font-weight:500;
-    transition:color var(--dur-2) var(--ease),transform var(--dur-1) var(--ease);
-  }
-  [data-theme="dark"] .tabbar-item{background:transparent;border-color:transparent!important}
-  .tabbar-item:hover:not(:disabled){background:transparent;box-shadow:none;filter:none}
-  .tabbar-item:active:not(:disabled){transform:scale(var(--press))}
-  .tabbar-item .nav-icon{width:24px;height:24px;transition:transform var(--dur-3) var(--ease-spring)}
-  .tabbar-item[aria-current]{color:var(--accent)}
-  .tabbar-item[aria-current] .nav-icon{transform:scale(1.08)}
-  .toast{bottom:calc(76px + env(safe-area-inset-bottom))}
-}
+/* 072 large-title toolbar + tabbar: replaced by the 167 top bar (end of the last style block). */
 
 /* ===== 073: Dynamic Island ===== */
 .island{position:fixed;top:8px;left:50%;z-index:1000;display:flex;align-items:flex-start;gap:6px;width:max-content;transform:translateX(-50%);
@@ -1169,7 +1057,7 @@ textarea{font-size:14px;line-height:1.5}
 /* P1.5 login (flow-preview visual system: panel card, fill inputs, pill primary). Closed = hidden + no pointer events. */
 .login-layer{position:fixed;inset:0;z-index:2000;display:grid;place-items:center;padding:var(--sp-2);background:var(--bg);visibility:hidden;pointer-events:none;opacity:0;transition:opacity var(--dur-2) var(--ease-out)}
 body.auth-locked .login-layer{visibility:visible;pointer-events:auto;opacity:1}
-body.auth-locked #appShell,body.auth-locked #tabbar,body.auth-locked #island{visibility:hidden}
+body.auth-locked #appShell,body.auth-locked #island{visibility:hidden}
 .login-card{width:min(380px,100%);background:var(--panel);border-radius:24px;box-shadow:var(--shadow);padding:calc(var(--sp-2)*2) var(--sp-3)}
 .login-brand{display:flex;align-items:center;gap:10px;font-family:var(--font-display);font-size:17px;font-weight:700;margin-bottom:var(--sp-3)}
 .login-card h1{font-family:var(--font-display);font-size:24px;line-height:1.15;margin:0 0 4px}
@@ -1177,28 +1065,13 @@ body.auth-locked #appShell,body.auth-locked #tabbar,body.auth-locked #island{vis
 .login-card input{width:100%;min-height:var(--hit)}
 .login-card button.primary{width:100%;min-height:var(--hit);margin-top:var(--sp-3);border-radius:999px}
 .login-error{min-height:20px;margin-top:var(--sp-1);color:var(--badge-failed-fg,#d70015);font-size:13px}
-.account-row{display:flex;align-items:center;gap:8px;padding:6px 10px;color:var(--muted);font-size:13px}
-.account-row .account-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text);font-weight:600}
-.account-row button{min-height:32px;padding:0 12px;border-radius:999px;font-size:13px}
 @media (prefers-reduced-motion:reduce){.login-layer{transition:none}}
-/* Stepper = top-level nav: sticks under the toolbar instead of sliding beneath it (cut-off titles, v2.1117).
-   Compacts (no sub-lines, smaller dots) once the toolbar has collapsed; driven by initToolbar's .is-collapsed. */
-.flow-card{position:sticky;top:56px;z-index:50;transition:padding var(--dur-2) var(--ease-out)}
-.flow-dot,.flow li+li::before{transition:width var(--dur-2) var(--ease-out),height var(--dur-2) var(--ease-out),top var(--dur-2) var(--ease-out),background var(--dur-2) var(--ease)}
-body:has(.toolbar.is-collapsed) .flow-card{padding-block:var(--sp-1) 2px}
-body:has(.toolbar.is-collapsed) .flow-dot{width:32px;height:32px}
-body:has(.toolbar.is-collapsed) .flow-dot svg{width:16px;height:16px}
-body:has(.toolbar.is-collapsed) .flow li+li::before{top:16px;right:calc(50% + 20px);left:calc(-50% + 20px)}
-body:has(.toolbar.is-collapsed) .flow-sub{display:none}
-@media (prefers-reduced-motion:reduce){.flow-card,.flow-dot,.flow li+li::before{transition:none}}
 /* Selects match the mockup's inputs: same box, own chevron (no native control chrome). */
 select,[data-theme] select{-webkit-appearance:none;appearance:none;padding-right:40px;cursor:pointer;text-overflow:ellipsis}
 /* after the background shorthands above (incl. [data-theme=dark] … :focus), so the chevron survives every state */
 select,select:focus,[data-theme] select,[data-theme] select:focus{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5 6 6.5l5-5' fill='none' stroke='%2386868b' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 15px center;background-size:12px 8px}
 select::-ms-expand{display:none}
 /* Account sheet (P1.5) */
-.account-row .account-name{background:transparent;border:0;padding:4px 6px;margin:-4px -6px;border-radius:8px;text-align:left;cursor:pointer;font:inherit;font-weight:600;color:var(--text);min-height:0;box-shadow:none}
-.account-row .account-name:hover{background:var(--fill)}
 .account-who{color:var(--muted);font-size:15px;margin:0 0 var(--sp-2)}
 .account-who b{color:var(--text)}
 .account-form h3{font-size:17px;margin:0 0 4px}
@@ -1543,6 +1416,73 @@ select::-ms-expand{display:none}
 }
 @keyframes ppanelUp{from{transform:translateY(100%)}to{transform:none}}
 @media (prefers-reduced-motion:reduce){.ppanel{animation:none}}
+/* ===== 168: shell v2 — thin top bar (48 px) + floating stepper pill (bottom centre) + top-centre island ===== */
+body{font-size:var(--fs-base)}
+.appbar{position:sticky;top:0;z-index:60;display:flex;align-items:center;gap:var(--s-2);height:var(--appbar-h);
+  margin:0 calc(-1 * var(--sp-2)) var(--s-4);padding:0 var(--sp-2);
+  background:var(--material);-webkit-backdrop-filter:var(--material-blur);backdrop-filter:var(--material-blur);border-bottom:1px solid var(--hairline)}
+@media(max-width:760px){.appbar{margin-inline:-7px;padding-inline:7px}}
+.appbar-brand{display:grid;place-items:center;flex:none;width:var(--hit);height:var(--hit);margin-left:-8px;border-radius:var(--r-md)}
+.appbar-brand .brand-mark{width:26px;height:26px}
+/* page context (campaign / job title) stops short of the island's compact capsule (248 px desktop, 150 phone) */
+.appbar-context{min-width:0;max-width:calc(50% - 124px - 56px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--fs-h2);font-weight:600;color:var(--text)}
+.toolbar-trail{margin-left:auto;display:flex;align-items:center;gap:2px;flex:none}
+.appbar .icon-btn{width:36px;height:36px;min-height:36px;border-radius:10px}
+.acct-wrap{position:relative}
+.acct-btn{display:flex;align-items:center;gap:4px;height:36px;min-height:36px;max-width:170px;padding:0 8px 0 12px;border-radius:var(--r-pill);background:var(--fill);border-color:transparent;box-shadow:none;color:var(--text);font-size:13px;font-weight:600}
+.acct-btn:hover:not(:disabled){background:var(--line);box-shadow:none;filter:none}
+.acct-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.acct-chev{width:16px;height:16px;flex:none;color:var(--muted)}
+.acct-burger{display:none;width:20px;height:20px}
+.acct-menu{position:absolute;right:0;top:calc(100% + 6px);z-index:70;width:260px;max-height:calc(100vh - 80px);overflow:auto;padding:6px;border-radius:var(--r-lg);background:var(--panel);border:1px solid var(--line);box-shadow:var(--shadow);
+  opacity:0;visibility:hidden;pointer-events:none;transform:translateY(-4px) scale(.98);transform-origin:top right;
+  transition:opacity var(--dur-2) var(--ease-out),transform var(--dur-2) var(--ease-out),visibility 0s linear var(--dur-2)}
+.acct-menu.open{opacity:1;visibility:visible;pointer-events:auto;transform:none;transition:opacity var(--dur-2) var(--ease-out),transform var(--dur-2) var(--ease-out),visibility 0s}
+.acct-menu-who{padding:8px 10px 6px;font-size:var(--fs-small);color:var(--muted);border-bottom:1px solid var(--line);margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.acct-item,[data-theme="dark"] .acct-item{display:flex;align-items:center;gap:10px;width:100%;min-height:40px;padding:0 10px;border-radius:10px;border:0!important;background:transparent;box-shadow:none;color:var(--text);font-size:var(--fs-base);font-weight:500;text-align:left;cursor:pointer}
+.acct-item:hover:not(:disabled),.acct-item:focus-visible{background:var(--fill);box-shadow:none;filter:none}
+.acct-new>summary{list-style:none}.acct-new>summary::-webkit-details-marker{display:none}
+.acct-new .version-badge{pointer-events:none}
+.acct-new ul{margin:2px 0 6px;padding:0 10px 0 26px;display:grid;gap:4px;font-size:var(--fs-small);color:var(--muted);line-height:1.4}
+/* the stepper pill */
+.flow-pill{position:fixed;left:50%;bottom:calc(12px + env(safe-area-inset-bottom));z-index:80;transform:translateX(-50%);max-width:calc(100vw - 16px);
+  padding:4px;border-radius:var(--r-pill);background:var(--material-thick,var(--material));-webkit-backdrop-filter:var(--material-blur);backdrop-filter:var(--material-blur);
+  border:1px solid var(--hairline);box-shadow:0 10px 30px rgba(0,0,0,.14);
+  transition:opacity var(--dur-2) var(--ease-out),transform var(--dur-3) var(--ease-out),visibility 0s}
+.flow-pill .flow{display:flex;gap:2px;padding:0;margin:0;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.flow-pill .flow::-webkit-scrollbar{display:none}
+.flow-pill .flow li{flex:none;display:block}
+.flow-pill .flow li+li::before{display:none}
+.flow-pill .flow-node,.flow-pill .flow-node:hover:not(:disabled),[data-theme="dark"] .flow-pill .flow-node{display:flex;flex-direction:row;align-items:center;gap:6px;width:auto;min-width:var(--pill-btn);height:var(--pill-btn);min-height:var(--pill-btn);padding:0;border-radius:var(--r-pill);background:transparent;border:0!important;box-shadow:none;color:var(--muted)}
+.flow-pill .flow-dot{width:var(--pill-btn);height:var(--pill-btn);background:transparent;color:inherit;transform:none!important}
+.flow-pill .flow-dot svg{width:var(--pill-icon);height:var(--pill-icon);stroke-width:1.8}
+.flow-pill .flow-node:hover:not(:disabled) .flow-dot{background:var(--fill)}
+.flow-pill .flow li.done .flow-dot{background:transparent;color:var(--text)}
+.flow-pill .flow-label{display:none;font-size:13px;font-weight:600;white-space:nowrap}
+.flow-pill .flow li.active .flow-node{background:var(--accent);color:#fff;padding-right:14px}
+.flow-pill .flow li.active .flow-label{display:inline;color:#fff}
+.flow-pill .flow li.active .flow-dot{background:transparent;color:#fff}
+.flow-pill .flow li.off .flow-dot{opacity:.38}
+body{padding-bottom:calc(72px + env(safe-area-inset-bottom))}
+/* the editor's own sticky action bar rides above the pill; on phone the pill steps aside while that bar is in use */
+body:has(#editorSection:not(.hidden)) .ed-foot{bottom:calc(var(--pill-btn) + 30px + env(safe-area-inset-bottom))}
+.acct-narrow{display:none}
+@media(max-width:600px){
+  .appbar{gap:var(--s-1)}
+  .appbar-wide{display:none}
+  .acct-item.acct-narrow{display:flex}
+  .flow-pill .flow li.phase{display:none}   /* not built yet ("Coming in P3"): 8 × 44 px + a label don't fit 390 px */
+  .appbar-context{max-width:calc(50% - 75px - 48px);font-size:15px}
+  .appbar .icon-btn,.acct-btn{width:var(--hit);height:var(--hit);min-height:var(--hit)}
+  .acct-btn{padding:0;justify-content:center;background:transparent}
+  .acct-name,.acct-chev{display:none}
+  .acct-burger{display:block}
+  .flow-pill{left:8px;right:8px;transform:none;max-width:none;display:flex;justify-content:center}
+  .flow-pill .flow{max-width:100%}
+  body:has(.ed-foot:focus-within) .flow-pill{opacity:0;visibility:hidden;pointer-events:none;transform:translateY(20px);transition:opacity var(--dur-2) var(--ease-out),transform var(--dur-3) var(--ease-out),visibility 0s linear var(--dur-2)}
+  body:has(.ed-foot:focus-within) .ed-foot{bottom:calc(12px + env(safe-area-inset-bottom))}
+}
+@media (prefers-reduced-motion:reduce){.flow-pill,.acct-menu{transition:none}}
 </style>
 <link rel="stylesheet" href="editor/editor.css"><!-- Editor + Review pages (149) -->
 </head>
@@ -1582,40 +1522,31 @@ select::-ms-expand{display:none}
 </div>
 
 <div class="app-shell" id="appShell">
-<div class="sidebar-scrim" id="sidebarScrim" aria-hidden="true"></div>
-<aside class="sidebar" id="sidebar" aria-label="Workspace">
-  <div class="sidebar-head">
-    <div class="sidebar-brand"><img class="brand-mark" src="clipflow-mark.svg" alt="" width="28" height="28">ClipFlow</div>
-    <button class="sidebar-collapse" type="button" data-sidebar-toggle aria-controls="sidebar" aria-expanded="true" aria-label="Hide sidebar">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="15" rx="3"/><path d="M9.5 4.5v15"/></svg>
-    </button>
-  </div>
-  <nav class="side-nav" id="sideNav" aria-label="Main">
-    <span class="nav-indicator" id="navIndicator" aria-hidden="true"></span>
-    <button class="nav-item" type="button" data-nav="watermarks" aria-haspopup="dialog" aria-controls="watermarkSheet"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="3"/><path d="m3.5 15.5 4.5-4.5 4 4"/><path d="M14.5 16h3"/></svg><span>Watermarks</span></button>
-    <button class="nav-item" type="button" data-nav="settings" aria-haspopup="dialog" aria-controls="settingsSheet"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg><span>Settings</span></button>
-  </nav>
-  <div class="sidebar-foot">
-    <div class="account-row" id="accountRow"><button type="button" class="account-name" id="accountName" data-account aria-haspopup="dialog" aria-controls="accountSheet" title="Account"></button><button type="button" data-signout>Sign out</button></div>
-    <button class="nav-item theme-toggle" id="themeToggleSide" type="button" aria-label="Switch appearance"><span class="nav-icon-stack"><svg class="theme-icon-sun nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2.2M12 19.3v2.2M4.9 4.9l1.6 1.6M17.5 17.5l1.6 1.6M2.5 12h2.2M19.3 12h2.2M4.9 19.1l1.6-1.6M17.5 6.5l1.6-1.6"/></svg><svg class="theme-icon-moon nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg></span><span>Appearance</span><span class="nav-value" id="themeValue">Light</span></button>
-  </div>
-</aside>
-
 <div class="container">
-  <!-- 072: iOS large-title toolbar. #pageTitle is one element: large under the bar at scroll 0, shrinking into the
-       bar as you scroll. applyToolbarProgress() maps scrollY -> --p (0..1) every frame (transform/opacity only). -->
-  <header class="toolbar" id="toolbar">
-    <div class="toolbar-bg" aria-hidden="true"></div>
-    <div class="toolbar-row">
-      <button class="sidebar-open-btn" type="button" data-sidebar-toggle aria-controls="sidebar" aria-expanded="true" aria-label="Show sidebar">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="15" rx="3"/><path d="M9.5 4.5v15"/></svg>
-    </button>
-      <h1 class="page-title" id="pageTitle">Import</h1>
-      <div class="toolbar-trail">
-        <div class="version-wrap"><button class="version-badge" id="versionBadge" type="button" aria-expanded="false">Beta · v2.1117</button>
-        <div class="version-popover" id="versionPopover" role="dialog" aria-hidden="true">
-        <div class="version-popover-title">What's new in v2.1117</div>
-        <ul>
+  <!-- 168 shell v2: thin top bar (48 px): logo · page context · Watermarks, Settings, account menu (version + refresh
+       inside). The stepper is the floating pill at the bottom (#flowNav, after .container); the island stays top centre.
+       #pageTitle = the active step's name for screen readers and lane-b's pages (no visible large title). -->
+  <header class="appbar" id="toolbar">
+    <a class="appbar-brand" href="#" data-nav-home aria-label="ClipFlow home"><img class="brand-mark" src="clipflow-mark.svg" alt="" width="28" height="28"></a>
+    <h1 class="sr-only" id="pageTitle">Analyze</h1>
+    <span class="appbar-context" id="pageContext"></span>
+    <div class="toolbar-trail">
+      <button class="icon-btn appbar-wide" type="button" data-nav="watermarks" aria-haspopup="dialog" aria-controls="watermarkSheet" aria-label="Watermarks" title="Watermarks"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="3"/><path d="m3.5 15.5 4.5-4.5 4 4"/><path d="M14.5 16h3"/></svg></button>
+      <button class="icon-btn appbar-wide" type="button" data-nav="settings" aria-haspopup="dialog" aria-controls="settingsSheet" aria-label="Settings" title="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
+      <div class="acct-wrap">
+        <button class="acct-btn" id="accountMenuBtn" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="accountMenu" aria-label="Account menu">
+          <span class="acct-name" id="accountName"></span>
+          <svg class="acct-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+          <svg class="acct-burger" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+        </button>
+        <div class="acct-menu" id="accountMenu" role="menu" aria-labelledby="accountMenuBtn">
+          <div class="acct-menu-who" id="accountMenuWho"></div>
+          <button class="acct-item acct-narrow" type="button" role="menuitem" data-nav="watermarks" aria-haspopup="dialog" aria-controls="watermarkSheet"><svg class="nav-icon" class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="3"/><path d="m3.5 15.5 4.5-4.5 4 4"/><path d="M14.5 16h3"/></svg><span>Watermarks</span></button>
+          <button class="acct-item acct-narrow" type="button" role="menuitem" data-nav="settings" aria-haspopup="dialog" aria-controls="settingsSheet"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg><span>Settings</span></button>
+          <button class="acct-item" type="button" role="menuitem" data-account aria-haspopup="dialog" aria-controls="accountSheet"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg><span>Account</span></button>
+          <button class="acct-item theme-toggle" id="themeToggleSide" type="button" role="menuitem" aria-label="Switch appearance"><span class="nav-icon-stack"><svg class="theme-icon-sun nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2.2M12 19.3v2.2M4.9 4.9l1.6 1.6M17.5 17.5l1.6 1.6M2.5 12h2.2M19.3 12h2.2M4.9 19.1l1.6-1.6M17.5 6.5l1.6-1.6"/></svg><svg class="theme-icon-moon nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg></span><span>Appearance</span><span class="nav-value" id="themeValue">Light</span></button>
+                    <button class="acct-item" id="refreshView" type="button" role="menuitem"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3"/><path d="M19.5 4.5v4h-4"/></svg><span>Refresh</span></button>
+          <details class="acct-new"><summary class="acct-item"><span class="version-badge" id="versionBadge">Beta · v2.1117</span><span>What's new</span></summary><ul>
           <li>Campaigns: pick one on Import; its watermark, hashtags (exact order, at the end) and title rules apply to every clip</li>
           <li>Language: Auto, English or Indonesian per job; Auto detects it from the audio</li>
           <li>Karaoke captions now reach the final video; editing one line keeps the word timing on the others</li>
@@ -1624,18 +1555,15 @@ select::-ms-expand{display:none}
           <li>Edit panel in tabs: Captions, Effects, Audio, Watermark, Export</li>
           <li>All progress lives in the Dynamic Island and small capsules on the cards, including renders started elsewhere</li>
           <li>A missing campaign watermark is never replaced by another one: the clip shows a warning instead</li>
-        </ul>
-      </div></div>
-        <button class="icon-btn" type="button" data-nav="settings" aria-haspopup="dialog" aria-controls="settingsSheet" aria-label="Settings" title="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
-        <button class="icon-btn refresh-btn" id="refreshView" type="button" aria-label="Refresh"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3"/><path d="M19.5 4.5v4h-4"/></svg></button>
+        </ul></details>
+          <button class="acct-item" type="button" role="menuitem" data-signout><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 17l5-5-5-5M15 12H4"/></svg><span>Sign out</span></button>
+        </div>
       </div>
     </div>
   </header>
-  <div class="title-spacer" aria-hidden="true"></div>
 
   <div class="layout">
     <main>
-      <nav class="panel flow-card" id="flowNav" aria-label="Workflow"><ol class="flow" id="flow"></ol></nav>
       <section id="campaignSection" class="view-section hidden" aria-labelledby="campaignTitle">
         <div class="panel publish-panel">
           <div class="section-head"><div><div class="eyebrow">Step 1 · Campaign</div><h2 id="campaignTitle">Campaigns</h2><p class="muted small">A campaign holds the brand's rules. Every clip is checked against them before it can be scheduled.</p></div></div>
@@ -1736,6 +1664,8 @@ select::-ms-expand{display:none}
     </main>
   </div>
 </div>
+<!-- 168: the stepper = floating glass pill, bottom centre on every size (icons; only the active step shows its label). -->
+<nav class="flow-pill" id="flowNav" aria-label="Workflow"><ol class="flow" id="flow"></ol></nav>
 </div>
 
 <!-- Dynamic Island (073). Not rendered (hidden) while nothing runs. #islandMain is the black shape whose
@@ -1757,7 +1687,6 @@ select::-ms-expand{display:none}
   <span class="sr-only" id="islandLive" role="status" aria-live="polite"></span>
 </div>
 <div id="publishSheetHost"></div><!-- 144: the ≤ 600 px Publish panel (bottom sheet) lives here, outside the transformed .view-section; empty when closed -->
-<nav class="tabbar" id="tabbar" aria-label="Main"><button class="tabbar-item" type="button" data-nav="current"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v10.5M8 10.5l4 4 4-4"/><path d="M4.5 15v2.5A2.5 2.5 0 0 0 7 20h10a2.5 2.5 0 0 0 2.5-2.5V15"/></svg><span>Analyze</span></button><button class="tabbar-item" type="button" data-nav="queue"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg><span>Review</span></button><button class="tabbar-item" type="button" data-nav="publish"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 3 10 14"/><path d="m21 3-7 18-4-7-7-4z"/></svg><span>Publish</span></button><button class="tabbar-item" type="button" data-nav="watermarks" aria-haspopup="dialog"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="3"/><path d="m3.5 15.5 4.5-4.5 4 4"/><path d="M14.5 16h3"/></svg><span>Watermarks</span></button><button class="tabbar-item" type="button" data-nav="settings" aria-haspopup="dialog"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg><span>Settings</span></button></nav>
 <!-- Sheets (068): Settings and Watermarks open as centred dialogs from the sidebar. Closed = visibility:hidden + pointer-events:none. -->
 <div class="sheet-layer" id="scheduleSheet" aria-hidden="true">
   <div class="sheet-backdrop" data-sheet-close></div>
@@ -2025,7 +1954,7 @@ function showLogin(message){
   if(!loginPending)loginPending=new Promise(resolve=>{
     document.body.classList.add("auth-locked");
     $("loginError").textContent=message||"";
-    ["appShell","tabbar","island"].forEach(id=>{const el=$(id);if(el)el.inert=true});
+    ["appShell","island"].forEach(id=>{const el=$(id);if(el)el.inert=true});
     loginResolve=resolve;
     requestAnimationFrame(()=>($("loginUser").value?$("loginPass"):$("loginUser")).focus({preventScroll:true}));
   }).finally(()=>{loginPending=null});
@@ -2033,7 +1962,7 @@ function showLogin(message){
 }
 let loginResolve=null;
 function setCurrentUser(u){
-  currentUser=u||null;$("accountName").textContent=u?u.username:"";$("pwUser").value=u?u.username:"";
+  currentUser=u||null;$("accountName").textContent=u?u.username:"";$("accountMenuWho").textContent=u?`${u.username} · ${u.role==="admin"?"Admin":"Member"}`:"";$("pwUser").value=u?u.username:"";
   $("accountWho").innerHTML=u?`Signed in as <b>${esc(u.username)}</b> · ${u.role==="admin"?"Admin":"Member"}`:"";
 }
 const PASSWORD_MIN=12;
@@ -2122,7 +2051,7 @@ function unlockApp(user){
   refreshMediaToken();
   $("forceForm").hidden=true;$("loginForm").hidden=false;
   document.body.classList.remove("auth-locked");
-  ["appShell","tabbar","island"].forEach(id=>{const el=$(id);if(el)el.inert=false});
+  ["appShell","island"].forEach(id=>{const el=$(id);if(el)el.inert=false});
   const done=loginResolve;loginResolve=null;done&&done(user);
 }
 // Part 5: an admin-set (temporary) password must be replaced before anything else loads.
@@ -3636,7 +3565,7 @@ async function refreshRunningJobs(){
 function startJobMonitor(){if(jobMonitorTimer)clearInterval(jobMonitorTimer);refreshRunningJobs();jobMonitorTimer=setInterval(refreshRunningJobs,POLL_INTERVAL)}
 function stopJobMonitor(){if(jobMonitorTimer){clearInterval(jobMonitorTimer);jobMonitorTimer=null}}
 
-function syncPageTitle(){const t=$("pageTitle");if(t)t.textContent=editorOpen()?"Editor":currentTab==="queue"?"Review":currentTab==="publish"?"Publish":currentTab==="schedule"?"Schedule":currentTab==="campaign"?"Campaign":"Analyze"}
+function syncPageTitle(){const t=$("pageTitle");if(t)t.textContent=editorOpen()?"Editor":currentTab==="queue"?"Review":currentTab==="publish"?"Publish":currentTab==="schedule"?"Schedule":currentTab==="campaign"?"Campaign":"Analyze";syncPageContext()}
 
 // Switching views while scrolled keeps the large title collapsed and puts the new section's top right
 // under the toolbar (instead of leaving it wherever the old view was scrolled to).
@@ -4470,8 +4399,6 @@ document.addEventListener("click",e=>{
   if(overlayOpen && !e.target.closest("#jobOverlay") && !e.target.closest("#island")){
     closeJobOverlay();
   }
-  if(e.target.closest("[data-sidebar-toggle]"))return toggleSidebar();
-  if(e.target.closest("#sidebarScrim"))return closeSidebarDrawer();
   const tt=e.target.closest(".theme-toggle");if(tt)return toggleTheme();
   const sp=e.target.closest("[data-split]");if(sp)return selectSplit(sp.dataset.split);
   const pl=e.target.closest("[data-platform]");if(pl)return selectPlatform(pl.dataset.platform);
@@ -4535,7 +4462,7 @@ document.addEventListener("click",e=>{
 document.addEventListener("keydown",e=>{
   const el=e.target.closest("[data-split],[data-platform],[data-layout],[data-language]");
   if(el&&(e.key==="Enter"||e.key===" ")){e.preventDefault();if(el.dataset.split)selectSplit(el.dataset.split);if(el.dataset.platform)selectPlatform(el.dataset.platform);if(el.dataset.layout)selectLayout(el.dataset.layout);if(el.dataset.language)selectLanguage(el.dataset.language)}
-  if(e.key==="Escape"){closeJobOverlay();closeVersionPopover();closeSidebarDrawer(true)}
+  if(e.key==="Escape"){closeJobOverlay();closeVersionPopover()}
   const et=e.target.closest("[data-edit-tab]");
   if(et&&["ArrowRight","ArrowLeft","Home","End"].includes(e.key)){
     const cid=et.dataset.cid,i=EDIT_TABS.findIndex(t=>t[0]===et.dataset.editTab),n=EDIT_TABS.length;
@@ -4544,48 +4471,27 @@ document.addEventListener("keydown",e=>{
   }
 });
 document.addEventListener("toggle",e=>{const d=e.target;if(d.tagName!=="DETAILS")return;if(d.matches("[data-publish-expired]"))publishExpiredOpen=d.open;d.querySelector(":scope > summary")?.setAttribute("aria-expanded",String(d.open));if(d.matches("[data-edit-more]"))editMoreOpen[d.dataset.cid+":"+d.dataset.editMore]=d.open},true);
-// Sidebar: desktop = collapsible column (remembered), narrow = drawer.
-const SIDEBAR_MQ=window.matchMedia("(max-width:999px)");
-const SIDEBAR_STORAGE="clipflow_sidebar_collapsed_v1";
-function syncSidebarAria(){
-  const shown=SIDEBAR_MQ.matches?document.body.classList.contains("sidebar-open"):!document.body.classList.contains("sidebar-collapsed");
-  document.querySelectorAll("[data-sidebar-toggle]").forEach(b=>b.setAttribute("aria-expanded",String(shown)));
-  $("sidebar").toggleAttribute("inert",!shown);
+// 168: account menu in the top bar (desktop: username ▾, phone: ☰): Account, Appearance, Refresh, What's new, Sign out.
+function setAccountMenu(open){
+  const m=$("accountMenu"),b=$("accountMenuBtn");if(!m||!b)return;
+  m.classList.toggle("open",open);b.setAttribute("aria-expanded",String(open));
+  if(open)requestAnimationFrame(()=>{if(m.classList.contains("open"))[...m.querySelectorAll(".acct-item")].find(x=>x.offsetParent)?.focus({preventScroll:true})});
 }
-function toggleSidebar(){
-  if(SIDEBAR_MQ.matches){
-    if(document.body.classList.contains("sidebar-open"))return closeSidebarDrawer(true);
-    document.body.classList.add("sidebar-open");syncSidebarAria();
-    $("sidebar").querySelector(".sidebar-collapse")?.focus();
-    return;
-  }
-  const collapsed=document.body.classList.toggle("sidebar-collapsed");
-  try{localStorage.setItem(SIDEBAR_STORAGE,collapsed?"1":"0")}catch{}
-  syncSidebarAria();
-  (collapsed?document.querySelector(".sidebar-open-btn"):$("sidebar").querySelector(".sidebar-collapse"))?.focus();
-}
-function closeSidebarDrawer(restoreFocus){
-  if(!document.body.classList.contains("sidebar-open"))return;
-  document.body.classList.remove("sidebar-open");syncSidebarAria();
-  if(restoreFocus)document.querySelector(".sidebar-open-btn")?.focus();
-}
-try{if(localStorage.getItem(SIDEBAR_STORAGE)==="1")document.body.classList.add("sidebar-collapsed")}catch{}
-SIDEBAR_MQ.addEventListener("change",()=>{document.body.classList.remove("sidebar-open");syncSidebarAria()});
-syncSidebarAria();
+document.addEventListener("click",e=>{
+  if(e.target.closest("#accountMenuBtn")){setAccountMenu(!$("accountMenu").classList.contains("open"));return}
+  if(!e.target.closest("#accountMenu")||e.target.closest(".acct-item"))setAccountMenu(false);
+});
+document.addEventListener("keydown",e=>{
+  const m=$("accountMenu");if(!m?.classList.contains("open"))return;
+  if(e.key==="Escape"){e.stopPropagation();setAccountMenu(false);$("accountMenuBtn").focus();return}
+  if(e.key==="ArrowDown"||e.key==="ArrowUp"){e.preventDefault();const it=[...m.querySelectorAll(".acct-item")].filter(x=>x.offsetParent);
+    const i=it.indexOf(document.activeElement);it[(i+(e.key==="ArrowDown"?1:-1)+it.length)%it.length]?.focus()}
+});
 function closeVersionPopover(){
   const p=$("versionPopover");if(!p||!p.classList.contains("open"))return;
   p.classList.remove("open");p.setAttribute("aria-hidden","true");
   $("versionBadge")?.setAttribute("aria-expanded","false");
 }
-$("versionBadge").addEventListener("click",e=>{
-  e.preventDefault();e.stopPropagation();
-  const p=$("versionPopover"),open=!p.classList.contains("open");
-  p.classList.toggle("open",open);p.setAttribute("aria-hidden",open?"false":"true");
-  e.currentTarget.setAttribute("aria-expanded",open?"true":"false");
-});
-document.addEventListener("click",e=>{
-  if(!e.target.closest("#versionPopover")&&!e.target.closest("#versionBadge"))closeVersionPopover();
-});
 $("youtubeUrl").addEventListener("input",updateAnalyzeReady);
 $("jobOverlayClose").addEventListener("click",e=>{e.preventDefault();e.stopPropagation();closeJobOverlay()});
 
@@ -4639,16 +4545,26 @@ const TITLE_RANGE=48;
   apply();
 })();
 
+// 168: page context in the top bar = what the open page is about (campaign / job title), read from what's on screen
+// so lane-b's pages need no hook. rAF-throttled observer on <main>; text only changes when it differs.
+function pageContextText(){
+  const vis=id=>{const el=$(id);return el&&!el.hidden&&!el.classList.contains("hidden")?el:null};
+  const ed=vis("editorSection");if(ed){const t=ed.querySelector(".ed-eyebrow")?.textContent||"";return t.replace(/^Editor\s*·\s*/,"").trim()}
+  const rv=vis("reviewSection");if(rv)return rv.querySelector(".rv-title")?.textContent.trim()||"";
+  if(currentTab==="campaign")return campaignNew?"New campaign":campaignOpen?(campaignDetail?.name||""):"";
+  if(currentTab==="queue"&&!editorOpen())return vis("queueDetail")?.querySelector(".job-title-row h3")?.textContent.trim()||"";
+  return "";
+}
+function syncPageContext(){const el=$("pageContext");if(!el)return;const t=pageContextText()||$("pageTitle")?.textContent||"";if(el.textContent!==t){el.textContent=t;el.title=t}}
+(function(){let q=false;const m=document.querySelector("main");if(!m||!window.MutationObserver)return;
+  new MutationObserver(()=>{if(q)return;q=true;requestAnimationFrame(()=>{q=false;syncPageContext()})}).observe(m,{childList:true,subtree:true,attributes:true,attributeFilter:["hidden","class"]})})();
 // ---- Sidebar navigation + sheets (068) ----
 let openSheetId=null,sheetOpener=null;
 function selectedNav(){return openSheetId==="settingsSheet"?"settings":openSheetId==="watermarkSheet"?"watermarks":currentTab}
 function syncNav(){
-  const sel=selectedNav(),ind=$("navIndicator");
+  const sel=selectedNav();
   document.querySelectorAll("[data-nav]").forEach(b=>{if(b.dataset.nav===sel)b.setAttribute("aria-current",b.dataset.nav==="current"||b.dataset.nav==="queue"||b.dataset.nav==="publish"||b.dataset.nav==="schedule"||b.dataset.nav==="campaign"?"page":"true");else b.removeAttribute("aria-current")});
-  const item=document.querySelector(`.side-nav [data-nav="${sel}"]`);
-  if(ind&&item){ind.style.setProperty("--nav-y",item.offsetTop+"px");ind.style.height=item.offsetHeight+"px";ind.classList.add("ready")}
-  else if(ind)ind.classList.remove("ready");
-  renderFlow();syncPageTitle();
+  renderFlow();syncPageTitle();syncPageContext();
 }
 // UI shell (P1 task 0): the flow-preview stepper IS the top-level navigation. Analyze = the Import view,
 // Review = the job list/detail, Editor = the open clip's edit drawer; steps not built yet are disabled
@@ -4683,9 +4599,10 @@ function renderFlow(){
   const html=FLOW_STEPS.map((s,i)=>{
     const off=!!s.phase||(s.id==="editor"&&!canEdit),sub=s.phase?`Coming in ${s.phase}`:s.id==="editor"&&!canEdit?"Open a clip in Review":s.sub;
     const attrs=s.nav?`data-nav="${s.nav}"`:s.id==="editor"?"data-flow-editor":"";
-    return `<li class="${i<idx&&!s.phase?"done":i===idx?"active":""}${off?" off":""}"><button class="flow-node" type="button" ${attrs} ${off?"disabled":""} ${i===idx?'aria-current="step"':""}>
+    // 168: pill = icons; the active step shows its label, the rest carry it in aria-label/title (+ why it's off)
+    return `<li class="${i<idx&&!s.phase?"done":i===idx?"active":""}${off?" off":""}${s.phase?" phase":""}"><button class="flow-node" type="button" ${attrs} ${off?"disabled":""} ${i===idx?'aria-current="step"':""} aria-label="${s.label}${off?` (${sub})`:""}" title="${s.label} · ${sub}">
       <span class="flow-dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${FLOW_ICON[s.icon]}</svg></span>
-      <span class="flow-label">${s.label}</span><span class="flow-sub">${sub}</span></button></li>`;
+      <span class="flow-label" aria-hidden="true">${s.label}</span></button></li>`;
   }).join("");
   if(ol.dataset.html!==html){ol.dataset.html=html;ol.innerHTML=html;
     const a=ol.querySelector("li.active");if(a&&window.matchMedia("(max-width:600px)").matches)a.scrollIntoView({behavior:scrollMode(),block:"nearest",inline:"center"})}
@@ -4709,7 +4626,7 @@ function openSheet(id,opener){
   if(openSheetId)closeSheet(false);
   openSheetId=id;sheetOpener=opener||document.activeElement;
   layer.classList.add("open");layer.setAttribute("aria-hidden","false");
-  ["appShell","tabbar","island"].forEach(id=>{const el=$(id);if(el)el.inert=true}); // everything behind a modal sheet
+  ["appShell","island"].forEach(id=>{const el=$(id);if(el)el.inert=true}); // everything behind a modal sheet
   syncNav();
   requestAnimationFrame(()=>(layer.querySelector(".sheet-body input,.sheet-body button,.sheet-body summary")||layer.querySelector(".sheet-close"))?.focus({preventScroll:true}));
 }
@@ -4717,7 +4634,7 @@ function closeSheet(restoreFocus=true){
   if(!openSheetId)return false;
   const layer=$(openSheetId);openSheetId=null;
   layer.classList.remove("open");layer.setAttribute("aria-hidden","true");
-  ["appShell","tabbar","island"].forEach(id=>{const el=$(id);if(el)el.inert=false});
+  ["appShell","island"].forEach(id=>{const el=$(id);if(el)el.inert=false});
   syncNav();
   if(restoreFocus&&sheetOpener&&document.contains(sheetOpener))sheetOpener.focus({preventScroll:true});
   return true;
@@ -4734,7 +4651,7 @@ document.addEventListener("keydown",e=>{
 },true);
 document.addEventListener("click",e=>{
   if(e.target.closest("[data-sheet-close]"))return closeSheet();
-  if(e.target.closest("[data-account]")){pwMessage("");tokenMessage("");telegramMessage("");loadTelegram();$("tokenNew").hidden=true;$("tokenValue").value="";openSheet("accountSheet",e.target.closest("[data-account]"));closeSidebarDrawer(false);loadTokens();return}
+  if(e.target.closest("[data-account]")){pwMessage("");tokenMessage("");telegramMessage("");loadTelegram();$("tokenNew").hidden=true;$("tokenValue").value="";openSheet("accountSheet",$("accountMenuBtn"));loadTokens();return}
   const tc=e.target.closest("[data-token-copy]");
   if(tc){navigator.clipboard?.writeText($("tokenValue").value).then(()=>{tc.textContent="Copied";setTimeout(()=>{tc.textContent="Copy"},motionMs(1500)||1200)},()=>{$("tokenValue").select()});return}
   const tr=e.target.closest("[data-token-revoke]");
@@ -4745,10 +4662,11 @@ document.addEventListener("click",e=>{
     return;
   }
   if(e.target.closest("[data-signout]")){setBusy(e.target.closest("[data-signout]"),true);signOut();return}
+  if(e.target.closest("[data-nav-home]")){e.preventDefault();document.querySelector('#flow [data-nav="current"]')?.click();return}
   const nav=e.target.closest("[data-nav]");if(nav){
     const v=nav.dataset.nav;
-    if(v==="settings"||v==="watermarks"){openSheet(v==="settings"?"settingsSheet":"watermarkSheet",nav);closeSidebarDrawer(false);return}
-    closeSheet(false);closeSidebarDrawer(false);
+    if(v==="settings"||v==="watermarks"){openSheet(v==="settings"?"settingsSheet":"watermarkSheet",nav.closest("#accountMenu")?$("accountMenuBtn"):nav);return}
+    closeSheet(false);
     if(/^#(review|editor)/.test(location.hash))history.replaceState(null,"",location.pathname+location.search);
     if(v==="queue"&&window.clipflowReview){window.clipflowReview.open();return}   // 149: Review = the Review page
     showTab(v);

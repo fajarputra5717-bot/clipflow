@@ -1,11 +1,11 @@
 // P2.5 S1: Settings → Posting times (POSTING_TIMES user setting, WIB): chips per platform, add/remove, Save sends
 // the whole map, Reset sends "" (back to the defaults); the server validates (shared/schedule.py).
-const { test, expect } = require("../fixtures");
+const { test, expect, nav } = require("../fixtures");
 
 const DEFAULTS = '{"tiktok": ["12:00", "19:00", "21:00"], "instagram": ["11:30", "19:30"], "youtube": ["17:00", "20:00"], "facebook": ["12:00", "19:00"]}';
 
 async function openSettings(app) {
-  await app.click('button.icon-btn[data-nav="settings"]');
+  await nav(app, "settings");
   await expect(app.locator("#postingTimes")).toBeVisible();
 }
 
