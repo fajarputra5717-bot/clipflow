@@ -147,3 +147,4 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 175 · 2026-10-09 · (lane B) Compact Review + Editor pages (⋯ menu cards, 3/2/1 columns, mobile density, deep links) · editor.css/js, review.js
 176 · 2026-10-09 · (lane B) P4 task 6: shared/source_watch.py (new uploads + finished livestreams per channel; uses shared/ytdlp) · shared, tests
 177 · 2026-10-09 · (lane B) QA Lows: loudness trim pass toward −14 LUFS, filler suggestions ≥ 80 ms, review score row wraps · worker, retention, review.js
+178 · 2026-10-09 · Lane B's editor.css sizes mapped to /ui/tokens.css (type scale, control/chip heights; --ed-top) · editor.css
