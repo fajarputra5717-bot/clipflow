@@ -141,3 +141,4 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 169 · 2026-10-09 · Shell v2: no sidebar/tab bar/large title; 48 px top bar (logo · page context · tools · account menu) + floating stepper pill at the bottom; same on every page · index.html, tests
 170 · 2026-10-09 · Every view in the URL hash (reload/back/forward restore it; bare URL = last view per user); router closes the other lane-b page first (fixes the old list above the Editor) · index.html, tests
 171 · 2026-10-09 · Editor with no clip = Pick a clip (compact Review grid, same saved filters); the pill reopens the last clip · index.html, tests
+172 · 2026-10-09 · Analyze job cards = compact Review-style cards linking to #review/<job>; old 'Tap a job…' copy gone · index.html, tests

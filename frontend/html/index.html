@@ -1499,6 +1499,21 @@ body:has(#editorSection:not(.hidden)) .ed-foot{bottom:calc(var(--pill-btn) + 30p
 .pk-sub{font-size:var(--fs-small);color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pk-score{font-size:var(--fs-small);color:var(--accent);font-weight:600}
 @media(max-width:600px){.pk-f,.pk-f select{width:100%}.pk-grid{grid-template-columns:1fr}}
+/* 172: Analyze job cards = compact Review-style cards; the whole card opens #review/<job> */
+.job-card.jc{display:flex;gap:var(--s-3);align-items:flex-start;padding:var(--s-3);border-radius:var(--r-lg)}
+.jc-link{position:absolute;inset:0;z-index:1;border-radius:inherit}
+.jc-link:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.jc .rename-btn,.jc .job-actions button{position:relative;z-index:2}
+.jc-thumb{flex:none;width:54px;height:96px;border-radius:var(--r-sm);background:var(--fill);overflow:hidden}
+.jc-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.jc-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:var(--s-1)}
+.jc h3{font-size:var(--fs-base);font-weight:600;margin:0;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.jc-meta{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:var(--fs-small);color:var(--muted)}
+.jc-meta .badge,.jc-meta .tag{height:var(--chip-h);display:inline-flex;align-items:center}
+.jc .mini-island{align-self:flex-start}
+.jc .job-auto-queue{font-size:var(--fs-small);background:none;border:0;padding:0;margin:0;min-height:0;color:var(--muted)}
+.jc .job-actions{flex:none;display:flex;gap:var(--s-1);align-self:center}
+.jc:hover{border-color:var(--accent)}
 </style>
 <link rel="stylesheet" href="editor/editor.css"><!-- Editor + Review pages (149) -->
 </head>
@@ -2380,28 +2395,39 @@ function jobStatusLine(j){
   if(s==="review"||s==="completed")return "Finished — moved to Review";
   return j.message||stageLabel(s);
 }
+// 172: compact Review-style card (thumbnail · title · status chip · campaign · date); the whole card links to
+// #review/<job> via a stretched link (buttons stay real buttons above it). Keyed + patched in place (074).
+function jobThumbSrc(j){
+  const tc=j.thumb_candidate_id||j.candidates?.[0]?.id;
+  if(tc)return mediaUrl(`${API}/api/jobs/${j.id}/candidates/${tc}/thumbnail`);
+  const id=youtubeId(j.youtube_url||"");return id?`https://i.ytimg.com/vi/${id}/mqdefault.jpg`:"";
+}
+function jobDay(j){const d=j.created_at?new Date(j.created_at):null;return d&&!isNaN(d)?d.toLocaleDateString("en-GB",{day:"numeric",month:"short"}):""}
 function createJobCard(j){
   const el=document.createElement("div");
-  el.className="panel job-card";el.dataset.jobId=String(j.id);
-  el.innerHTML=`<div class="job-header">
-      <div class="job-main"><div class="job-title-row"><h3></h3><button class="rename-btn" data-rename="${esc(j.id)}" type="button" aria-label="Rename job" title="Rename job">${PENCIL_ICON}</button></div></div>
-      <div class="job-header-side"><span class="tag campaign-tag" hidden></span>${platformIcon(j.platform,"sm")}<span class="badge"></span><span class="job-actions"></span></div>
+  el.className="panel job-card jc";el.dataset.jobId=String(j.id);
+  el.innerHTML=`<a class="jc-link" href="#review/${encodeURIComponent(j.id)}" aria-label=""></a>
+    <span class="jc-thumb"><img alt="" loading="lazy" hidden></span>
+    <div class="jc-main">
+      <div class="job-title-row"><h3></h3><button class="rename-btn" data-rename="${esc(j.id)}" type="button" aria-label="Rename job" title="Rename job">${PENCIL_ICON}</button></div>
+      <div class="jc-meta"><span class="badge"></span><span class="tag campaign-tag" hidden></span><span class="jc-date"></span></div>
+      ${miniIslandHtml()}
+      <div class="job-auto-queue"><span class="auto-queue-dot"></span><span class="job-status-line"></span></div>
     </div>
-    ${miniIslandHtml()}
-    <div class="job-auto-queue"><span class="auto-queue-dot"></span><span class="job-status-line"></span></div>
-    <div class="job-foot"><span class="stage job-format"></span><details class="job-details"><summary>Details</summary><div class="job-id"></div><div class="job-url"></div><div class="job-id job-lang"></div></details></div>`;
+    <span class="job-actions"></span>`;
   patchJobCard(el,j);return el;
 }
 function patchJobCard(el,j){
-  const p=pct(j.progress),s=j.status||"processing",q=c=>el.querySelector(c),split=Number(j.split_ratio||70);
+  const p=pct(j.progress),s=j.status||"processing",q=c=>el.querySelector(c);
   const bc=badgeClass(s);el.classList.toggle("is-running",bc==="running");el.classList.toggle("is-idle",bc==="idle");
-  setText(q("h3"),jobDisplayTitle(j));
+  const title=jobDisplayTitle(j);setText(q("h3"),title);setAttr(q(".jc-link"),"aria-label",`Review ${title}`);
+  const img=q(".jc-thumb img"),src=jobThumbSrc(j);
+  if(src&&img.dataset.src!==src){img.dataset.src=src;img.onload=()=>{img.hidden=false};img.onerror=()=>{img.hidden=true};img.src=src}
   const ct=q(".campaign-tag");setText(ct,j.campaign?campaignName(j.campaign):"");setAttr(ct,"hidden",!j.campaign);
   const badge=q(".badge");setAttr(badge,"class","badge "+badgeClass(s));setText(badge,stageLabel(s));
+  setText(q(".jc-date"),jobDay(j));
   const mi=q(".mini-island");patchMiniIsland(mi,p,s,stageLabel(s));setAttr(mi,"hidden",isDone(p,s));
   const line=jobStatusLine(j);setText(q(".job-status-line"),line);setAttr(q(".job-auto-queue"),"hidden",line===stageLabel(s)); // never say the badge twice
-  setText(q(".job-format"),`${split}:${100-split} · 9:16`);
-  setText(q(".job-id"),j.id);setText(q(".job-url"),j.youtube_url||"");setText(q(".job-lang"),jobLanguageLine(j));
   const acts=q(".job-actions"),key=(isCancellable(s)?"c":"")+(s==="failed"?"r":"");
   if(acts.dataset.key!==key){acts.dataset.key=key;
     acts.innerHTML=(key.includes("c")?`<button class="secondary cancel-job-btn" data-cancel-job="${esc(j.id)}" type="button">Cancel</button>`:"")+(key.includes("r")?`<button class="secondary cancel-job-btn" data-retry-job="${esc(j.id)}" type="button">Retry</button>`:"")}
@@ -2459,10 +2485,10 @@ function renderQueueJob(j,i=0){
     ${done?"":miniIslandStatic(p,s,j.message||stageLabel(s))}
     <div class="queue-preview">
       <div class="queue-thumb">${thumb?`<img src="${esc(thumb)}" alt="" loading="lazy" onload="this.classList.add('loaded')">`:""}</div>
-      <div><div class="queue-open-label">Tap a job to review both candidates side by side.</div><div class="stage">${esc(String(j.split_ratio||70))}:${esc(String(100-Number(j.split_ratio||70)))}</div></div>
+      <div><div class="stage">${esc(jobDay(j))}</div></div>
     </div>
     <div class="actions queue-actions">
-      <div class="queue-open-hint">Click anywhere to review this job ${ARROW_UP_RIGHT}</div>
+      <span></span>
       <button class="icon-btn danger-ghost" data-delete="${esc(j.id)}" type="button" aria-label="Delete job" title="Delete job">${TRASH_ICON}</button>
     </div>
   </div>`;

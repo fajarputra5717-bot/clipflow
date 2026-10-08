@@ -456,7 +456,7 @@ planned post: `reminded_at` set in the queueing transaction; > 1 h late = `misse
   capsules (same shape/colours/motion); the island stays the only global progress indicator.
   Implementation: `miniIslandHtml()` / `patchMiniIsland(el, p, status, label)` (`.mini-island`: black capsule,
   ring + stage + %, ring glides like the island's; only `.is-running` animates). Don't add bars back.
-- **Job cards (074):** `#currentJobs` is keyed by job id: `syncCurrentJobs()` patches via
+- **Job cards (074, compact since 172: thumb · title · status chip · campaign · date, stretched link → `#review/<job>`):** `#currentJobs` is keyed by job id: `syncCurrentJobs()` patches via
   `patchJobCard()` (`setText`/`setAttr`, bar `transform`), new → `createJobCard()`, gone →
   `leaveJobCard()`. Never re-render polled lists with innerHTML (flicker); same for the island
   and `#jobOverlayList`. Card status line = `jobStatusLine(j)`, not `isBusy()` (BUSY lacks `processing`).
