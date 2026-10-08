@@ -212,3 +212,11 @@ class Combined(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class GainFilter(unittest.TestCase):
+    def test_gain_then_limiter_chain(self):
+        f = r.gain_filter(0.84)
+        self.assertTrue(f.startswith("volume=0.84dB,alimiter=limit="))
+        self.assertTrue(f.endswith("aresample=48000,aformat=channel_layouts=mono|stereo"))
+        self.assertIn("volume=-1.5dB", r.gain_filter(-1.5))
