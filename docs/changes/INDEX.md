@@ -151,3 +151,4 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 179 · 2026-10-09 · Old job list/detail + edit drawer deleted (Editor page covers every piece); render-warning chips moved to Review cards; specs moved to the Review page · index.html, review.js, tests
 180 · 2026-10-09 · Preview captions: outline/shadow/side margins scale with the preview width like the font (previews looked 2× bolder; Lane C Medium) · worker make_ass
 181 · 2026-10-09 · P3 part 8: Track dashboard — shared/track.py (payouts-only money), GET /api/track, stepper step 8 live · shared, main.py, index.html, tests
+182 · 2026-10-09 · Phone touch targets ≥ 44 px on every page incl. Lane B's (rule + invisible hit areas), touch.spec; sheets fit 390 · index.html, tests

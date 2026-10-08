@@ -1,8 +1,6 @@
-// Screenshot tour (shell v2, 168): every step at 1280 and 390, mocked API. Off unless CLIPFLOW_SHOTS=<label>;
-// files go to docs/ui-recordings/shell-v2/<label>/ (gitignored). Self-contained mocks: lane-b specs stay untouched.
+// 182 (Lane C Medium, owner rule): on a phone every visible control is ≥ 44 px tall, or its invisible hit area
+// (::before/::after) is. Same mocked pages as the screenshot tour (shots.spec.js), Editor tabs included.
 const { test, expect, job } = require("../fixtures");
-const LABEL = process.env.CLIPFLOW_SHOTS;
-test.skip(!LABEL, "screenshot tour: set CLIPFLOW_SHOTS=<label>");
 test.use({ reducedMotion: "reduce" });
 
 const camp = { slug: "ime-roleplay", name: "IME Roleplay X Motion Klip", brief_pending: false, platforms: ["tiktok", "instagram", "youtube"],
@@ -63,13 +61,39 @@ const STEPS = [
   ["7-publish", (a) => a.evaluate(() => window.showTab("publish"))],
   ["8-track", (a) => a.evaluate(() => { location.hash = "#track"; })],
 ];
-test("screenshot tour", async ({ app, api }, info) => {
+
+async function smallTargets(app) {
+  return app.evaluate(() => {
+    const hit = (e) => {
+      const r = e.getBoundingClientRect(); let h = r.height;
+      for (const p of ["::before", "::after"]) {
+        const cs = getComputedStyle(e, p);
+        if (cs.content === "none" || cs.position !== "absolute") continue;
+        const top = parseFloat(cs.top) || 0, bottom = parseFloat(cs.bottom) || 0;
+        h = Math.max(h, r.height - Math.min(0, top) - Math.min(0, bottom));
+      }
+      return h;
+    };
+    const vis = (e) => { const cs = getComputedStyle(e); return e.offsetParent && cs.visibility !== "hidden" && !e.closest("[inert],#island,.acct-menu:not(.open),.sheet-layer:not(.open),.job-overlay:not(.open)"); };
+    return [...document.querySelectorAll("button,a[href],summary,select,[role=switch],[role=tab]")].filter(vis)
+      .filter((e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.bottom > 0 && hit(e) < 43.5; })
+      .map((e) => `${e.tagName.toLowerCase()}.${[...e.classList].join(".")} ${Math.round(e.getBoundingClientRect().height)}px "${(e.textContent || e.getAttribute("aria-label") || "").trim().slice(0, 20)}"`);
+  });
+}
+test("phone: every control on every page has a ≥ 44 px touch target", async ({ app, api }) => {
+  test.skip(test.info().project.name !== "mobile", "phone rule");
   test.setTimeout(90_000);
   await seed(app, api);
+  const bad = {};
   for (const [name, go] of STEPS) {
-    await go(app);
-    await app.waitForTimeout(700);
-    await app.screenshot({ path: `../../docs/ui-recordings/shell-v2/${LABEL}/${info.project.name}-${name}.png` });
+    await go(app); await app.waitForTimeout(600);
+    const s = await smallTargets(app); if (s.length) bad[name] = s;
+    if (name === "5-editor") for (const tab of ["captions", "effects", "audio", "watermark", "thumbnail", "export"]) {
+      const t = app.locator(`[data-ed-tab="${tab}"]`);
+      await expect(t, "the Editor must render (mock in sync with editor.js)").toHaveCount(1);
+      await t.click(); await app.waitForTimeout(300);
+      const st = await smallTargets(app); if (st.length) bad[`${name}/${tab}`] = st;
+    }
   }
-  expect(true).toBe(true);
+  expect(bad).toEqual({});
 });

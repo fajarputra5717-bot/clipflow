@@ -52,4 +52,17 @@ test.describe("Nothing-clickable overlay regression", () => {
     await app.locator("#accountMenu .acct-new summary").click();            // What's new (version) lives in the menu
     await expect(app.locator("#accountMenu .acct-new ul")).toBeVisible();
   });
+  test("182: Settings and Watermarks sheets fit a phone (no horizontal scroll), opened from the account menu", async ({ app }, info) => {
+    test.skip(info.project.name !== "mobile", "phone check");
+    for (const [sheet, id] of [["settings", "#settingsSheet"], ["watermarks", "#watermarkSheet"]]) {
+      await nav(app, sheet);
+      await expect(app.locator(id)).toHaveClass(/open/);
+      const over = await app.locator(id).evaluate((el) => [...el.querySelectorAll("*")].filter((e) => e.offsetParent && e.getBoundingClientRect().right > innerWidth + 1)
+        .map((e) => e.tagName.toLowerCase() + "." + [...e.classList].join(".")).slice(0, 5));
+      expect(over).toEqual([]);
+      expect(await app.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      await app.keyboard.press("Escape");
+      await expect(app.locator(id)).not.toHaveClass(/open/);
+    }
+  });
 });
