@@ -440,3 +440,16 @@ test.describe("Editor Watermark + Export tabs", () => {
     await expect.poll(() => api.calls.some((c) => c.method === "POST" && c.path === CAND + "/approve")).toBe(true);
   });
 });
+
+// Deep links survive a reload (Cmd+R): #editor/<job>/<clip> and #review/<job>.
+test.describe("Deep links after reload", () => {
+  test.use({ reducedMotion: "reduce" });
+  test("#editor/<job>/<clip> reopens the editor", async ({ app, api }) => {
+    await mockEditor(app, api);
+    await app.evaluate(() => { location.hash = "#editor/job-done/cand-a"; });
+    await expect(app.locator(".ed-title")).toBeVisible();
+    await app.reload();
+    await expect(app.locator(".ed-title")).toHaveText("First mock clip");
+    expect(await app.evaluate(() => location.hash)).toBe("#editor/job-done/cand-a");
+  });
+});

@@ -258,3 +258,10 @@ button.is-armed{background:var(--badge-failed-bg,#ff453a);color:#fff}
 .ed-actions{display:flex;flex-wrap:wrap;gap:8px}
 .ed-bad{color:var(--bad)}
 #edDesc{width:100%;box-sizing:border-box}
+
+/* Density = flow-preview (≤600 px): h2 21 px, panels sp-2 */
+@media (max-width:600px){
+  .ed-title,.rv-title{font-size:21px}
+  .ed-group{padding:var(--sp-2) 0}
+  .ed-grid{gap:var(--sp-2)}
+}
