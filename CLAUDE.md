@@ -464,6 +464,9 @@ planned post: `reminded_at` set in the queueing transaction; > 1 h late = `misse
   and `#jobOverlayList`. Card status line = `jobStatusLine(j)`, not `isBusy()` (BUSY lacks `processing`).
   Motion (075): only `.job-card.is-running` animates (mini-island ring glide + dot breathe); queued/idle cards and
   the island's idle lead are static. Don't add card-level shimmer/glow back.
+- **Touch targets (182):** ≤ 600 px every control is ≥ 44 px (rule at the end of index.html; fixed-size controls
+  get an invisible ::before/::after hit area). `touch.spec` checks every view + Editor tab: keep its editor mock in
+  sync with editor.js. Desktop is compact by spec (36 px top bar / stepper).
 - **Busy state:** every async button/upload label goes through
   `setBusy(el, busy, label?)`. It disables the control, sets `aria-busy` and
   `.is-busy` (spinner), and restores the label. Don't hand-swap `textContent`.
