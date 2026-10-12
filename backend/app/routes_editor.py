@@ -125,7 +125,7 @@ def _state(c: dict) -> dict:
         "thumbnail": _thumbnail_state(c),
         "watermark": _watermark_state(c),
         "export": _export_state(c),
-        "director": _director_state(spec),
+        "director": _director_state(spec, c),
         "hook_title": {
             "on": bool(ht.get("on", False)), "text": ht.get("text", ""),
             "duration": ht.get("duration", edit_specs.HOOK_TITLE_DEFAULT_DURATION),
@@ -195,11 +195,13 @@ def _export_state(c: dict) -> dict:
                          "error": c.get("submagic_error")}}
 
 
-def _director_state(spec: dict) -> dict:
-    """Auto Edit E1: the plan (empty until generated) + which effects render today."""
+def _director_state(spec: dict, c: dict) -> dict:
+    """Auto Edit E1: the plan (empty until generated) + which effects render today. frames_ready = the current
+    preview has sampled frames (a plan made before them has vision false: the UI suggests regenerating)."""
     d = edit_specs.director_of(spec) or {"items": []}
+    frames_ready = (_core().DATA_ROOT / "previews" / f"{c['id']}.frame-0.jpg").is_file()
     return {**d, "rendered": sorted(edit_director.RENDERED_EFFECTS), "arrives_in": edit_director.ARRIVES_IN,
-            "min_gap": edit_director.MIN_GAP}
+            "min_gap": edit_director.MIN_GAP, "frames_ready": frames_ready}
 
 
 def _cuts_state(spec: dict, duration) -> dict:
@@ -579,10 +581,7 @@ def _plan_inputs(c: dict, user: dict):
     trim = cuts.get("trim")
     removed = cuts.get("removed") or []
     ht = edit_specs.hook_title_of(spec) or {}
-    card = None
-    if ht.get("on"):
-        s0 = float(trim[0]) if trim else 0.0
-        card = (s0, s0 + float(ht.get("duration") or edit_specs.HOOK_TITLE_DEFAULT_DURATION))
+    card = float(ht.get("duration") or edit_specs.HOOK_TITLE_DEFAULT_DURATION) if ht.get("on") else 0.0
     frames = []
     vision_on = str(core.runtime_setting("EDIT_DIRECTOR_VISION", user_id=user["id"]) or "true").lower() not in (
         "false", "0", "no", "off")
@@ -632,10 +631,14 @@ def generate_plan(job_id: str, candidate_id: str, user: dict = Depends(get_curre
         except AIError as exc2:
             raise HTTPException(status_code=502, detail=f"The AI couldn't plan this clip: {str(exc2)[:200]}")
     moments = edit_director.parse_moments(data, duration)
-    items = edit_director.plan(
+    spec = c["edit_spec"] if isinstance(c["edit_spec"], dict) else {}
+    z = edit_specs.zoom_of(spec) or {}
+    items = edit_director.plan(            # restraint in OUTPUT seconds; the user's zoom markers count (QA a156a53)
         duration=duration, moments=moments,
         loud=edit_director.loudness_peaks(cached.get("peaks"), float(cached.get("rate") or 0)),
-        cuts=edit_director.cut_points(removed), hook_card=card, removed=removed, trim=trim)
+        cuts=edit_director.cut_points(removed), card_seconds=card, removed=removed, trim=trim,
+        keep=_keep({"trim": trim, "removed": removed}, duration) if (trim or removed) else None,
+        taken=(z.get("markers") or []) if z.get("on", True) else [])
     value = edit_specs.normalize_director({
         "version": edit_director.VERSION, "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "provider": meta.get("provider"), "vision": bool(frames), "items": items}, duration)
@@ -648,7 +651,7 @@ class PlanIn(BaseModel):
 
 @editor.put("/plan")
 def put_plan(job_id: str, candidate_id: str, body: PlanIn, user: dict = Depends(get_current_user)):
-    """Toggle / edit items of the current plan (empty items = clear the plan)."""
+    """Update plan items by id (items not sent are kept), add user items (t + effect); empty items = clear."""
     core = _core()
     with core.get_db() as conn, conn.cursor() as cur:
         c = _load(cur, job_id, candidate_id, user)
@@ -657,8 +660,20 @@ def put_plan(job_id: str, candidate_id: str, body: PlanIn, user: dict = Depends(
     current = edit_specs.director_of(spec) or {}
     if not body.items:
         return _save_spec_key(job_id, candidate_id, user, "director", None)
+    by_id = {i["id"]: i for i in current.get("items") or []}
+    added = []
+    for it in body.items:            # by id: {id, on} updates that item, items not sent stay; new ones need t + effect
+        if not isinstance(it, dict):
+            raise HTTPException(status_code=400, detail="plan items must be objects")
+        if it.get("id") in by_id:
+            by_id[it["id"]] = {**by_id[it["id"]], **it}
+        elif "t" in it and "effect" in it:
+            added.append({**it, "source": "user"})
+        else:
+            raise HTTPException(status_code=400, detail=f"Unknown plan item {str(it.get('id'))[:40]!r}")
+    merged = list(by_id.values()) + added
     try:
-        value = edit_specs.normalize_director({**current, "items": body.items}, duration)
+        value = edit_specs.normalize_director({**current, "items": merged}, duration)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     return _save_spec_key(job_id, candidate_id, user, "director", value)

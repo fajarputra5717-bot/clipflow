@@ -38,7 +38,7 @@ class Signals(unittest.TestCase):
         self.assertEqual(D.loudness_peaks([0, 0], rate), [])
 
     def test_cut_points(self):
-        self.assertEqual(D.cut_points([[4.0, 5.0], [1.5, 2.0]]), [1.5, 4.0])
+        self.assertEqual(D.cut_points([[4.0, 5.0], [1.5, 2.0]]), [2.0, 5.0])   # first kept moment after each cut
 
 
 class Restraint(unittest.TestCase):
@@ -48,7 +48,7 @@ class Restraint(unittest.TestCase):
                                 {"t": 6.0, "kind": "punchline", "text": "b"},
                                 {"t": 12.0, "kind": "laugh", "text": "c"},       # inside a cut
                                 {"t": 19.8, "kind": "shock", "text": "d"}],      # too close to the end
-                       loud=[7.0, 15.0], cuts=[11.0], hook_card=(0.0, 2.5), removed=[[11.0, 13.0]])
+                       loud=[7.0, 15.0], cuts=[], card_seconds=2.5, removed=[[11.0, 13.0]])
         self.assertEqual([(i["t"], i["effect"], i["source"]) for i in items],
                          [(6.0, "punch", "transcript"), (15.0, "shake", "audio")])
         self.assertTrue(all(i["on"] for i in items))
@@ -74,6 +74,30 @@ class Restraint(unittest.TestCase):
         cmd = D.frame_cmd("/s.mp4", 100.0, 2.5, "/p/x.frame-0.jpg")
         self.assertEqual(cmd[cmd.index("-ss") + 1], "102.500")
         self.assertIn("scale=320:-2", cmd)
+
+
+class OutputTimeAndManualMarkers(unittest.TestCase):
+    """Lane C a156a53 Medium: spacing in OUTPUT seconds after cuts, and the user's zoom markers count."""
+    def test_manual_markers_are_taken(self):
+        m = [{"t": 4.6, "kind": "punchline", "text": "a"}, {"t": 27.2, "kind": "shock", "text": "b"},
+             {"t": 15.0, "kind": "laugh", "text": "c"}]
+        items = D.plan(duration=30, moments=m, taken=[5.0, 26.0])
+        self.assertEqual([i["t"] for i in items], [15.0])
+
+    def test_spacing_measured_after_cuts(self):
+        # 4 s apart in source, but 3 s of it is cut: 1 s apart in the output -> only the first survives
+        m = [{"t": 2.0, "kind": "punchline", "text": "a"}, {"t": 6.0, "kind": "shock", "text": "b"}]
+        keep = [[0.0, 3.0], [6.0, 20.0]]
+        items = D.plan(duration=20, moments=m, removed=[[3.0, 6.0]], keep=keep)
+        self.assertEqual([i["t"] for i in items], [2.0])
+        # the hook card covers the first 2.5 OUTPUT seconds: source 7.0 is output 4.0, allowed; 2.0 is not
+        items = D.plan(duration=20, moments=[{"t": 2.0, "kind": "hook", "text": "a"}, {"t": 7.0, "kind": "shock", "text": "b"}],
+                       removed=[[3.0, 6.0]], keep=keep, card_seconds=2.5)
+        self.assertEqual([i["t"] for i in items], [7.0])
+
+    def test_cut_seam_is_kept(self):
+        items = D.plan(duration=20, cuts=D.cut_points([[8.0, 10.0]]), removed=[[8.0, 10.0]], keep=[[0, 8], [10, 20]])
+        self.assertEqual([(i["t"], i["effect"]) for i in items], [(10.0, "whip")])
 
 
 class Normalize(unittest.TestCase):

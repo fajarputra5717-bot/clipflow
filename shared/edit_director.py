@@ -5,15 +5,18 @@ Signals (all in clip-SOURCE seconds, the basis of zoom markers and cuts):
   vision      optional: 4–6 frames sampled at preview time, the same AI call labels reaction peaks
   audio       loud peaks in the timeline waveform (already cached per preview)
   cut         seams the user made (whip transitions arrive in E2)
-plan() merges them into items {id, t, effect, params, reason, source, on} and applies the restraint rules:
-≥ MIN_GAP s between effects, nothing inside the hook title card, nothing in removed/trimmed ranges, nothing in
-the last END_GUARD s. Pure functions only (frame extraction argv included); the AI call is the caller's
+plan() merges them into items {id, t, effect, params, reason, source, on} and applies the restraint rules,
+measured in OUTPUT seconds (after cuts, via retention.TimeMap): ≥ MIN_GAP s between effects AND from the user's
+own zoom markers, nothing under the hook title card (the first card seconds of the output), nothing in
+removed/trimmed ranges, nothing in the last END_GUARD s. Pure functions only (frame extraction argv included); the AI call is the caller's
 (routes_editor) via shared/ai/router.py, task "edit_moments" (TEXT_UTILITY_PROVIDER).
 """
 from __future__ import annotations
 
 import math
 from typing import Iterable, Optional, Sequence
+
+from shared.retention import TimeMap
 
 VERSION = 1
 MIN_GAP = 3.0             # s between two effects ("max ~1 effect per 3 s")
@@ -137,15 +140,13 @@ def loudness_peaks(peaks: Optional[Sequence[float]], rate: float, *, limit: int 
 
 
 def cut_points(removed: Iterable[Sequence[float]]) -> list[float]:
-    """Seams: where the kept video jumps (the start of each removed range)."""
-    return sorted(round(float(a), 2) for a, _b in removed or [])
+    """Seams: the first kept moment after each removed range (its end), where the kept video jumps."""
+    return sorted(round(float(b), 2) for _a, b in removed or [])
 
 
-def _blocked(t: float, *, duration: float, card: Optional[tuple], removed, trim) -> Optional[str]:
+def _blocked(t: float, *, duration: float, removed, trim) -> Optional[str]:
     if t >= duration - END_GUARD:
         return "too close to the end"
-    if card and card[0] <= t < card[1]:
-        return "under the hook title card"
     for a, b in removed or []:
         if a <= t < b:
             return "inside a cut"
@@ -155,9 +156,15 @@ def _blocked(t: float, *, duration: float, card: Optional[tuple], removed, trim)
 
 
 def plan(*, duration: float, moments: Sequence[dict] = (), loud: Sequence[float] = (),
-         cuts: Sequence[float] = (), hook_card: Optional[tuple] = None, removed=(), trim=None,
-         min_gap: float = MIN_GAP) -> list[dict]:
-    """Merge signals into restrained items, time-sorted. hook_card = (start, end) of the title card or None."""
+         cuts: Sequence[float] = (), card_seconds: float = 0.0, removed=(), trim=None, keep=None,
+         taken: Sequence[float] = (), min_gap: float = MIN_GAP) -> list[dict]:
+    """Merge signals into restrained items, time-sorted (t stays in source seconds).
+    keep = the clip's keep segments (None = uncut); card_seconds = hook title card length (0 = no card);
+    taken = source times already holding an effect (the user's zoom markers): planned items keep min_gap
+    from them too."""
+    tm = TimeMap(keep) if keep else None
+    out = (lambda t: tm.to_output_clamped(t)) if tm else (lambda t: t)
+    out_end = tm.duration if tm else duration
     cands = []
     for m in moments:
         src = "vision" if m["kind"] == "reaction" else "transcript"
@@ -166,13 +173,18 @@ def plan(*, duration: float, moments: Sequence[dict] = (), loud: Sequence[float]
     cands += [(t, "cut", "cut", "cut seam") for t in cuts]
     # best first: priority, then earlier
     cands.sort(key=lambda c: (-PRIORITY[c[2]], c[0]))
+    occupied = [out(float(t)) for t in taken]
     kept: list[dict] = []
     for t, kind, src, text in cands:
-        if _blocked(t, duration=duration, card=hook_card, removed=removed, trim=trim):
+        if _blocked(t, duration=duration, removed=removed, trim=trim):
             continue
-        if any(abs(t - k["t"]) < min_gap for k in kept):
+        o = out(t)
+        if o < card_seconds or o >= out_end - END_GUARD:
+            continue
+        if any(abs(o - x) < min_gap for x in occupied):
             continue
         effect = EFFECT_FOR[kind]
+        occupied.append(o)
         kept.append({"id": f"{effect}-{int(round(t * 100))}", "t": round(t, 2), "effect": effect,
                      "params": dict(PARAMS_FOR.get(effect, {})), "reason": f"{kind}: {text}"[:100],
                      "source": src, "on": True})
@@ -186,7 +198,7 @@ def frame_times(duration: float, *, count: int = FRAME_COUNT, removed=(), trim=N
     out = []
     for i in range(count):
         t = round((i + 0.5) * duration / count, 2)
-        if not _blocked(t, duration=duration + END_GUARD, card=None, removed=removed, trim=trim):
+        if not _blocked(t, duration=duration + END_GUARD, removed=removed, trim=trim):
             out.append(t)
     return out
 

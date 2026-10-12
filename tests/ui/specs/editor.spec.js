@@ -17,7 +17,7 @@ function editorState(over = {}) {
                  picked: null, locked: false, current_url: "/api/jobs/job-done/candidates/cand-a/thumbnail", generating: false },
     watermark: { width: 320, opacity: 1, custom: false },
     export: { burn: true, description: "", submagic: { status: null, preview_url: null, error: null } },
-    director: { items: [], rendered: ["punch"], arrives_in: { shake: "E2", whip: "E2", emoji: "E3" }, min_gap: 3 },
+    director: { items: [], rendered: ["punch"], arrives_in: { shake: "E2", whip: "E2", emoji: "E3" }, min_gap: 3, frames_ready: false },
     ...over,
   };
 }

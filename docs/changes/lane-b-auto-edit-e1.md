@@ -17,3 +17,13 @@ Verified on staging (lane-b-e1, job 96952037): plan in 9 s with frames (Gemini 5
 6 items; preview render log "Zoom: 4 punch-in(s) (4 from the edit plan)"; toggle PUT, cross-user 404, bad
 item 400. Unit: tests/test_edit_director.py (9). UI: editor.spec "Editor Auto edit plan"; director key added
 to the touch/shots editor mocks.
+
+## Fixes after QA a156a53
+- Medium: restraint in OUTPUT seconds (`retention.TimeMap` from the keep segments) and the user's zoom markers
+  count as taken (`plan(taken=, keep=, card_seconds=)`). Cut seams sit at the first kept moment (end of the cut;
+  before, every seam was inside its cut and dropped). Staging: markers placed 0.5 s after two planned punches →
+  the replan keeps ≥ 4.4 s from them.
+- PUT /plan updates items by id (items not sent stay); an unknown id → 400 "Unknown plan item".
+- `director.frames_ready`: the list says when frames weren't used and Regenerate would add them.
+- Unreproduced "(0 from the edit plan)": the "Applied changes" snapshot of that render has 0 plan items, so the
+  render was queued before the 33 s plan call saved. The UI now disables Render while a plan is generating.

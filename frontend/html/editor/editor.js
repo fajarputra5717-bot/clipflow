@@ -318,7 +318,8 @@
     return `
       <div class="ed-group">
         <div class="ed-row"><div><div class="ed-label">Auto edit</div>
-          <div class="ed-hint">${items.length ? `${on} of ${items.length} effects on · at most one per ${d.min_gap} s, never under the title card${d.vision ? " · frames checked" : ""}`
+          <div class="ed-hint">${items.length ? `${on} of ${items.length} effects on · at most one per ${d.min_gap} s, never under the title card${d.vision ? " · frames checked"
+              : d.frames_ready ? " · frames weren't checked: Regenerate to include them" : " · frames are checked after the next Render preview"}`
             : "AI picks the strongest moments (hook, punchline, shock, laugh) and plans a few effects. You keep the final say."}</div></div>
           <button type="button" class="sm" data-ed-plan-gen>${items.length ? "Regenerate plan" : "Generate plan"}</button></div>
         ${items.length ? `<div class="ed-plan-list">${items.map((i) => `
@@ -335,6 +336,9 @@
     saver("plan", "/plan", () => ({ items: E.plan }));
   }
   async function generatePlan(btn) {
+    if (E.busy) return;
+    E.busy = true;                 // QA a156a53: no render while the (synchronous) plan call runs, or it renders without it
+    const r = document.querySelector("[data-ed-render]"); if (r) r.disabled = true;
     setBusy(btn, true, "Planning…");
     try {
       await flushSavers();
@@ -344,6 +348,7 @@
       if (E.tab === "effects") repaintPanel();
       paintState(E.plan.length ? undefined : "No strong moments found: nothing planned");
     } catch (e) { setBusy(btn, false); paintState("Plan failed: " + e.message); }
+    finally { E.busy = false; const rb = document.querySelector("[data-ed-render]"); if (rb && !rb.classList.contains("is-busy")) rb.disabled = false; }
   }
   function addZoom(t) {
     if (!E.tl || E.zoom.markers.length >= E.state.zoom.max_markers) return;
