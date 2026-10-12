@@ -8,3 +8,6 @@ OK: key sent only in the X-Goog-Api-Key header (never a URL or log line; Request
 3. Low · auto pulls overwrite a manually entered YouTube view count (and also update claimed/paid posts' views; expected_rp stays as stored at claim): intended per "writes like a manual entry", note it in the UI.
 Not verified: a real API call ("does an API key alone read public stats" is unconfirmed per Lane B), the Settings → YouTube UI visually, the island "Updating views…" with a real run, quota arithmetic against Google's real units, 14 d/30 d cadence over real time.
 No High/Medium. This is part 1 of P5, not a phase gate.
+
+## Re-check 2026-10-13 · 190 (2b8bfb0): Lows 1 and 2 verified, 3 read only
+error_kind() on a git copy of 2b8bfb0: quotaExceeded / dailyLimitExceeded → quota; rateLimitExceeded, userRateLimitExceeded, 429, 5xx → transient; keyInvalid, keyExpired, or an "API key" message → key; other 400/403/404 (badRequest, forbidden, notFound) → request (recorded, no alert). unittest view_pull OK; prod riftstorm-* restarts=0. Low 3 (Publish panel "· from YouTube" + hint): not looked at visually (publish.spec incl. the 189 case is Lane A's). All three Lows closed; real API call still unverified.
