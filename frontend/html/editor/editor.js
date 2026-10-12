@@ -536,7 +536,7 @@
   }
   async function applyPack(btn) {
     if (E.busy) return;
-    if (!armed(btn, `Tap again: apply ${btn.textContent}`)) return;
+    if (!armed(btn, "Tap again: replaces captions, look, sounds, plan")) return;   // QA 8fdbdc1 Low: say what it overwrites
     btn.classList.remove("is-armed");
     E.busy = true; setBusy(btn, true, "Applying…");
     try {

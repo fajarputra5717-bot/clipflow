@@ -14,3 +14,8 @@
   ≥ 3 s apart and clear of the 2 manual zoom markers. Preview log: 5 punch-ins (3 from the plan), Look vivid_gaming,
   SFX 3 mixed, Loud & punchy, -14.2 LUFS / -4.7 dBTP. Frame at a punch: progress bar, Hormozi caption, watermark ok.
   Unit: tests/test_style_packs.py (4). UI: editor.spec "E5 style pack".
+
+## QA 8fdbdc1 Lows
+- Peak guard keeps a 0.1 dB margin (`PEAK_GUARD_MARGIN`): an encoded file above -1.1 dBTP is re-limited. Throwaway
+  container, a clip that landed at exactly -1.0: "peak guard 1: -1.0 → -14.5 LUFS / -1.4 dBTP".
+- The pack's second tap now says what it replaces: "Tap again: replaces captions, look, sounds, plan".

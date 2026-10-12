@@ -1723,6 +1723,7 @@ def set_render_warning(candidate_id, code, message=None):
         log(f"Could not record render warning {code} for {candidate_id}: {exc}")
 
 
+PEAK_GUARD_MARGIN = 0.1   # dB under the -1 dBTP ceiling the encoded file must reach (else re-limited)
 LOUDNESS_TRIM_TOL = 0.5   # QA Low 2: finals land within ±0.5 LU of the target when a trim can get them there
 
 
@@ -1833,10 +1834,10 @@ def normalize_loudness(path, duration, *, candidate_id=None, audio_bitrate="128k
                     note += f" (trim {name}: {after['i']:.1f} -> {trimmed['i']:.1f} LUFS)"
                     result, after = dst, trimmed
         # The ENCODED file must stay ≤ -1 dBTP (AAC overshoots): re-limit the result, up to twice, if it doesn't.
-        for attempt in (1, 2):
-            if not after or after["tp"] <= retention.LOUDNORM_TP:
+        for attempt in (1, 2):      # QA 8fdbdc1 Low: keep a 0.1 dB margin (a file at exactly -1.0 has none)
+            if not after or after["tp"] <= retention.LOUDNORM_TP - PEAK_GUARD_MARGIN:
                 break
-            hr2 = retention.CODEC_HEADROOM_DB + (after["tp"] - retention.LOUDNORM_TP) + 0.3 * attempt
+            hr2 = retention.CODEC_HEADROOM_DB + (after["tp"] - retention.LOUDNORM_TP) + PEAK_GUARD_MARGIN + 0.3 * attempt
             dst = tmp4 if result != tmp4 else tmp3
             relimited = _loudnorm_pass(result, dst, retention.gain_filter(0.0, codec_headroom_db=hr2), audio_bitrate, timeout)
             log(f"Loudness peak guard {attempt}: {after['tp']:.1f} dBTP -> "
