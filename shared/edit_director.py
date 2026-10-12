@@ -166,7 +166,7 @@ def _blocked(t: float, *, duration: float, removed, trim) -> Optional[str]:
 
 def plan(*, duration: float, moments: Sequence[dict] = (), loud: Sequence[float] = (),
          cuts: Sequence[float] = (), card_seconds: float = 0.0, removed=(), trim=None, keep=None,
-         taken: Sequence[float] = (), min_gap: float = MIN_GAP) -> list[dict]:
+         taken: Sequence[float] = (), min_gap: float = MIN_GAP, mapping: Optional[dict] = None) -> list[dict]:
     """Merge signals into restrained items, time-sorted (t stays in source seconds).
     keep = the clip's keep segments (None = uncut); card_seconds = hook title card length (0 = no card);
     taken = source times already holding an effect (the user's zoom markers): planned items keep min_gap
@@ -184,7 +184,10 @@ def plan(*, duration: float, moments: Sequence[dict] = (), loud: Sequence[float]
     cands.sort(key=lambda c: (-PRIORITY[c[2]], c[0]))
     occupied = [out(float(t)) for t in taken]
     kept: list[dict] = []
+    used: dict = {}
     for t, kind, src, text in cands:
+        if mapping is not None and not mapping.get(kind):
+            continue                                   # E5: the pack doesn't use this kind of moment
         if _blocked(t, duration=duration, removed=removed, trim=trim):
             continue
         o = out(t)
@@ -192,10 +195,15 @@ def plan(*, duration: float, moments: Sequence[dict] = (), loud: Sequence[float]
             continue
         if any(abs(o - x) < min_gap for x in occupied):
             continue
-        effect = EFFECT_FOR[kind]
+        if mapping is not None:                        # E5: cycle through the pack's effects for this kind
+            choices = mapping[kind]
+            effect, extra = choices[used.get(kind, 0) % len(choices)]
+            used[kind] = used.get(kind, 0) + 1
+        else:
+            effect, extra = EFFECT_FOR[kind], {}
         occupied.append(o)
         kept.append({"id": f"{effect}-{int(round(t * 100))}", "t": round(t, 2), "effect": effect,
-                     "params": dict(PARAMS_FOR.get(effect, {})), "reason": f"{kind}: {text}"[:100],
+                     "params": {**PARAMS_FOR.get(effect, {}), **extra}, "reason": f"{kind}: {text}"[:100],
                      "source": src, "on": True})
         if len(kept) >= MAX_ITEMS:
             break

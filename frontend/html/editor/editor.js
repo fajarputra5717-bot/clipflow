@@ -524,9 +524,33 @@
       </div>`;
   }
   const saveLook = () => saver("look", "/look", () => E.look);
+  function packGroupHtml() {        // E5: a pack presets captions, effects + sounds, density, look, progress, loudness
+    const P = E.state.pack;
+    return `
+      <div class="ed-group">
+        <div class="ed-row ed-row-tight"><div class="ed-label">Style pack</div>${P.from_campaign ? `<span class="tag">from campaign</span>` : ""}</div>
+        <div class="ed-chips" role="group" aria-label="Style pack">${P.options.map((o) =>
+          `<button type="button" class="ed-chip" data-ed-pack="${esc(o.id)}" aria-pressed="${o.id === P.id}">${esc(o.name)}</button>`).join("")}</div>
+        <div class="ed-hint">Sets captions, effects + sounds (one per ${P.options.find((o) => o.id === P.id)?.min_gap || 3} s), look, progress bar and loudness, then plans the clip. Change anything afterwards.</div>
+      </div>`;
+  }
+  async function applyPack(btn) {
+    if (E.busy) return;
+    if (!armed(btn, `Tap again: apply ${btn.textContent}`)) return;
+    btn.classList.remove("is-armed");
+    E.busy = true; setBusy(btn, true, "Applying…");
+    try {
+      await flushSavers();
+      const r = await api(edUrl(E.jid, E.cid) + "/pack", { method: "POST", body: JSON.stringify({ pack: btn.dataset.edPack }) });
+      E.busy = false;
+      await open(E.jid, E.cid);                    // every tab's state changed: reload, stay on Effects
+      E.tab = "effects"; render();
+      E.dirty = true; paintHook(); paintState(r.pack_note || undefined);
+    } catch (e) { E.busy = false; setBusy(btn, false); paintState("Pack not applied: " + e.message); }
+  }
   function effectsPanel() {
     const z = E.zoom, p = E.progress, n = z.markers.length;
-    return planGroupHtml() + lookGroupHtml() + `
+    return packGroupHtml() + planGroupHtml() + lookGroupHtml() + `
       <div class="ed-group">
         <div class="ed-row"><div><div class="ed-label">Zoom punch-ins</div>
           <div class="ed-hint">${n} punch-in${n === 1 ? "" : "s"} on the timeline: add them in ◆ Zoom mode (key Z).</div></div>
@@ -1074,7 +1098,7 @@
 
   // ------------------------------------------------------------------ events (delegated, data-*)
   document.addEventListener("click", (e) => {
-    const t = e.target.closest("[data-ed-back],[data-ed-hook-on],[data-ed-hook-dur],[data-ed-render],[data-ed-play],[data-ed-tab],[data-ed-zoom-on],[data-ed-progress-on],[data-ed-progress-color],[data-ed-compress],[data-ed-silence],[data-ed-word],[data-ed-pause],[data-ed-mode],[data-ed-suggest],[data-ed-fillers],[data-ed-cuts-reset],[data-ed-zoom-add],[data-ed-zoom-mark],[data-ed-trim],[data-ed-seekarea],[data-ed-preset],[data-ed-cap-all],[data-ed-kw],[data-ed-kw-color],[data-ed-fix-typos],[data-ed-cap-reset],[data-ed-capy-on],[data-ed-new-hook],[data-ed-thumb-pick],[data-ed-thumb-gen],[data-ed-burn],[data-ed-gen-desc],[data-ed-sm],[data-ed-versions],[data-ed-restore],[data-ed-approve],[data-ed-plan-gen],[data-ed-plan-item],[data-ed-loud],[data-ed-look-preset],[data-ed-look-vignette],[data-ed-look-grain]");
+    const t = e.target.closest("[data-ed-back],[data-ed-hook-on],[data-ed-hook-dur],[data-ed-render],[data-ed-play],[data-ed-tab],[data-ed-zoom-on],[data-ed-progress-on],[data-ed-progress-color],[data-ed-compress],[data-ed-silence],[data-ed-word],[data-ed-pause],[data-ed-mode],[data-ed-suggest],[data-ed-fillers],[data-ed-cuts-reset],[data-ed-zoom-add],[data-ed-zoom-mark],[data-ed-trim],[data-ed-seekarea],[data-ed-preset],[data-ed-cap-all],[data-ed-kw],[data-ed-kw-color],[data-ed-fix-typos],[data-ed-cap-reset],[data-ed-capy-on],[data-ed-new-hook],[data-ed-thumb-pick],[data-ed-thumb-gen],[data-ed-burn],[data-ed-gen-desc],[data-ed-sm],[data-ed-versions],[data-ed-restore],[data-ed-approve],[data-ed-plan-gen],[data-ed-plan-item],[data-ed-loud],[data-ed-look-preset],[data-ed-look-vignette],[data-ed-look-grain],[data-ed-pack]");
     if (!t || !E.state && !t.matches("[data-ed-back]")) return;
     if (t.matches("[data-ed-back]")) {                       // back to the Review page (step 4) for this job
       e.preventDefault(); const jid = E.jid; close(false); location.hash = `#review/${encodeURIComponent(jid || "")}`;
@@ -1165,6 +1189,7 @@
     if (t.matches("[data-ed-zoom-on]")) { E.zoom.on = !E.zoom.on; repaintPanel(); zoomChanged(); return; }
     if (t.matches("[data-ed-progress-on]")) { E.progress.on = !E.progress.on; repaintPanel(); saveProgress(); return; }
     if (t.matches("[data-ed-progress-color]")) { E.progress.color = t.dataset.edProgressColor; repaintPanel(); saveProgress(); return; }
+    if (t.matches("[data-ed-pack]")) return applyPack(t);
     if (t.matches("[data-ed-look-preset]")) { E.look.preset = t.dataset.edLookPreset; repaintPanel(); saveLook(); return; }
     if (t.matches("[data-ed-look-vignette]")) { E.look.vignette = !E.look.vignette; repaintPanel(); saveLook(); return; }
     if (t.matches("[data-ed-look-grain]")) { E.look.grain = !E.look.grain; repaintPanel(); saveLook(); return; }

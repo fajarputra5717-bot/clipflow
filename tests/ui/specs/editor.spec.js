@@ -21,6 +21,8 @@ function editorState(over = {}) {
       effects: ["punch", "push", "zoom_out", "shake", "flash", "whip", "freeze", "slowmo", "emoji"], defaults: { emoji: { emoji: "😂" }, freeze: { hold: 0.6 }, slowmo: { dur: 1.2, factor: 0.5 } },
       sfx: ["whoosh", "boom", "bass_hit", "ding", "record_scratch"], emoji: ["😂", "😭", "💀"] },
     look: { preset: "none", vignette: false, grain: false, presets: ["none", "vivid_gaming", "warm", "moody"] },
+    pack: { id: "podcast_clean", name: "Podcast Clean", from_campaign: true, options: [{ id: "gaming_hype", name: "Gaming Hype", min_gap: 3 },
+      { id: "funny_meme", name: "Funny / Meme", min_gap: 3 }, { id: "drama_tension", name: "Drama / Tension", min_gap: 5 }, { id: "podcast_clean", name: "Podcast Clean", min_gap: 6 }] },
     ...over,
   };
 }
@@ -54,7 +56,7 @@ async function mockEditor(page, api, timeline = TIMELINE) {
   api.editor = editorState();
   await page.route(/\/api\/jobs\/[^/]+\/candidates\/[^/]+\/editor\/timeline/, (route) =>
     route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(timeline) }));
-  await page.route(/\/api\/jobs\/[^/]+\/candidates\/[^/]+\/editor(\/hook-title|\/cuts|\/zoom|\/progress|\/audio|\/plan|\/look)?(\?.*)?$/, async (route) => {
+  await page.route(/\/api\/jobs\/[^/]+\/candidates\/[^/]+\/editor(\/hook-title|\/cuts|\/zoom|\/progress|\/audio|\/plan|\/look|\/pack)?(\?.*)?$/, async (route) => {
     const req = route.request();
     if (req.method() === "PUT") {
       const body = req.postDataJSON(), path = new URL(req.url()).pathname;
@@ -66,6 +68,12 @@ async function mockEditor(page, api, timeline = TIMELINE) {
       else if (path.endsWith("/plan")) api.editor.director = { ...api.editor.director, items: body.items };
       else if (path.endsWith("/look")) api.editor.look = { ...api.editor.look, ...body };
       else api.editor.hook_title = { ...api.editor.hook_title, ...body };
+    }
+    if (req.method() === "POST" && new URL(req.url()).pathname.endsWith("/pack")) {   // Auto Edit E5
+      const body = req.postDataJSON();
+      api.calls.push({ method: "POST", path: new URL(req.url()).pathname, body });
+      api.editor.pack = { ...api.editor.pack, id: body.pack, name: "Gaming Hype", from_campaign: false };
+      api.editor.look = { ...api.editor.look, preset: "vivid_gaming" };
     }
     if (req.method() === "POST" && new URL(req.url()).pathname.endsWith("/plan")) {   // Auto Edit E1
       api.calls.push({ method: "POST", path: new URL(req.url()).pathname });
@@ -520,5 +528,24 @@ test.describe("Editor Auto edit E4 look", () => {
     await expect(app.locator('[data-ed-look-preset="moody"]')).toHaveAttribute("aria-pressed", "true");
     await expect.poll(() => api.calls.filter((c) => c.method === "PUT" && c.path.endsWith("/look")).pop()?.body)
       .toEqual({ preset: "moody", vignette: true, grain: false });
+  });
+});
+
+// Auto Edit E5: style pack chips (campaign default tagged); applying one is a two-tap action, then the editor reloads.
+test.describe("Editor Auto edit E5 style pack", () => {
+  test.use({ reducedMotion: "reduce" });
+  test("campaign default shown; Gaming Hype applies after a second tap and stays on Effects", async ({ app, api }) => {
+    await mockEditor(app, api);
+    await app.evaluate(() => { location.hash = "#editor/job-done/cand-a"; });
+    await app.locator('[data-ed-tab="effects"]').click();
+    await expect(app.locator('[data-ed-pack="podcast_clean"]')).toHaveAttribute("aria-pressed", "true");
+    await expect(app.locator(".ed-panel .tag")).toHaveText("from campaign");
+    await app.locator('[data-ed-pack="gaming_hype"]').click();
+    expect(api.calls.some((c) => c.path && c.path.endsWith("/pack"))).toBe(false);          // first tap only arms
+    await app.locator('[data-ed-pack="gaming_hype"]').click();
+    await expect.poll(() => api.calls.find((c) => c.method === "POST" && c.path.endsWith("/pack"))?.body).toEqual({ pack: "gaming_hype" });
+    await expect(app.locator('[data-ed-pack="gaming_hype"]')).toHaveAttribute("aria-pressed", "true");
+    await expect(app.locator('[data-ed-tab="effects"]')).toHaveAttribute("aria-selected", "true");
+    await expect(app.locator('[data-ed-look-preset="vivid_gaming"]')).toHaveAttribute("aria-pressed", "true");
   });
 });

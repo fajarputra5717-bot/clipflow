@@ -29,6 +29,7 @@ from pydantic import BaseModel
 
 from shared import caption_options
 from shared import edit_director
+from shared import style_packs
 from shared import edit_spec as edit_specs
 from shared import fonts
 from shared import languages
@@ -126,6 +127,7 @@ def _state(c: dict) -> dict:
         "watermark": _watermark_state(c),
         "export": _export_state(c),
         "director": _director_state(spec, c),
+        "pack": _pack_state(spec, c),
         "look": {"preset": "none", "vignette": False, "grain": False, **(edit_specs.look_of(spec) or {}),
                  "presets": list(edit_specs.LOOK_PRESETS)},
         "hook_title": {
@@ -197,13 +199,21 @@ def _export_state(c: dict) -> dict:
                          "error": c.get("submagic_error")}}
 
 
+def _pack_state(spec: dict, c: dict) -> dict:
+    """E5: the clip's style pack (its own choice or the campaign default) + the four options."""
+    pid, from_campaign = style_packs.resolve(spec, c.get("campaign"))
+    return {"id": pid, "name": style_packs.PACKS[pid]["name"], "from_campaign": from_campaign,
+            "options": style_packs.options()}
+
+
 def _director_state(spec: dict, c: dict) -> dict:
     """Auto Edit E1: the plan (empty until generated) + which effects render today. frames_ready = the current
     preview has sampled frames (a plan made before them has vision false: the UI suggests regenerating)."""
     d = edit_specs.director_of(spec) or {"items": []}
     frames_ready = (_core().DATA_ROOT / "previews" / f"{c['id']}.frame-0.jpg").is_file()
     return {**d, "rendered": sorted(edit_director.RENDERED_EFFECTS), "arrives_in": edit_director.ARRIVES_IN,
-            "min_gap": edit_director.MIN_GAP, "frames_ready": frames_ready,
+            "min_gap": style_packs.PACKS[style_packs.resolve(spec, c.get("campaign"))[0]]["min_gap"],
+            "frames_ready": frames_ready,
             "effects": list(edit_director.EFFECTS), "defaults": edit_director.PARAMS_FOR,
             "sfx": list(edit_director.SFX), "emoji": list(edit_director.EMOJI)}
 
@@ -622,7 +632,8 @@ def _plan_inputs(c: dict, user: dict):
 
 @editor.post("/plan")
 def generate_plan(job_id: str, candidate_id: str, user: dict = Depends(get_current_user)):
-    """Generate / regenerate the edit plan (one utility-AI call, + frames when available). Replaces the plan."""
+    """Generate / regenerate the edit plan (one utility-AI call, + frames when available). Replaces the plan.
+    E5: the clip's style pack decides which moments get which effects + sounds and the density."""
     from datetime import datetime, timezone
     from shared.ai import router as ai_router
     from shared.errors import AIError, AINotConfiguredError
@@ -657,7 +668,9 @@ def generate_plan(job_id: str, candidate_id: str, user: dict = Depends(get_curre
     moments = edit_director.parse_moments(data, duration)
     spec = c["edit_spec"] if isinstance(c["edit_spec"], dict) else {}
     z = edit_specs.zoom_of(spec) or {}
+    pack = style_packs.PACKS[style_packs.resolve(spec, c["campaign"])[0]]
     items = edit_director.plan(            # restraint in OUTPUT seconds; the user's zoom markers count (QA a156a53)
+        mapping=pack["map"], min_gap=pack["min_gap"],
         duration=duration, moments=moments,
         loud=edit_director.loudness_peaks(cached.get("peaks"), float(cached.get("rate") or 0)),
         cuts=edit_director.cut_points(removed), card_seconds=card, removed=removed, trim=trim,
@@ -667,6 +680,45 @@ def generate_plan(job_id: str, candidate_id: str, user: dict = Depends(get_curre
         "version": edit_director.VERSION, "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "provider": meta.get("provider"), "vision": bool(frames), "items": items}, duration)
     return _save_spec_key(job_id, candidate_id, user, "director", value)
+
+
+class PackIn(BaseModel):
+    pack: str
+
+
+@editor.post("/pack")
+def apply_pack(job_id: str, candidate_id: str, body: PackIn, user: dict = Depends(get_current_user)):
+    """E5: apply a style pack to this clip: caption preset + keyword colour, look, progress bar, Loud & punchy, zoom
+    intensity, then a new plan with the pack's mapping (when the preview's transcript exists). All overridable after."""
+    from shared import caption_options
+    p = style_packs.PACKS.get(body.pack)
+    if not p:
+        raise HTTPException(status_code=400, detail=f"Unknown style pack {body.pack[:30]!r}")
+    core = _core()
+    with core.get_db() as conn, conn.cursor() as cur:
+        c = _load(cur, job_id, candidate_id, user)
+    spec = c["edit_spec"] if isinstance(c["edit_spec"], dict) else {}
+    duration = c["duration_seconds"] or ((c["end_time"] or 0) - (c["start_time"] or 0))
+    preset = next(x for x in caption_options.PRESETS if x[0] == p["caption"]["preset"])
+    save = lambda key, value: _save_spec_key(job_id, candidate_id, user, key, value)
+    save("pack", body.pack)
+    save("caption", {"style": preset[2], "animation": preset[3]})
+    if p["caption"].get("keyword_color"):
+        save("keyword_color", p["caption"]["keyword_color"])
+    save("look", edit_specs.normalize_look(p["look"]))
+    prog = edit_specs.progress_of(spec) or {}
+    save("progress", edit_specs.normalize_progress({"on": p["progress"], "color": prog.get("color")}))
+    save("audio", edit_specs.normalize_audio({**edit_specs.audio_of(spec), "loud": p["loud"]}, duration))
+    z = edit_specs.zoom_of(spec) or {}
+    state = save("zoom", edit_specs.normalize_zoom({"on": z.get("on", True), "markers": z.get("markers") or [],
+                                                     "intensity": p["zoom_intensity"]}, duration))
+    try:
+        return generate_plan(job_id, candidate_id, user)
+    except HTTPException as exc:
+        if exc.status_code != 409:          # no preview transcript yet: the pack applies, the plan comes later
+            raise
+        state["pack_note"] = "Pack applied. Render a preview, then Generate plan for its effects."
+        return state
 
 
 class PlanIn(BaseModel):
