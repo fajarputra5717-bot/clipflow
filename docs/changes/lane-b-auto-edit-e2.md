@@ -11,3 +11,5 @@
   plan: flash, push, shake, whip, zoom_out" + "39.9 s -> 40.7 s + time effects (freeze, slowmo)", preview 40.7 s.
   Frames at each effect's peak: watermark + captions sharp and in place (whip, flash, shake), nothing off-canvas.
   Unit: tests/test_motion.py (8). UI: editor.spec "Auto edit E2 effects".
+- Final (staging, same clip, 1080x1920): same log lines, 40.7 s, -14.0 LUFS / -1.2 dBTP; the same 10 frames match the
+  preview (effects at their peaks, captions + watermark intact, nothing off-canvas).
