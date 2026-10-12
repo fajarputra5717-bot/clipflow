@@ -580,6 +580,28 @@ def ensure_schema():
         "ALTER TABLE telegram_sends ADD COLUMN IF NOT EXISTS text TEXT",
         "ALTER TABLE telegram_sends DROP CONSTRAINT IF EXISTS telegram_sends_kind_check",
         "ALTER TABLE telegram_sends ADD CONSTRAINT telegram_sends_kind_check CHECK (kind IN ('clip', 'test', 'reminder', 'note'))",
+        # P5 part 1 (189): automatic YouTube view pulls (shared/view_pull.py). Views written like a manual entry,
+        # marked source 'auto'; view_pull_runs = one row per pull run (quota accounting + the island while running).
+        "ALTER TABLE clip_post_views ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'manual'",
+        "ALTER TABLE clip_posts ADD COLUMN IF NOT EXISTS views_source TEXT",
+        "ALTER TABLE clip_posts ADD COLUMN IF NOT EXISTS views_pulled_at TIMESTAMPTZ",
+        "ALTER TABLE clip_posts ADD COLUMN IF NOT EXISTS views_error TEXT",
+        """
+        CREATE TABLE IF NOT EXISTS view_pull_runs (
+            id BIGSERIAL PRIMARY KEY,
+            platform TEXT NOT NULL DEFAULT 'youtube',
+            status TEXT NOT NULL DEFAULT 'running' CHECK (status IN ('running', 'done', 'failed')),
+            user_ids TEXT[] NOT NULL DEFAULT '{}',
+            posts INT NOT NULL DEFAULT 0,
+            updated INT NOT NULL DEFAULT 0,
+            units INT NOT NULL DEFAULT 0,
+            error_kind TEXT,
+            error TEXT,
+            started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            finished_at TIMESTAMPTZ
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS idx_view_pull_runs_started ON view_pull_runs (started_at DESC)",
     ]
 
     try:
@@ -1773,7 +1795,7 @@ POST_COLUMNS = (
     "p.id, p.candidate_id, p.job_id, p.campaign, p.title, p.platform, p.account_id, a.handle, p.status, "
     "p.source, p.scheduled_for, p.posted_at, p.url, p.external_id, p.views, p.views_at, p.claimed_at, "
     "p.paid_at, p.paid_rp, p.note, p.error, p.created_at, p.updated_at, p.eligible, p.ineligible_reason, "
-    "p.claimed_views, p.expected_rp"
+    "p.claimed_views, p.expected_rp, p.views_source, p.views_error"
 )
 POST_FROM = "clip_posts p LEFT JOIN platform_accounts a ON a.id = p.account_id"
 
@@ -1782,7 +1804,7 @@ def _post_row(r) -> dict:
     keys = ("id", "candidate_id", "job_id", "campaign", "title", "platform", "account_id", "account_handle",
             "status", "source", "scheduled_for", "posted_at", "url", "external_id", "views", "views_at",
             "claimed_at", "paid_at", "paid_rp", "note", "error", "created_at", "updated_at", "eligible",
-            "ineligible_reason", "claimed_views", "expected_rp")
+            "ineligible_reason", "claimed_views", "expected_rp", "views_source", "views_error")
     d = dict(zip(keys, r))
     for k in ("scheduled_for", "posted_at", "views_at", "claimed_at", "paid_at", "created_at", "updated_at"):
         d[k] = d[k].isoformat() if d[k] else None
@@ -2468,6 +2490,7 @@ def update_post(post_id: str, payload: PostUpdate, request: Request):
             if "views" in sent and payload.views is not None:
                 sets["views"] = new["views"] = payload.views
                 sets["views_at"] = datetime.now(timezone.utc)  # every views entry is stamped
+                sets["views_source"] = "manual"   # 189: automatic pulls write "auto"
                 cur.execute(
                     "INSERT INTO clip_post_views (post_id, user_id, views) VALUES (%s, %s, %s)",
                     (post_id, user["id"], payload.views),
@@ -2807,6 +2830,14 @@ def list_activity(request: Request):
                               "stage": "checking", "percent": None, "label": "Checking for new videos",
                               "title": auto_import.channel_label(channel),
                               "updated_at": claimed.isoformat() if claimed else None})
+            # 189: an automatic view pull touching the caller's posts ("Updating views…", indeterminate).
+            cur.execute("SELECT id, platform, started_at FROM view_pull_runs WHERE status = 'running' AND %s = ANY(user_ids) "
+                        "AND started_at > NOW() - INTERVAL '30 minutes'", (user["id"],))
+            for rid, platform, started in cur.fetchall():
+                items.append({"owner": None, "kind": "views", "id": f"views:{rid}", "job_id": None, "candidate_id": None,
+                              "stage": "updating", "percent": None, "label": "Updating views…",
+                              "title": "YouTube" if platform == "youtube" else platform,
+                              "updated_at": started.isoformat() if started else None})
     return {"items": items}
 
 

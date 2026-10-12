@@ -26,7 +26,7 @@ from faster_whisper import WhisperModel
 from psycopg.rows import dict_row
 
 from shared.ai import router as ai_router
-from shared import auto_import, campaigns, descriptions, source_watch, ytdlp, edit_spec as edit_specs, languages, posts as post_rules, retention, rule_checks
+from shared import auto_import, campaigns, descriptions, source_watch, view_pull, ytdlp, edit_spec as edit_specs, languages, posts as post_rules, retention, rule_checks
 from shared.errors import FAILURE_TRANSIENT, failure_class
 from shared.fonts import caption_font_bold, normalize_caption_font
 from shared.settings import RuntimeSettings
@@ -8027,6 +8027,7 @@ def main():
             if not sender_is_separate():
                 maybe_queue_reminders()
             maybe_check_sources()
+            maybe_pull_views()
 
             time.sleep(
                 2
@@ -8245,6 +8246,122 @@ def maybe_check_sources():
         return   # the backend hasn't migrated yet (183)
     if row:
         process_source_channel(row)
+
+
+# ============================================================
+# VIEW PULLS (189, P5 part 1) — shared/view_pull.py. YouTube posts' view counts via Data API v3 videos.list (API key
+# only, YOUTUBE_API_KEY, sent as a header — never in a URL or a log line). Every 5 min while idle: posts due by the
+# cadence (6 h < 14 days, daily < 30 days), ≤ 50 ids per call, ≤ VIEW_PULL_DAILY_UNITS units per Pacific quota day;
+# a quotaExceeded stops pulls until the reset. Writes like a manual entry, source 'auto'.
+# ============================================================
+
+VIEW_PULL_EVERY_S = 300
+_last_view_pass = 0.0
+
+
+def _post_view_update(conn, row, views, now):
+    conn.execute(
+        "UPDATE clip_posts SET views = %s, views_at = %s, views_source = 'auto', views_pulled_at = %s, views_error = NULL, "
+        "updated_at = NOW() WHERE id = %s",
+        (views, now, now, row["id"]),
+    )
+    conn.execute("INSERT INTO clip_post_views (post_id, user_id, views, at, source) VALUES (%s, %s, %s, %s, 'auto')",
+                 (row["id"], row["user_id"], views, now))
+
+
+def pull_youtube_views(now=None, http=None):
+    """One pull run; returns a summary dict, or None when nothing was due / no key / no quota left."""
+    key = (setting("YOUTUBE_API_KEY") or "").strip()
+    if not key:
+        return None
+    http = http or _requests
+    now = now or datetime.now(timezone.utc)
+    with db() as conn:
+        conn.execute("UPDATE view_pull_runs SET status = 'failed', error = 'interrupted', finished_at = NOW() "
+                     "WHERE status = 'running' AND started_at < NOW() - INTERVAL '30 minutes'")
+        q = conn.execute("SELECT COALESCE(SUM(units), 0) AS used, COALESCE(BOOL_OR(error_kind = 'quota'), FALSE) AS blocked "
+                         "FROM view_pull_runs WHERE started_at >= %s", (view_pull.quota_day_start(now),)).fetchone()
+        rows = conn.execute(
+            "SELECT id, user_id, platform, url, external_id, posted_at, views_pulled_at FROM clip_posts "
+            "WHERE platform = ANY(%s) AND status IN ('posted', 'claimed', 'paid') AND posted_at > %s",
+            (list(view_pull.PLATFORMS), now - timedelta(days=view_pull.STOP_DAYS)),
+        ).fetchall()
+        conn.commit()
+    budget = max(0, (setting_int("VIEW_PULL_DAILY_UNITS", 1000) or 0) - int(q["used"]))
+    if q["blocked"] or budget <= 0:
+        return None
+    due = [r for r in rows if view_pull.due(r, now)]
+    by_vid, no_id = {}, []
+    for r in due:
+        vid = view_pull.youtube_id(r["url"], r["external_id"])
+        (by_vid.setdefault(vid, []) if vid else no_id).append(r)
+    groups = view_pull.batches(sorted(by_vid))[:budget]
+    if not groups and not no_id:
+        return None
+    users = sorted({r["user_id"] for g in groups for v in g for r in by_vid[v]} | {r["user_id"] for r in no_id})
+    with db() as conn:
+        run_id = conn.execute("INSERT INTO view_pull_runs (user_ids, posts) VALUES (%s, %s) RETURNING id",
+                              (users, sum(len(by_vid[v]) for g in groups for v in g) + len(no_id))).fetchone()["id"]
+        conn.commit()
+    units = updated = 0
+    kind = err = None
+    try:
+        if no_id:
+            with db() as conn:
+                for r in no_id:
+                    conn.execute("UPDATE clip_posts SET views_pulled_at = %s, views_error = %s WHERE id = %s",
+                                 (now, "No YouTube video id in the post URL", r["id"]))
+                conn.commit()
+        for ids in groups:
+            resp = http.get(view_pull.API_URL, params={"part": "statistics", "id": ",".join(ids), "maxResults": view_pull.BATCH},
+                            headers={"X-Goog-Api-Key": key}, timeout=20)
+            units += 1
+            try:
+                data = resp.json()
+            except ValueError:
+                data = None
+            if resp.status_code != 200:
+                kind = view_pull.error_kind(resp.status_code, data)
+                err = f"HTTP {resp.status_code}: " + str(((data or {}).get("error") or {}).get("message") or "")[:200]
+                break
+            counts = view_pull.parse_counts(data)
+            with db() as conn:
+                for vid in ids:
+                    for r in by_vid[vid]:
+                        if vid in counts:
+                            _post_view_update(conn, r, counts[vid], now)
+                            updated += 1
+                        else:
+                            conn.execute("UPDATE clip_posts SET views_pulled_at = %s, views_error = %s WHERE id = %s",
+                                         (now, "Not on YouTube or no public count (deleted, private or hidden)", r["id"]))
+                conn.commit()
+    except _requests.RequestException as exc:
+        kind, err = "transient", f"{type(exc).__name__}"[:200]
+    finally:
+        with db() as conn:
+            conn.execute(
+                "UPDATE view_pull_runs SET status = %s, updated = %s, units = %s, error_kind = %s, error = %s, finished_at = NOW() "
+                "WHERE id = %s",
+                ("failed" if kind else "done", updated, units, kind, err, run_id),
+            )
+            conn.commit()
+    if kind == "key":
+        alert_admin(f"ClipFlow: YouTube view pulls stopped, the API key was refused ({err}). Check YOUTUBE_API_KEY in Settings.")
+    log(f"View pull: {updated} updated, {units} unit(s){f', {kind}: {err}' if kind else ''}")
+    return {"updated": updated, "units": units, "error_kind": kind}
+
+
+def maybe_pull_views():
+    global _last_view_pass
+    if time.time() - _last_view_pass < VIEW_PULL_EVERY_S:
+        return
+    _last_view_pass = time.time()
+    try:
+        pull_youtube_views()
+    except psycopg.errors.UndefinedTable:
+        return   # the backend hasn't migrated yet (189)
+    except Exception as exc:
+        log(f"View pull failed: {str(exc)[:200]}")
 
 
 if __name__ == "__main__":

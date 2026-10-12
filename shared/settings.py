@@ -95,6 +95,9 @@ DEFAULT_SETTINGS = {
     "YOUTUBE_CLIENT_ID": "",
     "YOUTUBE_CLIENT_SECRET": "",
     "YOUTUBE_REFRESH_TOKEN": "",
+    # P5 part 1 (189): YouTube Data API v3 key for automatic view counts (videos.list, public statistics only).
+    "YOUTUBE_API_KEY": "",
+    "VIEW_PULL_DAILY_UNITS": "1000",
     # TIKTOK_* / INSTAGRAM_* have no consumer yet (no publisher code
     # in the baseline); kept so the UI fields stay saveable.
     "TIKTOK_CLIENT_KEY": "",
@@ -132,6 +135,7 @@ SECRET_SETTING_KEYS = {
     "RUNWAY_API_KEY",
     "YOUTUBE_CLIENT_SECRET",
     "YOUTUBE_REFRESH_TOKEN",
+    "YOUTUBE_API_KEY",
     "TIKTOK_CLIENT_SECRET",
     "TIKTOK_ACCESS_TOKEN",
     "INSTAGRAM_ACCESS_TOKEN",

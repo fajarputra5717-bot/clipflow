@@ -1364,6 +1364,7 @@ select::-ms-expand{display:none}
 .qadvice small{color:var(--muted);font-size:12px}
 .qviews{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:13px;color:var(--muted)}
 .qviews b{color:var(--text)}
+.qviews-err{color:var(--warn)}
 .qviews form,.qclaim{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .qviews input,.qclaim input{width:150px;min-height:36px;padding:6px 12px}
 .qviews button,.qclaim button{min-height:36px;padding:0 12px;border-radius:999px;font-size:13px}
@@ -2966,7 +2967,7 @@ function islandThumb(item){
 }
 function islandTitle(t){return t.kind==="candidate"?(t.title||"Clip"):(t.custom_title||t.source_title||platformLabel(t.platform))}
 // 184: the compact line says what is happening to what: "Checking @windahbasudara", "Rendering <clip>", …
-const ISL_VERB={source_check:"Checking",telegram:"Sending to phone ·",submagic:"Submagic ·"};
+const ISL_VERB={source_check:"Checking",telegram:"Sending to phone ·",submagic:"Submagic ·",views:"Updating views…"};
 function islandVerb(t){
   if(ISL_VERB[t.src])return ISL_VERB[t.src];
   const s=String(t.status||"");
@@ -2978,7 +2979,7 @@ function islandVerb(t){
   if(/analy/.test(s))return "Analyzing";
   return t.kind==="job"?"Importing":"Working on";
 }
-function islandLine(t){return `${islandVerb(t)} ${islandTitle(t)}`}
+function islandLine(t){return t.src==="views"?islandVerb(t):`${islandVerb(t)} ${islandTitle(t)}`}   // 189: "Updating views…"
 function paintIsland(){
   const items=islandItems(),ev=ISL.event,isl=$("island");
   isl.classList.toggle("is-ready",ev?.type==="ready");isl.classList.toggle("is-failed",ev?.type==="failed"||!ISL.failSeen);
@@ -3262,7 +3263,7 @@ const SETTINGS_GROUPS=[
   ["AI & transcription",["GEMINI_API_KEY","GEMINI_ANALYSIS_MODEL","GEMINI_MAX_ATTEMPTS","WHISPER_MODEL","WHISPER_LANGUAGE","RUNWAY_API_KEY","RUNWAY_MODEL"]],
   ["Face detection",["FACE_DETECTION_SAMPLE_COUNT","FACE_CONFIDENCE_THRESHOLD","FACE_ZOOM_RATIO"]],
   ["Clips & rendering",["CLIPS_PER_JOB","CLIP_TARGET_DURATION","CLIP_MIN_DURATION","CLIP_MAX_DURATION","PREVIEW_WIDTH","WATERMARK_WIDTH","WATERMARK_OPACITY","WATERMARK_POSITION_Y","SUBTITLE_SEAM_GAP","FULLFRAME_CAPTION_Y"]],
-  ["YouTube",["YOUTUBE_CLIENT_ID","YOUTUBE_CLIENT_SECRET","YOUTUBE_REFRESH_TOKEN"]],
+  ["YouTube",["YOUTUBE_API_KEY","VIEW_PULL_DAILY_UNITS","YOUTUBE_CLIENT_ID","YOUTUBE_CLIENT_SECRET","YOUTUBE_REFRESH_TOKEN"]],
   ["TikTok",["TIKTOK_CLIENT_KEY","TIKTOK_CLIENT_SECRET","TIKTOK_ACCESS_TOKEN"]],
   ["Instagram",["INSTAGRAM_ACCESS_TOKEN","INSTAGRAM_BUSINESS_ACCOUNT_ID"]],
   ["Submagic",["SUBMAGIC_API_KEY","SUBMAGIC_TEMPLATE","SUBMAGIC_MAGIC_ZOOMS","SUBMAGIC_MAGIC_BROLLS"]],
@@ -3271,7 +3272,7 @@ const SETTINGS_GROUPS=[
   ["Storage",["DISK_SPACE_MIN_MB","RETENTION_DAYS_INTERMEDIATE","ORPHAN_SWEEP_DRY_RUN"]],
   ["Auto-import",["AUTO_IMPORT_INTERVAL_MIN"]]
 ];
-const SETTING_LABELS={WATERMARK_POSITION_Y:"Watermark height (% from top, new jobs)",SUBTITLE_SEAM_GAP:"Caption gap above facecam (%, new jobs)",FULLFRAME_CAPTION_Y:"Caption height, no-facecam clips (% from top)",DISK_SPACE_MIN_MB:"Disk reserve (MB)",AUTO_IMPORT_INTERVAL_MIN:"Check channels every (min)",RETENTION_DAYS_INTERMEDIATE:"Keep downloads (days)",ORPHAN_SWEEP_DRY_RUN:"Orphan sweep dry run",GEMINI_API_KEY:"Gemini API key",GEMINI_ANALYSIS_MODEL:"Gemini model",GEMINI_MAX_ATTEMPTS:"Gemini attempts",WHISPER_MODEL:"Whisper model",WHISPER_LANGUAGE:"Fallback language",RUNWAY_API_KEY:"Runway API key",RUNWAY_MODEL:"Runway model",
+const SETTING_LABELS={WATERMARK_POSITION_Y:"Watermark height (% from top, new jobs)",SUBTITLE_SEAM_GAP:"Caption gap above facecam (%, new jobs)",FULLFRAME_CAPTION_Y:"Caption height, no-facecam clips (% from top)",DISK_SPACE_MIN_MB:"Disk reserve (MB)",AUTO_IMPORT_INTERVAL_MIN:"Check channels every (min)",YOUTUBE_API_KEY:"YouTube API key (view counts)",VIEW_PULL_DAILY_UNITS:"View pulls: max quota units a day",RETENTION_DAYS_INTERMEDIATE:"Keep downloads (days)",ORPHAN_SWEEP_DRY_RUN:"Orphan sweep dry run",GEMINI_API_KEY:"Gemini API key",GEMINI_ANALYSIS_MODEL:"Gemini model",GEMINI_MAX_ATTEMPTS:"Gemini attempts",WHISPER_MODEL:"Whisper model",WHISPER_LANGUAGE:"Fallback language",RUNWAY_API_KEY:"Runway API key",RUNWAY_MODEL:"Runway model",
   FACE_DETECTION_SAMPLE_COUNT:"Frames sampled",FACE_CONFIDENCE_THRESHOLD:"Confidence threshold",FACE_ZOOM_RATIO:"Facecam zoom",
   CLIPS_PER_JOB:"Clips per video (1–8, new jobs)",CLIP_TARGET_DURATION:"Target length (s)",CLIP_MIN_DURATION:"Minimum length (s)",CLIP_MAX_DURATION:"Maximum length (s)",PREVIEW_WIDTH:"Preview width (px)",WATERMARK_WIDTH:"Watermark width (px)",WATERMARK_OPACITY:"Watermark opacity",
   YOUTUBE_CLIENT_ID:"Client ID",YOUTUBE_CLIENT_SECRET:"Client secret",YOUTUBE_REFRESH_TOKEN:"Refresh token",TIKTOK_CLIENT_KEY:"Client key",TIKTOK_CLIENT_SECRET:"Client secret",TIKTOK_ACCESS_TOKEN:"Access token",
@@ -3375,7 +3376,7 @@ function postBlockHtml(r,k){
   const p=r.post,st=rowStatus(r);if(st==="ready"||st==="planned")return "";
   const a=p.advice,[al,ac]=a?(ADVICE_BADGE[a.action]||ADVICE_BADGE.unknown):[];
   const adv=a&&st==="posted"?`<div class="qadvice"><span class="badge ${ac}">${al}</span><span class="qadvice-msg">${esc(a.message)}</span>${a.deadline?`<small>claim by ${esc(fmtPostedAt(a.deadline))}</small>`:""}</div>`:"";
-  const views=`<div class="qviews">Views <b>${fmtViews(p.views)}</b>${p.views_at?` <span>as of ${esc(fmtPostedAt(p.views_at))}</span>`:" <span>not entered yet</span>"}
+  const views=`<div class="qviews">Views <b>${fmtViews(p.views)}</b>${p.views_at?` <span>as of ${esc(fmtPostedAt(p.views_at))}${p.views_source==="auto"?" · from YouTube":""}</span>`:" <span>not entered yet</span>"}${p.views_error?` <span class="qviews-err">${esc(p.views_error)}</span>`:""}
     <form data-views-form="${esc(p.id)}" novalidate><input type="number" min="0" step="1" inputmode="numeric" aria-label="Current views" placeholder="Current views"><button class="secondary" type="submit">Save views</button></form></div>`;
   let money="";
   if(st==="claimed")money=`<div class="qmoney">Claimed at ${fmtViews(p.claimed_views)} views · expected <b>${esc(p.expected_fmt||"Rp ?")}</b></div>`;
