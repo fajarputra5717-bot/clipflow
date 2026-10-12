@@ -10,3 +10,6 @@ No High/Medium. Low:
 2. Low · "warm" is barely distinguishable from "none" at this strength (frames); consider a stronger tint or say "subtle" in the picker.
 Not verified: FINAL with a look by me (Lane B reports 0782e50b final -14.3 / -5.3), the Look picker UI visually, grain/vignette at 1080.
 Merge: OK.
+
+## Re-check 2026-10-13 · d6dbddd (both E4 Lows) on staging, same clip C
+Staging worker has the YUV looks (lutyuv present). Preview render times: none 31 s, vivid 35 s, warm 31 s, moody + vignette + grain 33 s (before: 30 / 49 / 49 / 49 s) → overhead ≤ 4 s: Low 1 CLOSED. Warm now reads as a visible amber shift in the frame (none vs warm vs moody at 17.9 s): Low 2 CLOSED. Emoji centre colour within 4/255 of "none" in all looks (emoji not graded), caption + watermark intact, LUFS/TP identical (-14.2 / -1.2) in all four. Not verified: finals with a look by me.
