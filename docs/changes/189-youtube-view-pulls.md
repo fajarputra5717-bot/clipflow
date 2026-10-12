@@ -12,3 +12,6 @@
   island "Updating views…". Settings → YouTube: YOUTUBE_API_KEY (secret, admin-only), VIEW_PULL_DAILY_UNITS.
 - Not verified live: no YOUTUBE_API_KEY set yet; Lane B's research marks "API key alone works for public stats" as
   UNCONFIRMED. Check the first run's log line after the key is set.
+- Verified (2026-10-13): throwaway Postgres + worker image with a fake HTTP client — due posts batched in one call, key
+  only in the header, 40-day post skipped, no-id / not-returned posts get views_error, second run nothing due, a 403
+  quotaExceeded blocks later runs that quota day, history rows source 'auto'. UI 211 passed.

@@ -406,6 +406,10 @@ Auto-import (183): `shared/auto_import.py` rules; `source_watches` (user switch)
 Guardrails (184) per watch in `source_watches.guardrails`, only via `auto_import.normalize_guardrails()`; edited on the
 Campaign page. Daily cap = worker; disk pause + Telegram note (`telegram_sends` kind `note`) = backend import loop.
 Skips in `auto_import.CONFIRMABLE` (couldn't vouch, not ruled out) get "Import anyway" on the Campaign page (187).
+View pulls (P5 part 1, 189): `shared/view_pull.py` rules; worker `maybe_pull_views()` (idle, 5 min) pulls YouTube posts'
+views (videos.list, YOUTUBE_API_KEY in the `X-Goog-Api-Key` header, never a URL/log; cadence 6 h < 14 d, daily < 30 d, stop;
+≤ VIEW_PULL_DAILY_UNITS per Pacific quota day, `view_pull_runs`). Writes exactly like a manual entry with source 'auto'
+(`clip_posts.views_source`, `clip_post_views.source`); a new platform's puller follows the same write path.
 Track (181): `GET /api/track` = `shared/track.py` (own posts → tiles, by campaign/platform, top clips; money only via
 payouts, pre-formatted), step `#track`. Reminders (148): service `sender` (`riftstorm-sender`, worker image `--telegram-only`) owns `telegram_sends` + 
 `queue_due_reminders()` (worker has `TELEGRAM_SENDER=separate`; without it the worker does both). One reminder per
