@@ -525,6 +525,63 @@ def warp_graph(keep: Sequence[Segment], pieces: Sequence[Sequence[float]], *, v_
     return ";".join(parts)
 
 
+# --------------------------------------------------------------------------- (f) emoji pops + SFX (Auto Edit E3)
+EMOJI_SIZE = 0.20            # emoji width as a share of the frame width
+EMOJI_POP, EMOJI_SETTLE, EMOJI_FADE = 0.12, 0.10, 0.20   # s: grow to 115 %, settle to 100 %, fade out
+EMOJI_Y = 0.42               # centre height: below the watermark band, above the caption band
+EMOJI_X = {"right": 0.72, "left": 0.28}
+SFX_GAIN = 0.8               # SFX bus level before ducking (linear)
+
+
+def emoji_filters(last: str, events: Sequence[tuple], asset_dir: str, *, width: int = 1080, height: int = 1920,
+                  dur: float = 1.4, fps: int = 30) -> tuple[list[str], str]:
+    """Filter chunks (each ends with ';') overlaying PNG emoji pops in SOURCE time on [last]; returns (chunks, label).
+    events = [(t, code, side)]. Drawn in the zoom stage, i.e. under the watermark and captions (never covers them).
+    The emoji stream is a looped still (movie source), trimmed to its window, scaled per frame for the pop."""
+    chunks, cur = [], last
+    size = max(2, int(round(width * EMOJI_SIZE / 2)) * 2)
+    for k, (t, code, side) in enumerate(events):
+        t0, t1 = float(t), float(t) + dur
+        grow = f"min(1,(t-{_f(t0)})/{_f(EMOJI_POP)})"
+        settle = f"clip((t-{_f(t0 + EMOJI_POP)})/{_f(EMOJI_SETTLE)},0,1)"
+        sc = f"max(0.05,if(lt(t,{_f(t0 + EMOJI_POP)}),1.15*{grow},1.15-0.15*{settle}))"
+        path = f"{asset_dir.rstrip('/')}/{code}.png"
+        chunks.append(f"movie='{path}',loop=loop=-1:size=1:start=0,setpts=N/{fps}/TB,format=rgba,"
+                      f"trim=start={_f(t0)}:end={_f(t1)},"
+                      f"scale=w='trunc({size}*{sc}/2)*2':h=-2:eval=frame,"
+                      f"fade=t=out:st={_f(t1 - EMOJI_FADE)}:d={_f(EMOJI_FADE)}:alpha=1[em{k}];")
+        cx = EMOJI_X.get(side, EMOJI_X["right"])
+        out = f"emo{k}"
+        chunks.append(f"[{cur}][em{k}]overlay=x='{_f(cx)}*W-w/2':y='{_f(EMOJI_Y)}*H-h/2':eof_action=pass:eval=frame[{out}];")
+        cur = out
+    return chunks, cur
+
+
+def sfx_mix_cmd(src: str, dst: str, events: Sequence[tuple], asset_dir: str, *, audio_bitrate: str = "192k") -> Optional[list]:
+    """ffmpeg argv: video copied, SFX (events = [(output seconds, name)]) mixed UNDER the speech: the SFX bus is
+    side-chain compressed by the speech (ducking), then added to it. Output length = the speech's. Loudnorm runs
+    after this (always the last audio step). None when there is nothing to mix."""
+    if not events:
+        return None
+    argv = ["ffmpeg", "-hide_banner", "-nostats", "-y", "-i", src]
+    for _t, name in events:
+        argv += ["-i", f"{asset_dir.rstrip('/')}/{name}.wav"]
+    parts = []
+    for k, (t, _name) in enumerate(events, start=1):
+        ms = int(round(max(0.0, float(t)) * 1000))
+        parts.append(f"[{k}:a]aformat=sample_rates=48000:channel_layouts=stereo,adelay={ms}|{ms},volume={_f(SFX_GAIN)}[s{k}]")
+    n = len(events)
+    fx = "s1" if n == 1 else "fx"
+    if n > 1:
+        parts.append("".join(f"[s{k}]" for k in range(1, n + 1)) + f"amix=inputs={n}:normalize=0:duration=longest[fx]")
+    parts.append("[0:a]aformat=sample_rates=48000:channel_layouts=stereo,asplit=2[sp][key]")
+    parts.append(f"[{fx}][key]sidechaincompress=threshold=0.03:ratio=8:attack=5:release=250[fxd]")
+    parts.append("[sp][fxd]amix=inputs=2:normalize=0:duration=first[aout]")
+    argv += ["-filter_complex", ";".join(parts), "-map", "0:v", "-map", "[aout]", "-c:v", "copy",
+             "-c:a", "aac", "-b:a", audio_bitrate, "-ar", "48000", "-movflags", "+faststart", dst]
+    return argv
+
+
 # --------------------------------------------------------------------------- (b) loudnorm
 
 def loudnorm_measure_cmd(src: str, *, i: float = LOUDNORM_I, tp: float = LOUDNORM_TP,

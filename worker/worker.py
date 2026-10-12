@@ -5685,6 +5685,7 @@ def create_preview(
     )
 
     render_steps.apply_cuts(preview_path, candidate, duration, preset=setting("FFMPEG_PREVIEW_PRESET"), crf=setting("FFMPEG_PREVIEW_CRF"), run=run_command, timeout=render_timeout_seconds(duration), log=log)
+    render_steps.mix_sfx(preview_path, candidate, duration, run=run_command, timeout=render_timeout_seconds(duration), log=log)
     # QA P0: previews sound like the final (same chain + verify, never fatal).
     normalize_loudness(preview_path, duration, candidate_id=candidate_id,
                        audio_bitrate="96k", punchy=edit_specs_loud(candidate))
@@ -6154,6 +6155,7 @@ def render_final_candidate(
     )
 
     render_steps.apply_cuts(output_path, candidate, duration, preset=setting("FFMPEG_PRESET"), crf=setting("FFMPEG_CRF"), run=run_command, timeout=render_timeout_seconds(duration), log=log)
+    render_steps.mix_sfx(output_path, candidate, duration, run=run_command, timeout=render_timeout_seconds(duration), log=log)
     # QA #2: loudness last (after every audio step of the render).
     update_candidate(candidate_id, progress=90, message="Normalising loudness")
     normalize_loudness(output_path, duration, candidate_id=candidate_id, punchy=edit_specs_loud(candidate))

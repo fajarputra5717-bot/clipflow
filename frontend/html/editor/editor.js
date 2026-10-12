@@ -306,6 +306,7 @@
   const FX = { punch: ["◆", "Punch zoom"], push: ["↗", "Slow push-in"], zoom_out: ["↙", "Zoom out"], shake: ["≈", "Camera shake"],
     flash: ["✦", "Flash"], whip: ["»", "Whip transition"], freeze: ["❚❚", "Freeze frame"], slowmo: ["½", "Slow-mo"], emoji: ["☺", "Emoji pop"] };
   const fxName = (e) => (FX[e] || [null, e])[1];
+  const SFX_NAME = { whoosh: "Whoosh", boom: "Boom", bass_hit: "Bass hit", ding: "Ding", record_scratch: "Record scratch" };
   const fxGlyph = (i) => (i.effect === "emoji" && i.params && i.params.emoji) || (FX[i.effect] || ["•"])[0];
   function paintPlan() {
     const lane = $("edPlanLane"); if (!lane || !E.tl) return;
@@ -327,7 +328,11 @@
           <div class="ed-plan-row ${i.on ? "" : "is-off"}"><span class="ed-plan-t">${i.t.toFixed(1)} s</span>
             <span class="ed-plan-fx fx-${esc(i.effect)}" aria-hidden="true">${esc(fxGlyph(i))}</span>
             <span class="ed-plan-what"><select class="ed-plan-sel" data-ed-plan-fx="${esc(i.id)}" aria-label="Effect at ${i.t.toFixed(1)} s">${(d.effects || [i.effect]).map((x) =>
-              `<option value="${esc(x)}" ${x === i.effect ? "selected" : ""}>${esc(fxName(x))}</option>`).join("")}</select><span class="ed-hint">${esc(i.reason)}${esc(later(i))}${i.effect === "flash" ? " · also lightens the watermark for 0.2 s" : ""}</span></span>
+              `<option value="${esc(x)}" ${x === i.effect ? "selected" : ""}>${esc(fxName(x))}</option>`).join("")}</select><span class="ed-plan-opts">${i.effect === "emoji" ? `<select class="ed-plan-sel" data-ed-plan-emoji="${esc(i.id)}" aria-label="Emoji">${(d.emoji || ["😂"]).map((x) =>
+                `<option ${x === ((i.params || {}).emoji || "😂") ? "selected" : ""}>${x}</option>`).join("")}</select>` : ""}
+              <select class="ed-plan-sel" data-ed-plan-sfx="${esc(i.id)}" aria-label="Sound at ${i.t.toFixed(1)} s"><option value="">No sound</option>${(d.sfx || []).map((x) =>
+                `<option value="${esc(x)}" ${x === (i.params || {}).sfx ? "selected" : ""}>${esc(SFX_NAME[x] || x)}</option>`).join("")}</select></span>
+              <span class="ed-hint">${esc(i.reason)}${esc(later(i))}${i.effect === "flash" ? " · also lightens the watermark for 0.2 s" : ""}</span></span>
             ${sw(`data-ed-plan-item="${esc(i.id)}"`, i.on, `${fxName(i.effect)} at ${i.t.toFixed(1)} s`)}</div>`).join("")}</div>` : ""}
       </div>`;
   }
@@ -349,6 +354,15 @@
       if (i.effect === "slowmo") return x + overlap(i.t, i.t + Number(p.dur || 1.2)) * (1 / Math.max(0.5, Number(p.factor || 0.5)) - 1);
       return x;
     }, 0);
+  }
+  function setPlanParam(id, key, value) {           // E3: per-item sound / emoji
+    const it = (E.plan || []).find((i) => i.id === id); if (!it) return;
+    const p = { ...(it.params || {}) };
+    if (value) p[key] = value; else delete p[key];
+    it.params = p;
+    paintCuts(); if (E.tab === "effects") repaintPanel();
+    E.dirty = true; paintHook();
+    saver("plan", "/plan", () => ({ items: E.plan }));
   }
   function togglePlan(id) {
     const it = (E.plan || []).find((i) => i.id === id); if (!it) return;
@@ -1222,6 +1236,8 @@
   }).catch(() => {});
   document.addEventListener("change", (e) => {
     if (E.state && e.target.matches && e.target.matches("[data-ed-plan-fx]")) return setPlanEffect(e.target.dataset.edPlanFx, e.target.value);
+    if (E.state && e.target.matches && e.target.matches("[data-ed-plan-sfx]")) return setPlanParam(e.target.dataset.edPlanSfx, "sfx", e.target.value);
+    if (E.state && e.target.matches && e.target.matches("[data-ed-plan-emoji]")) return setPlanParam(e.target.dataset.edPlanEmoji, "emoji", e.target.value);
     if (E.state && e.target.matches && e.target.matches("[data-ed-thumb-upload]")) uploadThumb(e.target);
   });
   document.addEventListener("toggle", (e) => {                 // keep "Style, font…" open across repaints

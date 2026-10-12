@@ -17,8 +17,9 @@ function editorState(over = {}) {
                  picked: null, locked: false, current_url: "/api/jobs/job-done/candidates/cand-a/thumbnail", generating: false },
     watermark: { width: 320, opacity: 1, custom: false },
     export: { burn: true, description: "", submagic: { status: null, preview_url: null, error: null } },
-    director: { items: [], rendered: ["flash", "freeze", "punch", "push", "shake", "slowmo", "whip", "zoom_out"], arrives_in: { emoji: "E3" }, min_gap: 3, frames_ready: false,
-      effects: ["punch", "push", "zoom_out", "shake", "flash", "whip", "freeze", "slowmo", "emoji"], defaults: { emoji: { emoji: "😂" }, freeze: { hold: 0.6 }, slowmo: { dur: 1.2, factor: 0.5 } } },
+    director: { items: [], rendered: ["emoji", "flash", "freeze", "punch", "push", "shake", "slowmo", "whip", "zoom_out"], arrives_in: {}, min_gap: 3, frames_ready: false,
+      effects: ["punch", "push", "zoom_out", "shake", "flash", "whip", "freeze", "slowmo", "emoji"], defaults: { emoji: { emoji: "😂" }, freeze: { hold: 0.6 }, slowmo: { dur: 1.2, factor: 0.5 } },
+      sfx: ["whoosh", "boom", "bass_hit", "ding", "record_scratch"], emoji: ["😂", "😭", "💀"] },
     ...over,
   };
 }
@@ -484,5 +485,23 @@ test.describe("Editor Auto edit E2 effects", () => {
       .toMatchObject({ effect: "freeze", params: { hold: 0.6 } });
     await expect(app.locator('.ed-plan-mark[data-ed-plan-item="shake-350"]')).toHaveClass(/fx-freeze/);
     await expect(app.locator("#edOut")).toContainText("6.6");                 // 6 s clip + 0.6 s hold
+  });
+});
+
+// Auto Edit E3: a sound per item and an emoji per emoji item (params.sfx / params.emoji).
+test.describe("Editor Auto edit E3 sound + emoji", () => {
+  test.use({ reducedMotion: "reduce" });
+  test("pick a sound, switch to emoji and pick 💀: PUT carries the params", async ({ app, api }) => {
+    await mockEditor(app, api);
+    await app.evaluate(() => { location.hash = "#editor/job-done/cand-a"; });
+    await app.locator('[data-ed-tab="effects"]').click();
+    await app.locator("[data-ed-plan-gen]").click();
+    await app.locator('[data-ed-plan-sfx="punch-50"]').selectOption("boom");
+    await expect.poll(() => api.calls.filter((c) => c.method === "PUT" && c.path.endsWith("/plan")).pop()?.body.items.find((i) => i.id === "punch-50")?.params)
+      .toEqual({ sfx: "boom" });
+    await app.locator('[data-ed-plan-fx="shake-350"]').selectOption("emoji");
+    await app.locator('[data-ed-plan-emoji="shake-350"]').selectOption("💀");
+    await expect.poll(() => api.calls.filter((c) => c.method === "PUT" && c.path.endsWith("/plan")).pop()?.body.items.find((i) => i.id === "shake-350")?.params)
+      .toEqual({ emoji: "💀" });
   });
 });

@@ -74,7 +74,7 @@ class Director(unittest.TestCase):
         self.assertEqual(D.motion_events(self.plan), [("whip", 5.0, 5.0)])
         self.assertEqual(D.warps(self.plan), [("freeze", 2.0, 0.6), ("slowmo", 6.0, 1.2, 0.75)])
         self.assertIn("freeze", D.RENDERED_EFFECTS)
-        self.assertNotIn("emoji", D.RENDERED_EFFECTS)
+        self.assertIn("emoji", D.RENDERED_EFFECTS)          # E3
 
     def test_posted_length_counts_time_effects(self):
         c = {"start_time": 0, "end_time": 10, "edit_spec": {"cuts": {"trim": None, "removed": [[4, 5]]}, "director": self.plan}}

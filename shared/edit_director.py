@@ -38,8 +38,12 @@ PARAMS_FOR = {"emoji": {"emoji": "😂"}, "freeze": {"hold": 0.6}, "slowmo": {"d
 MOTION_EFFECTS = ("punch", "push", "zoom_out", "shake", "flash", "whip")    # zoom stage (source time, pre-captions)
 TIME_EFFECTS = ("freeze", "slowmo")                                         # cut stage (post-captions, re-times)
 EFFECTS = MOTION_EFFECTS + TIME_EFFECTS + ("emoji",)                        # what a plan item may be switched to
-RENDERED_EFFECTS = set(MOTION_EFFECTS) | set(TIME_EFFECTS)                  # E2; emoji arrives with E3
-ARRIVES_IN = {"emoji": "E3"}
+RENDERED_EFFECTS = set(MOTION_EFFECTS) | set(TIME_EFFECTS) | {"emoji"}      # E3: emoji pops render too
+ARRIVES_IN: dict = {}
+# E3 assets (worker/assets, licences in worker/assets/LICENSES.md): Twemoji PNGs (CC-BY 4.0) + in-house SFX (CC0).
+EMOJI = {"😂": "1f602", "😭": "1f62d", "💀": "1f480", "🔥": "1f525", "😱": "1f631", "👀": "1f440", "🤯": "1f92f", "😎": "1f60e"}
+SFX = ("whoosh", "boom", "bass_hit", "ding", "record_scratch")   # "laugh" waits for a CC0 recording
+EMOJI_DUR = 1.4           # s on screen (pop in, hold, fade)
 # Higher wins when two candidates are closer than MIN_GAP. A seam the user cut on purpose outranks a vision
 # guess and a loudness peak (QA 7fc6a5a Low: whips were never proposed next to another candidate).
 PRIORITY = {"transcript": 3, "cut": 2.5, "vision": 2, "audio": 1}
@@ -281,3 +285,49 @@ def time_extra(director: Optional[dict], keep) -> float:
         return 0.0
     pieces = retention.warp_pieces(keep, w)
     return max(0.0, retention.pieces_output_seconds(pieces) - sum(float(b) - float(a) for a, b in keep))
+
+
+# ---- E3 render helpers (pure)
+
+def emoji_events(director: Optional[dict]) -> list[tuple]:
+    """[(t, twemoji code, side)] source seconds; consecutive pops alternate right/left so they don't stack."""
+    out = []
+    for n, i in enumerate(_on(director, ("emoji",))):
+        ch = (i.get("params") or {}).get("emoji") or PARAMS_FOR["emoji"]["emoji"]
+        if ch in EMOJI:
+            out.append((float(i["t"]), EMOJI[ch], "right" if n % 2 == 0 else "left"))
+    return out
+
+
+def to_output(t: float, keep=None, pieces=None) -> Optional[float]:
+    """Source seconds → output seconds through cuts (keep) and time effects (pieces); None if t was cut."""
+    if pieces:
+        acc = 0.0
+        for a, b, sp, hold in pieces:
+            if a <= t < b:
+                return acc + (t - a) / sp
+            if hold and abs(t - b) < 1e-6:          # a freeze at t: its sound starts when the frame freezes
+                return acc + (b - a) / sp
+            acc += (b - a) / sp + hold
+        return None
+    if keep:
+        acc = 0.0
+        for a, b in keep:
+            if a <= t < b:
+                return acc + (t - a)
+            acc += b - a
+        return None
+    return t
+
+
+def sfx_events(director: Optional[dict], keep=None, pieces=None) -> list[tuple]:
+    """[(output seconds, sfx name)] for enabled items that carry params.sfx; cut ones dropped."""
+    out = []
+    for i in (director or {}).get("items") or []:
+        name = (i.get("params") or {}).get("sfx")
+        if not i.get("on") or name not in SFX:
+            continue
+        o = to_output(float(i["t"]), keep, pieces)
+        if o is not None:
+            out.append((round(o, 3), name))
+    return sorted(out)

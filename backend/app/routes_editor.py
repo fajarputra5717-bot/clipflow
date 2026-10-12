@@ -202,7 +202,8 @@ def _director_state(spec: dict, c: dict) -> dict:
     frames_ready = (_core().DATA_ROOT / "previews" / f"{c['id']}.frame-0.jpg").is_file()
     return {**d, "rendered": sorted(edit_director.RENDERED_EFFECTS), "arrives_in": edit_director.ARRIVES_IN,
             "min_gap": edit_director.MIN_GAP, "frames_ready": frames_ready,
-            "effects": list(edit_director.EFFECTS), "defaults": edit_director.PARAMS_FOR}
+            "effects": list(edit_director.EFFECTS), "defaults": edit_director.PARAMS_FOR,
+            "sfx": list(edit_director.SFX), "emoji": list(edit_director.EMOJI)}
 
 
 def _cuts_state(spec: dict, duration) -> dict:

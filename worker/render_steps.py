@@ -391,6 +391,31 @@ def apply_cuts(path, candidate: dict, clip_duration: float, *, preset, crf, run,
     return out if (keep or pieces) else None
 
 
+# --------------------------------------------------------------------------- SFX (Auto Edit E3)
+
+ASSETS = Path(__file__).resolve().parent / "assets"     # /app/assets in the image (emoji/, sfx/, LICENSES.md)
+
+
+def mix_sfx(path, candidate: dict, clip_duration: float, *, run, timeout=None, log=print) -> int:
+    """After apply_cuts, before loudness: mix the plan's SFX (items with params.sfx) at their OUTPUT times, ducked
+    under the speech; video copied. Returns how many were mixed (0 = untouched)."""
+    from shared import edit_director, retention
+    director = edit_specs.director_of(candidate.get("edit_spec"))
+    if not director:
+        return 0
+    keep = cut_plan(candidate, clip_duration, _probe_fps(path))
+    w = edit_director.warps(director)
+    pieces = retention.warp_pieces(keep or [(0.0, float(clip_duration))], w) if w else None
+    events = edit_director.sfx_events(director, keep, pieces)
+    argv = retention.sfx_mix_cmd(str(path), str(path) + ".sfx.mp4", events, str(ASSETS / "sfx"))
+    if not argv:
+        return 0
+    run(argv, timeout=timeout)
+    Path(str(path) + ".sfx.mp4").replace(path)
+    log(f"SFX: {len(events)} mixed under the speech ({', '.join(n for _t, n in events)})")
+    return len(events)
+
+
 # --------------------------------------------------------------------------- zoom (task 4)
 
 _render_ctx: dict = {}
@@ -424,18 +449,23 @@ def zoom_stage(filters: list, last: str, width: int, height: int, output_path=No
     cuts = edit_specs.cuts_of(spec) or {}
     planned = edit_director.motion_events(edit_specs.director_of(spec), cuts.get("removed") or [])   # Auto Edit E1/E2
     events = [("punch", m) for m in manual] + planned
-    if not events:
-        return last
     peak = edit_specs.zoom_peak(z.get("intensity", edit_specs.ZOOM_DEFAULT_INTENSITY))
-    mf = retention.motion_filter(events, width=width, height=height, punch_peak=peak, duration=ctx["duration"])
-    if not mf:
-        return last
-    filters.append(f"[{last}]{mf}[zoomed];")
-    n_punch = len(retention.plan_zoom_windows([e[1] for e in events if e[0] == "punch"], ctx["duration"])) if peak > 1.0 else 0
-    other = sorted({e[0] for e in planned if e[0] != "punch"})
-    log(f"Zoom: {n_punch} punch-in(s) ({sum(1 for e in planned if e[0] == 'punch')} from the edit plan), peak {peak:.2f}, "
-        f"canvas {width}x{height}" + (f"; motion from the plan: {', '.join(other)}" if other else ""))
-    return "zoomed"
+    mf = retention.motion_filter(events, width=width, height=height, punch_peak=peak, duration=ctx["duration"]) if events else None
+    if mf:
+        filters.append(f"[{last}]{mf}[zoomed];")
+        last = "zoomed"
+        n_punch = len(retention.plan_zoom_windows([e[1] for e in events if e[0] == "punch"], ctx["duration"])) if peak > 1.0 else 0
+        other = sorted({e[0] for e in planned if e[0] != "punch"})
+        log(f"Zoom: {n_punch} punch-in(s) ({sum(1 for e in planned if e[0] == 'punch')} from the edit plan), peak {peak:.2f}, "
+            f"canvas {width}x{height}" + (f"; motion from the plan: {', '.join(other)}" if other else ""))
+    # E3: emoji pops AFTER the motion (they don't zoom/shake) and BEFORE watermark + captions (never cover them)
+    emojis = edit_director.emoji_events(edit_specs.director_of(spec))
+    if emojis:
+        chunks, last = retention.emoji_filters(last, emojis, str(ASSETS / "emoji"), width=width, height=height,
+                                               dur=edit_director.EMOJI_DUR)
+        filters.extend(chunks)
+        log(f"Emoji: {len(emojis)} pop(s) from the edit plan")
+    return last
 
 
 # --------------------------------------------------------------------------- timeline (task 2)

@@ -354,3 +354,5 @@ a.rv-frame:focus-visible{outline:none;box-shadow:var(--ring)}
 .ed-plan-sel{min-height:var(--chip-h,24px);padding:0 var(--s-2,8px);font:600 var(--fs-small,12px) var(--font-text);border-radius:var(--r-sm,6px);max-width:100%}
 .fx-push{--fx:#FF9F0A}.fx-zoom_out{--fx:#BF5AF2}.fx-flash{--fx:#8E8E93}.fx-freeze{--fx:#30B0C7}.fx-slowmo{--fx:#5E5CE6}
 @media (max-width:600px){.ed-plan-sel{min-height:var(--hit,44px)}}
+/* E3: sound + emoji pickers per plan item */
+.ed-plan-opts{display:flex;flex-wrap:wrap;gap:var(--s-1,4px);margin:2px 0}
