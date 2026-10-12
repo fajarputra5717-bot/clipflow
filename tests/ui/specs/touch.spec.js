@@ -64,20 +64,21 @@ const STEPS = [
 
 async function smallTargets(app) {
   return app.evaluate(() => {
-    const hit = (e) => {
-      const r = e.getBoundingClientRect(); let h = r.height;
+    const hit = (e) => {   // [height, width] incl. absolutely positioned ::before/::after hit areas
+      const r = e.getBoundingClientRect(); let h = r.height, w = r.width;
       for (const p of ["::before", "::after"]) {
         const cs = getComputedStyle(e, p);
         if (cs.content === "none" || cs.position !== "absolute") continue;
-        const top = parseFloat(cs.top) || 0, bottom = parseFloat(cs.bottom) || 0;
-        h = Math.max(h, r.height - Math.min(0, top) - Math.min(0, bottom));
+        const n = (v) => Math.min(0, parseFloat(v) || 0);
+        h = Math.max(h, r.height - n(cs.top) - n(cs.bottom));
+        w = Math.max(w, r.width - n(cs.left) - n(cs.right));
       }
-      return h;
+      return [h, w];
     };
     const vis = (e) => { const cs = getComputedStyle(e); return e.offsetParent && cs.visibility !== "hidden" && !e.closest("[inert],#island,.acct-menu:not(.open),.sheet-layer:not(.open),.job-overlay:not(.open)"); };
-    return [...document.querySelectorAll("button,a[href],summary,select,[role=switch],[role=tab]")].filter(vis)
-      .filter((e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.bottom > 0 && hit(e) < 43.5; })
-      .map((e) => `${e.tagName.toLowerCase()}.${[...e.classList].join(".")} ${Math.round(e.getBoundingClientRect().height)}px "${(e.textContent || e.getAttribute("aria-label") || "").trim().slice(0, 20)}"`);
+    return [...document.querySelectorAll("button,a[href],summary,select,[role=switch],[role=tab],[role=slider]")].filter(vis)
+      .filter((e) => { const r = e.getBoundingClientRect(); const [h, w] = hit(e); return r.width > 0 && r.bottom > 0 && (h < 43.5 || w < 43.5); })
+      .map((e) => `${e.tagName.toLowerCase()}.${[...e.classList].join(".")} ${Math.round(e.getBoundingClientRect().width)}x${Math.round(e.getBoundingClientRect().height)} "${(e.textContent || e.getAttribute("aria-label") || "").trim().slice(0, 20)}"`);
   });
 }
 test("phone: every control on every page has a ≥ 44 px touch target", async ({ app, api }) => {

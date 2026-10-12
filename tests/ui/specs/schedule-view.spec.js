@@ -99,8 +99,8 @@ test("week calendar on desktop; list only on phones (screenshots)", async ({ app
 
 test("reminders (148): chip per row, banner when Telegram isn't set up, lead line when it is", async ({ app, api }) => {
   seed(api);
-  const today = api.schedule.days.flatMap((d) => d.posts);
-  today[0].reminder_status = "sent"; today[1].reminder_status = "no_chat"; api.schedule.overdue[0].reminder_status = "missed";
+  const byId = Object.fromEntries(api.schedule.days.flatMap((d) => d.posts).map((p) => [p.id, p]));   // by id: after 22:00 WIB pl-1 is tomorrow
+  byId["pl-1"].reminder_status = "sent"; byId["pl-2"].reminder_status = "no_chat"; api.schedule.overdue[0].reminder_status = "missed";
   api.schedule.telegram_ready = false; api.schedule.reminder_lead_min = 15;
   await open(app);
   await expect(app.locator('[data-sched-row="pl-1"] [data-reminder]')).toHaveText("Reminder sent");

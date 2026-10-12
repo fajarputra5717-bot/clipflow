@@ -1543,8 +1543,10 @@ body:has(#editorSection:not(.hidden)) .ed-foot{bottom:calc(var(--pill-btn) + 30p
    their look and get an invisible 44 px hit area instead. Desktop stays compact (36 px per the shell v2 spec). */
 @media (max-width:600px){
   body button:not(.flow-node):not(.ed-switch):not(.ed-sw):not(.rename-btn):not(.isl-cancel):not(.toast-action):not(.job-overlay-close):not(.ed-preset):not(.island-main),
-  body summary,body select,body a.rv-open,body a.btn-sm,body .ed-back,body .ed-headrow .ed-back{min-height:var(--hit)}
-  body a[data-ed-back]{display:inline-flex;align-items:center;min-height:var(--hit)}
+  body summary,body select,body a.rv-open,body a.btn-sm,body .ed-back,body .ed-headrow .ed-back{min-height:var(--hit);min-width:var(--hit)}
+  body .ed-tlwrap>summary,body .rv-more>summary{min-width:var(--hit)}
+  .ed-trim-h::after{content:"";position:absolute;inset:0 -13px}   /* 18 px handle → 44 px wide hit area */
+  body a[data-ed-back]{display:inline-flex;align-items:center;justify-content:center;min-height:var(--hit);min-width:var(--hit)}
   body .ed-tlwrap>summary{min-height:var(--hit)}
   body .acct-item{min-height:var(--hit)}
   .job-overlay-close,.ed-switch,.ed-sw{position:relative}
