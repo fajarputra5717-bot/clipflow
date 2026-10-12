@@ -159,3 +159,4 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 187 · 2026-10-12 · Auto-import 'Found, not imported: confirm?' list + Import anyway (owner-scoped endpoint); worker/assets/LICENSES.md · main.py, shared, index.html, tests
 188 · 2026-10-12 · Phone top bar: full-width title when idle, wider island while it runs; auto-import disk wait capped at 24 h; 'Step n ·' eyebrows removed · index.html, main.py, shared, tests
 189 · 2026-10-12 · P5 part 1: automatic YouTube view pulls (videos.list, API key, 6 h/daily/stop cadence, quota budget), island 'Updating views…' · shared, worker, main.py, index.html, tests
+190 · 2026-10-13 · View pulls: rate limits transient, only real key errors alert, UI says pulls replace typed YouTube views (Lane C Lows on 189) · shared/view_pull.py, index.html, tests

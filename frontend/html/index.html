@@ -1365,6 +1365,7 @@ select::-ms-expand{display:none}
 .qviews{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:13px;color:var(--muted)}
 .qviews b{color:var(--text)}
 .qviews-err{color:var(--warn)}
+.qviews-hint{flex-basis:100%;font-size:12px}
 .qviews form,.qclaim{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .qviews input,.qclaim input{width:150px;min-height:36px;padding:6px 12px}
 .qviews button,.qclaim button{min-height:36px;padding:0 12px;border-radius:999px;font-size:13px}
@@ -3376,7 +3377,7 @@ function postBlockHtml(r,k){
   const p=r.post,st=rowStatus(r);if(st==="ready"||st==="planned")return "";
   const a=p.advice,[al,ac]=a?(ADVICE_BADGE[a.action]||ADVICE_BADGE.unknown):[];
   const adv=a&&st==="posted"?`<div class="qadvice"><span class="badge ${ac}">${al}</span><span class="qadvice-msg">${esc(a.message)}</span>${a.deadline?`<small>claim by ${esc(fmtPostedAt(a.deadline))}</small>`:""}</div>`:"";
-  const views=`<div class="qviews">Views <b>${fmtViews(p.views)}</b>${p.views_at?` <span>as of ${esc(fmtPostedAt(p.views_at))}${p.views_source==="auto"?" · from YouTube":""}</span>`:" <span>not entered yet</span>"}${p.views_error?` <span class="qviews-err">${esc(p.views_error)}</span>`:""}
+  const views=`<div class="qviews">Views <b>${fmtViews(p.views)}</b>${p.views_at?` <span>as of ${esc(fmtPostedAt(p.views_at))}${p.views_source==="auto"?" · from YouTube":""}</span>`:" <span>not entered yet</span>"}${p.views_source==="auto"?` <span class="qviews-hint">Updated from YouTube automatically (also after a claim or payment); a number you type is replaced at the next pull.</span>`:""}${p.views_error?` <span class="qviews-err">${esc(p.views_error)}</span>`:""}
     <form data-views-form="${esc(p.id)}" novalidate><input type="number" min="0" step="1" inputmode="numeric" aria-label="Current views" placeholder="Current views"><button class="secondary" type="submit">Save views</button></form></div>`;
   let money="";
   if(st==="claimed")money=`<div class="qmoney">Claimed at ${fmtViews(p.claimed_views)} views · expected <b>${esc(p.expected_fmt||"Rp ?")}</b></div>`;

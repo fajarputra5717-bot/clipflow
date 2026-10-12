@@ -46,6 +46,10 @@ class ViewPullTest(unittest.TestCase):
         self.assertEqual(vp.error_kind(400, {"error": {"errors": [{"reason": "keyInvalid"}]}}), "key")
         self.assertEqual(vp.error_kind(403, {"error": {"errors": [{"reason": "accessNotConfigured"}]}}), "key")
         self.assertEqual(vp.error_kind(503, None), "transient")
+        self.assertEqual(vp.error_kind(403, {"error": {"errors": [{"reason": "rateLimitExceeded"}]}}), "transient")   # QA Low 1
+        self.assertEqual(vp.error_kind(400, {"error": {"message": "API key not valid. Please pass a valid API key.",
+                                                       "errors": [{"reason": "badRequest"}]}}), "key")
+        self.assertEqual(vp.error_kind(400, {"error": {"errors": [{"reason": "invalidParameter"}]}}), "request")    # QA Low 2
 
 
 if __name__ == "__main__":

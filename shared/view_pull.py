@@ -73,11 +73,17 @@ def next_quota_reset(now: datetime) -> datetime:
 
 
 def error_kind(status: int, data: Optional[dict]) -> str:
-    """'quota' (stop until reset) | 'key' (bad/missing key: alert admin, retry later) | 'transient'."""
-    reasons = {e.get("reason") for e in ((data or {}).get("error") or {}).get("errors") or [] if isinstance(e, dict)}
-    if status == 403 and reasons & {"quotaExceeded", "dailyLimitExceeded", "rateLimitExceeded"}:
+    """'quota' (daily quota gone: stop until the Pacific reset) | 'key' (bad/expired/restricted key or the API not
+    enabled: alert the admin) | 'request' (any other 4xx: our request, no alert) | 'transient' (5xx, per-100-s rate
+    limits, network: just the next run). QA 189 Lows: rateLimitExceeded is transient; a 400 is 'key' only when it is."""
+    err = (data or {}).get("error") or {}
+    reasons = {e.get("reason") for e in err.get("errors") or [] if isinstance(e, dict)}
+    message = str(err.get("message") or "").lower()
+    if status == 403 and reasons & {"quotaExceeded", "dailyLimitExceeded"}:
         return "quota"
-    if status in (400, 403) and (reasons & {"keyInvalid", "accessNotConfigured", "keyExpired", "forbidden", "ipRefererBlocked"}
-                                 or status == 400):
+    if status in (400, 403) and (reasons & {"keyInvalid", "keyExpired", "accessNotConfigured", "ipRefererBlocked"}
+                                 or "api key" in message):
         return "key"
-    return "transient"
+    if status == 429 or reasons & {"rateLimitExceeded", "userRateLimitExceeded"} or status >= 500:
+        return "transient"
+    return "request" if 400 <= status < 500 else "transient"

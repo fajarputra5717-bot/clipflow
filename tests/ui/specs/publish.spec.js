@@ -246,3 +246,15 @@ test("162: earn label on a card; an ended campaign's clips sit in a collapsed Ex
   await expect(card(app, "cand-old")).toBeVisible();
   await expect(app.locator(".qgroup:not(.pexpired) h3")).not.toContainText(["Old campaign"]);
 });
+
+test("189: YouTube views pulled automatically say so, and that a typed number gets replaced", async ({ app, api }) => {
+  api.publishGroups = [{ campaign: "fandra-octo", campaign_name: "Fandra", rows: [row({ campaign: "fandra-octo", platform: "youtube", platform_name: "YouTube Shorts",
+    post: posted({ id: "p-y", platform: "youtube", account_handle: "fanyt", url: "https://www.youtube.com/shorts/AAAAAAAAAAA", views: 12000,
+      views_at: new Date().toISOString(), views_source: "auto", views_error: null }) })] }];
+  await openPublish(app);
+  await app.click('[data-publish-filter="all"]');
+  await app.click('[data-chip="cand-a:youtube"]');
+  const r = app.locator('[data-publish-row="cand-a:youtube"]');
+  await expect(r.locator(".qviews")).toContainText("from YouTube");
+  await expect(r.locator(".qviews-hint")).toContainText("replaced at the next pull");
+});
