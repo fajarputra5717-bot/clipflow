@@ -33,9 +33,12 @@ KINDS = ("hook", "punchline", "shock", "laugh", "reaction")
 # moment kind → effect. Packs (E5) will change this mapping; E1 renders only "punch".
 EFFECT_FOR = {"hook": "punch", "punchline": "punch", "shock": "shake", "laugh": "emoji",
               "reaction": "punch", "loud": "shake", "cut": "whip"}
-PARAMS_FOR = {"emoji": {"emoji": "😂"}}
-RENDERED_EFFECTS = {"punch"}             # grows with E2–E4; others are planned but not rendered yet
-ARRIVES_IN = {"shake": "E2", "whip": "E2", "emoji": "E3"}
+PARAMS_FOR = {"emoji": {"emoji": "😂"}, "freeze": {"hold": 0.6}, "slowmo": {"dur": 1.2, "factor": 0.5}}
+MOTION_EFFECTS = ("punch", "push", "zoom_out", "shake", "flash", "whip")    # zoom stage (source time, pre-captions)
+TIME_EFFECTS = ("freeze", "slowmo")                                         # cut stage (post-captions, re-times)
+EFFECTS = MOTION_EFFECTS + TIME_EFFECTS + ("emoji",)                        # what a plan item may be switched to
+RENDERED_EFFECTS = set(MOTION_EFFECTS) | set(TIME_EFFECTS)                  # E2; emoji arrives with E3
+ARRIVES_IN = {"emoji": "E3"}
 # Higher wins when two candidates are closer than MIN_GAP.
 PRIORITY = {"transcript": 3, "vision": 2, "audio": 1, "cut": 1}
 
@@ -213,3 +216,66 @@ def punch_markers(director: Optional[dict]) -> list[float]:
     """Times of the plan's enabled punch items (rendered through the existing zoom stage)."""
     items = (director or {}).get("items") or []
     return [float(i["t"]) for i in items if i.get("on") and i.get("effect") == "punch"]
+
+
+# ---- E2 render helpers (pure): what the worker's zoom stage and cut stage apply from the plan
+
+def _on(director: Optional[dict], kinds) -> list[dict]:
+    return [i for i in (director or {}).get("items") or [] if i.get("on") and i.get("effect") in kinds]
+
+
+def motion_events(director: Optional[dict], removed=()) -> list[tuple]:
+    """Plan items for retention.motion_filter: (kind, t) or ("whip", t, out_start). A whip at a cut's end (a seam)
+    starts its outgoing half at the cut's START, so both halves meet across the cut."""
+    out = []
+    for i in _on(director, MOTION_EFFECTS):
+        t = float(i["t"])
+        if i["effect"] == "whip":
+            a = next((float(x) for x, y in removed or [] if abs(float(y) - t) < 0.03), t)
+            out.append(("whip", t, a))
+        else:
+            out.append((i["effect"], t))
+    return out
+
+
+def warps(director: Optional[dict]) -> list[tuple]:
+    """Plan items for retention.warp_pieces: ("freeze", t, hold) | ("slowmo", t, dur, factor)."""
+    out = []
+    for i in _on(director, TIME_EFFECTS):
+        p = {**PARAMS_FOR[i["effect"]], **(i.get("params") or {})}
+        if i["effect"] == "freeze":
+            out.append(("freeze", float(i["t"]), max(0.2, min(2.0, float(p["hold"])))))
+        else:
+            out.append(("slowmo", float(i["t"]), max(0.3, min(3.0, float(p["dur"]))),
+                        max(0.5, min(1.0, float(p["factor"])))))
+    return out
+
+
+def keep_of(spec: Optional[dict], clip: float) -> list[tuple]:
+    """Kept source segments from edit_spec.cuts (trim minus removed ranges); the whole clip when uncut."""
+    cuts = (spec or {}).get("cuts") if isinstance(spec, dict) else None
+    cuts = cuts if isinstance(cuts, dict) else {}
+    a, b = cuts.get("trim") or [0.0, clip]
+    keep = [(float(a), min(float(b), float(clip)))]
+    for s, e in cuts.get("removed") or []:
+        nxt = []
+        for x, y in keep:
+            if e <= x or s >= y:
+                nxt.append((x, y))
+            else:
+                if s > x:
+                    nxt.append((x, float(s)))
+                if e < y:
+                    nxt.append((float(e), y))
+        keep = nxt
+    return [(x, y) for x, y in keep if y > x]
+
+
+def time_extra(director: Optional[dict], keep) -> float:
+    """Seconds the time effects add to the output (freeze holds + slowed time), for the kept segments."""
+    from shared import retention
+    w = warps(director)
+    if not w or not keep:
+        return 0.0
+    pieces = retention.warp_pieces(keep, w)
+    return max(0.0, retention.pieces_output_seconds(pieces) - sum(float(b) - float(a) for a, b in keep))

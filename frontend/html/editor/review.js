@@ -77,6 +77,7 @@
   const fmtLen = (s) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}`;
 
   function outputSeconds(c) {                         // same rule as shared/rule_checks._duration
+    if (typeof c.output_seconds === "number") return c.output_seconds;   // server: cuts + Auto Edit time effects
     const clip = Math.max(0, (c.end_time || 0) - (c.start_time || 0));
     const cuts = c.edit_spec && c.edit_spec.cuts;
     if (!cuts || !clip) return clip;

@@ -237,7 +237,7 @@
     E.cuts.removed.forEach(([s, e]) => { keep = subtract(keep, s, e); });
     return keep;
   }
-  const outputSeconds = () => plannedKeep().reduce((a, [s, e]) => a + e - s, 0);
+  const outputSeconds = () => plannedKeep().reduce((a, [s, e]) => a + e - s, 0) + planExtra();
   function toggleRange(a, b) {
     E.cuts.removed = covered(a, b) ? subtract(E.cuts.removed, a, b) : merge([...E.cuts.removed, [a, b]]);
     cutsChanged();
@@ -303,7 +303,8 @@
     if (b) b.disabled = E.zoom.markers.length >= E.state.zoom.max_markers;
   }
   // ---- Auto Edit E1: the edit director's plan. Source-time items, each toggleable (timeline lane + list).
-  const FX = { punch: ["◆", "Punch zoom"], shake: ["≈", "Camera shake"], whip: ["»", "Whip transition"], emoji: ["☺", "Emoji pop"] };
+  const FX = { punch: ["◆", "Punch zoom"], push: ["↗", "Slow push-in"], zoom_out: ["↙", "Zoom out"], shake: ["≈", "Camera shake"],
+    flash: ["✦", "Flash"], whip: ["»", "Whip transition"], freeze: ["❚❚", "Freeze frame"], slowmo: ["½", "Slow-mo"], emoji: ["☺", "Emoji pop"] };
   const fxName = (e) => (FX[e] || [null, e])[1];
   const fxGlyph = (i) => (i.effect === "emoji" && i.params && i.params.emoji) || (FX[i.effect] || ["•"])[0];
   function paintPlan() {
@@ -325,14 +326,34 @@
         ${items.length ? `<div class="ed-plan-list">${items.map((i) => `
           <div class="ed-plan-row ${i.on ? "" : "is-off"}"><span class="ed-plan-t">${i.t.toFixed(1)} s</span>
             <span class="ed-plan-fx fx-${esc(i.effect)}" aria-hidden="true">${esc(fxGlyph(i))}</span>
-            <span class="ed-plan-what"><b>${esc(fxName(i.effect))}</b><span class="ed-hint">${esc(i.reason)}${esc(later(i))}</span></span>
+            <span class="ed-plan-what"><select class="ed-plan-sel" data-ed-plan-fx="${esc(i.id)}" aria-label="Effect at ${i.t.toFixed(1)} s">${(d.effects || [i.effect]).map((x) =>
+              `<option value="${esc(x)}" ${x === i.effect ? "selected" : ""}>${esc(fxName(x))}</option>`).join("")}</select><span class="ed-hint">${esc(i.reason)}${esc(later(i))}</span></span>
             ${sw(`data-ed-plan-item="${esc(i.id)}"`, i.on, `${fxName(i.effect)} at ${i.t.toFixed(1)} s`)}</div>`).join("")}</div>` : ""}
       </div>`;
+  }
+  function setPlanEffect(id, effect) {
+    const it = (E.plan || []).find((i) => i.id === id); if (!it || it.effect === effect) return;
+    it.effect = effect; it.params = { ...((E.state.director.defaults || {})[effect] || {}) };
+    paintCuts(); if (E.tab === "effects") repaintPanel();
+    E.dirty = true; paintHook();
+    saver("plan", "/plan", () => ({ items: E.plan }));
+  }
+  // E2: seconds freeze frames / slow-mo add (same rule as shared/edit_director.time_extra, simple non-overlapping case)
+  function planExtra() {
+    const keep = plannedKeep(), dflt = (E.state.director && E.state.director.defaults) || {};
+    const inKeep = (t) => keep.some(([a, b]) => a <= t && t < b);
+    const overlap = (a, b) => keep.reduce((x, [s, e]) => x + Math.max(0, Math.min(b, e) - Math.max(a, s)), 0);
+    return (E.plan || []).filter((i) => i.on).reduce((x, i) => {
+      const p = { ...(dflt[i.effect] || {}), ...(i.params || {}) };
+      if (i.effect === "freeze" && inKeep(i.t)) return x + Number(p.hold || 0.6);
+      if (i.effect === "slowmo") return x + overlap(i.t, i.t + Number(p.dur || 1.2)) * (1 / Math.max(0.5, Number(p.factor || 0.5)) - 1);
+      return x;
+    }, 0);
   }
   function togglePlan(id) {
     const it = (E.plan || []).find((i) => i.id === id); if (!it) return;
     it.on = !it.on;
-    paintPlan(); if (E.tab === "effects") repaintPanel();
+    paintCuts(); if (E.tab === "effects") repaintPanel();
     saver("plan", "/plan", () => ({ items: E.plan }));
   }
   async function generatePlan(btn) {
@@ -380,7 +401,15 @@
   }
 
   // rendered preview's keep (source time) ↔ video time
+  // E2: with freeze / slow-mo the preview's time base is pieces [s, e, speed, hold] (source s..e plays at speed,
+  // then the last frame holds for hold s); without them, keep segments.
   function toOut(t) {
+    const P = E.tl && E.tl.pieces;
+    if (P) {
+      let acc = 0;
+      for (const [a, b, sp, h] of P) { if (t < b) return acc + Math.max(0, t - a) / sp; acc += (b - a) / sp + h; }
+      return acc;
+    }
     const keep = E.tl && E.tl.keep;
     if (!keep) return t;
     let acc = 0;
@@ -388,6 +417,17 @@
     return acc;
   }
   function toSrc(o) {
+    const P = E.tl && E.tl.pieces;
+    if (P) {
+      let acc = 0;
+      for (const [a, b, sp, h] of P) {
+        const d = (b - a) / sp;
+        if (o <= acc + d) return a + (o - acc) * sp;
+        if (o <= acc + d + h) return b;          // inside a freeze: the held frame
+        acc += d + h;
+      }
+      return P.length ? P[P.length - 1][1] : o;
+    }
     const keep = E.tl && E.tl.keep;
     if (!keep) return o;
     let acc = 0;
@@ -1181,6 +1221,7 @@
     document.body.appendChild(b); document.body.classList.add("is-staging");
   }).catch(() => {});
   document.addEventListener("change", (e) => {
+    if (E.state && e.target.matches && e.target.matches("[data-ed-plan-fx]")) return setPlanEffect(e.target.dataset.edPlanFx, e.target.value);
     if (E.state && e.target.matches && e.target.matches("[data-ed-thumb-upload]")) uploadThumb(e.target);
   });
   document.addEventListener("toggle", (e) => {                 // keep "Style, font…" open across repaints

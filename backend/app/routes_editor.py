@@ -201,7 +201,8 @@ def _director_state(spec: dict, c: dict) -> dict:
     d = edit_specs.director_of(spec) or {"items": []}
     frames_ready = (_core().DATA_ROOT / "previews" / f"{c['id']}.frame-0.jpg").is_file()
     return {**d, "rendered": sorted(edit_director.RENDERED_EFFECTS), "arrives_in": edit_director.ARRIVES_IN,
-            "min_gap": edit_director.MIN_GAP, "frames_ready": frames_ready}
+            "min_gap": edit_director.MIN_GAP, "frames_ready": frames_ready,
+            "effects": list(edit_director.EFFECTS), "defaults": edit_director.PARAMS_FOR}
 
 
 def _cuts_state(spec: dict, duration) -> dict:
@@ -210,6 +211,8 @@ def _cuts_state(spec: dict, duration) -> dict:
     trim = cuts.get("trim") or [0.0, d]
     removed = cuts.get("removed") or []
     out = (trim[1] - trim[0]) - sum(e - s for s, e in removed)
+    if d:   # E2: freeze frames / slow-mo of the plan lengthen the output
+        out += edit_director.time_extra(edit_specs.director_of(spec), edit_director.keep_of(spec, d))
     return {"trim": cuts.get("trim"), "removed": removed, "output_seconds": round(max(0.0, out), 2),
             "suggest_min_gap": 0.6, "pad": 0.12}
 
@@ -540,6 +543,7 @@ def review_clips(campaign: str = "all", job: str = "all", status: str = "to_revi
             rules_cache[slug] = (rules, payouts.model_from_rules(rules) if rules else None)
         rules, model = rules_cache[slug]
         c["rule_checks"] = rule_checks.check(rules, c) if rules else []
+        c["output_seconds"] = round(rule_checks._duration(c), 2)      # cuts + Auto Edit time effects (E2)
         c.update(campaign_status_mod.clip_labels(rules, posts.get(c["id"], []), now))   # 162: earn + expired
         c.update(campaign=slug, job_title=jtitle or "Untitled video", job_date=jdate.isoformat() if jdate else None,
                  job_status=jstatus, updated_at=c["updated_at"].isoformat() if c["updated_at"] else None,

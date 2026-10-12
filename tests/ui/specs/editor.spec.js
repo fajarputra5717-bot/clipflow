@@ -17,7 +17,8 @@ function editorState(over = {}) {
                  picked: null, locked: false, current_url: "/api/jobs/job-done/candidates/cand-a/thumbnail", generating: false },
     watermark: { width: 320, opacity: 1, custom: false },
     export: { burn: true, description: "", submagic: { status: null, preview_url: null, error: null } },
-    director: { items: [], rendered: ["punch"], arrives_in: { shake: "E2", whip: "E2", emoji: "E3" }, min_gap: 3, frames_ready: false },
+    director: { items: [], rendered: ["flash", "freeze", "punch", "push", "shake", "slowmo", "whip", "zoom_out"], arrives_in: { emoji: "E3" }, min_gap: 3, frames_ready: false,
+      effects: ["punch", "push", "zoom_out", "shake", "flash", "whip", "freeze", "slowmo", "emoji"], defaults: { emoji: { emoji: "😂" }, freeze: { hold: 0.6 }, slowmo: { dur: 1.2, factor: 0.5 } } },
     ...over,
   };
 }
@@ -458,7 +459,7 @@ test.describe("Editor Auto edit plan", () => {
     await app.locator('[data-ed-tab="effects"]').click();
     await app.locator("[data-ed-plan-gen]").click();
     await expect(app.locator(".ed-plan-row")).toHaveCount(2);
-    await expect(app.locator(".ed-plan-row").nth(1)).toContainText("arrives in E2");
+    await expect(app.locator(".ed-plan-row").nth(1)).not.toContainText("arrives in");   // E2: shake renders
     await expect(app.locator(".ed-plan-mark")).toHaveCount(2);
     await expect(app.locator("[data-ed-plan-gen]")).toHaveText("Regenerate plan");
     await app.locator('.ed-plan-mark[data-ed-plan-item="punch-50"]').click();
@@ -466,5 +467,22 @@ test.describe("Editor Auto edit plan", () => {
     await expect(app.locator('.ed-switch[data-ed-plan-item="punch-50"]')).toHaveAttribute("aria-checked", "false");
     await expect.poll(() => api.calls.filter((c) => c.method === "PUT" && c.path.endsWith("/plan")).pop()?.body.items.map((i) => i.on))
       .toEqual([false, true]);
+  });
+});
+
+// Auto Edit E2: switch an item's effect (motion / time); a freeze adds its hold to the output length.
+test.describe("Editor Auto edit E2 effects", () => {
+  test.use({ reducedMotion: "reduce" });
+  test("change an item to Freeze frame: PUT carries the effect + default params, output grows", async ({ app, api }) => {
+    await mockEditor(app, api);
+    await app.evaluate(() => { location.hash = "#editor/job-done/cand-a"; });
+    await app.locator('[data-ed-tab="effects"]').click();
+    await app.locator("[data-ed-plan-gen]").click();
+    await expect(app.locator(".ed-plan-row")).toHaveCount(2);
+    await app.locator('[data-ed-plan-fx="shake-350"]').selectOption("freeze");
+    await expect.poll(() => api.calls.filter((c) => c.method === "PUT" && c.path.endsWith("/plan")).pop()?.body.items.find((i) => i.id === "shake-350"))
+      .toMatchObject({ effect: "freeze", params: { hold: 0.6 } });
+    await expect(app.locator('.ed-plan-mark[data-ed-plan-item="shake-350"]')).toHaveClass(/fx-freeze/);
+    await expect(app.locator("#edOut")).toContainText("6.6");                 // 6 s clip + 0.6 s hold
   });
 });

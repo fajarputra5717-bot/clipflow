@@ -353,13 +353,26 @@ def apply_cuts(path, candidate: dict, clip_duration: float, *, preset, crf, run,
     (retention.silence_trim_graph). Goes through the worker's run_command (cancel + watchdog).
     Returns the output duration, or None when the clip has no cuts. Loudnorm runs after this."""
     from shared import retention
+    from shared import edit_director
     keep = cut_plan(candidate, clip_duration, _probe_fps(path))
     compress = bool(edit_specs.audio_of(candidate.get("edit_spec")).get("compress"))
-    if not keep and not compress:
+    warps = edit_director.warps(edit_specs.director_of(candidate.get("edit_spec")))   # Auto Edit E2: freeze / slow-mo
+    if not keep and not compress and not warps:
         return None
     tmp = Path(str(path) + ".cut.mp4")
-    if keep:
-        graph = retention.silence_trim_graph(keep, crossfade=retention.CUT_CROSSFADE, duration=float(clip_duration))
+    pieces = None
+    if warps:
+        base = keep or [(0.0, float(clip_duration))]
+        pieces = retention.warp_pieces(base, warps)
+        if all(sp == 1.0 and not hold for _s, _e, sp, hold in pieces):
+            pieces = None                     # every warp fell outside the kept time
+    if not keep and not compress and not pieces:
+        return None
+    if keep or pieces:
+        base = keep or [(0.0, float(clip_duration))]
+        graph = (retention.warp_graph(base, pieces, crossfade=retention.CUT_CROSSFADE, duration=float(clip_duration))
+                 if pieces else
+                 retention.silence_trim_graph(keep, crossfade=retention.CUT_CROSSFADE, duration=float(clip_duration)))
         amap = "[atrim]"
         if compress:                      # task 5: light compression, then loudnorm (Lane A) runs last
             graph += f";[atrim]{COMPRESSOR}[acomp]"
@@ -371,9 +384,11 @@ def apply_cuts(path, candidate: dict, clip_duration: float, *, preset, crf, run,
              "-c:v", "copy", "-af", COMPRESSOR, "-c:a", "aac", "-b:a", "128k", "-ar", "48000",
              "-movflags", "+faststart", str(tmp)], timeout=timeout)
     tmp.replace(path)
-    out = sum(b - a for a, b in keep) if keep else float(clip_duration)
-    log(f"Cuts: {len(keep or [])} segments, {clip_duration:.1f} s -> {out:.1f} s" + (" + light compression" if compress else ""))
-    return out if keep else None
+    out = (retention.pieces_output_seconds(pieces) if pieces else
+           sum(b - a for a, b in keep) if keep else float(clip_duration))
+    log(f"Cuts: {len(keep or [])} segments, {clip_duration:.1f} s -> {out:.1f} s" + (" + light compression" if compress else "")
+        + (f" + time effects ({', '.join(w[0] for w in warps)})" if pieces else ""))
+    return out if (keep or pieces) else None
 
 
 # --------------------------------------------------------------------------- zoom (task 4)
@@ -403,25 +418,32 @@ def zoom_stage(filters: list, last: str, width: int, height: int, output_path=No
     if not cand or ctx.get("output") is None or output_path is None or ctx["output"] != str(output_path):
         return last                                   # not the render begin_render() announced
     from shared import edit_director
-    z = edit_specs.zoom_of(cand.get("edit_spec")) or {}
+    spec = cand.get("edit_spec")
+    z = edit_specs.zoom_of(spec) or {}
     manual = list(z.get("markers") or []) if z.get("on", True) else []
-    planned = edit_director.punch_markers(edit_specs.director_of(cand.get("edit_spec")))   # Auto Edit E1
-    markers = sorted(set(manual + planned))
-    if not markers:
+    cuts = edit_specs.cuts_of(spec) or {}
+    planned = edit_director.motion_events(edit_specs.director_of(spec), cuts.get("removed") or [])   # Auto Edit E1/E2
+    events = [("punch", m) for m in manual] + planned
+    if not events:
         return last
     peak = edit_specs.zoom_peak(z.get("intensity", edit_specs.ZOOM_DEFAULT_INTENSITY))
-    if peak <= 1.0:
+    mf = retention.motion_filter(events, width=width, height=height, punch_peak=peak, duration=ctx["duration"])
+    if not mf:
         return last
-    wins = retention.plan_zoom_windows(markers, ctx["duration"])
-    zf = retention.zoom_filter(wins, width=width, height=height, peak=peak)
-    if not zf:
-        return last
-    filters.append(f"[{last}]{zf}[zoomed];")
-    log(f"Zoom: {len(wins)} punch-in(s) ({len(planned)} from the edit plan), peak {peak:.2f}, canvas {width}x{height}")
+    filters.append(f"[{last}]{mf}[zoomed];")
+    n_punch = len(retention.plan_zoom_windows([e[1] for e in events if e[0] == "punch"], ctx["duration"])) if peak > 1.0 else 0
+    other = sorted({e[0] for e in planned if e[0] != "punch"})
+    log(f"Zoom: {n_punch} punch-in(s) ({sum(1 for e in planned if e[0] == 'punch')} from the edit plan), peak {peak:.2f}, "
+        f"canvas {width}x{height}" + (f"; motion from the plan: {', '.join(other)}" if other else ""))
     return "zoomed"
 
 
 # --------------------------------------------------------------------------- timeline (task 2)
+
+def retention_warp_pieces(keep, warps):
+    from shared import retention
+    return retention.warp_pieces(keep, warps)
+
 
 def _sample_frames(candidate, duration, previews_dir, source_path, start, log=print) -> list:
     """Auto Edit E1: FRAME_COUNT small JPEGs from the SOURCE clip window (source time = the plan's time basis)
@@ -455,6 +477,12 @@ def write_timeline(preview_path, segments, duration, candidate, previews_dir, *,
         data = timeline.build(source_path or preview_path, segments, duration,
                               start=start if source_path else None, keep=keep)
         data["frames"] = _sample_frames(candidate, duration, previews_dir, source_path, start, log=log)
+        if isinstance(candidate, dict):       # E2: freeze / slow-mo change the preview's time base
+            from shared import edit_director
+            w = edit_director.warps(edit_specs.director_of(candidate.get("edit_spec")))
+            if w:
+                data["pieces"] = [[round(a, 3), round(b, 3), sp, round(h, 3)] for a, b, sp, h in
+                                  retention_warp_pieces(keep or [(0.0, float(duration))], w)]
         timeline.write_cache(timeline.cache_path(previews_dir, candidate_id), data, preview_path)
         log(f"Timeline: {len(data['words'])} words, {len(data['peaks'] or [])} peaks")
     except Exception as e:
