@@ -60,6 +60,7 @@
       E.mode = "seek";
       E.zoom = { on: E.state.zoom.on, intensity: E.state.zoom.intensity, markers: E.state.zoom.markers.slice() };
       E.progress = { on: E.state.progress.on, color: E.state.progress.color };
+      E.plan = (E.state.director.items || []).map((i) => ({ ...i }));
       E.audio = { compress: E.state.audio.compress, silence_trim: E.state.audio.silence_trim,
                   silence_ranges: (E.state.audio.silence_ranges || []).map((r) => r.slice()) };
       loadCaptions();
@@ -179,6 +180,7 @@
           <canvas class="ed-tl-wave" id="edWave" aria-hidden="true"></canvas>
           <div id="edBands" aria-hidden="true"></div>
           <div class="ed-zoom-lane" id="edZoomLane" aria-label="Zoom punch-ins"></div>
+          <div class="ed-plan-lane" id="edPlanLane" role="group" aria-label="Auto edit plan"></div>
           <div class="ed-tl-words" role="group" aria-label="Words and pauses">${pauses}${words}</div>
           <div class="ed-trim-shade l" id="edShadeL" aria-hidden="true"></div><div class="ed-trim-shade r" id="edShadeR" aria-hidden="true"></div>
           <div class="ed-trim-h" id="edTrimA" role="slider" tabindex="0" aria-label="Clip start" data-ed-trim="a"></div>
@@ -282,6 +284,7 @@
     const out = outputSeconds(), o = $("edOut");
     if (o) o.textContent = `Output ${out.toFixed(1)} s`;
     paintZoom();
+    paintPlan();
     const hint = $("edTlHint");
     if (hint) hint.textContent = E.mode === "zoom" ? `Zoom mode: click the timeline to add a punch-in (max ${E.state.zoom.max_markers}), click a ◆ to remove it.`
       : E.mode === "cut" ? "Cut mode: click a word or pause to cut it, click again to restore. Drag the orange handles to trim."
@@ -298,6 +301,49 @@
       <button type="button" class="ed-zoom-mark" data-ed-zoom-mark="${k}" style="left:${m * PPS}px" title="Punch-in at ${m.toFixed(2)} s · click to remove" aria-label="Zoom punch-in at ${m.toFixed(1)} seconds, remove"></button>`).join("");
     const b = document.querySelector("[data-ed-zoom-add]");
     if (b) b.disabled = E.zoom.markers.length >= E.state.zoom.max_markers;
+  }
+  // ---- Auto Edit E1: the edit director's plan. Source-time items, each toggleable (timeline lane + list).
+  const FX = { punch: ["◆", "Punch zoom"], shake: ["≈", "Camera shake"], whip: ["»", "Whip transition"], emoji: ["☺", "Emoji pop"] };
+  const fxName = (e) => (FX[e] || [null, e])[1];
+  const fxGlyph = (i) => (i.effect === "emoji" && i.params && i.params.emoji) || (FX[i.effect] || ["•"])[0];
+  function paintPlan() {
+    const lane = $("edPlanLane"); if (!lane || !E.tl) return;
+    lane.innerHTML = (E.plan || []).map((i) => `<button type="button" class="ed-plan-mark fx-${esc(i.effect)}" data-ed-plan-item="${esc(i.id)}"
+      style="left:${i.t * PPS}px" aria-pressed="${i.on}" title="${esc(`${fxName(i.effect)} at ${i.t.toFixed(1)} s · ${i.reason} · click to turn ${i.on ? "off" : "on"}`)}"
+      aria-label="${esc(`${fxName(i.effect)} at ${i.t.toFixed(1)} seconds`)}">${esc(fxGlyph(i))}</button>`).join("");
+  }
+  function planGroupHtml() {
+    const d = E.state.director, items = E.plan || [], on = items.filter((i) => i.on).length;
+    const later = (i) => d.rendered.includes(i.effect) ? "" : ` · arrives in ${d.arrives_in[i.effect] || "a later step"}`;
+    return `
+      <div class="ed-group">
+        <div class="ed-row"><div><div class="ed-label">Auto edit</div>
+          <div class="ed-hint">${items.length ? `${on} of ${items.length} effects on · at most one per ${d.min_gap} s, never under the title card${d.vision ? " · frames checked" : ""}`
+            : "AI picks the strongest moments (hook, punchline, shock, laugh) and plans a few effects. You keep the final say."}</div></div>
+          <button type="button" class="sm" data-ed-plan-gen>${items.length ? "Regenerate plan" : "Generate plan"}</button></div>
+        ${items.length ? `<div class="ed-plan-list">${items.map((i) => `
+          <div class="ed-plan-row ${i.on ? "" : "is-off"}"><span class="ed-plan-t">${i.t.toFixed(1)} s</span>
+            <span class="ed-plan-fx fx-${esc(i.effect)}" aria-hidden="true">${esc(fxGlyph(i))}</span>
+            <span class="ed-plan-what"><b>${esc(fxName(i.effect))}</b><span class="ed-hint">${esc(i.reason)}${esc(later(i))}</span></span>
+            ${sw(`data-ed-plan-item="${esc(i.id)}"`, i.on, `${fxName(i.effect)} at ${i.t.toFixed(1)} s`)}</div>`).join("")}</div>` : ""}
+      </div>`;
+  }
+  function togglePlan(id) {
+    const it = (E.plan || []).find((i) => i.id === id); if (!it) return;
+    it.on = !it.on;
+    paintPlan(); if (E.tab === "effects") repaintPanel();
+    saver("plan", "/plan", () => ({ items: E.plan }));
+  }
+  async function generatePlan(btn) {
+    setBusy(btn, true, "Planning…");
+    try {
+      await flushSavers();
+      E.state = await api(edUrl(E.jid, E.cid) + "/plan", { method: "POST" });
+      E.plan = (E.state.director.items || []).map((i) => ({ ...i }));
+      E.dirty = true; paintHook(); paintPlan();
+      if (E.tab === "effects") repaintPanel();
+      paintState(E.plan.length ? undefined : "No strong moments found: nothing planned");
+    } catch (e) { setBusy(btn, false); paintState("Plan failed: " + e.message); }
   }
   function addZoom(t) {
     if (!E.tl || E.zoom.markers.length >= E.state.zoom.max_markers) return;
@@ -406,7 +452,7 @@
 
   function effectsPanel() {
     const z = E.zoom, p = E.progress, n = z.markers.length;
-    return `
+    return planGroupHtml() + `
       <div class="ed-group">
         <div class="ed-row"><div><div class="ed-label">Zoom punch-ins</div>
           <div class="ed-hint">${n} punch-in${n === 1 ? "" : "s"} on the timeline: add them in ◆ Zoom mode (key Z).</div></div>
@@ -951,7 +997,7 @@
 
   // ------------------------------------------------------------------ events (delegated, data-*)
   document.addEventListener("click", (e) => {
-    const t = e.target.closest("[data-ed-back],[data-ed-hook-on],[data-ed-hook-dur],[data-ed-render],[data-ed-play],[data-ed-tab],[data-ed-zoom-on],[data-ed-progress-on],[data-ed-progress-color],[data-ed-compress],[data-ed-silence],[data-ed-word],[data-ed-pause],[data-ed-mode],[data-ed-suggest],[data-ed-fillers],[data-ed-cuts-reset],[data-ed-zoom-add],[data-ed-zoom-mark],[data-ed-trim],[data-ed-seekarea],[data-ed-preset],[data-ed-cap-all],[data-ed-kw],[data-ed-kw-color],[data-ed-fix-typos],[data-ed-cap-reset],[data-ed-capy-on],[data-ed-new-hook],[data-ed-thumb-pick],[data-ed-thumb-gen],[data-ed-burn],[data-ed-gen-desc],[data-ed-sm],[data-ed-versions],[data-ed-restore],[data-ed-approve]");
+    const t = e.target.closest("[data-ed-back],[data-ed-hook-on],[data-ed-hook-dur],[data-ed-render],[data-ed-play],[data-ed-tab],[data-ed-zoom-on],[data-ed-progress-on],[data-ed-progress-color],[data-ed-compress],[data-ed-silence],[data-ed-word],[data-ed-pause],[data-ed-mode],[data-ed-suggest],[data-ed-fillers],[data-ed-cuts-reset],[data-ed-zoom-add],[data-ed-zoom-mark],[data-ed-trim],[data-ed-seekarea],[data-ed-preset],[data-ed-cap-all],[data-ed-kw],[data-ed-kw-color],[data-ed-fix-typos],[data-ed-cap-reset],[data-ed-capy-on],[data-ed-new-hook],[data-ed-thumb-pick],[data-ed-thumb-gen],[data-ed-burn],[data-ed-gen-desc],[data-ed-sm],[data-ed-versions],[data-ed-restore],[data-ed-approve],[data-ed-plan-gen],[data-ed-plan-item]");
     if (!t || !E.state && !t.matches("[data-ed-back]")) return;
     if (t.matches("[data-ed-back]")) {                       // back to the Review page (step 4) for this job
       e.preventDefault(); const jid = E.jid; close(false); location.hash = `#review/${encodeURIComponent(jid || "")}`;
@@ -1028,6 +1074,8 @@
       moveSeg();
       return;
     }
+    if (t.matches("[data-ed-plan-gen]")) return generatePlan(t);
+    if (t.matches("[data-ed-plan-item]")) { e.stopPropagation(); return togglePlan(t.dataset.edPlanItem); }
     if (t.matches("[data-ed-burn]")) {
       const X = E.state.export; X.burn = !X.burn; E.state.captions.burn = X.burn; repaintPanel();
       saver("burn", `/api/jobs/${encodeURIComponent(E.jid)}/render-options`, () => ({ burn_subtitles: X.burn }), "PATCH"); return;

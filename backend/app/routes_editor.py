@@ -28,6 +28,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from shared import caption_options
+from shared import edit_director
 from shared import edit_spec as edit_specs
 from shared import fonts
 from shared import languages
@@ -124,6 +125,7 @@ def _state(c: dict) -> dict:
         "thumbnail": _thumbnail_state(c),
         "watermark": _watermark_state(c),
         "export": _export_state(c),
+        "director": _director_state(spec),
         "hook_title": {
             "on": bool(ht.get("on", False)), "text": ht.get("text", ""),
             "duration": ht.get("duration", edit_specs.HOOK_TITLE_DEFAULT_DURATION),
@@ -191,6 +193,13 @@ def _export_state(c: dict) -> dict:
     return {"burn": c.get("burn_subtitles") is not False, "description": c.get("description") or "",
             "submagic": {"status": c.get("submagic_status"), "preview_url": c.get("submagic_preview_url"),
                          "error": c.get("submagic_error")}}
+
+
+def _director_state(spec: dict) -> dict:
+    """Auto Edit E1: the plan (empty until generated) + which effects render today."""
+    d = edit_specs.director_of(spec) or {"items": []}
+    return {**d, "rendered": sorted(edit_director.RENDERED_EFFECTS), "arrives_in": edit_director.ARRIVES_IN,
+            "min_gap": edit_director.MIN_GAP}
 
 
 def _cuts_state(spec: dict, duration) -> dict:
@@ -557,6 +566,105 @@ def environment():
     return {"env": os.getenv("CLIPFLOW_ENV") or "production"}
 
 
+# --------------------------------------------------------------------------- Auto Edit E1: edit plan
+
+def _plan_inputs(c: dict, user: dict):
+    """Words/peaks/frames from the preview's timeline cache + this clip's cuts and hook card window."""
+    core = _core()
+    spec = c["edit_spec"] if isinstance(c["edit_spec"], dict) else {}
+    duration = float(c["duration_seconds"] or ((c["end_time"] or 0) - (c["start_time"] or 0)) or 0)
+    previews = core.DATA_ROOT / "previews"
+    cached = timelines.read_cache(timelines.cache_path(previews, c["id"]), c["preview_path"]) or {}
+    cuts = edit_specs.cuts_of(spec) or {}
+    trim = cuts.get("trim")
+    removed = cuts.get("removed") or []
+    ht = edit_specs.hook_title_of(spec) or {}
+    card = None
+    if ht.get("on"):
+        s0 = float(trim[0]) if trim else 0.0
+        card = (s0, s0 + float(ht.get("duration") or edit_specs.HOOK_TITLE_DEFAULT_DURATION))
+    frames = []
+    vision_on = str(core.runtime_setting("EDIT_DIRECTOR_VISION", user_id=user["id"]) or "true").lower() not in (
+        "false", "0", "no", "off")
+    if vision_on:
+        for f in (cached.get("frames") or [])[: edit_director.FRAME_COUNT]:
+            path = previews / str(f.get("file", ""))
+            if path.parent == previews and path.name.startswith(c["id"]) and path.is_file():
+                try:
+                    frames.append((float(f["t"]), path.read_bytes()))
+                except (OSError, KeyError, TypeError, ValueError):
+                    pass
+    return duration, cached, removed, trim, card, frames
+
+
+@editor.post("/plan")
+def generate_plan(job_id: str, candidate_id: str, user: dict = Depends(get_current_user)):
+    """Generate / regenerate the edit plan (one utility-AI call, + frames when available). Replaces the plan."""
+    from datetime import datetime, timezone
+    from shared.ai import router as ai_router
+    from shared.errors import AIError, AINotConfiguredError
+    core = _core()
+    with core.get_db() as conn, conn.cursor() as cur:
+        c = _load(cur, job_id, candidate_id, user)
+    duration, cached, removed, trim, card, frames = _plan_inputs(c, user)
+    if duration <= 0:
+        raise HTTPException(status_code=409, detail="This clip has no duration yet")
+    words = cached.get("words") or []
+    if not words:
+        raise HTTPException(status_code=409, detail="Render a preview first: the plan reads its transcript and audio")
+    prompt = edit_director.moments_prompt(words, duration, frame_times=[t for t, _ in frames],
+                                          title=(c["manual_title"] or c["title"] or c["ai_title"] or ""))
+    try:
+        data, meta = ai_router.ai_generate_json(prompt, edit_director.MOMENTS_SCHEMA, task="edit_moments",
+                                                max_tokens=1200, attempts=1, with_meta=True,
+                                                images=[b for _, b in frames] or None)
+    except AINotConfiguredError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    except AIError as exc:
+        if not frames:
+            raise HTTPException(status_code=502, detail=f"The AI couldn't plan this clip: {str(exc)[:200]}")
+        print(f"[backend] edit plan: vision call failed ({type(exc).__name__}), retrying text-only")
+        frames = []
+        prompt = edit_director.moments_prompt(words, duration, title=(c["manual_title"] or c["title"] or ""))
+        try:
+            data, meta = ai_router.ai_generate_json(prompt, edit_director.MOMENTS_SCHEMA, task="edit_moments",
+                                                    max_tokens=1200, attempts=1, with_meta=True)
+        except AIError as exc2:
+            raise HTTPException(status_code=502, detail=f"The AI couldn't plan this clip: {str(exc2)[:200]}")
+    moments = edit_director.parse_moments(data, duration)
+    items = edit_director.plan(
+        duration=duration, moments=moments,
+        loud=edit_director.loudness_peaks(cached.get("peaks"), float(cached.get("rate") or 0)),
+        cuts=edit_director.cut_points(removed), hook_card=card, removed=removed, trim=trim)
+    value = edit_specs.normalize_director({
+        "version": edit_director.VERSION, "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "provider": meta.get("provider"), "vision": bool(frames), "items": items}, duration)
+    return _save_spec_key(job_id, candidate_id, user, "director", value)
+
+
+class PlanIn(BaseModel):
+    items: list[dict] = []
+
+
+@editor.put("/plan")
+def put_plan(job_id: str, candidate_id: str, body: PlanIn, user: dict = Depends(get_current_user)):
+    """Toggle / edit items of the current plan (empty items = clear the plan)."""
+    core = _core()
+    with core.get_db() as conn, conn.cursor() as cur:
+        c = _load(cur, job_id, candidate_id, user)
+    spec = c["edit_spec"] if isinstance(c["edit_spec"], dict) else {}
+    duration = c["duration_seconds"] or ((c["end_time"] or 0) - (c["start_time"] or 0))
+    current = edit_specs.director_of(spec) or {}
+    if not body.items:
+        return _save_spec_key(job_id, candidate_id, user, "director", None)
+    try:
+        value = edit_specs.normalize_director({**current, "items": body.items}, duration)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return _save_spec_key(job_id, candidate_id, user, "director", value)
+
+
 router.include_router(editor)
 router.include_router(review)
 router.add_api_route("/api/env", environment, methods=["GET"], tags=["meta"])
+

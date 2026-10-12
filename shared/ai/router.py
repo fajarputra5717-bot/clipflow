@@ -159,11 +159,12 @@ def _backoff(attempt):
 
 
 def ai_generate_json(prompt, schema, *, task, max_tokens, attempts=None,
-                     with_meta=False):
+                     with_meta=False, images=None):
     """Parsed JSON; with_meta=True returns (data, meta) where meta =
     {"provider", "model", "failed_over", "usage"}. `attempts` overrides the
     per-provider attempt count (backend handlers pass 1 so a request
-    doesn't block on backoff)."""
+    doesn't block on backoff). `images` = optional list of JPEG bytes sent
+    with the prompt (vision-capable models only; Auto Edit E1)."""
     if _setting is None:
         raise RuntimeError("shared.ai.router.configure() was not called")
 
@@ -185,9 +186,10 @@ def ai_generate_json(prompt, schema, *, task, max_tokens, attempts=None,
                 _log(f"AI: {name} circuit open, skipping for task={task}")
                 break
             try:
+                extra = {"images": images} if images else {}
                 data, model, usage = module.generate_json(
                     prompt, schema, task=task, max_tokens=max_tokens,
-                    setting=_setting,
+                    setting=_setting, **extra,
                 )
             except AINotConfiguredError as exc:
                 last_error = exc

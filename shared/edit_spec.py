@@ -48,6 +48,7 @@ def normalize_caption(value, styles, animations):
     return {"style": style, "animation": animation}
 
 
+import json
 import re
 
 KEYWORD_DEFAULT_COLOR = "#FFD60A"
@@ -364,3 +365,53 @@ def normalize_audio(value, clip_duration=None):
 def audio_of(spec):
     a = (spec or {}).get("audio") if isinstance(spec, dict) else None
     return a if isinstance(a, dict) else {}
+
+
+# ---- Auto Edit E1 (lane B): the edit director's plan, every item toggleable
+
+DIRECTOR_MAX_ITEMS = 40
+DIRECTOR_SOURCES = ("transcript", "vision", "audio", "cut", "user")
+_EFFECT_RE = re.compile(r"^[a-z_]{2,20}$")
+
+
+def normalize_director(value, clip_duration=None):
+    """{version, generated_at, provider, vision, items:[{id, t, effect, params, reason, source, on}]} or None.
+    Unknown effects are kept (a newer plan degrades safely: only known effects render)."""
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        raise ValueError("director must be an object")
+    raw = value.get("items") or []
+    if not isinstance(raw, list) or len(raw) > DIRECTOR_MAX_ITEMS:
+        raise ValueError(f"director.items must be a list of at most {DIRECTOR_MAX_ITEMS}")
+    items, seen = [], set()
+    for it in raw:
+        if not isinstance(it, dict):
+            raise ValueError("director.items must be objects")
+        try:
+            t = round(float(it.get("t")), 2)
+        except (TypeError, ValueError):
+            raise ValueError("director item t must be seconds")
+        if t < 0 or (clip_duration is not None and t >= float(clip_duration)):
+            continue
+        effect = str(it.get("effect") or "")
+        if not _EFFECT_RE.match(effect):
+            raise ValueError("director item effect must be a short lowercase name")
+        iid = str(it.get("id") or f"{effect}-{int(round(t * 100))}")[:40]
+        if iid in seen:
+            continue
+        seen.add(iid)
+        params = it.get("params") if isinstance(it.get("params"), dict) else {}
+        if len(json.dumps(params)) > 300:
+            raise ValueError("director item params too large")
+        source = it.get("source") if it.get("source") in DIRECTOR_SOURCES else "user"
+        items.append({"id": iid, "t": t, "effect": effect, "params": params,
+                      "reason": str(it.get("reason") or "")[:120], "source": source, "on": bool(it.get("on", True))})
+    items.sort(key=lambda i: i["t"])
+    return {"version": int(value.get("version") or 1), "generated_at": str(value.get("generated_at") or "")[:40],
+            "provider": str(value.get("provider") or "")[:40], "vision": bool(value.get("vision")), "items": items}
+
+
+def director_of(spec):
+    d = (spec or {}).get("director") if isinstance(spec, dict) else None
+    return d if isinstance(d, dict) else None

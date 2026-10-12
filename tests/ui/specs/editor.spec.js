@@ -17,6 +17,7 @@ function editorState(over = {}) {
                  picked: null, locked: false, current_url: "/api/jobs/job-done/candidates/cand-a/thumbnail", generating: false },
     watermark: { width: 320, opacity: 1, custom: false },
     export: { burn: true, description: "", submagic: { status: null, preview_url: null, error: null } },
+    director: { items: [], rendered: ["punch"], arrives_in: { shake: "E2", whip: "E2", emoji: "E3" }, min_gap: 3 },
     ...over,
   };
 }
@@ -50,7 +51,7 @@ async function mockEditor(page, api, timeline = TIMELINE) {
   api.editor = editorState();
   await page.route(/\/api\/jobs\/[^/]+\/candidates\/[^/]+\/editor\/timeline/, (route) =>
     route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(timeline) }));
-  await page.route(/\/api\/jobs\/[^/]+\/candidates\/[^/]+\/editor(\/hook-title|\/cuts|\/zoom|\/progress|\/audio)?(\?.*)?$/, async (route) => {
+  await page.route(/\/api\/jobs\/[^/]+\/candidates\/[^/]+\/editor(\/hook-title|\/cuts|\/zoom|\/progress|\/audio|\/plan)?(\?.*)?$/, async (route) => {
     const req = route.request();
     if (req.method() === "PUT") {
       const body = req.postDataJSON(), path = new URL(req.url()).pathname;
@@ -59,7 +60,14 @@ async function mockEditor(page, api, timeline = TIMELINE) {
       else if (path.endsWith("/zoom")) api.editor.zoom = { ...api.editor.zoom, ...body };
       else if (path.endsWith("/progress")) api.editor.progress = { ...api.editor.progress, ...body };
       else if (path.endsWith("/audio")) api.editor.audio = { ...api.editor.audio, ...body };
+      else if (path.endsWith("/plan")) api.editor.director = { ...api.editor.director, items: body.items };
       else api.editor.hook_title = { ...api.editor.hook_title, ...body };
+    }
+    if (req.method() === "POST" && new URL(req.url()).pathname.endsWith("/plan")) {   // Auto Edit E1
+      api.calls.push({ method: "POST", path: new URL(req.url()).pathname });
+      api.editor.director = { ...api.editor.director, vision: true, provider: "gemini", items: [
+        { id: "punch-50", t: 0.5, effect: "punch", params: {}, reason: "punchline: kekuatan", source: "transcript", on: true },
+        { id: "shake-350", t: 3.5, effect: "shake", params: {}, reason: "loud: loudness peak", source: "audio", on: true }] };
     }
     return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(api.editor) });
   });
@@ -438,5 +446,25 @@ test.describe("Deep links after reload", () => {
     await app.reload();
     await expect(app.locator(".ed-title")).toHaveText("First mock clip");
     expect(await app.evaluate(() => location.hash)).toBe("#editor/job-done/cand-a");
+  });
+});
+
+// Auto Edit E1: Generate plan → list + timeline markers; toggling saves the items (PUT /plan).
+test.describe("Editor Auto edit plan", () => {
+  test.use({ reducedMotion: "reduce" });
+  test("generate, see markers, toggle one off from the timeline", async ({ app, api }) => {
+    await mockEditor(app, api);
+    await app.evaluate(() => { location.hash = "#editor/job-done/cand-a"; });
+    await app.locator('[data-ed-tab="effects"]').click();
+    await app.locator("[data-ed-plan-gen]").click();
+    await expect(app.locator(".ed-plan-row")).toHaveCount(2);
+    await expect(app.locator(".ed-plan-row").nth(1)).toContainText("arrives in E2");
+    await expect(app.locator(".ed-plan-mark")).toHaveCount(2);
+    await expect(app.locator("[data-ed-plan-gen]")).toHaveText("Regenerate plan");
+    await app.locator('.ed-plan-mark[data-ed-plan-item="punch-50"]').click();
+    await expect(app.locator('.ed-plan-mark[data-ed-plan-item="punch-50"]')).toHaveAttribute("aria-pressed", "false");
+    await expect(app.locator('.ed-switch[data-ed-plan-item="punch-50"]')).toHaveAttribute("aria-checked", "false");
+    await expect.poll(() => api.calls.filter((c) => c.method === "PUT" && c.path.endsWith("/plan")).pop()?.body.items.map((i) => i.on))
+      .toEqual([false, true]);
   });
 });

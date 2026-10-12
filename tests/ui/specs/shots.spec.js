@@ -23,6 +23,7 @@ const editor = { job: { id: "job-done", title: "Mock finished stream", platform:
   thumbnail: { options: [], picked: null, locked: false, current_url: null, generating: false },
   watermark: { width: 320, opacity: 1, custom: false },
   export: { burn: true, description: "", submagic: { status: null, preview_url: null, error: null } },
+  director: { items: [], rendered: ["punch"], arrives_in: { shake: "E2", whip: "E2", emoji: "E3" }, min_gap: 3 },
   captions: { job: { style: "outline", animation: "karaoke", font: "Montserrat Black", size: 42 }, clip: null, style: "outline", animation: "karaoke",
     caption_y: null, auto_caption_y: 78, keywords: [], keyword_color: null, auto_keyword_color: "#30D158", transcript: "HAHAHAHA KEKUATAN", override: "",
     text: "HAHAHAHA KEKUATAN", burn: true, options: { styles: [{ id: "outline", label: "Outline", resting: "#FFFFFF", highlight: "#FFD60A", weight: 800,

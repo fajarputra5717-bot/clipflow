@@ -402,22 +402,47 @@ def zoom_stage(filters: list, last: str, width: int, height: int, output_path=No
     cand = ctx.get("candidate")
     if not cand or ctx.get("output") is None or output_path is None or ctx["output"] != str(output_path):
         return last                                   # not the render begin_render() announced
-    z = edit_specs.zoom_of(cand.get("edit_spec"))
-    if not z or not z.get("on", True) or not z.get("markers"):
+    from shared import edit_director
+    z = edit_specs.zoom_of(cand.get("edit_spec")) or {}
+    manual = list(z.get("markers") or []) if z.get("on", True) else []
+    planned = edit_director.punch_markers(edit_specs.director_of(cand.get("edit_spec")))   # Auto Edit E1
+    markers = sorted(set(manual + planned))
+    if not markers:
         return last
     peak = edit_specs.zoom_peak(z.get("intensity", edit_specs.ZOOM_DEFAULT_INTENSITY))
     if peak <= 1.0:
         return last
-    wins = retention.plan_zoom_windows(z["markers"], ctx["duration"])
+    wins = retention.plan_zoom_windows(markers, ctx["duration"])
     zf = retention.zoom_filter(wins, width=width, height=height, peak=peak)
     if not zf:
         return last
     filters.append(f"[{last}]{zf}[zoomed];")
-    log(f"Zoom: {len(wins)} punch-in(s), peak {peak:.2f}, canvas {width}x{height}")
+    log(f"Zoom: {len(wins)} punch-in(s) ({len(planned)} from the edit plan), peak {peak:.2f}, canvas {width}x{height}")
     return "zoomed"
 
 
 # --------------------------------------------------------------------------- timeline (task 2)
+
+def _sample_frames(candidate, duration, previews_dir, source_path, start, log=print) -> list:
+    """Auto Edit E1: FRAME_COUNT small JPEGs from the SOURCE clip window (source time = the plan's time basis)
+    → previews/<cid>.frame-N.jpg (named with the candidate id, so the orphan sweep keeps them). Never fatal."""
+    import subprocess
+    from shared import edit_director
+    if not source_path or start is None or not isinstance(candidate, dict):
+        return []
+    cuts = edit_specs.cuts_of(candidate.get("edit_spec")) or {}
+    out = []
+    for n, t in enumerate(edit_director.frame_times(float(duration), removed=cuts.get("removed") or [],
+                                                    trim=cuts.get("trim"))):
+        name = f"{candidate['id']}.frame-{n}.jpg"
+        try:
+            subprocess.run(edit_director.frame_cmd(str(source_path), float(start), t, str(Path(previews_dir) / name)),
+                           check=True, capture_output=True, timeout=30)
+            out.append({"t": t, "file": name})
+        except (subprocess.SubprocessError, OSError) as e:
+            log(f"WARNING: frame {n} at {t:.1f} s skipped: {str(e)[-120:]}")
+    return out
+
 
 def write_timeline(preview_path, segments, duration, candidate, previews_dir, *, source_path=None, start=None, log=print):
     """After a preview render: waveform peaks + word chips → previews/<cid>.timeline.json, in SOURCE
@@ -429,6 +454,7 @@ def write_timeline(preview_path, segments, duration, candidate, previews_dir, *,
         keep = cut_plan(candidate, duration, _probe_fps(preview_path)) if isinstance(candidate, dict) else None
         data = timeline.build(source_path or preview_path, segments, duration,
                               start=start if source_path else None, keep=keep)
+        data["frames"] = _sample_frames(candidate, duration, previews_dir, source_path, start, log=log)
         timeline.write_cache(timeline.cache_path(previews_dir, candidate_id), data, preview_path)
         log(f"Timeline: {len(data['words'])} words, {len(data['peaks'] or [])} peaks")
     except Exception as e:
