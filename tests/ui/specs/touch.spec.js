@@ -44,7 +44,8 @@ async function seed(app, api) {
       title: "Lompatan GILA", platform: "tiktok", platform_name: "TikTok", account_handle: "imeclips", status: "planned", campaign_name: "IME Roleplay",
       has_thumbnail: false, eligible: true, overdue: false, render: { state: "ready", label: "Final ready" }, scheduled_for: new Date(Date.now() + 2 * 3600e3).toISOString() }] })) };
   api.autoImport = { interval_min: 15, min_minutes: 5, campaigns: [{ slug: "fandra-octo", name: "Fandra Octo", status: "Active", status_code: "active", can_watch: true,
-    channels: [{ channel: "https://www.youtube.com/@fandraocto", label: "@fandraocto", content: "livestreams", watched: true, line: "checked 4 min ago", error: null }] }],
+    channels: [{ channel: "https://www.youtube.com/@fandraocto", label: "@fandraocto", content: "livestreams", watched: true, line: "checked 4 min ago", error: null,
+      guardrails: { max_per_day: 2, min_minutes: 5, max_minutes: 240, include: [], exclude: [], pause_below_gb: null, telegram_note: true }, guard_text: "Max 2 a day" }] }],
     imports: [{ id: "i1", title: "Stream", url: "u", campaign_name: "Fandra Octo", channel: "@fandraocto", duration_fmt: "3:12:40", when_fmt: "12 Oct, 09:12",
       status: "imported", label: "Ready for review", badge: "attention", job_id: "job-done" }] };
   const f = (body) => (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });

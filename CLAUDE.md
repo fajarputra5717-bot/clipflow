@@ -29,6 +29,10 @@ Schema first (143): only the backend migrates (`ensure_schema()`); `/health` is 
 healthcheck uses it, and worker + notifier `depends_on: backend: service_healthy`. New tables are created there, never
 by the worker; a new service that reads app tables gets the same depends_on.
 Frontend changes need no rebuild (directory bind mount); hard-refresh the browser.
+**Deploy order (184): backend first (migrates + new routes; wait for healthy) → worker + sender → frontend last.** The
+frontend is live on save, so UI that calls a new endpoint goes live before the backend knows it: `api()` turns
+FastAPI's bare 404 "Not Found" (unknown route) and 502/503/504 into "ClipFlow is updating…", never a raw error box.
+Keep handler 404 details specific ("Job not found"), never the bare "Not Found". Deploy the backend promptly.
 Logs: `docker compose logs -f --tail=200 worker`.
 DB shell: `docker compose exec postgres psql -U clipflow -d clipflow`.
 
@@ -399,6 +403,8 @@ campaign windows via `payouts.window_problems`). Times are stored TIMESTAMPTZ (U
 Auto-import (183): `shared/auto_import.py` rules; `source_watches` (user switch) → worker `maybe_check_sources()` (idle,
 `source_channels` queue, one check per channel for all its watchers) → `source_imports` found/skipped → backend
 `run_import_loop()` → `create_job_for()` (the ONE job-creation path; Analyze's POST /api/jobs uses it too). Step `#import`.
+Guardrails (184) per watch in `source_watches.guardrails`, only via `auto_import.normalize_guardrails()`; edited on the
+Campaign page. Daily cap = worker; disk pause + Telegram note (`telegram_sends` kind `note`) = backend import loop.
 Track (181): `GET /api/track` = `shared/track.py` (own posts → tiles, by campaign/platform, top clips; money only via
 payouts, pre-formatted), step `#track`. Reminders (148): service `sender` (`riftstorm-sender`, worker image `--telegram-only`) owns `telegram_sends` + 
 `queue_due_reminders()` (worker has `TELEGRAM_SENDER=separate`; without it the worker does both). One reminder per

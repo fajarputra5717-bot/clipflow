@@ -457,7 +457,7 @@ def ensure_schema():
         CREATE TABLE IF NOT EXISTS telegram_sends (
             id TEXT PRIMARY KEY,
             user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-            kind TEXT NOT NULL DEFAULT 'clip' CHECK (kind IN ('clip', 'test')),
+            kind TEXT NOT NULL DEFAULT 'clip' CHECK (kind IN ('clip', 'test', 'reminder', 'note')),
             candidate_id TEXT REFERENCES clip_candidates(id) ON DELETE CASCADE,
             platform TEXT,
             chat_id TEXT NOT NULL,
@@ -569,6 +569,12 @@ def ensure_schema():
         )
         """,
         "CREATE INDEX IF NOT EXISTS idx_source_imports_found ON source_imports (created_at) WHERE status = 'found'",
+        # 184: per-watch guardrails (shared/auto_import.normalize_guardrails; {} = defaults) + the Telegram note kind.
+        # 148 inserted kind 'reminder' but the 141 CHECK only allowed clip|test: widened here (reminder + note).
+        "ALTER TABLE source_watches ADD COLUMN IF NOT EXISTS guardrails JSONB NOT NULL DEFAULT '{}'::jsonb",
+        "ALTER TABLE telegram_sends ADD COLUMN IF NOT EXISTS text TEXT",
+        "ALTER TABLE telegram_sends DROP CONSTRAINT IF EXISTS telegram_sends_kind_check",
+        "ALTER TABLE telegram_sends ADD CONSTRAINT telegram_sends_kind_check CHECK (kind IN ('clip', 'test', 'reminder', 'note'))",
     ]
 
     try:
@@ -2780,7 +2786,7 @@ def list_activity(request: Request):
                 items.append({"owner": owner, "kind": "telegram", "id": tid, "job_id": jid, "candidate_id": cid,
                               "stage": st, "percent": int(prog or 0) if st == "sending" else None,
                               "label": msg or ("Telegram: queued" if st == "queued" else "Sending to Telegram"),
-                              "title": title or ("Telegram test" if kind == "test" else "Clip"),
+                              "title": title or ("Telegram test" if kind == "test" else "Auto-import note" if kind == "note" else "Clip"),
                               "updated_at": upd.isoformat() if upd else None})
             # 183: auto-import channel checks the caller watches (indeterminate capsule while yt-dlp lists it).
             cur.execute(
@@ -4343,15 +4349,17 @@ def _auto_import_interval() -> int:
 
 
 @app.get("/api/auto-import")
-def get_auto_import(request: Request):
-    """The caller's watch switches per visible campaign source channel + their recent imports."""
+def get_auto_import(request: Request, campaign: Optional[str] = None):
+    """The caller's watch switches + guardrails per visible campaign source channel + their recent imports.
+    ?campaign=<slug> = that campaign only (the Campaign page's Auto-import box)."""
     user = current_user(request)
     now = datetime.now(timezone.utc)
-    visible = [r for r in campaigns.load_all().values() if campaigns.visible_to(r, user) and auto_import.watchable(r)]
+    visible = [r for r in campaigns.load_all().values() if campaigns.visible_to(r, user) and auto_import.watchable(r)
+               and (not campaign or r["slug"] == campaign)]
     with get_db() as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT campaign, channel, enabled FROM source_watches WHERE user_id = %s", (user["id"],))
-            watches = {(c, ch): en for c, ch, en in cur.fetchall()}
+            cur.execute("SELECT campaign, channel, enabled, guardrails FROM source_watches WHERE user_id = %s", (user["id"],))
+            watches = {(c, ch): (en, g) for c, ch, en, g in cur.fetchall()}
             cur.execute("SELECT channel, status, last_checked_at, last_ok_at, last_error FROM source_channels")
             channels = {r[0]: r[1:] for r in cur.fetchall()}
             cur.execute(
@@ -4359,9 +4367,9 @@ def get_auto_import(request: Request):
                 SELECT i.id, i.campaign, i.channel, i.url, i.title, i.duration, i.status, i.reason, i.job_id, j.status,
                        i.created_at
                 FROM source_imports i LEFT JOIN jobs j ON j.id = i.job_id AND j.user_id = i.user_id
-                WHERE i.user_id = %s ORDER BY i.created_at DESC LIMIT 30
+                WHERE i.user_id = %s AND (%s::text IS NULL OR i.campaign = %s) ORDER BY i.created_at DESC LIMIT 30
                 """,
-                (user["id"],),
+                (user["id"], campaign, campaign),
             )
             recent = cur.fetchall()
     out = []
@@ -4370,7 +4378,12 @@ def get_auto_import(request: Request):
         chans = []
         for w in auto_import.watchable(rules):
             status, checked, ok, err = channels.get(w["channel"], (None, None, None, None))
-            watched = bool(watches.get((rules["slug"], w["channel"])))
+            enabled, graw = watches.get((rules["slug"], w["channel"]), (False, None))
+            watched = bool(enabled)
+            try:
+                guard = auto_import.normalize_guardrails(graw)
+            except ValueError:
+                guard = auto_import.normalize_guardrails(None)
             if status == "checking":
                 line = "checking now"
             elif not watched:
@@ -4379,7 +4392,7 @@ def get_auto_import(request: Request):
                 line = f"checked {_ago(checked, now)}"
             else:
                 line = "first check soon"
-            chans.append({**w, "watched": watched, "line": line,
+            chans.append({**w, "watched": watched, "line": line, "guardrails": guard, "guard_text": auto_import.describe(guard),
                           "error": err if watched and err and (not ok or checked > ok) else None})
         out.append({"slug": rules["slug"], "name": campaigns.display_name(rules), "status": st["label"],
                     "status_code": st["code"], "can_watch": st["code"] not in ("ended", "paused"), "channels": chans})
@@ -4393,17 +4406,15 @@ def get_auto_import(request: Request):
                         "channel": auto_import.channel_label(ch), "duration_fmt": _duration_fmt(dur),
                         "when_fmt": created.astimezone(WIB_TZ).strftime("%-d %b, %H:%M"), "status": status,
                         "label": label, "badge": badge, "job_id": job_id})
-    try:
-        min_minutes = int(float(runtime_setting("AUTO_IMPORT_MIN_MINUTES") or 5))
-    except (TypeError, ValueError):
-        min_minutes = 5
-    return {"interval_min": _auto_import_interval(), "min_minutes": min_minutes, "campaigns": out, "imports": imports}
+    return {"interval_min": _auto_import_interval(), "disk_free_gb": round(disk_status()["free_mb"] / 1024),
+            "campaigns": out, "imports": imports}
 
 
 class WatchRequest(BaseModel):
     campaign: str
     channel: str
-    enabled: bool
+    enabled: Optional[bool] = None          # None = keep (a new watch starts off)
+    guardrails: Optional[dict] = None       # 184: partial update, merged over the stored ones
 
 
 @app.put("/api/auto-import/watch")
@@ -4420,6 +4431,8 @@ def put_auto_import_watch(req: WatchRequest, request: Request):
         raise HTTPException(status_code=400, detail="Not a YouTube channel")
     if key not in {w["channel"] for w in auto_import.watchable(rules)}:
         raise HTTPException(status_code=400, detail="Not a source channel of this campaign")
+    if req.enabled is None and req.guardrails is None:
+        raise HTTPException(status_code=400, detail="Nothing to change")
     if req.enabled:
         st = campaign_status.status(rules, datetime.now(timezone.utc))
         if st["code"] in ("ended", "paused"):
@@ -4427,23 +4440,36 @@ def put_auto_import_watch(req: WatchRequest, request: Request):
     with get_db() as conn:
         with conn.cursor() as cur:
             cur.execute(
+                "SELECT enabled, guardrails FROM source_watches WHERE user_id = %s AND campaign = %s AND channel = %s FOR UPDATE",
+                (user["id"], rules["slug"], key),
+            )
+            row = cur.fetchone()
+            enabled = req.enabled if req.enabled is not None else bool(row and row[0])
+            guard = (row[1] if row else None) or {}
+            if req.guardrails is not None:
+                try:
+                    guard = auto_import.normalize_guardrails(req.guardrails, base=guard)
+                except ValueError as exc:
+                    raise HTTPException(status_code=400, detail=str(exc))
+            cur.execute(
                 """
-                INSERT INTO source_watches (user_id, campaign, channel, enabled) VALUES (%s, %s, %s, %s)
+                INSERT INTO source_watches (user_id, campaign, channel, enabled, guardrails) VALUES (%s, %s, %s, %s, %s::jsonb)
                 ON CONFLICT (user_id, campaign, channel) DO UPDATE SET enabled = EXCLUDED.enabled,
+                    guardrails = EXCLUDED.guardrails,
                     enabled_at = CASE WHEN EXCLUDED.enabled AND NOT source_watches.enabled THEN NOW()
                                       ELSE source_watches.enabled_at END,
                     updated_at = NOW()
                 """,
-                (user["id"], rules["slug"], key, req.enabled),
+                (user["id"], rules["slug"], key, enabled, json.dumps(guard)),
             )
-            if req.enabled:
+            if req.enabled and not (row and row[0]):
                 cur.execute(
                     "INSERT INTO source_channels (channel) VALUES (%s) "
                     "ON CONFLICT (channel) DO UPDATE SET next_check_at = LEAST(source_channels.next_check_at, NOW())",
                     (key,),
                 )
         conn.commit()
-    return get_auto_import(request)
+    return get_auto_import(request, campaign=rules["slug"] if req.guardrails is not None else None)
 
 
 IMPORT_LOOP_SECONDS = 15
@@ -4460,6 +4486,23 @@ def _existing_job(cur, user_id, url):
     return row[0] if row else None
 
 
+def _queue_import_note(cur, user, title, duration, channel, rules) -> None:
+    """184: a Telegram line per auto-imported job to the user's OWN chat (sender queue, kind 'note'); no chat or no
+    bot = nothing queued (the import itself never depends on Telegram)."""
+    chat, _ = telegram_chat_for(cur, user)
+    if not chat or not (os.getenv("TELEGRAM_BOT_TOKEN") or "").strip():
+        return
+    bits = [auto_import.channel_label(channel or "")]
+    if duration:
+        bits.append(_duration_fmt(duration))
+    camp = f" for {campaigns.display_name(rules)}" if rules else ""
+    text = f"🎬 Auto-import{camp}: {title} ({' · '.join(b for b in bits if b)}). Analysing now; the clips will be in Review."
+    cur.execute(
+        "INSERT INTO telegram_sends (id, user_id, kind, chat_id, message, text) VALUES (%s, %s, 'note', %s, 'Note queued', %s)",
+        (str(uuid.uuid4()), user["id"], chat, text),
+    )
+
+
 def promote_found_imports(limit: int = 5) -> int:
     """`found` source_imports → jobs (create_job_for, the job owner = whoever switched the watch on). Rows are
     claimed FOR UPDATE SKIP LOCKED, so several backend processes never double-import."""
@@ -4468,27 +4511,42 @@ def promote_found_imports(limit: int = 5) -> int:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT i.id, i.user_id, i.campaign, i.url, i.attempts, u.username, u.role, u.active
+                SELECT i.id, i.user_id, i.campaign, i.url, i.attempts, u.username, u.role, u.active,
+                       w.guardrails, i.title, i.duration, i.channel, w.enabled
                 FROM source_imports i JOIN users u ON u.id = i.user_id
+                LEFT JOIN source_watches w ON w.id = i.watch_id
                 WHERE i.status = 'found' AND (i.retry_after IS NULL OR i.retry_after <= NOW())
                 ORDER BY i.created_at LIMIT %s FOR UPDATE OF i SKIP LOCKED
                 """,
                 (limit,),
             )
-            for iid, uid, slug, url, attempts, username, role, active in cur.fetchall():
+            for iid, uid, slug, url, attempts, username, role, active, guard_raw, title, dur, channel, watch_on in cur.fetchall():
                 status, reason, job_id, retry = "imported", None, None, None
+                try:
+                    guard = auto_import.normalize_guardrails(guard_raw)
+                except ValueError:
+                    guard = auto_import.normalize_guardrails(None)
+                user = {"id": uid, "username": username, "role": role}
                 try:
                     url = validate_youtube_url(url)
                     job_id = _existing_job(cur, uid, url)
+                    free_gb = disk_status()["free_mb"] / 1024
                     if not active:
                         status, reason = "skipped", "Account disabled"
+                    elif watch_on is False:
+                        status, reason = "skipped", "Auto-import switched off"
                     elif job_id:
                         status, reason = "skipped", "Already imported"
+                    elif guard["pause_below_gb"] and free_gb < guard["pause_below_gb"]:
+                        # 184: the watch's disk guardrail: keep it found (nothing lost), retry when space is back.
+                        status, reason, retry = "found", f"Paused: under {guard['pause_below_gb']} GB free", 10
                     else:
                         rules = campaigns.get(slug) if slug else None
                         req = ClipRequest(youtube_url=url, campaign=slug if rules else None,
                                           language=campaigns.default_language(rules) or "auto")
-                        job_id = create_job_for(req, {"id": uid, "username": username, "role": role})["id"]
+                        job_id = create_job_for(req, user)["id"]
+                        if guard["telegram_note"]:
+                            _queue_import_note(cur, user, title or url, dur, channel, rules)
                 except HTTPException as exc:
                     if exc.status_code == 507:
                         status, reason, retry = "found", "Waiting for disk space", 10
@@ -4508,7 +4566,7 @@ def promote_found_imports(limit: int = 5) -> int:
                         updated_at = NOW()
                     WHERE id = %s
                     """,
-                    (status, reason, job_id, 0 if reason == "Waiting for disk space" else 1, retry, retry, iid),
+                    (status, reason, job_id, 0 if status == "found" and retry == 10 else 1, retry, retry, iid),
                 )
                 print(f"[auto-import] {url} for user {uid}: {status}{' · ' + reason if reason else ''}")
                 done += 1

@@ -7,9 +7,9 @@ const seed = (api) => {
   api.autoImport = { interval_min: 15, min_minutes: 5,
     campaigns: [
       { slug: "fandra-octo", name: "Fandra Octo", status: "Active", status_code: "active", can_watch: true, channels: [
-        { channel: "https://www.youtube.com/@fandraocto", label: "@fandraocto", content: "livestreams of any game", watched: true, line: "checked 4 min ago", error: null }] },
+        { channel: "https://www.youtube.com/@fandraocto", label: "@fandraocto", content: "livestreams of any game", watched: true, line: "checked 4 min ago", error: null, guardrails: { max_per_day: 2, min_minutes: 5, max_minutes: 240, include: [], exclude: [], pause_below_gb: null, telegram_note: true }, guard_text: "Max 2 a day · 5 min–4 h · Telegram note" }] },
       { slug: "old-camp", name: "Old campaign", status: "Ended", status_code: "ended", can_watch: false, channels: [
-        { channel: "https://www.youtube.com/@oldchan", label: "@oldchan", content: "", watched: false, line: "not watched", error: null }] }],
+        { channel: "https://www.youtube.com/@oldchan", label: "@oldchan", content: "", watched: false, line: "not watched", error: null, guardrails: { max_per_day: 2, min_minutes: 5, max_minutes: 240, include: [], exclude: [], pause_below_gb: null, telegram_note: true }, guard_text: "Max 2 a day · 5 min–4 h · Telegram note" }] }],
     imports: [
       { id: "i1", title: "Stream: Minecraft hardcore", url: "https://www.youtube.com/watch?v=a", campaign_name: "Fandra Octo", channel: "@fandraocto",
         duration_fmt: "3:12:40", when_fmt: "12 Oct, 09:12", status: "imported", label: "Ready for review", badge: "attention", job_id: "job-done" },
@@ -34,10 +34,39 @@ test("Auto-import: switches per source channel, recent imports, ended campaign l
   expect(api.calls.filter((c) => c.method === "PUT" && c.path === "/api/auto-import/watch").at(-1).body)
     .toEqual({ campaign: "fandra-octo", channel: "https://www.youtube.com/@fandraocto", enabled: false });
   await expect(app.locator(".ai-camp").first()).toContainText("not watched");
+  await expect(app.locator(".ai-camp").first().locator(".ai-guard")).toContainText("Max 2 a day · 5 min–4 h");
+  await expect(app.locator(".ai-camp").first().locator("[data-ai-limits]")).toHaveAttribute("href", "#campaign/fandra-octo");
   expect(await app.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
 test("Auto-import with no source channels shows the empty state", async ({ app }) => {
   await app.locator('#flow [data-nav="import"]').click();
   await expect(app.locator("#importBody")).toContainText("No campaign lists a source channel yet");
+});
+
+test("Campaign page: Auto-import box saves per-channel limits (184)", async ({ app, api }) => {
+  seed(api);
+  api.campaigns = [{ slug: "fandra-octo", name: "Fandra Octo", platforms: [], status: { code: "active", label: "Active" }, mine: {} }];
+  api.campaignDetail = { "fandra-octo": { slug: "fandra-octo", name: "Fandra Octo", status: { code: "active", label: "Active", detail: "" }, mine: {}, view: {} } };
+  await app.evaluate(() => { location.hash = "#campaign/fandra-octo"; });
+  const box = app.locator("#cdAutoImport");
+  await expect(box).toBeVisible();
+  await expect(box.locator(".ai-guard")).toHaveText("Max 2 a day · 5 min–4 h · Telegram note");
+  await box.locator(".ai-limits > summary").click();
+  await box.locator('input[name="max_per_day"]').fill("3");
+  await box.locator('input[name="exclude"]').fill("#shorts, reupload");
+  await box.locator('input[name="pause_below_gb"]').fill("50");
+  await box.locator('input[name="telegram_note"]').uncheck();
+  await box.getByRole("button", { name: "Save limits" }).click();
+  await expect.poll(() => api.calls.filter((c) => c.method === "PUT" && c.path === "/api/auto-import/watch").length).toBe(1);
+  expect(api.calls.find((c) => c.method === "PUT").body).toEqual({ campaign: "fandra-octo", channel: "https://www.youtube.com/@fandraocto",
+    guardrails: { max_per_day: "3", min_minutes: "5", max_minutes: "240", include: "", exclude: "#shorts, reupload", pause_below_gb: "50", telegram_note: false } });
+  await expect(box.locator(".ai-guard")).toHaveText("Max 3 a day");
+  expect(await app.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test("deploy rule (184): a route the backend doesn't know yet shows 'updating', not the raw 404", async ({ app }) => {
+  await app.route(/\/api\/auto-import(\?.*)?$/, (r) => r.fulfill({ status: 404, contentType: "application/json", body: '{"detail":"Not Found"}' }));
+  await app.locator('#flow [data-nav="import"]').click();
+  await expect(app.locator("#importBody .error-box")).toHaveText("ClipFlow is updating… try again in a minute.");
 });

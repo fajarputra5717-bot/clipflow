@@ -8,7 +8,12 @@ same create_job path as the Analyze form → `imported`, job defaults from the c
 Dedupe by URL per user: UNIQUE (user_id, url) + an existing job of that user with the URL.
 
     key = channel_key("@FandraOcto")            # "https://www.youtube.com/@fandraocto"
-    reason = skip_reason(item, rules, enabled_at=…, now=…, min_seconds=300, stale=False)   # None = import it
+    g = normalize_guardrails(watch["guardrails"])  # per watch (user × campaign × channel), defaults merged
+    reason = skip_reason(item, rules, enabled_at=…, now=…, guard=g, stale=False)   # None = import it
+
+Guardrails (184): max new jobs per day (WIB, per user × channel; counted by the worker), duration window, title
+keywords (include = at least one, exclude = none; case-insensitive substrings), pause while the disk has < X GB free
+(the backend keeps the row `found` and retries), a Telegram note per imported job (the user's own chat).
 """
 from datetime import datetime, timedelta
 from typing import Optional
@@ -21,6 +26,92 @@ ENABLED_SLACK = timedelta(hours=12)
 # days old, so a video without an upload time (past the RSS window) is skipped instead of imported.
 STALE_AFTER = timedelta(hours=24)
 STATUSES = ("found", "imported", "skipped", "failed")
+GUARD_DEFAULTS = {"max_per_day": 2, "min_minutes": 5, "max_minutes": 240, "include": [], "exclude": [],
+                  "pause_below_gb": None, "telegram_note": True}
+MAX_KEYWORDS, MAX_KEYWORD_LEN = 10, 40
+
+
+def _int(v, name, lo, hi):
+    try:
+        n = int(v)
+    except (TypeError, ValueError):
+        raise ValueError(f"{name} must be a whole number")
+    if not lo <= n <= hi:
+        raise ValueError(f"{name} must be {lo}–{hi}")
+    return n
+
+
+def _words(v, name):
+    if isinstance(v, str):
+        v = v.split(",")
+    if not isinstance(v, (list, tuple)):
+        raise ValueError(f"{name} must be a list of words")
+    out = []
+    for w in v:
+        w = " ".join(str(w).split()).lower()
+        if not w or w in out:
+            continue
+        if len(w) > MAX_KEYWORD_LEN:
+            raise ValueError(f"{name}: '{w[:20]}…' is longer than {MAX_KEYWORD_LEN} characters")
+        out.append(w)
+    if len(out) > MAX_KEYWORDS:
+        raise ValueError(f"{name}: at most {MAX_KEYWORDS} words")
+    return out
+
+
+def normalize_guardrails(raw, base: Optional[dict] = None) -> dict:
+    """Merge `raw` over `base` (else the defaults) and validate. Unknown keys are dropped; raises ValueError."""
+    g = dict(GUARD_DEFAULTS)
+    g.update({k: v for k, v in (base or {}).items() if k in GUARD_DEFAULTS})
+    raw = {k: v for k, v in (raw or {}).items() if k in GUARD_DEFAULTS}
+    g.update(raw)
+    g["max_per_day"] = _int(g["max_per_day"], "Max new jobs per day", 1, 20)
+    g["min_minutes"] = _int(g["min_minutes"], "Shortest video (min)", 0, 600)
+    g["max_minutes"] = _int(g["max_minutes"], "Longest video (min)", 1, 1440)
+    if g["max_minutes"] <= g["min_minutes"]:
+        raise ValueError("Longest video must be longer than the shortest")
+    g["include"] = _words(g["include"], "Only titles with")
+    g["exclude"] = _words(g["exclude"], "Skip titles with")
+    if g["pause_below_gb"] in (None, "", 0, "0"):
+        g["pause_below_gb"] = None
+    else:
+        g["pause_below_gb"] = _int(g["pause_below_gb"], "Pause below (GB)", 1, 10000)
+    g["telegram_note"] = bool(g["telegram_note"]) if not isinstance(g["telegram_note"], str) else g["telegram_note"].lower() in ("1", "true", "on", "yes")
+    return g
+
+
+def _minutes_fmt(m: int) -> str:
+    return f"{m // 60} h" if m >= 60 and m % 60 == 0 else (f"{m // 60} h {m % 60} min" if m >= 60 else f"{m} min")
+
+
+def describe(g: dict) -> str:
+    """One plain line for the UI: "Max 2 a day · 5 min–4 h · only: ranked · pauses below 50 GB · Telegram note"."""
+    parts = [f"Max {g['max_per_day']} a day", f"{_minutes_fmt(g['min_minutes'])}–{_minutes_fmt(g['max_minutes'])}"]
+    if g["include"]:
+        parts.append("only: " + ", ".join(g["include"]))
+    if g["exclude"]:
+        parts.append("not: " + ", ".join(g["exclude"]))
+    if g["pause_below_gb"]:
+        parts.append(f"pauses below {g['pause_below_gb']} GB free")
+    parts.append("Telegram note" if g["telegram_note"] else "no Telegram note")
+    return " · ".join(parts)
+
+
+def guard_reason(item: dict, g: dict) -> Optional[str]:
+    """The per-watch filters that only need the video itself (the daily cap and disk pause need state)."""
+    duration = item.get("duration")
+    if duration is not None:
+        if duration < g["min_minutes"] * 60:
+            return f"Under {_minutes_fmt(g['min_minutes'])}"
+        if duration > g["max_minutes"] * 60:
+            return f"Over {_minutes_fmt(g['max_minutes'])}"
+    title = (item.get("title") or "").lower()
+    if g["include"] and not any(w in title for w in g["include"]):
+        return "Title has none of: " + ", ".join(g["include"])
+    hit = next((w for w in g["exclude"] if w in title), None)
+    if hit:
+        return f"Title has '{hit}'"
+    return None
 
 
 def channel_key(channel: str) -> str:
@@ -61,7 +152,7 @@ def parse_time(ts) -> Optional[datetime]:
     return dt if dt is None or dt.tzinfo else None
 
 
-def skip_reason(item: dict, rules: dict, *, enabled_at: datetime, now: datetime, min_seconds: int,
+def skip_reason(item: dict, rules: dict, *, enabled_at: datetime, now: datetime, guard: Optional[dict] = None,
                 stale: bool = False) -> Optional[str]:
     """Why a new video of a watched channel is NOT imported for this watch; None = import it."""
     code = campaign_status.status(rules, now)["code"]
@@ -69,9 +160,9 @@ def skip_reason(item: dict, rules: dict, *, enabled_at: datetime, now: datetime,
         return "Campaign paused"
     if code == "ended":
         return "Campaign ended"
-    duration = item.get("duration")
-    if duration is not None and duration < min_seconds:
-        return f"Under {max(1, round(min_seconds / 60))} min"
+    why = guard_reason(item, guard or normalize_guardrails(None))
+    if why:
+        return why
     published = parse_time(item.get("published_at"))
     if published is None:
         return "Older than the watch" if stale else None

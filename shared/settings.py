@@ -111,9 +111,9 @@ DEFAULT_SETTINGS = {
     "RETENTION_DAYS_INTERMEDIATE": "3",
     "ORPHAN_SWEEP_DRY_RUN": "true",
     "DISK_SPACE_MIN_MB": "2048",
-    # Auto-import (183, shared/auto_import.py): how often a watched source channel is checked, shortest video imported.
+    # Auto-import (183, shared/auto_import.py): how often a watched source channel is checked (duration/keyword
+    # filters are per-watch guardrails since 184).
     "AUTO_IMPORT_INTERVAL_MIN": "15",
-    "AUTO_IMPORT_MIN_MINUTES": "5",
     # Failure recovery (R-15): automatic retries of transient failures
     # and of work orphaned by a worker restart, per job/candidate.
     "JOB_MAX_ATTEMPTS": "3",

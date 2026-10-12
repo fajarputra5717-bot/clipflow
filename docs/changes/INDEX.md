@@ -153,3 +153,4 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 181 · 2026-10-09 · P3 part 8: Track dashboard — shared/track.py (payouts-only money), GET /api/track, stepper step 8 live · shared, main.py, index.html, tests
 182 · 2026-10-09 · Phone touch targets ≥ 44 px on every page incl. Lane B's (rule + invisible hit areas), touch.spec; sheets fit 390 · index.html, tests
 183 · 2026-10-12 · P3 part 7: Auto-import — source_watches/source_channels/source_imports, worker channel checks (source_watch), backend import loop via create_job_for, step 2 live · shared, main.py, worker, index.html, tests
+184 · 2026-10-12 · Auto-import guardrails per watch (max/day, duration, keywords, disk pause, Telegram note), telegram_sends kind CHECK fix, deploy order + 'updating' API errors · shared, main.py, worker, index.html, CLAUDE.md, tests

@@ -19,7 +19,7 @@ def item(**o):
 
 
 def why(it, rules=FANDRA, **kw):
-    return auto_import.skip_reason(it, rules, enabled_at=kw.pop("enabled_at", ON), now=NOW, min_seconds=300, **kw)
+    return auto_import.skip_reason(it, rules, enabled_at=kw.pop("enabled_at", ON), now=NOW, **kw)
 
 
 class AutoImportTest(unittest.TestCase):
@@ -49,6 +49,35 @@ class AutoImportTest(unittest.TestCase):
     def test_no_upload_time(self):
         self.assertIsNone(why(item(published_at=None)))                       # feed hiccup on a fresh check: import
         self.assertEqual(why(item(published_at=None), stale=True), "Older than the watch")
+
+
+class GuardrailTest(unittest.TestCase):
+    def g(self, **raw):
+        return auto_import.normalize_guardrails(raw)
+
+    def test_defaults_and_describe(self):
+        g = self.g()
+        self.assertEqual((g["max_per_day"], g["min_minutes"], g["max_minutes"], g["pause_below_gb"], g["telegram_note"]), (2, 5, 240, None, True))
+        self.assertEqual(auto_import.describe(g), "Max 2 a day · 5 min–4 h · Telegram note")
+        g2 = self.g(include="Ranked, ranked ,  Push  Rank", exclude=["#shorts"], pause_below_gb="50", telegram_note="false", max_minutes=90)
+        self.assertEqual(g2["include"], ["ranked", "push rank"])
+        self.assertEqual(auto_import.describe(g2), "Max 2 a day · 5 min–1 h 30 min · only: ranked, push rank · not: #shorts · pauses below 50 GB free · no Telegram note")
+        self.assertIsNone(self.g(pause_below_gb="")["pause_below_gb"])
+        self.assertEqual(auto_import.normalize_guardrails({"max_per_day": 5}, base={"min_minutes": 10, "junk": 1})["min_minutes"], 10)
+
+    def test_validation(self):
+        for raw in ({"max_per_day": 0}, {"max_per_day": "x"}, {"min_minutes": 60, "max_minutes": 30}, {"include": ["w"] * 11 + [str(i) for i in range(11)]},
+                    {"exclude": ["x" * 41]}, {"pause_below_gb": -1}):
+            with self.assertRaises(ValueError, msg=raw):
+                auto_import.normalize_guardrails(raw)
+
+    def test_filters(self):
+        g = self.g(include=["ranked"], exclude=["#shorts"], max_minutes=240)
+        self.assertEqual(why(item(duration=5 * 3600), guard=g), "Over 4 h")
+        self.assertEqual(why(item(duration=120), guard=g), "Under 5 min")
+        self.assertEqual(why(item(title="Casual night"), guard=g), "Title has none of: ranked")
+        self.assertEqual(why(item(title="RANKED grind #Shorts"), guard=g), "Title has '#shorts'")
+        self.assertIsNone(why(item(title="Ranked grind"), guard=g))
 
 
 if __name__ == "__main__":

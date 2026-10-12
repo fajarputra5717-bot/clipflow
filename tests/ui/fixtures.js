@@ -167,10 +167,17 @@ async function mockApi(page, api) {
       if (m && m[2]) return route.fulfill({ status: 200, contentType: "image/png", body: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=", "base64") });
       if (m && method === "GET") { const d = (api.campaignDetail || {})[m[1]]; return d ? json(d) : json({ detail: "Campaign not found" }, 404); }
       if (m && method === "PUT") { const d = (api.campaignDetail || {})[m[1]]; Object.assign(d, body, body.paused != null ? { status: { ...d.status, code: body.paused ? "paused" : "active", label: body.paused ? "Paused" : "Active" } } : {}); return json(d); } }
-    if (path === "/api/auto-import" && method === "GET") return json(api.autoImport || { interval_min: 15, min_minutes: 5, campaigns: [], imports: [] });   // 183
+    if (path === "/api/auto-import" && method === "GET") {   // 183/184
+      const d = api.autoImport || { interval_min: 15, disk_free_gb: 300, campaigns: [], imports: [] }, only = url.searchParams.get("campaign");
+      return json(only ? { ...d, campaigns: d.campaigns.filter((c) => c.slug === only) } : d);
+    }
     if (path === "/api/auto-import/watch" && method === "PUT") {
       const b = body || {}, d = api.autoImport || { campaigns: [], imports: [] };
-      for (const c of d.campaigns) if (c.slug === b.campaign) for (const ch of c.channels) if (ch.channel === b.channel) Object.assign(ch, { watched: b.enabled, line: b.enabled ? "first check soon" : "not watched" });
+      for (const c of d.campaigns) if (c.slug === b.campaign) for (const ch of c.channels) if (ch.channel === b.channel) {
+        if (b.enabled !== undefined) Object.assign(ch, { watched: b.enabled, line: b.enabled ? "first check soon" : "not watched" });
+        if (b.guardrails) { const w = (v) => (Array.isArray(v) ? v : String(v || "").split(",").map((x) => x.trim()).filter(Boolean));
+          ch.guardrails = { ...ch.guardrails, ...b.guardrails, include: w(b.guardrails.include), exclude: w(b.guardrails.exclude) }; ch.guard_text = `Max ${b.guardrails.max_per_day} a day`; }
+      }
       return json(d);
     }
     if (path === "/api/track" && method === "GET") return json(api.track || { tiles: { posts: 0 }, campaigns: [], platforms: [], top: [], skipped_currencies: [] });   // 181

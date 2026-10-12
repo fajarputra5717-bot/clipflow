@@ -667,6 +667,10 @@ def process_telegram_send(send):
     sid, chat = send["id"], send["chat_id"]
     tmp = None
     try:
+        if send["kind"] == "note":   # 184: auto-import note (text written by the backend's import loop)
+            telegram_call("sendMessage", {"chat_id": chat, "text": send.get("text") or "ClipFlow"})
+            update_telegram_send(sid, status="sent", progress=100, message="Note sent", mode="text", sent_at=datetime.now(timezone.utc))
+            return
         if send["kind"] == "test":
             telegram_call("sendMessage", {"chat_id": chat, "text": "ClipFlow ✓ Send to phone will deliver your clips to this chat."})
             update_telegram_send(sid, status="sent", progress=100, message="Test message sent", mode="text", sent_at=datetime.now(timezone.utc))
@@ -8132,15 +8136,16 @@ def claim_source_channel():
 
 
 def record_source_items(channel, items, now, stale):
-    """Per user watching `channel`: the first of their watches (campaigns) that accepts a video imports it; if none
-    does, the video is recorded as skipped with the first watch's reason. UNIQUE (user_id, url) = dedupe."""
+    """Per user watching `channel`: the first of their watches (campaigns) whose rules + guardrails accept a video
+    records it `found` (until that watch's max_per_day for the WIB day is used up), else `skipped` with the first
+    watch's reason. UNIQUE (user_id, url) = dedupe."""
     if not items:
         return 0
-    min_seconds = max(0, setting_int("AUTO_IMPORT_MIN_MINUTES", 5) or 0) * 60
+    wib_midnight = (now + timedelta(hours=7)).replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(hours=7)
     added = 0
     with db() as conn:
         watches = conn.execute(
-            "SELECT id, user_id, campaign, enabled_at FROM source_watches WHERE channel = %s AND enabled "
+            "SELECT id, user_id, campaign, enabled_at, guardrails FROM source_watches WHERE channel = %s AND enabled "
             "ORDER BY enabled_at",
             (channel,),
         ).fetchall()
@@ -8148,14 +8153,24 @@ def record_source_items(channel, items, now, stale):
         for w in watches:
             by_user.setdefault(w["user_id"], []).append(w)
         for user_id, user_watches in by_user.items():
+            today = conn.execute(
+                "SELECT count(*) AS n FROM source_imports WHERE user_id = %s AND channel = %s "
+                "AND status IN ('found', 'imported') AND created_at >= %s",
+                (user_id, channel, wib_midnight),
+            ).fetchone()["n"]
             for it in items:
                 pick, reason = None, None
                 for w in user_watches:
                     rules = campaigns.get(w["campaign"])
                     if not rules:
                         continue
-                    why = auto_import.skip_reason(it, rules, enabled_at=w["enabled_at"], now=now,
-                                                  min_seconds=min_seconds, stale=stale)
+                    try:
+                        guard = auto_import.normalize_guardrails(w["guardrails"])
+                    except ValueError:
+                        guard = auto_import.normalize_guardrails(None)
+                    why = auto_import.skip_reason(it, rules, enabled_at=w["enabled_at"], now=now, guard=guard, stale=stale)
+                    if why is None and today >= guard["max_per_day"]:
+                        why = f"Daily limit ({guard['max_per_day']}) reached"
                     if why is None:
                         pick, reason = w, None
                         break
@@ -8176,6 +8191,8 @@ def record_source_items(channel, items, now, stale):
                      auto_import.parse_time(it.get("published_at")), "skipped" if reason else "found", reason),
                 )
                 added += cur.rowcount
+                if cur.rowcount and not reason:
+                    today += 1
         conn.commit()
     return added
 
