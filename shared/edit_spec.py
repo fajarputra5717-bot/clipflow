@@ -339,7 +339,7 @@ def progress_of(spec):
 
 
 def normalize_audio(value, clip_duration=None):
-    """{compress, silence_trim, silence_ranges} or None (all off). Ranges are clamped to the clip like cuts
+    """{compress, loud, silence_trim, silence_ranges} or None (all off). loud = "Loud & punchy" (owner 2026-10-12). Ranges are clamped to the clip like cuts
     (0 … clip_duration when known), sorted; empty or inverted ones are dropped (QA 2e3d583 Low)."""
     if value is None:
         return None
@@ -357,9 +357,9 @@ def normalize_audio(value, clip_duration=None):
         if e > s:
             ranges.append([s, e])
     ranges.sort()
-    out = {"compress": bool(value.get("compress", False)), "silence_trim": bool(value.get("silence_trim", False)),
-           "silence_ranges": ranges[:CUTS_MAX_RANGES]}
-    return out if (out["compress"] or out["silence_trim"] or out["silence_ranges"]) else None
+    out = {"compress": bool(value.get("compress", False)), "loud": bool(value.get("loud", False)),
+           "silence_trim": bool(value.get("silence_trim", False)), "silence_ranges": ranges[:CUTS_MAX_RANGES]}
+    return out if (out["compress"] or out["loud"] or out["silence_trim"] or out["silence_ranges"]) else None
 
 
 def audio_of(spec):

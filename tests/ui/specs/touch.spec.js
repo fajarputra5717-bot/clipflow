@@ -17,7 +17,7 @@ const editor = { job: { id: "job-done", title: "Mock finished stream", platform:
     preview_url: "/api/jobs/job-done/candidates/cand-a/preview", updated_at: "2026-10-05T10:00:00+00:00", edit_spec: {} },
   hook_title: { on: false, text: "", duration: 2.5, default_text: "First mock clip", durations: [2, 2.5, 3], max_chars: 80 },
   cuts: { trim: null, removed: [], output_seconds: 6, suggest_min_gap: 0.6, pad: 0.12 }, zoom: { on: true, intensity: 50, markers: [], max_markers: 40 },
-  progress: { on: false, color: "#FFD60A", colors: ["#FFD60A"] }, audio: { compress: false, silence_trim: false, silence_ranges: [], loudness: { lufs: -14, true_peak_dbtp: -1, always_on: true } },
+  progress: { on: false, color: "#FFD60A", colors: ["#FFD60A"] }, audio: { compress: false, loud: false, silence_trim: false, silence_ranges: [], loudness: { lufs: -14, true_peak_dbtp: -1, always_on: true } },
   thumbnail: { options: [], picked: null, locked: false, current_url: null, generating: false },
   watermark: { width: 320, opacity: 1, custom: false },
   export: { burn: true, description: "", submagic: { status: null, preview_url: null, error: null } },

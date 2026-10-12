@@ -61,7 +61,7 @@
       E.zoom = { on: E.state.zoom.on, intensity: E.state.zoom.intensity, markers: E.state.zoom.markers.slice() };
       E.progress = { on: E.state.progress.on, color: E.state.progress.color };
       E.plan = (E.state.director.items || []).map((i) => ({ ...i }));
-      E.audio = { compress: E.state.audio.compress, silence_trim: E.state.audio.silence_trim,
+      E.audio = { compress: E.state.audio.compress, loud: !!E.state.audio.loud, silence_trim: E.state.audio.silence_trim,
                   silence_ranges: (E.state.audio.silence_ranges || []).map((r) => r.slice()) };
       loadCaptions();
       render();
@@ -495,6 +495,9 @@
         <div class="ed-row"><div><div class="ed-label">Light compression</div>
           <div class="ed-hint">Evens out loud peaks (shouts, laughs) before loudness normalisation.</div></div>
           ${sw("data-ed-compress", a.compress, "Light compression")}</div>
+        <div class="ed-row"><div><div class="ed-label">Loud &amp; punchy</div>
+          <div class="ed-hint">Hits -14 LUFS even on quiet, peaky audio by limiting the loudest peaks (up to ~6 dB). Shots and shouts sound flatter.</div></div>
+          ${sw("data-ed-loud", !!a.loud, "Loud and punchy")}</div>
       </div>
       <div class="ed-group">
         <div class="ed-row"><div><div class="ed-label">Loudness</div>
@@ -1002,7 +1005,7 @@
 
   // ------------------------------------------------------------------ events (delegated, data-*)
   document.addEventListener("click", (e) => {
-    const t = e.target.closest("[data-ed-back],[data-ed-hook-on],[data-ed-hook-dur],[data-ed-render],[data-ed-play],[data-ed-tab],[data-ed-zoom-on],[data-ed-progress-on],[data-ed-progress-color],[data-ed-compress],[data-ed-silence],[data-ed-word],[data-ed-pause],[data-ed-mode],[data-ed-suggest],[data-ed-fillers],[data-ed-cuts-reset],[data-ed-zoom-add],[data-ed-zoom-mark],[data-ed-trim],[data-ed-seekarea],[data-ed-preset],[data-ed-cap-all],[data-ed-kw],[data-ed-kw-color],[data-ed-fix-typos],[data-ed-cap-reset],[data-ed-capy-on],[data-ed-new-hook],[data-ed-thumb-pick],[data-ed-thumb-gen],[data-ed-burn],[data-ed-gen-desc],[data-ed-sm],[data-ed-versions],[data-ed-restore],[data-ed-approve],[data-ed-plan-gen],[data-ed-plan-item]");
+    const t = e.target.closest("[data-ed-back],[data-ed-hook-on],[data-ed-hook-dur],[data-ed-render],[data-ed-play],[data-ed-tab],[data-ed-zoom-on],[data-ed-progress-on],[data-ed-progress-color],[data-ed-compress],[data-ed-silence],[data-ed-word],[data-ed-pause],[data-ed-mode],[data-ed-suggest],[data-ed-fillers],[data-ed-cuts-reset],[data-ed-zoom-add],[data-ed-zoom-mark],[data-ed-trim],[data-ed-seekarea],[data-ed-preset],[data-ed-cap-all],[data-ed-kw],[data-ed-kw-color],[data-ed-fix-typos],[data-ed-cap-reset],[data-ed-capy-on],[data-ed-new-hook],[data-ed-thumb-pick],[data-ed-thumb-gen],[data-ed-burn],[data-ed-gen-desc],[data-ed-sm],[data-ed-versions],[data-ed-restore],[data-ed-approve],[data-ed-plan-gen],[data-ed-plan-item],[data-ed-loud]");
     if (!t || !E.state && !t.matches("[data-ed-back]")) return;
     if (t.matches("[data-ed-back]")) {                       // back to the Review page (step 4) for this job
       e.preventDefault(); const jid = E.jid; close(false); location.hash = `#review/${encodeURIComponent(jid || "")}`;
@@ -1093,6 +1096,7 @@
     if (t.matches("[data-ed-zoom-on]")) { E.zoom.on = !E.zoom.on; repaintPanel(); zoomChanged(); return; }
     if (t.matches("[data-ed-progress-on]")) { E.progress.on = !E.progress.on; repaintPanel(); saveProgress(); return; }
     if (t.matches("[data-ed-progress-color]")) { E.progress.color = t.dataset.edProgressColor; repaintPanel(); saveProgress(); return; }
+    if (t.matches("[data-ed-loud]")) { E.audio.loud = !E.audio.loud; repaintPanel(); saveAudio(); return; }
     if (t.matches("[data-ed-compress]")) { E.audio.compress = !E.audio.compress; repaintPanel(); saveAudio(); return; }
     if (t.matches("[data-ed-silence]")) {
       if (!E.audio.silence_trim) {

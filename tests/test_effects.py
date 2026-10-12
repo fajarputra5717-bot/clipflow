@@ -20,7 +20,7 @@ class Spec(unittest.TestCase):
         self.assertIsNone(es.progress_of({"progress": {"on": False, "color": "#FFFFFF"}}))
 
     def test_audio(self):
-        self.assertEqual(es.normalize_audio({"compress": True}), {"compress": True, "silence_trim": False, "silence_ranges": []})
+        self.assertEqual(es.normalize_audio({"compress": True}), {"compress": True, "loud": False, "silence_trim": False, "silence_ranges": []})
         self.assertIsNone(es.normalize_audio({}))
         self.assertEqual(es.normalize_audio({"silence_trim": True, "silence_ranges": [[1, 1.5], [3, 2]]})["silence_ranges"], [[1.0, 1.5]])
         with self.assertRaises(ValueError):

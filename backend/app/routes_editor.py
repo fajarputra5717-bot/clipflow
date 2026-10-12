@@ -119,7 +119,7 @@ def _state(c: dict) -> dict:
                  **(edit_specs.zoom_of(spec) or {}), "max_markers": edit_specs.ZOOM_MAX_MARKERS},
         "progress": {"on": False, "color": edit_specs.PROGRESS_COLORS[0], **((spec or {}).get("progress") or {}),
                      "colors": list(edit_specs.PROGRESS_COLORS)},
-        "audio": {"compress": False, "silence_trim": False, "silence_ranges": [], **edit_specs.audio_of(spec),
+        "audio": {"compress": False, "loud": False, "silence_trim": False, "silence_ranges": [], **edit_specs.audio_of(spec),
                   "loudness": {"lufs": -14.0, "true_peak_dbtp": -1.0, "always_on": True}},
         "captions": _captions_state(c, spec),
         "thumbnail": _thumbnail_state(c),
@@ -374,6 +374,7 @@ def put_progress(job_id: str, candidate_id: str, body: ProgressIn, user: dict = 
 
 class AudioIn(BaseModel):
     compress: bool = False
+    loud: bool = False
     silence_trim: bool = False
     silence_ranges: list[list[float]] = []
 

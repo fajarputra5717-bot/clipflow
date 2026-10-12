@@ -418,6 +418,20 @@ def gain_filter(gain_db: float, *, tp: float = LOUDNORM_TP, out_rate: int = 4800
             f"aresample={out_rate},aformat=channel_layouts=mono|stereo")
 
 
+PUNCH_LEVEL_LUFS = -20.0    # Loud & punchy: bring the clip here before the compressor (its threshold is absolute)
+PUNCH_LIMIT_DBFS = -6.0     # then a fast limiter: with the +6 dB make-up this is ≈ 6 dB of peak reduction at most
+
+
+def punch_filter(input_i: float) -> str:
+    """Loud & punchy pre-chain (per clip, opt-in): level to PUNCH_LEVEL_LUFS, fast 4:1 compressor with +6 dB
+    make-up, limiter at PUNCH_LIMIT_DBFS. Lowers the peak-to-loudness ratio so the normalising pass (always
+    last) can reach -14 LUFS under the -1 dBTP ceiling on quiet, peaky sources."""
+    gain = max(-10.0, min(24.0, PUNCH_LEVEL_LUFS - float(input_i)))
+    limit = _f(round(10 ** (PUNCH_LIMIT_DBFS / 20), 4))
+    return (f"volume={_f(round(gain, 2))}dB,acompressor=threshold=0.1:ratio=4:attack=1:release=120:knee=4:makeup=2,"
+            f"alimiter=limit={limit}:attack=1:release=60:level=0")
+
+
 def ebur128_measure_cmd(src: str) -> FFmpegStep:
     """Verification meter (BS.1770 integrated + true peak) for a finished file -> parse_ebur128().
     Use this, not loudnorm's own JSON, to check an output: loudnorm's pass-1 numbers read up to
