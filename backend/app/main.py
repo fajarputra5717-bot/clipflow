@@ -4486,6 +4486,9 @@ def put_auto_import_watch(req: WatchRequest, request: Request):
             enabled = req.enabled if req.enabled is not None else bool(row and row[0])
             guard = (row[1] if row else None) or {}
             if req.guardrails is not None:
+                unknown = auto_import.unknown_guard_keys(req.guardrails)
+                if unknown:
+                    raise HTTPException(status_code=400, detail="Unknown limit(s): " + ", ".join(unknown[:5]))
                 try:
                     guard = auto_import.normalize_guardrails(req.guardrails, base=guard)
                 except ValueError as exc:

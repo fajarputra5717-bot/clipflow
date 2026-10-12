@@ -167,3 +167,4 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 195 · 2026-10-13 · Auto Edit E5 (lane-b): style packs · shared/style_packs, edit_spec, editor
 196 · 2026-10-13 · Loudness (lane-b): trim re-targets the normalising pass from the original; per-clip Loud & punchy; peak guard 0.1 dB margin · worker normalize_loudness
 197 · 2026-10-13 · Merge lane-b 05f3208 (Auto Edit E1–E5, loudness, source_watch doc update; Lane C Merge OK) · merge
+198 · 2026-10-13 · Auto-import limits API rejects unknown keys with 400 (Lane C Low) · shared/auto_import.py, main.py, tests

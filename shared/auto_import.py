@@ -64,6 +64,11 @@ def _words(v, name):
     return out
 
 
+def unknown_guard_keys(raw) -> list[str]:
+    """Keys an API caller sent that aren't guardrails (QA Low: rejected with 400 instead of dropped silently)."""
+    return sorted(k for k in (raw or {}) if k not in GUARD_DEFAULTS)
+
+
 def normalize_guardrails(raw, base: Optional[dict] = None) -> dict:
     """Merge `raw` over `base` (else the defaults) and validate. Unknown keys are dropped; raises ValueError."""
     g = dict(GUARD_DEFAULTS)

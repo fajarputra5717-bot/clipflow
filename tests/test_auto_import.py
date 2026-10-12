@@ -73,6 +73,10 @@ class GuardrailTest(unittest.TestCase):
         self.assertIsNone(self.g(pause_below_gb="")["pause_below_gb"])
         self.assertEqual(auto_import.normalize_guardrails({"max_per_day": 5}, base={"min_minutes": 10, "junk": 1})["min_minutes"], 10)
 
+    def test_unknown_keys(self):   # QA Low (fresh e2e 11162f8)
+        self.assertEqual(auto_import.unknown_guard_keys({"max_per_day": 3, "maxPerDay": 3, "foo": 1}), ["foo", "maxPerDay"])
+        self.assertEqual(auto_import.unknown_guard_keys(None), [])
+
     def test_validation(self):
         for raw in ({"max_per_day": 0}, {"max_per_day": "x"}, {"min_minutes": 60, "max_minutes": 30}, {"include": ["w"] * 11 + [str(i) for i in range(11)]},
                     {"exclude": ["x" * 41]}, {"pause_below_gb": -1}):
