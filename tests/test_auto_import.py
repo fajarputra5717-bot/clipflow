@@ -35,7 +35,7 @@ class AutoImportTest(unittest.TestCase):
 
     def test_imports_a_fresh_upload(self):
         self.assertIsNone(why(item()))
-        self.assertIsNone(why(item(duration=None)))            # unknown duration: import, the pipeline decides
+        self.assertEqual(why(item(duration=None)), "Unknown length")   # QA P3 Low: never bypasses the window
 
     def test_skips(self):
         self.assertEqual(why(item(duration=120)), "Under 5 min")
@@ -47,7 +47,7 @@ class AutoImportTest(unittest.TestCase):
         self.assertEqual(why(item(), rules={**FANDRA, "period": {"start": "2026-09-01", "end": "2026-10-01"}}), "Campaign ended")
 
     def test_no_upload_time(self):
-        self.assertIsNone(why(item(published_at=None)))                       # feed hiccup on a fresh check: import
+        self.assertEqual(why(item(published_at=None)), "No upload time")      # QA P3 Medium: never imported blind
         self.assertEqual(why(item(published_at=None), stale=True), "Older than the watch")
 
 

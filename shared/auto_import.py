@@ -22,8 +22,8 @@ from shared import campaign_status, payouts, source_watch
 
 # A stream that started before the switch went on but finished after it still counts.
 ENABLED_SLACK = timedelta(hours=12)
-# A channel whose last good check is older than this has a stale seen-list: everything it reports as "new" may be
-# days old, so a video without an upload time (past the RSS window) is skipped instead of imported.
+# A channel whose last good check is older than this has a stale seen-list (only changes the skip reason of a video
+# without an upload time: "Older than the watch" instead of "No upload time").
 STALE_AFTER = timedelta(hours=24)
 STATUSES = ("found", "imported", "skipped", "failed")
 GUARD_DEFAULTS = {"max_per_day": 2, "min_minutes": 5, "max_minutes": 240, "include": [], "exclude": [],
@@ -100,11 +100,12 @@ def describe(g: dict) -> str:
 def guard_reason(item: dict, g: dict) -> Optional[str]:
     """The per-watch filters that only need the video itself (the daily cap and disk pause need state)."""
     duration = item.get("duration")
-    if duration is not None:
-        if duration < g["min_minutes"] * 60:
-            return f"Under {_minutes_fmt(g['min_minutes'])}"
-        if duration > g["max_minutes"] * 60:
-            return f"Over {_minutes_fmt(g['max_minutes'])}"
+    if duration is None:
+        return "Unknown length"   # QA P3 Low: an unknown length can't be checked against the window, so not imported
+    if duration < g["min_minutes"] * 60:
+        return f"Under {_minutes_fmt(g['min_minutes'])}"
+    if duration > g["max_minutes"] * 60:
+        return f"Over {_minutes_fmt(g['max_minutes'])}"
     title = (item.get("title") or "").lower()
     if g["include"] and not any(w in title for w in g["include"]):
         return "Title has none of: " + ", ".join(g["include"])
@@ -165,7 +166,9 @@ def skip_reason(item: dict, rules: dict, *, enabled_at: datetime, now: datetime,
         return why
     published = parse_time(item.get("published_at"))
     if published is None:
-        return "Older than the watch" if stale else None
+        # QA P3 Medium: no upload time (past the RSS window or a feed failure) = can't prove it's new → skipped,
+        # listed in Recent imports with the reason (import it from Analyze if wanted). Never imported blind.
+        return "Older than the watch" if stale else "No upload time"
     if published < enabled_at - ENABLED_SLACK:
         return "Uploaded before auto-import was on"
     start, _ = payouts.campaign_period(rules)

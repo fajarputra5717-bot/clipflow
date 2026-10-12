@@ -155,3 +155,4 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 183 · 2026-10-12 · P3 part 7: Auto-import — source_watches/source_channels/source_imports, worker channel checks (source_watch), backend import loop via create_job_for, step 2 live · shared, main.py, worker, index.html, tests
 184 · 2026-10-12 · Auto-import guardrails per watch (max/day, duration, keywords, disk pause, Telegram note), telegram_sends kind CHECK fix, deploy order + 'updating' API errors · shared, main.py, worker, index.html, CLAUDE.md, tests
 185 · 2026-10-12 · Island: one progress mark per task (indeterminate = lead spinner, percent = ring), contextual '<verb> <subject>' line for every kind · index.html, tests
+186 · 2026-10-12 · Auto-import skips videos with no upload time or unknown length (Lane C P3 Medium + Low) · shared/auto_import.py, tests
