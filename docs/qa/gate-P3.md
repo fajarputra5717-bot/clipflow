@@ -14,3 +14,9 @@ Method: git-served Playwright (198 passed / 6 skipped / 0 failed), unit tests (a
 3. Low · phone title "Auto-import" truncates to "Auto-im…" in the 390 top bar while space is free.
 4. Low · license checker (tests/qa/check_asset_licenses.py) fails on worker/assets/watermark.png until Lane A adds worker/assets/LICENSES.md (requested).
 Not in scope here: Lane B Auto Edit (checklist docs/qa/auto-edit-checklist.md).
+
+## Addendum 2026-10-12 late: main 8419e56 (184 guardrails, 185 island) · still PASS (conditional)
+Prod: all riftstorm-* running, restarts=0 (backend 22:58 +07, worker/sender 22:58); telegram_sends kind CHECK = clip|test|reminder|note (184 migration applied); prod DB (read-only counts): 2 watches enabled, 2 channels baselined (last_ok_at set), 0 imports, 0 found rows.
+Git-served Playwright at 8419e56: 208 passed / 6 skipped / 0 failed; unittest auto_import, track, campaign_status, source_watch, brief_parser, payouts all OK.
+184 read: guardrails normalised + validated server side (max/day 1-20, duration 0-600 / 1-1440 min and longest > shortest, ≤ 10 keywords ≤ 40 chars, pause-below GB), daily cap per WIB day × user × channel counted at record time, disk pause keeps the row `found` (retry 10 min), Telegram note goes to the watcher's OWN chat via telegram_chat_for. Open: (a) Medium unchanged: undated video is still imported (auto_import.py:166-168, stale=None path); (b) Low: a video with duration None bypasses the duration window; (c) Low: staging runs lane-b code without 183-185, so guardrails/API were NOT tested live; the first real import (prod, admin's @windahbasudara + @brandochillgames) has not happened yet: watch the first one.
+185 (island one mark per task): covered by the suite; not reviewed visually.
