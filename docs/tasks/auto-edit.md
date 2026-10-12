@@ -47,11 +47,20 @@ words/captions through a `TimeMap` built from the same segments.
 Colour presets via ffmpeg `eq`/`curves` (or a bundled .cube LUT): Vivid Gaming, Warm, Moody; vignette; light
 grain. Applied after overlays, before encode; previews and finals identical.
 
-## E5 · Style packs
-Gaming Hype, Funny/Meme, Drama/Tension, Podcast Clean = **definition pending from the owner** (the brief was
-cut off). Assumed shape: a pack = director weights (which moments → which effects, density) + look preset +
-SFX set + caption preset; picking a pack regenerates the plan.
+## E5 · Style packs (owner 2026-10-12; defaults, every setting overridable per clip)
+| Pack | Captions | Effects | SFX | Look | Other | Density |
+|---|---|---|---|---|---|---|
+| Gaming Hype | Hormozi or Boxed, keywords green | punch zoom on hook/shock; shake + flash on loud peaks; whip at cuts | bass hit, boom, whoosh | Vivid Gaming | progress bar on, Loud & punchy ON | 1 / 3 s |
+| Funny / Meme | Word pop | freeze frame + record scratch on punchline; emoji pops 😂😭💀 on laughs; slight slow-mo on fails | ding, laugh | Warm | | 1 / 3 s |
+| Drama / Tension | Clean | slow push-ins; low boom on reveals; no emoji, no shake | low boom | Moody + vignette | | 1 / 5 s |
+| Podcast Clean | Karaoke | subtle zooms on emphasis only; no SFX/emoji/shake | none | neutral | filler-word suggestions on | 1 / 6 s |
+
+Campaign defaults: IME and Fandra → Gaming Hype; every other campaign (and none) → Podcast Clean.
+Loud & punchy (audio.loud, owner option 3) is ON in Gaming Hype, OFF elsewhere.
+
+## Frame checks (lane-b and Lane C, every part)
+Per effect type at least one frame at its peak; per clip at most 3 frames + one at a cut. Check: captions and
+watermark never covered, nothing off-canvas.
 
 ## Open questions
-1. E5 pack definitions (see above).
-2. Vision default: on (4 frames, utility model) or off until we see the cost?
+1. Vision default: on (6 frames, utility model) or off until we see the cost? (Currently on.)
