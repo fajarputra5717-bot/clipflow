@@ -4541,7 +4541,8 @@ def promote_found_imports(limit: int = 5) -> int:
             cur.execute(
                 """
                 SELECT i.id, i.user_id, i.campaign, i.url, i.attempts, u.username, u.role, u.active,
-                       w.guardrails, i.title, i.duration, i.channel, w.enabled, i.reason
+                       w.guardrails, i.title, i.duration, i.channel, w.enabled, i.reason,
+                       i.created_at < NOW() - INTERVAL '24 hours'
                 FROM source_imports i JOIN users u ON u.id = i.user_id
                 LEFT JOIN source_watches w ON w.id = i.watch_id
                 WHERE i.status = 'found' AND (i.retry_after IS NULL OR i.retry_after <= NOW())
@@ -4549,7 +4550,8 @@ def promote_found_imports(limit: int = 5) -> int:
                 """,
                 (limit,),
             )
-            for iid, uid, slug, url, attempts, username, role, active, guard_raw, title, dur, channel, watch_on, reason_now in cur.fetchall():
+            for (iid, uid, slug, url, attempts, username, role, active, guard_raw, title, dur, channel, watch_on, reason_now,
+                 waited_day) in cur.fetchall():
                 status, reason, job_id, retry = "imported", None, None, None
                 try:
                     guard = auto_import.normalize_guardrails(guard_raw)
@@ -4567,8 +4569,10 @@ def promote_found_imports(limit: int = 5) -> int:
                     elif job_id:
                         status, reason = "skipped", "Already imported"
                     elif guard["pause_below_gb"] and free_gb < guard["pause_below_gb"]:
-                        # 184: the watch's disk guardrail: keep it found (nothing lost), retry when space is back.
-                        status, reason, retry = "found", f"Paused: under {guard['pause_below_gb']} GB free", 10
+                        # 184: the watch's disk guardrail: keep it found (nothing lost), retry when space is back;
+                        # 188: at most 24 h, then it moves to the confirm list.
+                        status, reason, retry = ("skipped", auto_import.DISK_TIMEOUT, None) if waited_day else \
+                            ("found", f"Paused: under {guard['pause_below_gb']} GB free", 10)
                     else:
                         rules = campaigns.get(slug) if slug else None
                         req = ClipRequest(youtube_url=url, campaign=slug if rules else None,
@@ -4578,7 +4582,8 @@ def promote_found_imports(limit: int = 5) -> int:
                             _queue_import_note(cur, user, title or url, dur, channel, rules)
                 except HTTPException as exc:
                     if exc.status_code == 507:
-                        status, reason, retry = "found", "Waiting for disk space", 10
+                        status, reason, retry = ("skipped", auto_import.DISK_TIMEOUT, None) if waited_day else \
+                            ("found", "Waiting for disk space", 10)
                     elif exc.status_code == 400:
                         status, reason = "skipped", str(exc.detail)
                     elif attempts + 1 < IMPORT_MAX_ATTEMPTS:

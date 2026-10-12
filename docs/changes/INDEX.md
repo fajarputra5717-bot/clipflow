@@ -157,3 +157,4 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 185 · 2026-10-12 · Island: one progress mark per task (indeterminate = lead spinner, percent = ring), contextual '<verb> <subject>' line for every kind · index.html, tests
 186 · 2026-10-12 · Auto-import skips videos with no upload time or unknown length (Lane C P3 Medium + Low) · shared/auto_import.py, tests
 187 · 2026-10-12 · Auto-import 'Found, not imported: confirm?' list + Import anyway (owner-scoped endpoint); worker/assets/LICENSES.md · main.py, shared, index.html, tests
+188 · 2026-10-12 · Phone top bar: full-width title when idle, wider island while it runs; auto-import disk wait capped at 24 h; 'Step n ·' eyebrows removed · index.html, main.py, shared, tests

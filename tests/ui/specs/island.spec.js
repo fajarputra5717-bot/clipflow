@@ -49,3 +49,21 @@ test.describe("Island progress mark", () => {
     await expect(app.locator("#islTitleC")).toHaveText("Sending to phone · Lompatan GILA", { timeout: 8_000 });
   });
 });
+
+// 188: phone top bar — no island = the page title runs logo → menu; island showing = it owns the middle (title hidden),
+// wide enough for "<verb> <subject>", never over the logo or the menu (incl. the "+N" split).
+test("phone: title uses the bar when idle; the island takes the middle without overlapping logo/menu", async ({ app, api }) => {
+  test.skip(test.info().project.name !== "mobile", "phone layout");
+  const w = await app.evaluate(() => { const e = document.getElementById("pageContext"); e.textContent = "IME Roleplay X Motion Klip · a long job title"; return e.getBoundingClientRect().width; });
+  expect(w).toBeGreaterThan(200);
+  api.current = [job({ id: "run-1", status: "transcribing", progress: 40, source_title: "Fandra main Minecraft hardcore" }),
+                 job({ id: "run-2", status: "queued", progress: 0, source_title: "Second" })];
+  await expect(app.locator("#islandMore")).toBeVisible({ timeout: 8_000 });
+  await expect(app.locator("#pageContext")).toBeHidden();
+  await app.waitForTimeout(900);   // morph settles
+  const main = await app.locator("#islandMain").boundingBox(), more = await app.locator("#islandMore").boundingBox();
+  const logo = await app.locator("#toolbar [data-nav-home]").boundingBox(), menu = await app.locator("#accountMenuBtn").boundingBox();
+  expect(main.width).toBeGreaterThanOrEqual(200);
+  expect(main.x).toBeGreaterThan(logo.x + logo.width);
+  expect(more.x + more.width).toBeLessThan(menu.x);
+});

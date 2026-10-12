@@ -28,7 +28,8 @@ STALE_AFTER = timedelta(hours=24)
 STATUSES = ("found", "imported", "skipped", "failed")
 # 187: skip reasons the user may override ("Found, not imported: confirm?" on the Campaign page) — the rules couldn't
 # vouch for the video, they didn't rule it out. Confirmed rows go back to `found` with reason CONFIRMED.
-CONFIRMABLE = ("No upload time", "Older than the watch", "Unknown length")
+DISK_TIMEOUT = "Disk full for 24 h"   # 188: a disk-blocked import waits at most 24 h, then it needs a confirm
+CONFIRMABLE = ("No upload time", "Older than the watch", "Unknown length", DISK_TIMEOUT)
 CONFIRMED = "Confirmed by you"
 GUARD_DEFAULTS = {"max_per_day": 2, "min_minutes": 5, "max_minutes": 240, "include": [], "exclude": [],
                   "pause_below_gb": None, "telegram_note": True}

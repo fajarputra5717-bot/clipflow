@@ -975,7 +975,7 @@ img.topbar-logo-icon{background:none;padding:0;object-fit:cover}
 .isl-compact{display:flex;align-items:center;gap:8px;height:36px;width:100%;padding:0 8px 0 8px}
 .island-main{--cw:248px}
 .isl-compact{width:var(--cw)}
-@media(max-width:600px){.isl-compact{--cw:150px;width:150px}}
+@media(max-width:600px){.isl-compact{--cw:min(240px,max(150px,calc(100vw - 170px)));width:var(--cw)}}
 .isl-lead{width:20px;height:20px;flex:none;display:grid;place-items:center}
 .isl-lead img,.isl-x-icon img{width:20px;height:20px;border-radius:50%;object-fit:cover;display:block}
 .island.is-idle .isl-spinner{animation:none;border-top-color:rgba(255,255,255,.25)} /* queued: static empty ring */
@@ -1475,7 +1475,10 @@ body:has(#editorSection:not(.hidden)) .ed-foot{bottom:calc(var(--pill-btn) + 30p
   .appbar-wide{display:none}
   .acct-item.acct-narrow{display:flex}
   .flow-pill .flow li.phase{display:none}   /* a step not built yet: hidden on phones */
-  .appbar-context{max-width:calc(50% - 75px - 48px);font-size:15px}
+  /* 188: no island = the title runs from the logo to the menu; while the island shows it owns the middle and the
+     title steps aside (the page name stays in #pageTitle + the stepper's aria-label). */
+  .appbar-context{max-width:calc(100% - 48px - var(--hit) - 24px);font-size:15px}
+  body:has(#island:not([hidden])) .appbar-context{visibility:hidden}
   .appbar .icon-btn,.acct-btn{width:var(--hit);height:var(--hit);min-height:var(--hit)}
   .acct-btn{padding:0;justify-content:center;background:transparent}
   .acct-name,.acct-chev{display:none}
@@ -1684,13 +1687,13 @@ body:has(#editorSection:not(.hidden)) .ed-foot{bottom:calc(var(--pill-btn) + 30p
     <main>
       <section id="campaignSection" class="view-section hidden" aria-labelledby="campaignTitle">
         <div class="panel publish-panel">
-          <div class="section-head"><div><div class="eyebrow">Step 1 · Campaign</div><h2 id="campaignTitle">Campaigns</h2><p class="muted small">A campaign holds the brand's rules. Every clip is checked against them before it can be scheduled.</p></div></div>
+          <div class="section-head"><div><h2 id="campaignTitle">Campaigns</h2><p class="muted small">A campaign holds the brand's rules. Every clip is checked against them before it can be scheduled.</p></div></div>
           <div id="campaignList" aria-live="polite"></div>
         </div>
       </section>
       <section id="currentSection" class="view-section">
         <div class="panel analyze-panel">
-          <div class="section-head"><div><div class="eyebrow">Step 3 · Analyze</div><h2>New job options</h2><p class="muted small">Paste a YouTube link. AI finds the strongest hooks and cuts them into vertical clips.</p></div></div>
+          <div class="section-head"><div><h2>New job options</h2><p class="muted small">Paste a YouTube link. AI finds the strongest hooks and cuts them into vertical clips.</p></div></div>
 
           <label class="field" for="youtubeUrl">Video</label>
           <input id="youtubeUrl" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://www.youtube.com/watch?v=…" aria-describedby="youtubeUrlHint">
@@ -1764,7 +1767,7 @@ body:has(#editorSection:not(.hidden)) .ed-foot{bottom:calc(var(--pill-btn) + 30p
       </section>
       <section id="scheduleSection" class="view-section hidden" aria-labelledby="scheduleTitle">
         <div class="panel publish-panel">
-          <div class="section-head"><div><div class="eyebrow">Step 6 · Schedule</div><h2 id="scheduleTitle">Schedule</h2><p class="muted small">Planned posts by day, in WIB. ClipFlow reminds you on Telegram at the planned time; you post them yourself.</p></div><span class="spacer"></span>
+          <div class="section-head"><div><h2 id="scheduleTitle">Schedule</h2><p class="muted small">Planned posts by day, in WIB. ClipFlow reminds you on Telegram at the planned time; you post them yourself.</p></div><span class="spacer"></span>
             <div class="publish-filters"><div class="seg" role="group" aria-label="Week"><button type="button" data-sched-week="-1" aria-label="Previous week">‹</button><button type="button" data-sched-week="0" id="schedWeekLabel">This week</button><button type="button" data-sched-week="1" aria-label="Next week">›</button></div>
               <div class="seg sched-viewseg" role="group" aria-label="View"><button type="button" data-sched-view="list" aria-pressed="true">List</button><button type="button" data-sched-view="week" aria-pressed="false">Week</button></div></div></div>
           <div id="scheduleList" aria-live="polite"></div>
@@ -1772,26 +1775,26 @@ body:has(#editorSection:not(.hidden)) .ed-foot{bottom:calc(var(--pill-btn) + 30p
       </section>
       <section id="importSection" class="view-section hidden" aria-labelledby="importTitle">
         <div class="panel publish-panel">
-          <div class="section-head"><div><div class="eyebrow">Step 2 · Auto-import</div><h2 id="importTitle">Watch source channels</h2><p class="muted small">New uploads and finished livestreams on a campaign's source channels are imported and analysed without you pasting links.</p></div></div>
+          <div class="section-head"><div><h2 id="importTitle">Watch source channels</h2><p class="muted small">New uploads and finished livestreams on a campaign's source channels are imported and analysed without you pasting links.</p></div></div>
           <div id="importBody" aria-live="polite"></div>
         </div>
       </section>
       <section id="trackSection" class="view-section hidden" aria-labelledby="trackTitle">
         <div class="panel publish-panel">
-          <div class="section-head"><div><div class="eyebrow">Step 8 · Track</div><h2 id="trackTitle">Views → earnings</h2><p class="muted small">Your posted clips: latest views, what they pay and what's been paid. Amounts follow each campaign's payout rules.</p></div></div>
+          <div class="section-head"><div><h2 id="trackTitle">Views → earnings</h2><p class="muted small">Your posted clips: latest views, what they pay and what's been paid. Amounts follow each campaign's payout rules.</p></div></div>
           <div id="trackBody" aria-live="polite"></div>
         </div>
       </section>
       <section id="pickSection" class="view-section hidden" aria-labelledby="pickTitle">
         <div class="panel publish-panel">
-          <div class="section-head"><div><div class="eyebrow">Step 5 · Editor</div><h2 id="pickTitle">Pick a clip</h2><p class="muted small">Choose a clip to edit. ClipFlow reopens the last one you edited next time.</p></div></div>
+          <div class="section-head"><div><h2 id="pickTitle">Pick a clip</h2><p class="muted small">Choose a clip to edit. ClipFlow reopens the last one you edited next time.</p></div></div>
           <div class="pk-filters" id="pickFilters" role="group" aria-label="Filter clips"></div>
           <div id="pickBody" aria-live="polite"></div>
         </div>
       </section>
       <section id="publishSection" class="view-section hidden" aria-labelledby="publishTitle">
         <div class="panel publish-panel">
-          <div class="section-head"><div><div class="eyebrow">Step 7 · Publish</div><h2 id="publishTitle">Publish queue</h2><p class="muted small">One card per clip. Each platform chip is its own post: tap it to copy its caption, mark it posted and track views.</p></div><span class="spacer"></span>
+          <div class="section-head"><div><h2 id="publishTitle">Publish queue</h2><p class="muted small">One card per clip. Each platform chip is its own post: tap it to copy its caption, mark it posted and track views.</p></div><span class="spacer"></span>
             <div class="publish-filters" id="publishFilter"></div></div>
           <div id="publishList" aria-live="polite"></div>
         </div>
@@ -2915,9 +2918,12 @@ const ISL={mode:"hidden",pinned:false,hover:false,event:null,eventTimer:null,fai
 const ISL_BUSY=s=>BUSY.includes(s)||s==="processing";
 // Running work leads (stable sort), so the island never shows a queued job while another one is working.
 function islandItems(){const busy=t=>t.kind==="candidate"||badgeClass(t.status)==="running"?0:1;return allActiveTasks().filter(t=>t.kind==="candidate"||ISL_BUSY(t.status)||!TERMINAL.includes(t.status)).sort((a,b)=>busy(a)-busy(b))}
+function islandCompactW(){return Math.max(150,Math.min(240,window.innerWidth-170))}
 function islandSize(mode){
   const narrow=window.innerWidth<=600,vw=window.innerWidth;
-  if(mode==="compact")return{w:narrow?150:248,h:36,r:18};
+  // 188: phones give the island the top bar's middle (the page title steps aside while it shows) so
+  // "<verb> <subject>" fits; it stays clear of the logo + menu (and the "+N" split) down to 320 px.
+  if(mode==="compact")return{w:narrow?islandCompactW():248,h:36,r:18};
   if(mode==="expanded"){const w=Math.min(380,vw-16);const h=Math.ceil($("islExpanded").scrollHeight)||132;return{w,h,r:28}}
   return{w:12,h:12,r:6};
 }
@@ -4253,7 +4259,7 @@ async function loadCdAutoImport(slug){
 // 187: "Found, not imported: confirm?" — videos the rules couldn't vouch for (no upload time / unknown length).
 function confirmListHtml(rows){
   if(!rows.length)return "";
-  return `<div class="ai-confirm"><h4>Found, not imported: confirm?</h4><p class="ai-sub">ClipFlow couldn't tell if these are new uploads or how long they are, so it didn't import them on its own.</p>
+  return `<div class="ai-confirm"><h4>Found, not imported: confirm?</h4><p class="ai-sub">ClipFlow didn't import these on its own: it couldn't confirm they're new uploads or how long they are, or the disk stayed full for 24 h.</p>
     <ul class="ai-list">${rows.map(v=>`<li class="ai-li"><div class="ai-grow"><a class="ai-title" href="${esc(v.url)}" target="_blank" rel="noopener">${esc(v.title)}</a>
       <div class="ai-sub">${[v.channel,v.duration_fmt,v.when_fmt,v.label.replace(/^Skipped · /,"")].filter(Boolean).map(esc).join(" · ")}</div></div>
       <button class="secondary" type="button" data-ai-confirm="${esc(v.id)}">Import anyway</button></li>`).join("")}</ul></div>`;

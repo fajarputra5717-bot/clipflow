@@ -430,7 +430,7 @@ planned post: `reminded_at` set in the queueing transaction; > 1 h late = `misse
   `FLOW_STEPS`): icons only (`--pill-icon` 24, `--pill-btn` 36 / 44 phone), only the active step shows its
   `.flow-label`; disabled steps carry "Coming in Px" in aria-label/title (never mock content); on phones the
   unbuilt phase steps are hidden (183: none left; ≤ 440 px the active step is icon-only). It lifts the editor's sticky `.ed-foot` and hides while `.ed-foot` has focus on
-  phones. Island stays top centre. Tokens: `/ui/tokens.css` (`shared/ui/tokens.css`, 168).
+  phones. Island stays top centre (188: ≤ 600 px it owns the bar's middle, `islandCompactW()`, and `#pageContext` hides while it shows). Tokens: `/ui/tokens.css` (`shared/ui/tokens.css`, 168).
   Steps: Campaign (`data-nav="campaign"`), Analyze (`current`), Review (`queue` → the Review page), Editor
   (`data-flow-editor`), Schedule, Publish. `syncNav()` repaints. Sheets (`openSheet()`/`closeSheet()`) sit outside
   `#appShell`, which goes `inert` while one is open. **Every closed overlay layer must be `visibility:hidden;
