@@ -6,6 +6,7 @@ import re
 import secrets
 import shutil
 import statistics
+import threading
 import time
 import traceback
 import uuid
@@ -25,7 +26,7 @@ from starlette.concurrency import run_in_threadpool
 from app import auth
 
 from shared.ai import router as ai_router
-from shared import brief_parser, campaign_status, track, campaign_view, campaigns, descriptions, edit_spec as edit_specs, hook_ranges, languages, origins, payouts, post_advice, posts as post_rules, rule_checks, schedule
+from shared import auto_import, brief_parser, campaign_status, track, campaign_view, campaigns, descriptions, edit_spec as edit_specs, hook_ranges, languages, origins, payouts, post_advice, posts as post_rules, rule_checks, schedule
 from shared.errors import AINotConfiguredError
 from shared.fonts import normalize_caption_font
 from shared.settings import (
@@ -502,7 +503,6 @@ def ensure_schema():
         "ALTER TABLE telegram_sends ADD COLUMN IF NOT EXISTS post_id TEXT",
         # P3 part 1 (157): campaigns in the DB, a shared catalogue (created_by + visibility, not user_id-owned:
         # P1.5's exception for campaigns). rules = the docs/campaigns rules.json schema; brief_text verbatim.
-        # Keep LAST: the readiness check reads it.
         """
         CREATE TABLE IF NOT EXISTS campaigns (
             slug TEXT PRIMARY KEY,
@@ -516,6 +516,59 @@ def ensure_schema():
             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )
         """,
+        # P3 part 7 (183): auto-import (shared/auto_import.py). source_watches = a user's switch per campaign source
+        # channel; source_channels = the shared check queue (one row per channel, no user data, like source_videos);
+        # source_imports = what a check found per user (found → the backend import loop makes the job). Keep the
+        # import table LAST: the readiness check reads it.
+        """
+        CREATE TABLE IF NOT EXISTS source_watches (
+            id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+            user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            campaign TEXT NOT NULL REFERENCES campaigns(slug) ON DELETE CASCADE,
+            channel TEXT NOT NULL,
+            enabled BOOLEAN NOT NULL DEFAULT TRUE,
+            enabled_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            UNIQUE (user_id, campaign, channel)
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS idx_source_watches_channel ON source_watches (channel) WHERE enabled",
+        """
+        CREATE TABLE IF NOT EXISTS source_channels (
+            channel TEXT PRIMARY KEY,
+            status TEXT NOT NULL DEFAULT 'idle' CHECK (status IN ('idle', 'checking')),
+            next_check_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            claimed_at TIMESTAMPTZ,
+            last_checked_at TIMESTAMPTZ,
+            last_ok_at TIMESTAMPTZ,
+            last_error TEXT,
+            last_found INT
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS source_imports (
+            id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+            user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            watch_id TEXT REFERENCES source_watches(id) ON DELETE SET NULL,
+            campaign TEXT,
+            channel TEXT NOT NULL,
+            video_id TEXT NOT NULL,
+            url TEXT NOT NULL,
+            title TEXT,
+            duration INT,
+            published_at TIMESTAMPTZ,
+            status TEXT NOT NULL CHECK (status IN ('found', 'imported', 'skipped', 'failed')),
+            reason TEXT,
+            job_id TEXT REFERENCES jobs(id) ON DELETE SET NULL,
+            attempts INT NOT NULL DEFAULT 0,
+            retry_after TIMESTAMPTZ,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            UNIQUE (user_id, url)
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS idx_source_imports_found ON source_imports (created_at) WHERE status = 'found'",
     ]
 
     try:
@@ -556,8 +609,8 @@ def ensure_schema():
     try:
         with get_db() as conn:
             with conn.cursor() as cur:
-                # The newest table must exist: proof the statement list got through (157: campaigns).
-                cur.execute("SELECT to_regclass('public.campaigns') IS NOT NULL")
+                # The newest table must exist: proof the statement list got through (183: source_imports).
+                cur.execute("SELECT to_regclass('public.source_imports') IS NOT NULL")
                 SCHEMA_READY = bool(cur.fetchone()[0])
     except Exception:
         print("[backend] schema readiness check failed:", traceback.format_exc())
@@ -1306,7 +1359,12 @@ def get_disk_status():
 
 @app.post("/api/jobs")
 def create_job(req: ClipRequest, request: Request):
-    user = current_user(request)
+    return create_job_for(req, current_user(request))
+
+
+def create_job_for(req: ClipRequest, user: dict) -> dict:
+    """The one job-creation path: the Analyze form (POST /api/jobs) and auto-import (183, import loop) both land here,
+    so campaign defaults, settings snapshots and the disk reserve can never drift apart."""
 
     if req.platform not in SUPPORTED_PLATFORMS:
         raise HTTPException(
@@ -2724,6 +2782,20 @@ def list_activity(request: Request):
                               "label": msg or ("Telegram: queued" if st == "queued" else "Sending to Telegram"),
                               "title": title or ("Telegram test" if kind == "test" else "Clip"),
                               "updated_at": upd.isoformat() if upd else None})
+            # 183: auto-import channel checks the caller watches (indeterminate capsule while yt-dlp lists it).
+            cur.execute(
+                """
+                SELECT sc.channel, sc.claimed_at FROM source_channels sc
+                WHERE sc.status = 'checking' AND EXISTS (
+                    SELECT 1 FROM source_watches w WHERE w.channel = sc.channel AND w.enabled AND w.user_id = %s)
+                """,
+                (user["id"],),
+            )
+            for channel, claimed in cur.fetchall():
+                items.append({"owner": None, "kind": "source_check", "id": channel, "job_id": None, "candidate_id": None,
+                              "stage": "checking", "percent": None, "label": "Checking for new videos",
+                              "title": auto_import.channel_label(channel),
+                              "updated_at": claimed.isoformat() if claimed else None})
     return {"items": items}
 
 
@@ -4216,6 +4288,249 @@ def get_track(request: Request):
                     "expected_rp", "url")
             posts = [dict(zip(keys, r)) for r in cur.fetchall()]
     return track.build(posts, campaigns.get)
+
+
+# ============================================================
+# AUTO-IMPORT (183, P3 part 7) — shared/auto_import.py. The user switches campaign source channels on; the worker
+# checks each watched channel (source_channels queue, yt-dlp via shared/source_watch) and writes source_imports
+# rows; run_import_loop() below turns `found` rows into jobs through create_job_for() (same path as Analyze).
+# ============================================================
+
+WIB_TZ = timezone(timedelta(hours=7))
+
+
+def _ago(ts, now) -> str:
+    mins = int((now - ts).total_seconds() // 60)
+    if mins < 1:
+        return "just now"
+    if mins < 60:
+        return f"{mins} min ago"
+    if mins < 48 * 60:
+        return f"{mins // 60} h ago"
+    return f"{mins // 1440} days ago"
+
+
+def _duration_fmt(sec) -> str:
+    if not sec:
+        return ""
+    h, rest = divmod(int(sec), 3600)
+    m, s_ = divmod(rest, 60)
+    return f"{h}:{m:02d}:{s_:02d}" if h else f"{m}:{s_:02d}"
+
+
+def _import_state(status, reason, job_status) -> tuple[str, str]:
+    """(label, badge) of one recent import; badge = a badgeClass() bucket in index.html."""
+    if status == "found":
+        return ("Waiting for disk space" if reason == "Waiting for disk space" else "Importing", "idle")
+    if status == "skipped":
+        return (f"Skipped · {reason}" if reason else "Skipped", "cancelled")
+    if status == "failed":
+        return (f"Not imported · {reason}" if reason else "Not imported", "failed")
+    if job_status is None:
+        return ("Job deleted", "cancelled")
+    if job_status in JOB_RUNNING:
+        return ("Analyzing", "running")
+    return {"review": ("Ready for review", "attention"), "partial_failure": ("Ready for review", "attention"),
+            "completed": ("Done", "completed"), "failed": ("Analysis failed", "failed"),
+            "cancelled": ("Cancelled", "cancelled")}.get(job_status, (job_status.replace("_", " ").capitalize(), "idle"))
+
+
+def _auto_import_interval() -> int:
+    try:
+        return max(5, int(float(runtime_setting("AUTO_IMPORT_INTERVAL_MIN") or 15)))
+    except (TypeError, ValueError):
+        return 15
+
+
+@app.get("/api/auto-import")
+def get_auto_import(request: Request):
+    """The caller's watch switches per visible campaign source channel + their recent imports."""
+    user = current_user(request)
+    now = datetime.now(timezone.utc)
+    visible = [r for r in campaigns.load_all().values() if campaigns.visible_to(r, user) and auto_import.watchable(r)]
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT campaign, channel, enabled FROM source_watches WHERE user_id = %s", (user["id"],))
+            watches = {(c, ch): en for c, ch, en in cur.fetchall()}
+            cur.execute("SELECT channel, status, last_checked_at, last_ok_at, last_error FROM source_channels")
+            channels = {r[0]: r[1:] for r in cur.fetchall()}
+            cur.execute(
+                """
+                SELECT i.id, i.campaign, i.channel, i.url, i.title, i.duration, i.status, i.reason, i.job_id, j.status,
+                       i.created_at
+                FROM source_imports i LEFT JOIN jobs j ON j.id = i.job_id AND j.user_id = i.user_id
+                WHERE i.user_id = %s ORDER BY i.created_at DESC LIMIT 30
+                """,
+                (user["id"],),
+            )
+            recent = cur.fetchall()
+    out = []
+    for rules in sorted(visible, key=lambda r: campaigns.display_name(r).lower()):
+        st = campaign_status.status(rules, now)
+        chans = []
+        for w in auto_import.watchable(rules):
+            status, checked, ok, err = channels.get(w["channel"], (None, None, None, None))
+            watched = bool(watches.get((rules["slug"], w["channel"])))
+            if status == "checking":
+                line = "checking now"
+            elif not watched:
+                line = "not watched"
+            elif checked:
+                line = f"checked {_ago(checked, now)}"
+            else:
+                line = "first check soon"
+            chans.append({**w, "watched": watched, "line": line,
+                          "error": err if watched and err and (not ok or checked > ok) else None})
+        out.append({"slug": rules["slug"], "name": campaigns.display_name(rules), "status": st["label"],
+                    "status_code": st["code"], "can_watch": st["code"] not in ("ended", "paused"), "channels": chans})
+    names = {r["slug"]: campaigns.display_name(r) for r in campaigns.load_all().values()}
+    imports = []
+    for iid, slug, ch, url, title, dur, status, reason, job_id, job_status, created in recent:
+        label, badge = _import_state(status, reason, job_status if job_id else None)
+        if status == "skipped" and job_id and reason == "Already imported":
+            label, badge = "Already imported", "completed"
+        imports.append({"id": iid, "title": title or url, "url": url, "campaign_name": names.get(slug, slug or ""),
+                        "channel": auto_import.channel_label(ch), "duration_fmt": _duration_fmt(dur),
+                        "when_fmt": created.astimezone(WIB_TZ).strftime("%-d %b, %H:%M"), "status": status,
+                        "label": label, "badge": badge, "job_id": job_id})
+    try:
+        min_minutes = int(float(runtime_setting("AUTO_IMPORT_MIN_MINUTES") or 5))
+    except (TypeError, ValueError):
+        min_minutes = 5
+    return {"interval_min": _auto_import_interval(), "min_minutes": min_minutes, "campaigns": out, "imports": imports}
+
+
+class WatchRequest(BaseModel):
+    campaign: str
+    channel: str
+    enabled: bool
+
+
+@app.put("/api/auto-import/watch")
+def put_auto_import_watch(req: WatchRequest, request: Request):
+    """Switch one campaign source channel on/off for the caller. On = a check soon (the first one only records what
+    exists, so a backlog is never imported); videos uploaded before the switch went on are skipped."""
+    user = current_user(request)
+    rules = campaigns.get(req.campaign)
+    if not campaigns.visible_to(rules, user):
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    try:
+        key = auto_import.channel_key(req.channel)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Not a YouTube channel")
+    if key not in {w["channel"] for w in auto_import.watchable(rules)}:
+        raise HTTPException(status_code=400, detail="Not a source channel of this campaign")
+    if req.enabled:
+        st = campaign_status.status(rules, datetime.now(timezone.utc))
+        if st["code"] in ("ended", "paused"):
+            raise HTTPException(status_code=409, detail=f"{campaigns.display_name(rules)} is {st['label'].lower()}: nothing to import")
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO source_watches (user_id, campaign, channel, enabled) VALUES (%s, %s, %s, %s)
+                ON CONFLICT (user_id, campaign, channel) DO UPDATE SET enabled = EXCLUDED.enabled,
+                    enabled_at = CASE WHEN EXCLUDED.enabled AND NOT source_watches.enabled THEN NOW()
+                                      ELSE source_watches.enabled_at END,
+                    updated_at = NOW()
+                """,
+                (user["id"], rules["slug"], key, req.enabled),
+            )
+            if req.enabled:
+                cur.execute(
+                    "INSERT INTO source_channels (channel) VALUES (%s) "
+                    "ON CONFLICT (channel) DO UPDATE SET next_check_at = LEAST(source_channels.next_check_at, NOW())",
+                    (key,),
+                )
+        conn.commit()
+    return get_auto_import(request)
+
+
+IMPORT_LOOP_SECONDS = 15
+IMPORT_MAX_ATTEMPTS = 3
+
+
+def _existing_job(cur, user_id, url):
+    cur.execute(
+        "SELECT j.id FROM jobs j JOIN source_videos sv ON sv.id = j.source_video_id "
+        "WHERE j.user_id = %s AND sv.youtube_url = %s ORDER BY j.created_at LIMIT 1",
+        (user_id, url),
+    )
+    row = cur.fetchone()
+    return row[0] if row else None
+
+
+def promote_found_imports(limit: int = 5) -> int:
+    """`found` source_imports → jobs (create_job_for, the job owner = whoever switched the watch on). Rows are
+    claimed FOR UPDATE SKIP LOCKED, so several backend processes never double-import."""
+    done = 0
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT i.id, i.user_id, i.campaign, i.url, i.attempts, u.username, u.role, u.active
+                FROM source_imports i JOIN users u ON u.id = i.user_id
+                WHERE i.status = 'found' AND (i.retry_after IS NULL OR i.retry_after <= NOW())
+                ORDER BY i.created_at LIMIT %s FOR UPDATE OF i SKIP LOCKED
+                """,
+                (limit,),
+            )
+            for iid, uid, slug, url, attempts, username, role, active in cur.fetchall():
+                status, reason, job_id, retry = "imported", None, None, None
+                try:
+                    url = validate_youtube_url(url)
+                    job_id = _existing_job(cur, uid, url)
+                    if not active:
+                        status, reason = "skipped", "Account disabled"
+                    elif job_id:
+                        status, reason = "skipped", "Already imported"
+                    else:
+                        rules = campaigns.get(slug) if slug else None
+                        req = ClipRequest(youtube_url=url, campaign=slug if rules else None,
+                                          language=campaigns.default_language(rules) or "auto")
+                        job_id = create_job_for(req, {"id": uid, "username": username, "role": role})["id"]
+                except HTTPException as exc:
+                    if exc.status_code == 507:
+                        status, reason, retry = "found", "Waiting for disk space", 10
+                    elif exc.status_code == 400:
+                        status, reason = "skipped", str(exc.detail)
+                    elif attempts + 1 < IMPORT_MAX_ATTEMPTS:
+                        status, reason, retry = "found", None, 5
+                    else:
+                        status, reason = "failed", str(exc.detail)[:300]
+                except Exception as exc:
+                    status, reason = "failed", str(exc)[:300]
+                cur.execute(
+                    """
+                    UPDATE source_imports SET status = %s, reason = %s, job_id = COALESCE(%s, job_id),
+                        attempts = attempts + %s,
+                        retry_after = CASE WHEN %s::int IS NULL THEN NULL ELSE NOW() + make_interval(mins => %s::int) END,
+                        updated_at = NOW()
+                    WHERE id = %s
+                    """,
+                    (status, reason, job_id, 0 if reason == "Waiting for disk space" else 1, retry, retry, iid),
+                )
+                print(f"[auto-import] {url} for user {uid}: {status}{' · ' + reason if reason else ''}")
+                done += 1
+        conn.commit()
+    return done
+
+
+def run_import_loop():
+    while True:
+        time.sleep(IMPORT_LOOP_SECONDS)
+        if not SCHEMA_READY:
+            continue
+        try:
+            promote_found_imports()
+        except Exception:
+            print("[auto-import] import loop error:", traceback.format_exc())
+
+
+@app.on_event("startup")
+def start_import_loop():
+    # Short DB work only (the job insert); the long work (download, analysis) stays in the worker.
+    threading.Thread(target=run_import_loop, name="auto-import", daemon=True).start()
 
 
 # 166 (P3 part 4): New campaign = paste brief → brief_parser (patterns first, AI only for gaps) → admin confirms every

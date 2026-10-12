@@ -43,6 +43,8 @@ test("169: top bar stays at the top and the stepper pill at the bottom when scro
   expect(bar.height).toBeLessThanOrEqual(48);
   expect(pill.y + pill.height).toBeLessThanOrEqual(480);
   expect(pill.y).toBeGreaterThan(400);
-  await expect(app.locator("#flow li.active .flow-label")).toBeVisible();
+  if (app.viewportSize().width > 440) await expect(app.locator("#flow li.active .flow-label")).toBeVisible();
+  else await expect(app.locator("#flow li.active .flow-label")).toBeHidden();   // 183: 8 live steps; icon-only on narrow phones
+  await expect(app.locator("#flow li.active button")).toHaveAccessibleName(/Analyze/);
   await expect(app.locator("#flow li:not(.active) .flow-label").first()).toBeHidden();
 });

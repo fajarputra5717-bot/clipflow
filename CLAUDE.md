@@ -396,6 +396,9 @@ campaign windows via `payouts.window_problems`). Times are stored TIMESTAMPTZ (U
 `POST …/candidates/{cid}/schedule` = Approve gate + `_queue_final_render()` (the one approve path) + planned rows with
 `_eligibility_for()` at the planned time; re-plan via PATCH re-checks. Mark posted on a planned row PATCHes it. Schedule step (147): `GET /api/schedule` (own planned rows by WIB day + overdue),
 `#scheduleSection` in `TAB_SECTIONS` stepper order; its render fn is `renderScheduleView()` (`renderSchedule()` = the sheet).
+Auto-import (183): `shared/auto_import.py` rules; `source_watches` (user switch) → worker `maybe_check_sources()` (idle,
+`source_channels` queue, one check per channel for all its watchers) → `source_imports` found/skipped → backend
+`run_import_loop()` → `create_job_for()` (the ONE job-creation path; Analyze's POST /api/jobs uses it too). Step `#import`.
 Track (181): `GET /api/track` = `shared/track.py` (own posts → tiles, by campaign/platform, top clips; money only via
 payouts, pre-formatted), step `#track`. Reminders (148): service `sender` (`riftstorm-sender`, worker image `--telegram-only`) owns `telegram_sends` + 
 `queue_due_reminders()` (worker has `TELEGRAM_SENDER=separate`; without it the worker does both). One reminder per
@@ -419,7 +422,7 @@ planned post: `reminded_at` set in the queueing transaction; > 1 h late = `misse
   **Stepper = floating glass pill** `#flowNav.flow-pill` (fixed bottom centre, safe-area aware, `renderFlow()`,
   `FLOW_STEPS`): icons only (`--pill-icon` 24, `--pill-btn` 36 / 44 phone), only the active step shows its
   `.flow-label`; disabled steps carry "Coming in Px" in aria-label/title (never mock content); on phones the
-  unbuilt phase steps are hidden. It lifts the editor's sticky `.ed-foot` and hides while `.ed-foot` has focus on
+  unbuilt phase steps are hidden (183: none left; ≤ 440 px the active step is icon-only). It lifts the editor's sticky `.ed-foot` and hides while `.ed-foot` has focus on
   phones. Island stays top centre. Tokens: `/ui/tokens.css` (`shared/ui/tokens.css`, 168).
   Steps: Campaign (`data-nav="campaign"`), Analyze (`current`), Review (`queue` → the Review page), Editor
   (`data-flow-editor`), Schedule, Publish. `syncNav()` repaints. Sheets (`openSheet()`/`closeSheet()`) sit outside

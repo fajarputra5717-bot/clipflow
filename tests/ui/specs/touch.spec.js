@@ -43,6 +43,10 @@ async function seed(app, api) {
     days: [...Array(7)].map((_, i) => ({ date: key(new Date(Date.now() + i * 864e5)), posts: i ? [] : [{ id: "pl-1", candidate_id: "cand-a", job_id: "job-done",
       title: "Lompatan GILA", platform: "tiktok", platform_name: "TikTok", account_handle: "imeclips", status: "planned", campaign_name: "IME Roleplay",
       has_thumbnail: false, eligible: true, overdue: false, render: { state: "ready", label: "Final ready" }, scheduled_for: new Date(Date.now() + 2 * 3600e3).toISOString() }] })) };
+  api.autoImport = { interval_min: 15, min_minutes: 5, campaigns: [{ slug: "fandra-octo", name: "Fandra Octo", status: "Active", status_code: "active", can_watch: true,
+    channels: [{ channel: "https://www.youtube.com/@fandraocto", label: "@fandraocto", content: "livestreams", watched: true, line: "checked 4 min ago", error: null }] }],
+    imports: [{ id: "i1", title: "Stream", url: "u", campaign_name: "Fandra Octo", channel: "@fandraocto", duration_fmt: "3:12:40", when_fmt: "12 Oct, 09:12",
+      status: "imported", label: "Ready for review", badge: "attention", job_id: "job-done" }] };
   const f = (body) => (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
   await app.route(/\/api\/review\/filter$/, f({ campaign: "ime-roleplay", job: "all", status: "to_review" }));
   await app.route(/\/api\/review\/clips\?/, f({ header: { kind: "campaign", title: "IME Roleplay X Motion Klip", status: { text: "Week 2 · 6 days left", ended: false }, to_review: 3 },
@@ -53,6 +57,7 @@ async function seed(app, api) {
 }
 const STEPS = [
   ["1-campaign", (a) => a.evaluate(() => window.showTab("campaign"))],
+  ["2-import", (a) => a.evaluate(() => { location.hash = "#import"; })],
   ["3-analyze", (a) => a.evaluate(() => window.showTab("current"))],
   ["4-review", (a) => a.evaluate(() => { location.hash = "#review"; })],
   ["5-editor", (a) => a.evaluate(() => { location.hash = "#editor/job-done/cand-a"; })],
