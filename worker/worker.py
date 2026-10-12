@@ -1756,6 +1756,7 @@ def normalize_loudness(path, duration, *, candidate_id=None, audio_bitrate="128k
     tmp = path.with_name(path.stem + ".loudnorm.tmp.mp4")
     tmp2 = path.with_name(path.stem + ".loudnorm2.tmp.mp4")
     tmp3 = path.with_name(path.stem + ".loudnorm3.tmp.mp4")
+    tmp4 = path.with_name(path.stem + ".loudnorm4.tmp.mp4")
     try:
         if not has_audio_stream(path):
             log(f"Loudness: {path.name} has no audio, skipped")
@@ -1782,13 +1783,26 @@ def normalize_loudness(path, duration, *, candidate_id=None, audio_bitrate="128k
             result, after = tmp2, after2
         # QA Low 2: compression (and the true-peak corrective pass) leave the limiter eating ~1 LU. Trim by the
         # MEASURED error; keep the trim only if it is closer to the target and the peak is no worse.
-        if after and abs(after["i"] - retention.LOUDNORM_I) > LOUDNESS_TRIM_TOL:
-            gain = max(-6.0, min(6.0, retention.LOUDNORM_I - after["i"]))
-            trimmed = _loudnorm_pass(result, tmp3, retention.gain_filter(gain), audio_bitrate, timeout)
-            if (trimmed and abs(trimmed["i"] - retention.LOUDNORM_I) < abs(after["i"] - retention.LOUDNORM_I)
-                    and trimmed["tp"] <= max(retention.LOUDNORM_TP, after["tp"])):
-                note += f" (trim {gain:+.1f} dB: {after['i']:.1f} -> {trimmed['i']:.1f} LUFS)"
-                result, after = tmp3, trimmed
+        # QA Low 2 / a156a53 re-check: the limiter + AAC leave some clips (compression on) > 0.5 LU under -14.
+        # Up to two trims, stop once within LOUDNESS_TRIM_TOL: (1) redo the normalising pass from the ORIGINAL
+        # with the target offset by the measured error, (2) a plain gain on the current result. Each is kept
+        # only if closer to -14 and its true peak is no worse (tested on real clips: neither alone always wins).
+        if measured and after and abs(after["i"] - retention.LOUDNORM_I) > LOUDNESS_TRIM_TOL:
+            err = max(-3.0, min(3.0, retention.LOUDNORM_I - after["i"]))
+            hr = headroom if result == tmp2 else retention.CODEC_HEADROOM_DB
+            tries = [("retarget", path, retention.loudnorm_filter(measured, i=retention.LOUDNORM_I + err,
+                                                                  codec_headroom_db=hr), tmp3),
+                     ("gain", None, None, tmp4)]
+            for name, src, af, dst in tries:
+                if abs(after["i"] - retention.LOUDNORM_I) <= LOUDNESS_TRIM_TOL:
+                    break
+                if name == "gain":
+                    src, af = result, retention.gain_filter(max(-6.0, min(6.0, retention.LOUDNORM_I - after["i"])))
+                trimmed = _loudnorm_pass(src, dst, af, audio_bitrate, timeout)
+                if (trimmed and abs(trimmed["i"] - retention.LOUDNORM_I) < abs(after["i"] - retention.LOUDNORM_I)
+                        and trimmed["tp"] <= max(retention.LOUDNORM_TP, after["tp"])):
+                    note += f" (trim {name}: {after['i']:.1f} -> {trimmed['i']:.1f} LUFS)"
+                    result, after = dst, trimmed
         os.replace(result, path)
     except JobCancelled:
         raise
@@ -1802,6 +1816,7 @@ def normalize_loudness(path, duration, *, candidate_id=None, audio_bitrate="128k
         tmp.unlink(missing_ok=True)
         tmp2.unlink(missing_ok=True)
         tmp3.unlink(missing_ok=True)
+        tmp4.unlink(missing_ok=True)
     before = (f"{measured['input_i']:.1f} LUFS / {measured['input_tp']:.1f} dBTP"
               if measured else "silent (limiter only)")
     now = f"{after['i']:.1f} LUFS / {after['tp']:.1f} dBTP" if after else "unmeasured"
