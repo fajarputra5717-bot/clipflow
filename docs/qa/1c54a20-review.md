@@ -1,0 +1,10 @@
+# main 1c54a20 (189, P5 part 1: automatic YouTube view pulls) + b0af533 (188) · Lane C · 2026-10-13
+Prod: riftstorm-* all running, restarts=0 (backend 23:39 +07 12 Oct, worker/sender 23:39); later main commits are docs only. Git-served Playwright 211 passed / 7 skipped / 0 failed; unittest view_pull OK. Prod DB (read-only): 2 clip_posts, 0 auto, no pull runs: no YOUTUBE_API_KEY set, so NO real pull has happened.
+188 (b0af533): reviewed earlier (docs/qa/b0af533-review.md): phone title + disk-wait cap OK.
+189 read (shared/view_pull.py, worker pull_youtube_views / maybe_pull_views):
+OK: key sent only in the X-Goog-Api-Key header (never a URL or log line; RequestException text carries the URL, not headers), YOUTUBE_API_KEY is in SECRET_SETTING_KEYS and not in USER_SETTING_KEYS (admin-only, masked); cadence 6 h < 14 d, daily < 30 d, stop after; ≤ 50 ids per call; daily unit budget per Pacific quota day from view_pull_runs, quotaExceeded blocks until the reset (+2 h, DST-safe); key refusal → alert_admin once/h; runs claimed/stale-reset (30 min); writes with views_source 'auto' + clip_post_views history row; hidden counts treated as not returned; only platform YouTube posts with an id.
+1. Low · error_kind() treats `rateLimitExceeded` as quota: a short per-100-seconds limit would stop all pulls until the next Pacific day. Treat it as transient (retry next run).
+2. Low · any HTTP 400 is classified 'key' (alert_admin "key was refused"): a malformed request would alert the admin as a bad key.
+3. Low · auto pulls overwrite a manually entered YouTube view count (and also update claimed/paid posts' views; expected_rp stays as stored at claim): intended per "writes like a manual entry", note it in the UI.
+Not verified: a real API call ("does an API key alone read public stats" is unconfirmed per Lane B), the Settings → YouTube UI visually, the island "Updating views…" with a real run, quota arithmetic against Google's real units, 14 d/30 d cadence over real time.
+No High/Medium. This is part 1 of P5, not a phase gate.
