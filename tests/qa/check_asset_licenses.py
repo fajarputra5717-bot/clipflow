@@ -1,33 +1,52 @@
 #!/usr/bin/env python3
 """Lane C: every bundled Auto Edit asset has a license entry (docs/tasks/auto-edit.md E3).
 Usage: check_asset_licenses.py <repo root>   (exit 1 on any gap)
-SFX under assets/sfx/: file must be named in assets/sfx/LICENSES.md with source URL + author + CC0.
-Other overlay/emoji assets under assets/: named in assets/LICENSES.md (or the folder's LICENSES.md) with URL + licence; an owner/user-supplied file (e.g. worker/assets/watermark.png) may carry a "supplied by / owned by / not for redistribution" statement instead."""
-import re, sys
+A LICENSES.md (in the file's folder chain under assets/ or worker/assets/) is a markdown table; a row covers a file
+when one of its backticked names/globs matches the file's path relative to that LICENSES.md (fnmatch), or the file name
+appears in the row. Rules: every row needs a licence name; SFX rows must be CC0/public domain and name a source (URL or
+"generated in-house"/script); other rows need a source URL, or an owner/user-supplied statement; CC-BY rows must carry
+a credit/attribution text."""
+import fnmatch, re, sys
 from pathlib import Path
 
 root = Path(sys.argv[1] if len(sys.argv) > 1 else ".")
 SKIP = {"LICENSES.md", "README.md", ".gitkeep"}
+LIC = re.compile(r"CC0|CC[- ]BY|MIT|OFL|Apache|public domain|own work|owned by|supplied by", re.I)
 problems = []
 for base in (root / "assets", root / "worker" / "assets"):
     if not base.is_dir():
         continue
     for f in sorted(p for p in base.rglob("*") if p.is_file() and p.name not in SKIP):
         rel = f.relative_to(root)
-        docs = [d / "LICENSES.md" for d in [f.parent, *f.parents] if (d / "LICENSES.md").is_file() and base in [d, *d.parents]]
-        if not docs:
-            problems.append(f"{rel}: no LICENSES.md in its folder chain")
+        row = None
+        for d in [f.parent, *f.parents]:
+            lic = d / "LICENSES.md"
+            if base not in [d, *d.parents] or not lic.is_file():
+                continue
+            r = f.relative_to(d).as_posix()
+            for ln in lic.read_text().splitlines():
+                if not ln.startswith("|"):
+                    continue
+                names = re.findall(r"`([^`]+)`", ln)
+                if any(fnmatch.fnmatch(r, n) or r == n for n in names) or (not names and f.name in ln):
+                    row = ln
+                    break
+            if row:
+                break
+        if not row:
+            problems.append(f"{rel}: not covered by any LICENSES.md row")
             continue
-        entry = next((ln for d in docs for ln in d.read_text().splitlines() if f.name in ln), None)
-        if not entry:
-            problems.append(f"{rel}: not listed in {docs[0].relative_to(root)}")
-            continue
-        supplied = re.search(r"supplied by|owned by|own work|not for redistribution", entry, re.I)   # user/owner-supplied files: a statement replaces URL + licence
-        if not re.search(r"https?://", entry) and not (supplied and "sfx" not in f.parts):
-            problems.append(f"{rel}: entry has no source URL")
-        if "sfx" in f.parts and not re.search(r"CC0|public domain", entry, re.I):
-            problems.append(f"{rel}: SFX entry is not CC0")
-        if not re.search(r"CC0|CC[- ]BY|MIT|OFL|Apache|public domain|own work", entry, re.I) and not (supplied and "sfx" not in f.parts):
-            problems.append(f"{rel}: entry names no licence")
+        sfx = "sfx" in f.parts
+        supplied = re.search(r"supplied by|owned by|own work|not for redistribution", row, re.I)
+        if not LIC.search(row):
+            problems.append(f"{rel}: row names no licence")
+        if sfx and not re.search(r"CC0|public domain", row, re.I):
+            problems.append(f"{rel}: SFX row is not CC0")
+        if sfx and not (re.search(r"https?://", row) or re.search(r"in-house|generated|scripts/", row, re.I)):
+            problems.append(f"{rel}: SFX row names no source")
+        if not sfx and not re.search(r"https?://", row) and not supplied:
+            problems.append(f"{rel}: row has no source URL")
+        if re.search(r"CC[- ]BY", row, re.I) and not re.search(r"©|credit|attribution|by Twemoji", row, re.I):
+            problems.append(f"{rel}: CC-BY row has no attribution text")
 print("\n".join(problems) or "all assets have a license entry")
 sys.exit(1 if problems else 0)
