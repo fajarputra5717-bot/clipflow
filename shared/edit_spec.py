@@ -401,15 +401,49 @@ def normalize_director(value, clip_duration=None):
         if iid in seen:
             continue
         seen.add(iid)
-        params = it.get("params") if isinstance(it.get("params"), dict) else {}
-        if len(json.dumps(params)) > 300:
-            raise ValueError("director item params too large")
+        params = _director_params(it.get("params"))
         source = it.get("source") if it.get("source") in DIRECTOR_SOURCES else "user"
         items.append({"id": iid, "t": t, "effect": effect, "params": params,
                       "reason": str(it.get("reason") or "")[:120], "source": source, "on": bool(it.get("on", True))})
     items.sort(key=lambda i: i["t"])
     return {"version": int(value.get("version") or 1), "generated_at": str(value.get("generated_at") or "")[:40],
             "provider": str(value.get("provider") or "")[:40], "vision": bool(value.get("vision")), "items": items}
+
+
+_PARAM_RANGES = {"hold": (0.2, 2.0), "dur": (0.3, 3.0), "factor": (0.5, 1.0)}
+
+
+def _director_params(value):
+    """Known keys only (QA b85de37 Low): sfx ∈ bundled SFX, emoji ∈ bundled emoji, numbers in range; else ValueError."""
+    from shared import edit_director
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise ValueError("director item params must be an object")
+    out = {}
+    for k, v in value.items():
+        if k == "sfx":
+            if v in (None, ""):
+                continue
+            if v not in edit_director.SFX:
+                raise ValueError(f"Unknown sound {str(v)[:30]!r}")
+            out[k] = v
+        elif k == "emoji":
+            if v not in edit_director.EMOJI:
+                raise ValueError(f"Unknown emoji {str(v)[:30]!r}")
+            out[k] = v
+        elif k in _PARAM_RANGES:
+            try:
+                x = float(v)
+            except (TypeError, ValueError):
+                raise ValueError(f"director item {k} must be a number")
+            lo, hi = _PARAM_RANGES[k]
+            if not lo <= x <= hi:
+                raise ValueError(f"director item {k} must be {lo:g}–{hi:g}")
+            out[k] = x
+        else:
+            raise ValueError(f"Unknown director item param {str(k)[:30]!r}")
+    return out
 
 
 def director_of(spec):

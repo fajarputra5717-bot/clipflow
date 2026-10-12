@@ -101,6 +101,11 @@ class OutputTimeAndManualMarkers(unittest.TestCase):
 
 
 class Normalize(unittest.TestCase):
+    def test_params_kept_when_valid(self):
+        v = S.normalize_director({"items": [{"t": 1, "effect": "emoji", "params": {"emoji": "💀", "sfx": "ding"}},
+                                            {"t": 5, "effect": "freeze", "params": {"hold": "0.8", "sfx": ""}}]}, 10)
+        self.assertEqual([i["params"] for i in v["items"]], [{"emoji": "💀", "sfx": "ding"}, {"hold": 0.8}])
+
     def test_round_trip_and_rules(self):
         v = S.normalize_director({"provider": "gemini", "vision": 1, "items": [
             {"t": 5.123, "effect": "punch", "reason": "r", "source": "transcript", "on": False},
@@ -111,7 +116,10 @@ class Normalize(unittest.TestCase):
         self.assertTrue(v["vision"])
         self.assertIsNone(S.normalize_director(None))
         for bad in ("x", {"items": "x"}, {"items": [{"t": 1, "effect": "Bad Effect"}]},
-                    {"items": [{"t": "a", "effect": "punch"}]}, {"items": [{"t": 1, "effect": "punch", "params": {"p": "x" * 400}}]}):
+                    {"items": [{"t": "a", "effect": "punch"}]}, {"items": [{"t": 1, "effect": "punch", "params": {"p": "x" * 400}}]},
+                    {"items": [{"t": 1, "effect": "punch", "params": {"sfx": "laugh"}}]},
+                    {"items": [{"t": 1, "effect": "emoji", "params": {"emoji": "<script>"}}]},
+                    {"items": [{"t": 1, "effect": "freeze", "params": {"hold": 9}}]}):
             with self.assertRaises(ValueError):
                 S.normalize_director(bad, 10)
 
