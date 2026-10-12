@@ -1,0 +1,12 @@
+# lane-b 7fc6a5a · Auto Edit E2 (motion + time effects) · Lane C · 2026-10-13
+Staging = 7fc6a5a. Own data only: lane-c-a job b0a4ed97, three clips: A 0a5548a8 (36 s, cuts 8.42-10.26/23.66-24.02, compression + Loud & punchy), B 5d905d89 (55 s, no cuts), C 23855acf (36 s, cut 11-12). Effects set through PUT /plan {id, effect, params}: A freeze (1.18, hold 0.6), slowmo (15.72, 1.2 s ×0.5), shake; B push (11.0), zoom_out (15.3), flash (39.1), shake; C whip (12.1, at the end of the cut), shake. Unit tests/test_motion 8, test_edit_director 12, test_retention 26 OK (test_render_steps needs the worker dir on the path: my harness, not a bug).
+Previews (30-43 s renders; A 34 s vs 30 s for the same clip before E2 time effects):
+- Worker logs per clip: "motion from the plan: shake" / "flash, push, shake, zoom_out" / "shake, whip"; A "Cuts: 3 segments, 36.0 s -> 35.6 s + light compression + time effects (freeze, slowmo)". File durations 35.60 / 55.02 / 35.01 s = 36 - cuts + freeze 0.6 + slow-mo 1.2 (A), 55.0 (B), 35.0 (C): editor output_seconds 35.6 matches the file.
+- Frames (max 3 per clip + one at a cut): A freeze 1.5 s (caption held, partial karaoke fill), slow-mo 15.9 s ("BIAR APA LO" filled, "KAYA" starting: matches the source word time 16.43 s under ×0.5), shake 30.5 s, post-cut 9.5 s ("MIRA APA?" in sync); B push 11.7 s, zoom_out 15.4 s, flash 39.12 s; C shake 7.7 s, whip at the seam 11.05 s, shake 29.4 s. Captions and the campaign watermark are never covered or off-canvas; time effects are applied after captions burn so karaoke stretches/holds with the picture (sync by construction).
+- LUFS/TP (ebur128 on the preview files): A -14.6 / -1.7, B -14.5 / -1.3, C -14.2 / -1.2 dBTP: all ≤ -1 dBTP, within 0.6 LU of -14 with freeze/slow-mo/whip.
+No High/Medium found. Low:
+1. Low · a plan can start with a punch at t = 0.0 (clip B "punch-0"): a zoom on the first frame is invisible/jarring; keep the first 0.3-0.5 s clear.
+2. Low · the generated plan never proposed a whip at a cut seam on my two clips with cuts (restraint drops the seam item when another item is within 3 s); whip only appears when the user sets it on an item at a seam.
+3. Low (visual) · flash peak whitens the whole frame including the baked-in source overlays; the watermark stays but loses contrast for those frames: expected for a flash, say so in the picker.
+Not verified: FINAL render with these effects (Lane B reports 2d79eef6 final -14.0 / -1.2 and 10 peak frames), picker UI visually, rule-check length with time effects through the Review clip API, SFX (E3).
+Merge: OK.
