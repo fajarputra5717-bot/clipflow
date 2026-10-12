@@ -10,3 +10,10 @@
   preview and 1080x1920 final frames: footage graded with vignette, emoji full colour, captions yellow/green, watermark
   white. Final -14.3 LUFS / -5.3 dBTP. Unit: test_overlays_sfx Look (2). UI: editor.spec "E4 look".
 - Also in this round: plan params validated (5d8cdde, QA b85de37 Low): unknown sfx/emoji/param or out-of-range → 400.
+
+## QA 7b9854f Lows
+- Render cost: `colorbalance` works in RGB (two colour-space conversions per frame). Looks are now YUV-only (`eq` +
+  `lutyuv` chroma shifts). Timing on 20 s of preview footage, 2 CPUs (staging worker limit), x264 veryfast: no look 2.3 s;
+  vivid 8.3 → 3.7 s, warm 7.1 → 2.6 s, moody 7.0 → 2.5 s; vignette + grain together 4.0 s. Finals (1080x1920) scale
+  the same way: expect roughly +10–60 % of the encode time for a look, most with Vivid Gaming (unsharp) and grain.
+- Warm was barely visible: now a clear amber chroma shift (u −5, v +6) with saturation 1.12; blacks stay near black.
