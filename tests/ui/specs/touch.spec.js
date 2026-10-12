@@ -43,6 +43,10 @@ async function seed(app, api) {
     days: [...Array(7)].map((_, i) => ({ date: key(new Date(Date.now() + i * 864e5)), posts: i ? [] : [{ id: "pl-1", candidate_id: "cand-a", job_id: "job-done",
       title: "Lompatan GILA", platform: "tiktok", platform_name: "TikTok", account_handle: "imeclips", status: "planned", campaign_name: "IME Roleplay",
       has_thumbnail: false, eligible: true, overdue: false, render: { state: "ready", label: "Final ready" }, scheduled_for: new Date(Date.now() + 2 * 3600e3).toISOString() }] })) };
+  api.autoImport = { interval_min: 15, min_minutes: 5, campaigns: [{ slug: "fandra-octo", name: "Fandra Octo", status: "Active", status_code: "active", can_watch: true,
+    channels: [{ channel: "https://www.youtube.com/@fandraocto", label: "@fandraocto", content: "livestreams", watched: true, line: "checked 4 min ago", error: null }] }],
+    imports: [{ id: "i1", title: "Stream", url: "u", campaign_name: "Fandra Octo", channel: "@fandraocto", duration_fmt: "3:12:40", when_fmt: "12 Oct, 09:12",
+      status: "imported", label: "Ready for review", badge: "attention", job_id: "job-done" }] };
   const f = (body) => (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
   await app.route(/\/api\/review\/filter$/, f({ campaign: "ime-roleplay", job: "all", status: "to_review" }));
   await app.route(/\/api\/review\/clips\?/, f({ header: { kind: "campaign", title: "IME Roleplay X Motion Klip", status: { text: "Week 2 · 6 days left", ended: false }, to_review: 3 },
@@ -53,6 +57,7 @@ async function seed(app, api) {
 }
 const STEPS = [
   ["1-campaign", (a) => a.evaluate(() => window.showTab("campaign"))],
+  ["2-import", (a) => a.evaluate(() => { location.hash = "#import"; })],
   ["3-analyze", (a) => a.evaluate(() => window.showTab("current"))],
   ["4-review", (a) => a.evaluate(() => { location.hash = "#review"; })],
   ["5-editor", (a) => a.evaluate(() => { location.hash = "#editor/job-done/cand-a"; })],
@@ -64,20 +69,21 @@ const STEPS = [
 
 async function smallTargets(app) {
   return app.evaluate(() => {
-    const hit = (e) => {
-      const r = e.getBoundingClientRect(); let h = r.height;
+    const hit = (e) => {   // [height, width] incl. absolutely positioned ::before/::after hit areas
+      const r = e.getBoundingClientRect(); let h = r.height, w = r.width;
       for (const p of ["::before", "::after"]) {
         const cs = getComputedStyle(e, p);
         if (cs.content === "none" || cs.position !== "absolute") continue;
-        const top = parseFloat(cs.top) || 0, bottom = parseFloat(cs.bottom) || 0;
-        h = Math.max(h, r.height - Math.min(0, top) - Math.min(0, bottom));
+        const n = (v) => Math.min(0, parseFloat(v) || 0);
+        h = Math.max(h, r.height - n(cs.top) - n(cs.bottom));
+        w = Math.max(w, r.width - n(cs.left) - n(cs.right));
       }
-      return h;
+      return [h, w];
     };
     const vis = (e) => { const cs = getComputedStyle(e); return e.offsetParent && cs.visibility !== "hidden" && !e.closest("[inert],#island,.acct-menu:not(.open),.sheet-layer:not(.open),.job-overlay:not(.open)"); };
-    return [...document.querySelectorAll("button,a[href],summary,select,[role=switch],[role=tab]")].filter(vis)
-      .filter((e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.bottom > 0 && hit(e) < 43.5; })
-      .map((e) => `${e.tagName.toLowerCase()}.${[...e.classList].join(".")} ${Math.round(e.getBoundingClientRect().height)}px "${(e.textContent || e.getAttribute("aria-label") || "").trim().slice(0, 20)}"`);
+    return [...document.querySelectorAll("button,a[href],summary,select,[role=switch],[role=tab],[role=slider]")].filter(vis)
+      .filter((e) => { const r = e.getBoundingClientRect(); const [h, w] = hit(e); return r.width > 0 && r.bottom > 0 && (h < 43.5 || w < 43.5); })
+      .map((e) => `${e.tagName.toLowerCase()}.${[...e.classList].join(".")} ${Math.round(e.getBoundingClientRect().width)}x${Math.round(e.getBoundingClientRect().height)} "${(e.textContent || e.getAttribute("aria-label") || "").trim().slice(0, 20)}"`);
   });
 }
 test("phone: every control on every page has a ≥ 44 px touch target", async ({ app, api }) => {

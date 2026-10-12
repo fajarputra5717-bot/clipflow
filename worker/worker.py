@@ -26,7 +26,7 @@ from faster_whisper import WhisperModel
 from psycopg.rows import dict_row
 
 from shared.ai import router as ai_router
-from shared import campaigns, descriptions, ytdlp, edit_spec as edit_specs, languages, posts as post_rules, retention, rule_checks
+from shared import auto_import, campaigns, descriptions, source_watch, ytdlp, edit_spec as edit_specs, languages, posts as post_rules, retention, rule_checks
 from shared.errors import FAILURE_TRANSIENT, failure_class
 from shared.fonts import caption_font_bold, normalize_caption_font
 from shared.settings import RuntimeSettings
@@ -8022,6 +8022,7 @@ def main():
             maybe_run_sweeps()
             if not sender_is_separate():
                 maybe_queue_reminders()
+            maybe_check_sources()
 
             time.sleep(
                 2
@@ -8098,6 +8099,135 @@ def maybe_queue_reminders():
     if time.time() - _last_reminder_pass >= 30:
         _last_reminder_pass = time.time()
         queue_due_reminders()
+
+
+# ============================================================
+# AUTO-IMPORT CHECKS (183, P3 part 7) — shared/auto_import.py. One check per watched channel per
+# AUTO_IMPORT_INTERVAL_MIN (source_channels queue, shared by every user watching it); each new video becomes a
+# source_imports row per user (found / skipped + reason). The backend's import loop turns `found` into jobs.
+# ============================================================
+
+SOURCE_CLAIM_STALE_MIN = 15      # a check never takes this long (2 yt-dlp listings, 120 s timeout each)
+_last_source_pass = 0.0
+
+
+def claim_source_channel():
+    with db() as conn:
+        row = conn.execute(
+            """
+            UPDATE source_channels SET status = 'checking', claimed_at = NOW()
+            WHERE channel = (
+                SELECT sc.channel FROM source_channels sc
+                WHERE ((sc.status = 'idle' AND sc.next_check_at <= NOW())
+                       OR (sc.status = 'checking' AND sc.claimed_at < NOW() - make_interval(mins => %s)))
+                  AND EXISTS (SELECT 1 FROM source_watches w WHERE w.channel = sc.channel AND w.enabled)
+                ORDER BY sc.next_check_at
+                FOR UPDATE SKIP LOCKED LIMIT 1)
+            RETURNING channel, last_ok_at
+            """,
+            (SOURCE_CLAIM_STALE_MIN,),
+        ).fetchone()
+        conn.commit()
+    return row
+
+
+def record_source_items(channel, items, now, stale):
+    """Per user watching `channel`: the first of their watches (campaigns) that accepts a video imports it; if none
+    does, the video is recorded as skipped with the first watch's reason. UNIQUE (user_id, url) = dedupe."""
+    if not items:
+        return 0
+    min_seconds = max(0, setting_int("AUTO_IMPORT_MIN_MINUTES", 5) or 0) * 60
+    added = 0
+    with db() as conn:
+        watches = conn.execute(
+            "SELECT id, user_id, campaign, enabled_at FROM source_watches WHERE channel = %s AND enabled "
+            "ORDER BY enabled_at",
+            (channel,),
+        ).fetchall()
+        by_user = {}
+        for w in watches:
+            by_user.setdefault(w["user_id"], []).append(w)
+        for user_id, user_watches in by_user.items():
+            for it in items:
+                pick, reason = None, None
+                for w in user_watches:
+                    rules = campaigns.get(w["campaign"])
+                    if not rules:
+                        continue
+                    why = auto_import.skip_reason(it, rules, enabled_at=w["enabled_at"], now=now,
+                                                  min_seconds=min_seconds, stale=stale)
+                    if why is None:
+                        pick, reason = w, None
+                        break
+                    if pick is None:
+                        pick, reason = w, why
+                if pick is None:
+                    continue
+                dur = it.get("duration")
+                cur = conn.execute(
+                    """
+                    INSERT INTO source_imports (user_id, watch_id, campaign, channel, video_id, url, title, duration,
+                                                published_at, status, reason)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (user_id, url) DO NOTHING
+                    """,
+                    (user_id, pick["id"], pick["campaign"], channel, it["video_id"], it["url"], it.get("title") or None,
+                     int(round(dur)) if isinstance(dur, (int, float)) else None,
+                     auto_import.parse_time(it.get("published_at")), "skipped" if reason else "found", reason),
+                )
+                added += cur.rowcount
+        conn.commit()
+    return added
+
+
+def process_source_channel(row):
+    channel = row["channel"]
+    now = datetime.now(timezone.utc)
+    stale = row["last_ok_at"] is None or now - row["last_ok_at"] > auto_import.STALE_AFTER
+    ok, error, found = False, None, None
+    try:
+        ensure_disk_space("auto-import")   # R-14: postpone (nothing is marked seen) rather than import into a full disk
+        items = source_watch.check_channel(channel, setting)
+        ok = True
+        found = record_source_items(channel, items, now, stale)
+        log(f"Auto-import: {channel} → {len(items)} new, {found} recorded")
+    except DiskSpaceError:
+        error = "Low disk space: check postponed"
+    except source_watch.SourceWatchError as exc:
+        error = str(exc)[:300]
+    except Exception as exc:
+        error = f"Check failed: {str(exc)[:250]}"
+    if error:
+        log(f"Auto-import: {channel}: {error}")
+    try:
+        interval = max(5, setting_int("AUTO_IMPORT_INTERVAL_MIN", 15) or 15)
+    except Exception:
+        interval = 15
+    with db() as conn:
+        conn.execute(
+            """
+            UPDATE source_channels SET status = 'idle', claimed_at = NULL, last_checked_at = NOW(),
+                last_ok_at = CASE WHEN %s THEN NOW() ELSE last_ok_at END, last_error = %s,
+                last_found = COALESCE(%s, last_found), next_check_at = NOW() + make_interval(mins => %s)
+            WHERE channel = %s
+            """,
+            (ok, error, found, interval, channel),
+        )
+        conn.commit()
+
+
+def maybe_check_sources():
+    """Idle housekeeping: at most one channel check per 30 s, lowest priority (renders + analysis come first)."""
+    global _last_source_pass
+    if time.time() - _last_source_pass < 30:
+        return
+    _last_source_pass = time.time()
+    try:
+        row = claim_source_channel()
+    except psycopg.errors.UndefinedTable:
+        return   # the backend hasn't migrated yet (183)
+    if row:
+        process_source_channel(row)
 
 
 if __name__ == "__main__":

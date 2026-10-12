@@ -11,3 +11,6 @@
   ::before/::after hit areas; fails if the Editor mock can't render); overlays.spec: Settings/Watermarks sheets fit
   390 when opened from the account menu (Lane C Low). The tour's editor mock gained thumbnail/watermark/export.
   UI 194 passed.
+- Follow-up: touch.spec also checks WIDTH ≥ 44 px (and `[role=slider]`); icon-only summaries/back links get
+  `min-width`, the 18 px trim handles an invisible 44 px-wide ::after. schedule-view reminders test picks posts by
+  id (after 22:00 WIB the +2 h post lands on tomorrow and the index order flipped). UI 194 passed.

@@ -167,6 +167,12 @@ async function mockApi(page, api) {
       if (m && m[2]) return route.fulfill({ status: 200, contentType: "image/png", body: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=", "base64") });
       if (m && method === "GET") { const d = (api.campaignDetail || {})[m[1]]; return d ? json(d) : json({ detail: "Campaign not found" }, 404); }
       if (m && method === "PUT") { const d = (api.campaignDetail || {})[m[1]]; Object.assign(d, body, body.paused != null ? { status: { ...d.status, code: body.paused ? "paused" : "active", label: body.paused ? "Paused" : "Active" } } : {}); return json(d); } }
+    if (path === "/api/auto-import" && method === "GET") return json(api.autoImport || { interval_min: 15, min_minutes: 5, campaigns: [], imports: [] });   // 183
+    if (path === "/api/auto-import/watch" && method === "PUT") {
+      const b = body || {}, d = api.autoImport || { campaigns: [], imports: [] };
+      for (const c of d.campaigns) if (c.slug === b.campaign) for (const ch of c.channels) if (ch.channel === b.channel) Object.assign(ch, { watched: b.enabled, line: b.enabled ? "first check soon" : "not watched" });
+      return json(d);
+    }
     if (path === "/api/track" && method === "GET") return json(api.track || { tiles: { posts: 0 }, campaigns: [], platforms: [], top: [], skipped_currencies: [] });   // 181
     if (path === "/api/schedule" && method === "GET") return json(api.schedule || { overdue: [], days: [], posting_times: {} });   // P2.5 S3
     { const m = path.match(/^\/api\/jobs\/([^/]+)\/candidates\/([^/]+)\/(schedule-plan|schedule)$/);   // P2.5 S2 mocks
