@@ -461,7 +461,9 @@ planned post: `reminded_at` set in the queueing transaction; > 1 h late = `misse
   `GET /api/activity` → `{items:[{kind, id, job_id, candidate_id, stage, percent, label, title}]}` is the
   one feed; a new background task kind adds its rows there (and keeps `status/progress/message` on its row),
   never a new progress UI. The island merges it in `allActiveTasks()` (polled by `refreshRunningJobs()`). Jobs appear only for statuses in
-  `JOB_RUNNING` (allow-list); `percent: null` = indeterminate (spinning ring, no %); feed errors keep the last
+  `JOB_RUNNING` (allow-list); `percent: null` = indeterminate (185: ONE mark per task — indeterminate = lead spinner,
+  no ring/bar/%; a percent = ring + bar, lead = thumbnail or static dot; compact line = `islandLine()` "<verb> <subject>",
+  verbs in `islandVerb()`/`ISL_VERB` by activity kind/status — a new kind adds its verb there); feed errors keep the last
   state and back off (102).
 - **Card-level progress (P0):** Import job-card bars and Publish queue row progress become small island-style
   capsules (same shape/colours/motion); the island stays the only global progress indicator.
