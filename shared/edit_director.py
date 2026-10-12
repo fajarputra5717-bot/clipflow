@@ -21,6 +21,7 @@ from shared.retention import TimeMap
 VERSION = 1
 MIN_GAP = 3.0             # s between two effects ("max ~1 effect per 3 s")
 END_GUARD = 0.5           # s: no effect starting this close to the end
+START_GUARD = 0.5         # s: nor in the first half second of the output (QA 7fc6a5a Low: punch at 0.0)
 MAX_MOMENTS = 8
 MAX_ITEMS = 12
 FRAME_COUNT = 6
@@ -39,8 +40,9 @@ TIME_EFFECTS = ("freeze", "slowmo")                                         # cu
 EFFECTS = MOTION_EFFECTS + TIME_EFFECTS + ("emoji",)                        # what a plan item may be switched to
 RENDERED_EFFECTS = set(MOTION_EFFECTS) | set(TIME_EFFECTS)                  # E2; emoji arrives with E3
 ARRIVES_IN = {"emoji": "E3"}
-# Higher wins when two candidates are closer than MIN_GAP.
-PRIORITY = {"transcript": 3, "vision": 2, "audio": 1, "cut": 1}
+# Higher wins when two candidates are closer than MIN_GAP. A seam the user cut on purpose outranks a vision
+# guess and a loudness peak (QA 7fc6a5a Low: whips were never proposed next to another candidate).
+PRIORITY = {"transcript": 3, "cut": 2.5, "vision": 2, "audio": 1}
 
 MOMENTS_SCHEMA = {
     "type": "object",
@@ -182,7 +184,7 @@ def plan(*, duration: float, moments: Sequence[dict] = (), loud: Sequence[float]
         if _blocked(t, duration=duration, removed=removed, trim=trim):
             continue
         o = out(t)
-        if o < card_seconds or o >= out_end - END_GUARD:
+        if o < max(card_seconds, START_GUARD) or o >= out_end - END_GUARD:
             continue
         if any(abs(o - x) < min_gap for x in occupied):
             continue

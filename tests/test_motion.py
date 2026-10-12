@@ -54,6 +54,17 @@ class Warps(unittest.TestCase):
         self.assertEqual(g.count("acrossfade"), 1)
 
 
+class RestraintLows(unittest.TestCase):
+    """QA 7fc6a5a Lows: nothing in the first 0.5 s; a cut seam beats a nearby vision/audio candidate."""
+    def test_no_effect_at_zero(self):
+        self.assertEqual(D.plan(duration=20, moments=[{"t": 0.0, "kind": "hook", "text": "a"}]), [])
+
+    def test_seam_beats_vision_and_loud(self):
+        items = D.plan(duration=20, moments=[{"t": 9.0, "kind": "reaction", "text": "face"}], loud=[11.0],
+                       cuts=D.cut_points([[8.0, 10.0]]), removed=[[8.0, 10.0]], keep=[[0, 8], [10, 20]])
+        self.assertEqual([(i["t"], i["effect"]) for i in items], [(10.0, "whip")])
+
+
 class Director(unittest.TestCase):
     plan = {"items": [{"t": 2, "effect": "freeze", "on": True}, {"t": 6, "effect": "slowmo", "on": True, "params": {"factor": 0.75}},
                       {"t": 5, "effect": "whip", "on": True}, {"t": 1, "effect": "shake", "on": False}, {"t": 8, "effect": "emoji", "on": True}]}

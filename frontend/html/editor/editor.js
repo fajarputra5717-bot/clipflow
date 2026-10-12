@@ -327,7 +327,7 @@
           <div class="ed-plan-row ${i.on ? "" : "is-off"}"><span class="ed-plan-t">${i.t.toFixed(1)} s</span>
             <span class="ed-plan-fx fx-${esc(i.effect)}" aria-hidden="true">${esc(fxGlyph(i))}</span>
             <span class="ed-plan-what"><select class="ed-plan-sel" data-ed-plan-fx="${esc(i.id)}" aria-label="Effect at ${i.t.toFixed(1)} s">${(d.effects || [i.effect]).map((x) =>
-              `<option value="${esc(x)}" ${x === i.effect ? "selected" : ""}>${esc(fxName(x))}</option>`).join("")}</select><span class="ed-hint">${esc(i.reason)}${esc(later(i))}</span></span>
+              `<option value="${esc(x)}" ${x === i.effect ? "selected" : ""}>${esc(fxName(x))}</option>`).join("")}</select><span class="ed-hint">${esc(i.reason)}${esc(later(i))}${i.effect === "flash" ? " · also lightens the watermark for 0.2 s" : ""}</span></span>
             ${sw(`data-ed-plan-item="${esc(i.id)}"`, i.on, `${fxName(i.effect)} at ${i.t.toFixed(1)} s`)}</div>`).join("")}</div>` : ""}
       </div>`;
   }
