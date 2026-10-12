@@ -11,12 +11,18 @@ function editorState(over = {}) {
     cuts: { trim: null, removed: [], output_seconds: 6, suggest_min_gap: 0.6, pad: 0.12 },
     zoom: { on: true, intensity: 50, markers: [], max_markers: 40 },
     progress: { on: false, color: "#FFD60A", colors: ["#FFD60A", "#FFFFFF", "#FF453A", "#0A84FF"] },
-    audio: { compress: false, silence_trim: false, silence_ranges: [], loudness: { lufs: -14, true_peak_dbtp: -1, always_on: true } },
+    audio: { compress: false, loud: false, silence_trim: false, silence_ranges: [], loudness: { lufs: -14, true_peak_dbtp: -1, always_on: true } },
     captions: CAPTIONS(),
     thumbnail: { options: [0, 1, 2].map((i) => ({ index: i, url: `/api/jobs/job-done/candidates/cand-a/thumbnail-options/${i}` })),
                  picked: null, locked: false, current_url: "/api/jobs/job-done/candidates/cand-a/thumbnail", generating: false },
     watermark: { width: 320, opacity: 1, custom: false },
     export: { burn: true, description: "", submagic: { status: null, preview_url: null, error: null } },
+    director: { items: [], rendered: ["emoji", "flash", "freeze", "punch", "push", "shake", "slowmo", "whip", "zoom_out"], arrives_in: {}, min_gap: 3, frames_ready: false,
+      effects: ["punch", "push", "zoom_out", "shake", "flash", "whip", "freeze", "slowmo", "emoji"], defaults: { emoji: { emoji: "😂" }, freeze: { hold: 0.6 }, slowmo: { dur: 1.2, factor: 0.5 } },
+      sfx: ["whoosh", "boom", "bass_hit", "ding", "record_scratch"], emoji: ["😂", "😭", "💀"] },
+    look: { preset: "none", vignette: false, grain: false, presets: ["none", "vivid_gaming", "warm", "moody"] },
+    pack: { id: "podcast_clean", name: "Podcast Clean", from_campaign: true, options: [{ id: "gaming_hype", name: "Gaming Hype", min_gap: 3 },
+      { id: "funny_meme", name: "Funny / Meme", min_gap: 3 }, { id: "drama_tension", name: "Drama / Tension", min_gap: 5 }, { id: "podcast_clean", name: "Podcast Clean", min_gap: 6 }] },
     ...over,
   };
 }
@@ -50,7 +56,7 @@ async function mockEditor(page, api, timeline = TIMELINE) {
   api.editor = editorState();
   await page.route(/\/api\/jobs\/[^/]+\/candidates\/[^/]+\/editor\/timeline/, (route) =>
     route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(timeline) }));
-  await page.route(/\/api\/jobs\/[^/]+\/candidates\/[^/]+\/editor(\/hook-title|\/cuts|\/zoom|\/progress|\/audio)?(\?.*)?$/, async (route) => {
+  await page.route(/\/api\/jobs\/[^/]+\/candidates\/[^/]+\/editor(\/hook-title|\/cuts|\/zoom|\/progress|\/audio|\/plan|\/look|\/pack)?(\?.*)?$/, async (route) => {
     const req = route.request();
     if (req.method() === "PUT") {
       const body = req.postDataJSON(), path = new URL(req.url()).pathname;
@@ -59,7 +65,21 @@ async function mockEditor(page, api, timeline = TIMELINE) {
       else if (path.endsWith("/zoom")) api.editor.zoom = { ...api.editor.zoom, ...body };
       else if (path.endsWith("/progress")) api.editor.progress = { ...api.editor.progress, ...body };
       else if (path.endsWith("/audio")) api.editor.audio = { ...api.editor.audio, ...body };
+      else if (path.endsWith("/plan")) api.editor.director = { ...api.editor.director, items: body.items };
+      else if (path.endsWith("/look")) api.editor.look = { ...api.editor.look, ...body };
       else api.editor.hook_title = { ...api.editor.hook_title, ...body };
+    }
+    if (req.method() === "POST" && new URL(req.url()).pathname.endsWith("/pack")) {   // Auto Edit E5
+      const body = req.postDataJSON();
+      api.calls.push({ method: "POST", path: new URL(req.url()).pathname, body });
+      api.editor.pack = { ...api.editor.pack, id: body.pack, name: "Gaming Hype", from_campaign: false };
+      api.editor.look = { ...api.editor.look, preset: "vivid_gaming" };
+    }
+    if (req.method() === "POST" && new URL(req.url()).pathname.endsWith("/plan")) {   // Auto Edit E1
+      api.calls.push({ method: "POST", path: new URL(req.url()).pathname });
+      api.editor.director = { ...api.editor.director, vision: true, provider: "gemini", items: [
+        { id: "punch-50", t: 0.5, effect: "punch", params: {}, reason: "punchline: kekuatan", source: "transcript", on: true },
+        { id: "shake-350", t: 3.5, effect: "shake", params: {}, reason: "loud: loudness peak", source: "audio", on: true }] };
     }
     return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(api.editor) });
   });
@@ -438,5 +458,94 @@ test.describe("Deep links after reload", () => {
     await app.reload();
     await expect(app.locator(".ed-title")).toHaveText("First mock clip");
     expect(await app.evaluate(() => location.hash)).toBe("#editor/job-done/cand-a");
+  });
+});
+
+// Auto Edit E1: Generate plan → list + timeline markers; toggling saves the items (PUT /plan).
+test.describe("Editor Auto edit plan", () => {
+  test.use({ reducedMotion: "reduce" });
+  test("generate, see markers, toggle one off from the timeline", async ({ app, api }) => {
+    await mockEditor(app, api);
+    await app.evaluate(() => { location.hash = "#editor/job-done/cand-a"; });
+    await app.locator('[data-ed-tab="effects"]').click();
+    await app.locator("[data-ed-plan-gen]").click();
+    await expect(app.locator(".ed-plan-row")).toHaveCount(2);
+    await expect(app.locator(".ed-plan-row").nth(1)).not.toContainText("arrives in");   // E2: shake renders
+    await expect(app.locator(".ed-plan-mark")).toHaveCount(2);
+    await expect(app.locator("[data-ed-plan-gen]")).toHaveText("Regenerate plan");
+    await app.locator('.ed-plan-mark[data-ed-plan-item="punch-50"]').click();
+    await expect(app.locator('.ed-plan-mark[data-ed-plan-item="punch-50"]')).toHaveAttribute("aria-pressed", "false");
+    await expect(app.locator('.ed-switch[data-ed-plan-item="punch-50"]')).toHaveAttribute("aria-checked", "false");
+    await expect.poll(() => api.calls.filter((c) => c.method === "PUT" && c.path.endsWith("/plan")).pop()?.body.items.map((i) => i.on))
+      .toEqual([false, true]);
+  });
+});
+
+// Auto Edit E2: switch an item's effect (motion / time); a freeze adds its hold to the output length.
+test.describe("Editor Auto edit E2 effects", () => {
+  test.use({ reducedMotion: "reduce" });
+  test("change an item to Freeze frame: PUT carries the effect + default params, output grows", async ({ app, api }) => {
+    await mockEditor(app, api);
+    await app.evaluate(() => { location.hash = "#editor/job-done/cand-a"; });
+    await app.locator('[data-ed-tab="effects"]').click();
+    await app.locator("[data-ed-plan-gen]").click();
+    await expect(app.locator(".ed-plan-row")).toHaveCount(2);
+    await app.locator('[data-ed-plan-fx="shake-350"]').selectOption("freeze");
+    await expect.poll(() => api.calls.filter((c) => c.method === "PUT" && c.path.endsWith("/plan")).pop()?.body.items.find((i) => i.id === "shake-350"))
+      .toMatchObject({ effect: "freeze", params: { hold: 0.6 } });
+    await expect(app.locator('.ed-plan-mark[data-ed-plan-item="shake-350"]')).toHaveClass(/fx-freeze/);
+    await expect(app.locator("#edOut")).toContainText("6.6");                 // 6 s clip + 0.6 s hold
+  });
+});
+
+// Auto Edit E3: a sound per item and an emoji per emoji item (params.sfx / params.emoji).
+test.describe("Editor Auto edit E3 sound + emoji", () => {
+  test.use({ reducedMotion: "reduce" });
+  test("pick a sound, switch to emoji and pick 💀: PUT carries the params", async ({ app, api }) => {
+    await mockEditor(app, api);
+    await app.evaluate(() => { location.hash = "#editor/job-done/cand-a"; });
+    await app.locator('[data-ed-tab="effects"]').click();
+    await app.locator("[data-ed-plan-gen]").click();
+    await app.locator('[data-ed-plan-sfx="punch-50"]').selectOption("boom");
+    await expect.poll(() => api.calls.filter((c) => c.method === "PUT" && c.path.endsWith("/plan")).pop()?.body.items.find((i) => i.id === "punch-50")?.params)
+      .toEqual({ sfx: "boom" });
+    await app.locator('[data-ed-plan-fx="shake-350"]').selectOption("emoji");
+    await app.locator('[data-ed-plan-emoji="shake-350"]').selectOption("💀");
+    await expect.poll(() => api.calls.filter((c) => c.method === "PUT" && c.path.endsWith("/plan")).pop()?.body.items.find((i) => i.id === "shake-350")?.params)
+      .toEqual({ emoji: "💀" });
+  });
+});
+
+// Auto Edit E4: Look = colour preset chips + vignette + grain switches (PUT /look).
+test.describe("Editor Auto edit E4 look", () => {
+  test.use({ reducedMotion: "reduce" });
+  test("pick Moody and vignette: PUT /look", async ({ app, api }) => {
+    await mockEditor(app, api);
+    await app.evaluate(() => { location.hash = "#editor/job-done/cand-a"; });
+    await app.locator('[data-ed-tab="effects"]').click();
+    await app.locator('[data-ed-look-preset="moody"]').click();
+    await app.locator("[data-ed-look-vignette]").click();
+    await expect(app.locator('[data-ed-look-preset="moody"]')).toHaveAttribute("aria-pressed", "true");
+    await expect.poll(() => api.calls.filter((c) => c.method === "PUT" && c.path.endsWith("/look")).pop()?.body)
+      .toEqual({ preset: "moody", vignette: true, grain: false });
+  });
+});
+
+// Auto Edit E5: style pack chips (campaign default tagged); applying one is a two-tap action, then the editor reloads.
+test.describe("Editor Auto edit E5 style pack", () => {
+  test.use({ reducedMotion: "reduce" });
+  test("campaign default shown; Gaming Hype applies after a second tap and stays on Effects", async ({ app, api }) => {
+    await mockEditor(app, api);
+    await app.evaluate(() => { location.hash = "#editor/job-done/cand-a"; });
+    await app.locator('[data-ed-tab="effects"]').click();
+    await expect(app.locator('[data-ed-pack="podcast_clean"]')).toHaveAttribute("aria-pressed", "true");
+    await expect(app.locator(".ed-panel .tag")).toHaveText("from campaign");
+    await app.locator('[data-ed-pack="gaming_hype"]').click();
+    expect(api.calls.some((c) => c.path && c.path.endsWith("/pack"))).toBe(false);          // first tap only arms
+    await app.locator('[data-ed-pack="gaming_hype"]').click();
+    await expect.poll(() => api.calls.find((c) => c.method === "POST" && c.path.endsWith("/pack"))?.body).toEqual({ pack: "gaming_hype" });
+    await expect(app.locator('[data-ed-pack="gaming_hype"]')).toHaveAttribute("aria-pressed", "true");
+    await expect(app.locator('[data-ed-tab="effects"]')).toHaveAttribute("aria-selected", "true");
+    await expect(app.locator('[data-ed-look-preset="vivid_gaming"]')).toHaveAttribute("aria-pressed", "true");
   });
 });

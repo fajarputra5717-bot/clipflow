@@ -38,15 +38,16 @@ def _clip_length(c):
 
 
 def _duration(c):
-    """The length that gets posted: the clip minus the editor's cuts (P4 task 3, edit_spec.cuts)."""
+    """The length that gets posted: the clip minus the editor's cuts (P4 task 3, edit_spec.cuts), plus the time
+    the Auto Edit plan's freeze frames / slow-mo add (E2)."""
+    from shared import edit_director
     clip = _clip_length(c)
-    cuts = edit_specs.cuts_of(c.get("edit_spec") if isinstance(c.get("edit_spec"), dict) else None)
-    if not cuts or not clip:
+    spec = c.get("edit_spec") if isinstance(c.get("edit_spec"), dict) else None
+    if not clip:
         return clip
-    a, b = cuts.get("trim") or [0.0, clip]
-    b = min(float(b), clip)
-    removed = sum(max(0.0, min(e, b) - max(s, a)) for s, e in cuts.get("removed") or [])
-    return max(0.0, (b - float(a)) - removed)
+    keep = edit_director.keep_of(spec, clip)
+    base = sum(e - s for s, e in keep)
+    return max(0.0, base + edit_director.time_extra(edit_specs.director_of(spec), keep))
 
 
 def hashtags_ok(description, required):

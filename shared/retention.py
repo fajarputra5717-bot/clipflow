@@ -358,6 +358,256 @@ def zoom_filter(windows: Sequence[Segment], *, width: int = 1080, height: int = 
             f"crop={width}:{height}:'(iw-ow)*{_f(cx)}':'(ih-oh)*{_f(cy)}',setsar=1")
 
 
+# --------------------------------------------------------------------------- (d) motion effects (Auto Edit E2)
+# Visual, time-preserving effects in SOURCE time, rendered in the zoom stage (after the layout, BEFORE the
+# watermark and captions: text never zooms, shakes, blurs or flashes). One scale + one crop + optional blur/eq.
+PUSH_DUR, PUSH_OUT, PUSH_PEAK = 2.5, 0.3, 0.08      # slow push-in: ease in over 2.5 s, release in 0.3 s
+ZOOMOUT_DUR, ZOOMOUT_PEAK = 0.8, 0.18               # starts zoomed in, pulls back to 1.0 over 0.8 s
+SHAKE_DUR, SHAKE_AMP, SHAKE_Z = 0.5, 0.012, 0.04    # camera shake: amplitude as a share of the frame, decays
+FLASH_DUR, FLASH_PEAK = 0.2, 0.55                   # white flash (eq brightness), fades over 0.2 s
+WHIP_DUR, WHIP_SHIFT, WHIP_Z, WHIP_BLUR = 0.15, 0.035, 0.08, 31   # per side of the seam
+MOTION_KINDS = ("punch", "push", "zoom_out", "shake", "flash", "whip")
+
+
+def _sm(x: str) -> str:
+    """smoothstep of an expression already clipped to 0..1."""
+    return f"({x})*({x})*(3-2*({x}))"
+
+
+def _clip01(x: str) -> str:
+    return f"clip({x},0,1)"
+
+
+def _win(s: float, e: float) -> str:
+    return f"between(t,{_f(s)},{_f(e)})"
+
+
+def motion_filter(events: Sequence[tuple], *, width: int = 1080, height: int = 1920, punch_peak: float = ZOOM_PEAK,
+                  duration: Optional[float] = None, center: tuple[float, float] = (0.5, 0.5)) -> Optional[str]:
+    """events = [(kind, t)] or [(kind, t, out_start)] for whip (out_start = where the outgoing side ends, i.e. the
+    cut's start; default t). Source seconds. Returns the chain for a width x height input, or None."""
+    ev = [e for e in events if e and e[0] in MOTION_KINDS]
+    if not ev:
+        return None
+    dur = duration if duration is not None else math.inf
+    zt, xt, yt, blur, flash = [], [], [], [], []
+    punches = [e[1] for e in ev if e[0] == "punch"]
+    if punches and punch_peak > 1.0:
+        wins = plan_zoom_windows(punches, dur)
+        zt.append(f"({zoom_expr(wins, peak=punch_peak)}-1)")   # registers 0/1 are the punch sum only
+    for e in ev:
+        kind, t = e[0], float(e[1])
+        if kind == "push":
+            u = _clip01(f"(t-{_f(t)})/{_f(PUSH_DUR)}")
+            rel = _clip01(f"({_f(t + PUSH_DUR + PUSH_OUT)}-t)/{_f(PUSH_OUT)}")
+            zt.append(f"{_f(PUSH_PEAK)}*{_sm(u)}*{rel}*{_win(t, t + PUSH_DUR + PUSH_OUT)}")
+        elif kind == "zoom_out":
+            u = _clip01(f"(t-{_f(t)})/{_f(ZOOMOUT_DUR)}")
+            zt.append(f"{_f(ZOOMOUT_PEAK)}*(1-{_sm(u)})*{_win(t, t + ZOOMOUT_DUR)}")
+        elif kind == "shake":
+            w = _win(t, t + SHAKE_DUR)
+            decay = f"(1-(t-{_f(t)})/{_f(SHAKE_DUR)})"
+            zt.append(f"{_f(SHAKE_Z)}*{w}")
+            xt.append(f"{_f(SHAKE_AMP)}*iw*sin(2*PI*13*(t-{_f(t)}))*{decay}*{w}")
+            yt.append(f"{_f(SHAKE_AMP)}*ih*sin(2*PI*9*(t-{_f(t)})+1)*{decay}*{w}")
+        elif kind == "flash":
+            flash.append(f"{_f(FLASH_PEAK)}*(1-(t-{_f(t)})/{_f(FLASH_DUR)})*{_win(t, t + FLASH_DUR)}")
+        elif kind == "whip":
+            a = float(e[2]) if len(e) > 2 and e[2] is not None else t      # outgoing side ends at a, incoming starts at t
+            o0, i1 = max(0.0, a - WHIP_DUR), t + WHIP_DUR
+            zt.append(f"{_f(WHIP_Z)}*({_win(o0, a)}+{_win(t, i1)})")
+            xt.append(f"{_f(WHIP_SHIFT)}*iw*({_sm(_clip01(f'(t-{_f(o0)})/{_f(WHIP_DUR)}'))}*{_win(o0, a)}"
+                      f"-(1-{_sm(_clip01(f'(t-{_f(t)})/{_f(WHIP_DUR)}'))})*{_win(t, i1)})")
+            blur.append(f"between(t,{_f(o0)},{_f(a)})+between(t,{_f(t)},{_f(i1)})")
+    if not (zt or xt or yt or blur or flash):
+        return None                       # e.g. punches only, at intensity 0
+    z = "1" + "".join(f"+{x}" for x in zt)
+    cx, cy = center
+    dx = "+".join(xt) if xt else "0"
+    dy = "+".join(yt) if yt else "0"
+    chain = (f"scale=w='trunc(iw*({z})/2)*2':h=-2:eval=frame:flags=bicubic,"
+             f"crop={width}:{height}:'clip((iw-ow)*{_f(cx)}+({dx}),0,iw-ow)':'clip((ih-oh)*{_f(cy)}+({dy}),0,ih-oh)',setsar=1")
+    if blur:
+        chain += f",avgblur=sizeX={WHIP_BLUR}:sizeY=1:enable='{'+'.join(blur)}'"
+    if flash:
+        chain += f",eq=brightness='{'+'.join(flash)}':eval=frame"
+    return chain
+
+
+# --------------------------------------------------------------------------- (e) time warps (Auto Edit E2)
+# Freeze frame and slow-mo change the timeline: they run in the cut stage (AFTER captions are burned, so burned
+# captions stretch/hold with the video and stay in sync). pieces = [(s, e, speed, hold)] in source seconds.
+FREEZE_HOLD = 0.6            # s the frame is held (audio: silence; E3 adds a record scratch)
+SLOWMO_DUR, SLOWMO_FACTOR = 1.2, 0.5   # source seconds slowed, playback speed
+
+
+def warp_pieces(keep: Sequence[Segment], warps: Sequence[tuple]) -> list[list]:
+    """Split keep segments at warp points. warps = [("freeze", t, hold) | ("slowmo", t, dur, factor)].
+    A warp outside the kept time is ignored; slow-mo windows are clipped to their segment."""
+    pieces = [[float(s), float(e), 1.0, 0.0] for s, e in keep]
+    for w in sorted(warps, key=lambda w: w[1]):
+        kind, t = w[0], float(w[1])
+        for i, (s, e, sp, hold) in enumerate(pieces):
+            if not (s <= t < e) or sp != 1.0:
+                continue
+            if kind == "freeze":
+                hold_s = float(w[2]) if len(w) > 2 else FREEZE_HOLD
+                new = [[s, t, 1.0, hold_s], [t, e, 1.0, hold]] if t > s + 0.04 else [[s, e, 1.0, hold]]
+                if t <= s + 0.04:          # freeze at the very start of a piece: hold its first frame instead
+                    new = [[s, s + 0.04, 1.0, hold_s], [s + 0.04, e, 1.0, hold]]
+            else:
+                d = float(w[2]) if len(w) > 2 else SLOWMO_DUR
+                f = max(0.5, min(1.0, float(w[3]) if len(w) > 3 else SLOWMO_FACTOR))
+                t1 = min(e, t + d)
+                new = ([[s, t, 1.0, 0.0]] if t > s + 0.04 else []) + [[t, t1, f, 0.0 if t1 < e else hold]] + \
+                      ([[t1, e, 1.0, hold]] if t1 < e else [])
+            pieces[i:i + 1] = [p for p in new if p[1] - p[0] > 0.001]
+            break
+    return pieces
+
+
+def pieces_output_seconds(pieces: Sequence[Sequence[float]]) -> float:
+    return sum((e - s) / sp + hold for s, e, sp, hold in pieces)
+
+
+def warp_graph(keep: Sequence[Segment], pieces: Sequence[Sequence[float]], *, v_in: str = "0:v", a_in: str = "0:a",
+               v_out: str = "vtrim", a_out: str = "atrim", crossfade: float = CUT_CROSSFADE,
+               duration: Optional[float] = None) -> str:
+    """Like silence_trim_graph, plus speed changes and frame holds inside the kept segments. Audio across CUTS
+    keeps the equal-power crossfade; pieces inside one segment join hard (they are contiguous in the source)."""
+    n, m = len(keep), len(pieces)
+    if m == 0:
+        raise ValueError("nothing to keep")
+    seg_of = []
+    for s, e, *_ in pieces:
+        seg_of.append(next(i for i, (a, b) in enumerate(keep) if a - 1e-6 <= s and e <= b + 1e-6))
+    parts = [f"[{v_in}]split={m}" + "".join(f"[pv{j}]" for j in range(m)),
+             f"[{a_in}]asplit={m}" + "".join(f"[pa{j}]" for j in range(m))]
+    h = min([crossfade / 2] + [(b - a) / 2 for a, b in keep]) if crossfade > 0 and n > 1 else 0.0
+    hi = duration if duration is not None else math.inf
+    for j, (s, e, sp, hold) in enumerate(pieces):
+        v = f"[pv{j}]trim=start={_f(s)}:end={_f(e)},setpts=(PTS-STARTPTS)/{_f(sp)}"
+        if hold > 0:
+            v += f",tpad=stop_mode=clone:stop_duration={_f(hold)}"
+        parts.append(v + f"[v{j}]")
+        i = seg_of[j]
+        first = j == 0 or seg_of[j - 1] != i
+        last = j == m - 1 or seg_of[j + 1] != i
+        a0 = s - h if (first and i > 0) else s
+        a1 = min(e + h, hi) if (last and i < n - 1) else e
+        a = f"[pa{j}]atrim=start={_f(max(0.0, a0))}:end={_f(a1)},asetpts=PTS-STARTPTS"
+        if sp != 1.0:
+            a += f",atempo={_f(sp)}"
+        if hold > 0:
+            a += f",apad=pad_dur={_f(hold)}"
+        parts.append(a + f"[a{j}]")
+    parts.append("".join(f"[v{j}]" for j in range(m)) + f"concat=n={m}:v=1:a=0[{v_out}]")
+    segs = []
+    for i in range(n):
+        js = [j for j in range(m) if seg_of[j] == i]
+        if not js:
+            continue
+        if len(js) == 1:
+            segs.append(f"a{js[0]}")
+        else:
+            parts.append("".join(f"[a{j}]" for j in js) + f"concat=n={len(js)}:v=0:a=1[as{i}]")
+            segs.append(f"as{i}")
+    if len(segs) == 1:
+        parts.append(f"[{segs[0]}]anull[{a_out}]")
+    elif h <= 0:
+        parts.append("".join(f"[{x}]" for x in segs) + f"concat=n={len(segs)}:v=0:a=1[{a_out}]")
+    else:
+        prev = segs[0]
+        for k in range(1, len(segs)):
+            out = a_out if k == len(segs) - 1 else f"wx{k}"
+            parts.append(f"[{prev}][{segs[k]}]acrossfade=d={_f(2 * h)}:c1=qsin:c2=qsin[{out}]")
+            prev = out
+    return ";".join(parts)
+
+
+# --------------------------------------------------------------------------- (f) emoji pops + SFX (Auto Edit E3)
+EMOJI_SIZE = 0.20            # emoji width as a share of the frame width
+EMOJI_POP, EMOJI_SETTLE, EMOJI_FADE = 0.12, 0.10, 0.20   # s: grow to 115 %, settle to 100 %, fade out
+EMOJI_Y = 0.42               # centre height: below the watermark band, above the caption band
+EMOJI_X = {"right": 0.72, "left": 0.28}
+SFX_GAIN = 0.8               # SFX bus level before ducking (linear)
+
+
+def emoji_filters(last: str, events: Sequence[tuple], asset_dir: str, *, width: int = 1080, height: int = 1920,
+                  dur: float = 1.4, fps: int = 30) -> tuple[list[str], str]:
+    """Filter chunks (each ends with ';') overlaying PNG emoji pops in SOURCE time on [last]; returns (chunks, label).
+    events = [(t, code, side)]. Drawn in the zoom stage, i.e. under the watermark and captions (never covers them).
+    The emoji stream is a looped still (movie source), trimmed to its window, scaled per frame for the pop."""
+    chunks, cur = [], last
+    size = max(2, int(round(width * EMOJI_SIZE / 2)) * 2)
+    for k, (t, code, side) in enumerate(events):
+        t0, t1 = float(t), float(t) + dur
+        grow = f"min(1,(t-{_f(t0)})/{_f(EMOJI_POP)})"
+        settle = f"clip((t-{_f(t0 + EMOJI_POP)})/{_f(EMOJI_SETTLE)},0,1)"
+        sc = f"max(0.05,if(lt(t,{_f(t0 + EMOJI_POP)}),1.15*{grow},1.15-0.15*{settle}))"
+        path = f"{asset_dir.rstrip('/')}/{code}.png"
+        chunks.append(f"movie='{path}',loop=loop=-1:size=1:start=0,setpts=N/{fps}/TB,format=rgba,"
+                      f"trim=start={_f(t0)}:end={_f(t1)},"
+                      f"scale=w='trunc({size}*{sc}/2)*2':h=-2:eval=frame,"
+                      f"fade=t=out:st={_f(t1 - EMOJI_FADE)}:d={_f(EMOJI_FADE)}:alpha=1[em{k}];")
+        cx = EMOJI_X.get(side, EMOJI_X["right"])
+        out = f"emo{k}"
+        chunks.append(f"[{cur}][em{k}]overlay=x='{_f(cx)}*W-w/2':y='{_f(EMOJI_Y)}*H-h/2':eof_action=pass:eval=frame[{out}];")
+        cur = out
+    return chunks, cur
+
+
+def sfx_mix_cmd(src: str, dst: str, events: Sequence[tuple], asset_dir: str, *, audio_bitrate: str = "192k") -> Optional[list]:
+    """ffmpeg argv: video copied, SFX (events = [(output seconds, name)]) mixed UNDER the speech: the SFX bus is
+    side-chain compressed by the speech (ducking), then added to it. Output length = the speech's. Loudnorm runs
+    after this (always the last audio step). None when there is nothing to mix."""
+    if not events:
+        return None
+    argv = ["ffmpeg", "-hide_banner", "-nostats", "-y", "-i", src]
+    for _t, name in events:
+        argv += ["-i", f"{asset_dir.rstrip('/')}/{name}.wav"]
+    parts = []
+    for k, (t, _name) in enumerate(events, start=1):
+        ms = int(round(max(0.0, float(t)) * 1000))
+        parts.append(f"[{k}:a]aformat=sample_rates=48000:channel_layouts=stereo,adelay={ms}|{ms},volume={_f(SFX_GAIN)}[s{k}]")
+    n = len(events)
+    fx = "s1" if n == 1 else "fx"
+    if n > 1:
+        parts.append("".join(f"[s{k}]" for k in range(1, n + 1)) + f"amix=inputs={n}:normalize=0:duration=longest[fx]")
+    parts.append("[0:a]aformat=sample_rates=48000:channel_layouts=stereo,asplit=2[sp][key]")
+    parts.append(f"[{fx}][key]sidechaincompress=threshold=0.03:ratio=8:attack=5:release=250[fxd]")
+    parts.append("[sp][fxd]amix=inputs=2:normalize=0:duration=first[aout]")
+    argv += ["-filter_complex", ";".join(parts), "-map", "0:v", "-map", "[aout]", "-c:v", "copy",
+             "-c:a", "aac", "-b:a", audio_bitrate, "-ar", "48000", "-movflags", "+faststart", dst]
+    return argv
+
+
+# --------------------------------------------------------------------------- (g) look (Auto Edit E4)
+# Colour grade + vignette + grain on the FOOTAGE only: zoom stage, after the motion, before emoji/watermark/captions
+# (caption colours and the watermark stay exact). ffmpeg eq + lutyuv chroma shifts (no LUT files to license).
+LOOKS = {   # YUV-only filters (QA 7b9854f Low: RGB colorbalance cost ~+60 % render time; these ~+10–60 %)
+    "vivid_gaming": "eq=saturation=1.35:contrast=1.08:gamma=0.98,lutyuv=u='val+3',unsharp=5:5:0.4",
+    "warm": "eq=saturation=1.12,lutyuv=u='val-5':v='val+6'",          # chroma toward amber, clearly visible
+    "moody": "eq=contrast=1.12:brightness=-0.03:saturation=0.82,lutyuv=u='val+6':v='val-2'",
+}
+VIGNETTE = "vignette=angle=PI/5"
+GRAIN = "noise=alls=6:allf=t"
+
+
+def look_filter(look: Optional[dict]) -> Optional[str]:
+    """{preset: none|vivid_gaming|warm|moody, vignette, grain} → filter chain, or None for a neutral look."""
+    if not look:
+        return None
+    parts = []
+    if look.get("preset") in LOOKS:
+        parts.append(LOOKS[look["preset"]])
+    if look.get("vignette"):
+        parts.append(VIGNETTE)
+    if look.get("grain"):
+        parts.append(GRAIN)
+    return ",".join(parts) or None
+
+
 # --------------------------------------------------------------------------- (b) loudnorm
 
 def loudnorm_measure_cmd(src: str, *, i: float = LOUDNORM_I, tp: float = LOUDNORM_TP,
@@ -416,6 +666,20 @@ def gain_filter(gain_db: float, *, tp: float = LOUDNORM_TP, out_rate: int = 4800
     limit = _f(round(10 ** ((tp - codec_headroom_db) / 20), 4))
     return (f"volume={_f(round(gain_db, 2))}dB,alimiter=limit={limit}:attack=1:release=50:level=0,"
             f"aresample={out_rate},aformat=channel_layouts=mono|stereo")
+
+
+PUNCH_LEVEL_LUFS = -20.0    # Loud & punchy: bring the clip here before the compressor (its threshold is absolute)
+PUNCH_LIMIT_DBFS = -6.0     # then a fast limiter: with the +6 dB make-up this is ≈ 6 dB of peak reduction at most
+
+
+def punch_filter(input_i: float) -> str:
+    """Loud & punchy pre-chain (per clip, opt-in): level to PUNCH_LEVEL_LUFS, fast 4:1 compressor with +6 dB
+    make-up, limiter at PUNCH_LIMIT_DBFS. Lowers the peak-to-loudness ratio so the normalising pass (always
+    last) can reach -14 LUFS under the -1 dBTP ceiling on quiet, peaky sources."""
+    gain = max(-10.0, min(24.0, PUNCH_LEVEL_LUFS - float(input_i)))
+    limit = _f(round(10 ** (PUNCH_LIMIT_DBFS / 20), 4))
+    return (f"volume={_f(round(gain, 2))}dB,acompressor=threshold=0.1:ratio=4:attack=1:release=120:knee=4:makeup=2,"
+            f"alimiter=limit={limit}:attack=1:release=60:level=0")
 
 
 def ebur128_measure_cmd(src: str) -> FFmpegStep:

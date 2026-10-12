@@ -28,6 +28,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from shared import caption_options
+from shared import edit_director
+from shared import style_packs
 from shared import edit_spec as edit_specs
 from shared import fonts
 from shared import languages
@@ -118,12 +120,16 @@ def _state(c: dict) -> dict:
                  **(edit_specs.zoom_of(spec) or {}), "max_markers": edit_specs.ZOOM_MAX_MARKERS},
         "progress": {"on": False, "color": edit_specs.PROGRESS_COLORS[0], **((spec or {}).get("progress") or {}),
                      "colors": list(edit_specs.PROGRESS_COLORS)},
-        "audio": {"compress": False, "silence_trim": False, "silence_ranges": [], **edit_specs.audio_of(spec),
+        "audio": {"compress": False, "loud": False, "silence_trim": False, "silence_ranges": [], **edit_specs.audio_of(spec),
                   "loudness": {"lufs": -14.0, "true_peak_dbtp": -1.0, "always_on": True}},
         "captions": _captions_state(c, spec),
         "thumbnail": _thumbnail_state(c),
         "watermark": _watermark_state(c),
         "export": _export_state(c),
+        "director": _director_state(spec, c),
+        "pack": _pack_state(spec, c),
+        "look": {"preset": "none", "vignette": False, "grain": False, **(edit_specs.look_of(spec) or {}),
+                 "presets": list(edit_specs.LOOK_PRESETS)},
         "hook_title": {
             "on": bool(ht.get("on", False)), "text": ht.get("text", ""),
             "duration": ht.get("duration", edit_specs.HOOK_TITLE_DEFAULT_DURATION),
@@ -193,12 +199,33 @@ def _export_state(c: dict) -> dict:
                          "error": c.get("submagic_error")}}
 
 
+def _pack_state(spec: dict, c: dict) -> dict:
+    """E5: the clip's style pack (its own choice or the campaign default) + the four options."""
+    pid, from_campaign = style_packs.resolve(spec, c.get("campaign"))
+    return {"id": pid, "name": style_packs.PACKS[pid]["name"], "from_campaign": from_campaign,
+            "options": style_packs.options()}
+
+
+def _director_state(spec: dict, c: dict) -> dict:
+    """Auto Edit E1: the plan (empty until generated) + which effects render today. frames_ready = the current
+    preview has sampled frames (a plan made before them has vision false: the UI suggests regenerating)."""
+    d = edit_specs.director_of(spec) or {"items": []}
+    frames_ready = (_core().DATA_ROOT / "previews" / f"{c['id']}.frame-0.jpg").is_file()
+    return {**d, "rendered": sorted(edit_director.RENDERED_EFFECTS), "arrives_in": edit_director.ARRIVES_IN,
+            "min_gap": style_packs.PACKS[style_packs.resolve(spec, c.get("campaign"))[0]]["min_gap"],
+            "frames_ready": frames_ready,
+            "effects": list(edit_director.EFFECTS), "defaults": edit_director.PARAMS_FOR,
+            "sfx": list(edit_director.SFX), "emoji": list(edit_director.EMOJI)}
+
+
 def _cuts_state(spec: dict, duration) -> dict:
     cuts = edit_specs.cuts_of(spec) or {}
     d = float(duration or 0)
     trim = cuts.get("trim") or [0.0, d]
     removed = cuts.get("removed") or []
     out = (trim[1] - trim[0]) - sum(e - s for s, e in removed)
+    if d:   # E2: freeze frames / slow-mo of the plan lengthen the output
+        out += edit_director.time_extra(edit_specs.director_of(spec), edit_director.keep_of(spec, d))
     return {"trim": cuts.get("trim"), "removed": removed, "output_seconds": round(max(0.0, out), 2),
             "suggest_min_gap": 0.6, "pad": 0.12}
 
@@ -361,8 +388,25 @@ def put_progress(job_id: str, candidate_id: str, body: ProgressIn, user: dict = 
     return _save_spec_key(job_id, candidate_id, user, "progress", value)
 
 
+class LookIn(BaseModel):
+    preset: str = "none"
+    vignette: bool = False
+    grain: bool = False
+
+
+@editor.put("/look")
+def put_look(job_id: str, candidate_id: str, body: LookIn, user: dict = Depends(get_current_user)):
+    """Auto Edit E4: colour preset + vignette + grain for this clip (footage only, previews and finals)."""
+    try:
+        value = edit_specs.normalize_look(body.model_dump())
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return _save_spec_key(job_id, candidate_id, user, "look", value)
+
+
 class AudioIn(BaseModel):
     compress: bool = False
+    loud: bool = False
     silence_trim: bool = False
     silence_ranges: list[list[float]] = []
 
@@ -528,6 +572,7 @@ def review_clips(campaign: str = "all", job: str = "all", status: str = "to_revi
             rules_cache[slug] = (rules, payouts.model_from_rules(rules) if rules else None)
         rules, model = rules_cache[slug]
         c["rule_checks"] = rule_checks.check(rules, c) if rules else []
+        c["output_seconds"] = round(rule_checks._duration(c), 2)      # cuts + Auto Edit time effects (E2)
         c.update(campaign_status_mod.clip_labels(rules, posts.get(c["id"], []), now))   # 162: earn + expired
         c.update(campaign=slug, job_title=jtitle or "Untitled video", job_date=jdate.isoformat() if jdate else None,
                  job_status=jstatus, updated_at=c["updated_at"].isoformat() if c["updated_at"] else None,
@@ -557,6 +602,160 @@ def environment():
     return {"env": os.getenv("CLIPFLOW_ENV") or "production"}
 
 
+# --------------------------------------------------------------------------- Auto Edit E1: edit plan
+
+def _plan_inputs(c: dict, user: dict):
+    """Words/peaks/frames from the preview's timeline cache + this clip's cuts and hook card window."""
+    core = _core()
+    spec = c["edit_spec"] if isinstance(c["edit_spec"], dict) else {}
+    duration = float(c["duration_seconds"] or ((c["end_time"] or 0) - (c["start_time"] or 0)) or 0)
+    previews = core.DATA_ROOT / "previews"
+    cached = timelines.read_cache(timelines.cache_path(previews, c["id"]), c["preview_path"]) or {}
+    cuts = edit_specs.cuts_of(spec) or {}
+    trim = cuts.get("trim")
+    removed = cuts.get("removed") or []
+    ht = edit_specs.hook_title_of(spec) or {}
+    card = float(ht.get("duration") or edit_specs.HOOK_TITLE_DEFAULT_DURATION) if ht.get("on") else 0.0
+    frames = []
+    vision_on = str(core.runtime_setting("EDIT_DIRECTOR_VISION", user_id=user["id"]) or "true").lower() not in (
+        "false", "0", "no", "off")
+    if vision_on:
+        for f in (cached.get("frames") or [])[: edit_director.FRAME_COUNT]:
+            path = previews / str(f.get("file", ""))
+            if path.parent == previews and path.name.startswith(c["id"]) and path.is_file():
+                try:
+                    frames.append((float(f["t"]), path.read_bytes()))
+                except (OSError, KeyError, TypeError, ValueError):
+                    pass
+    return duration, cached, removed, trim, card, frames
+
+
+@editor.post("/plan")
+def generate_plan(job_id: str, candidate_id: str, user: dict = Depends(get_current_user)):
+    """Generate / regenerate the edit plan (one utility-AI call, + frames when available). Replaces the plan.
+    E5: the clip's style pack decides which moments get which effects + sounds and the density."""
+    from datetime import datetime, timezone
+    from shared.ai import router as ai_router
+    from shared.errors import AIError, AINotConfiguredError
+    core = _core()
+    with core.get_db() as conn, conn.cursor() as cur:
+        c = _load(cur, job_id, candidate_id, user)
+    duration, cached, removed, trim, card, frames = _plan_inputs(c, user)
+    if duration <= 0:
+        raise HTTPException(status_code=409, detail="This clip has no duration yet")
+    words = cached.get("words") or []
+    if not words:
+        raise HTTPException(status_code=409, detail="Render a preview first: the plan reads its transcript and audio")
+    prompt = edit_director.moments_prompt(words, duration, frame_times=[t for t, _ in frames],
+                                          title=(c["manual_title"] or c["title"] or c["ai_title"] or ""))
+    try:
+        data, meta = ai_router.ai_generate_json(prompt, edit_director.MOMENTS_SCHEMA, task="edit_moments",
+                                                max_tokens=1200, attempts=1, with_meta=True,
+                                                images=[b for _, b in frames] or None)
+    except AINotConfiguredError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    except AIError as exc:
+        if not frames:
+            raise HTTPException(status_code=502, detail=f"The AI couldn't plan this clip: {str(exc)[:200]}")
+        print(f"[backend] edit plan: vision call failed ({type(exc).__name__}), retrying text-only")
+        frames = []
+        prompt = edit_director.moments_prompt(words, duration, title=(c["manual_title"] or c["title"] or ""))
+        try:
+            data, meta = ai_router.ai_generate_json(prompt, edit_director.MOMENTS_SCHEMA, task="edit_moments",
+                                                    max_tokens=1200, attempts=1, with_meta=True)
+        except AIError as exc2:
+            raise HTTPException(status_code=502, detail=f"The AI couldn't plan this clip: {str(exc2)[:200]}")
+    moments = edit_director.parse_moments(data, duration)
+    spec = c["edit_spec"] if isinstance(c["edit_spec"], dict) else {}
+    z = edit_specs.zoom_of(spec) or {}
+    pack = style_packs.PACKS[style_packs.resolve(spec, c["campaign"])[0]]
+    items = edit_director.plan(            # restraint in OUTPUT seconds; the user's zoom markers count (QA a156a53)
+        mapping=pack["map"], min_gap=pack["min_gap"],
+        duration=duration, moments=moments,
+        loud=edit_director.loudness_peaks(cached.get("peaks"), float(cached.get("rate") or 0)),
+        cuts=edit_director.cut_points(removed), card_seconds=card, removed=removed, trim=trim,
+        keep=_keep({"trim": trim, "removed": removed}, duration) if (trim or removed) else None,
+        taken=(z.get("markers") or []) if z.get("on", True) else [])
+    value = edit_specs.normalize_director({
+        "version": edit_director.VERSION, "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "provider": meta.get("provider"), "vision": bool(frames), "items": items}, duration)
+    return _save_spec_key(job_id, candidate_id, user, "director", value)
+
+
+class PackIn(BaseModel):
+    pack: str
+
+
+@editor.post("/pack")
+def apply_pack(job_id: str, candidate_id: str, body: PackIn, user: dict = Depends(get_current_user)):
+    """E5: apply a style pack to this clip: caption preset + keyword colour, look, progress bar, Loud & punchy, zoom
+    intensity, then a new plan with the pack's mapping (when the preview's transcript exists). All overridable after."""
+    from shared import caption_options
+    p = style_packs.PACKS.get(body.pack)
+    if not p:
+        raise HTTPException(status_code=400, detail=f"Unknown style pack {body.pack[:30]!r}")
+    core = _core()
+    with core.get_db() as conn, conn.cursor() as cur:
+        c = _load(cur, job_id, candidate_id, user)
+    spec = c["edit_spec"] if isinstance(c["edit_spec"], dict) else {}
+    duration = c["duration_seconds"] or ((c["end_time"] or 0) - (c["start_time"] or 0))
+    preset = next(x for x in caption_options.PRESETS if x[0] == p["caption"]["preset"])
+    save = lambda key, value: _save_spec_key(job_id, candidate_id, user, key, value)
+    save("pack", body.pack)
+    save("caption", {"style": preset[2], "animation": preset[3]})
+    if p["caption"].get("keyword_color"):
+        save("keyword_color", p["caption"]["keyword_color"])
+    save("look", edit_specs.normalize_look(p["look"]))
+    prog = edit_specs.progress_of(spec) or {}
+    save("progress", edit_specs.normalize_progress({"on": p["progress"], "color": prog.get("color")}))
+    save("audio", edit_specs.normalize_audio({**edit_specs.audio_of(spec), "loud": p["loud"]}, duration))
+    z = edit_specs.zoom_of(spec) or {}
+    state = save("zoom", edit_specs.normalize_zoom({"on": z.get("on", True), "markers": z.get("markers") or [],
+                                                     "intensity": p["zoom_intensity"]}, duration))
+    try:
+        return generate_plan(job_id, candidate_id, user)
+    except HTTPException as exc:
+        if exc.status_code != 409:          # no preview transcript yet: the pack applies, the plan comes later
+            raise
+        state["pack_note"] = "Pack applied. Render a preview, then Generate plan for its effects."
+        return state
+
+
+class PlanIn(BaseModel):
+    items: list[dict] = []
+
+
+@editor.put("/plan")
+def put_plan(job_id: str, candidate_id: str, body: PlanIn, user: dict = Depends(get_current_user)):
+    """Update plan items by id (items not sent are kept), add user items (t + effect); empty items = clear."""
+    core = _core()
+    with core.get_db() as conn, conn.cursor() as cur:
+        c = _load(cur, job_id, candidate_id, user)
+    spec = c["edit_spec"] if isinstance(c["edit_spec"], dict) else {}
+    duration = c["duration_seconds"] or ((c["end_time"] or 0) - (c["start_time"] or 0))
+    current = edit_specs.director_of(spec) or {}
+    if not body.items:
+        return _save_spec_key(job_id, candidate_id, user, "director", None)
+    by_id = {i["id"]: i for i in current.get("items") or []}
+    added = []
+    for it in body.items:            # by id: {id, on} updates that item, items not sent stay; new ones need t + effect
+        if not isinstance(it, dict):
+            raise HTTPException(status_code=400, detail="plan items must be objects")
+        if it.get("id") in by_id:
+            by_id[it["id"]] = {**by_id[it["id"]], **it}
+        elif "t" in it and "effect" in it:
+            added.append({**it, "source": "user"})
+        else:
+            raise HTTPException(status_code=400, detail=f"Unknown plan item {str(it.get('id'))[:40]!r}")
+    merged = list(by_id.values()) + added
+    try:
+        value = edit_specs.normalize_director({**current, "items": merged}, duration)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return _save_spec_key(job_id, candidate_id, user, "director", value)
+
+
 router.include_router(editor)
 router.include_router(review)
 router.add_api_route("/api/env", environment, methods=["GET"], tags=["meta"])
+

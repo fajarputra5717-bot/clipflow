@@ -48,6 +48,7 @@ def normalize_caption(value, styles, animations):
     return {"style": style, "animation": animation}
 
 
+import json
 import re
 
 KEYWORD_DEFAULT_COLOR = "#FFD60A"
@@ -338,7 +339,7 @@ def progress_of(spec):
 
 
 def normalize_audio(value, clip_duration=None):
-    """{compress, silence_trim, silence_ranges} or None (all off). Ranges are clamped to the clip like cuts
+    """{compress, loud, silence_trim, silence_ranges} or None (all off). loud = "Loud & punchy" (owner 2026-10-12). Ranges are clamped to the clip like cuts
     (0 … clip_duration when known), sorted; empty or inverted ones are dropped (QA 2e3d583 Low)."""
     if value is None:
         return None
@@ -356,11 +357,118 @@ def normalize_audio(value, clip_duration=None):
         if e > s:
             ranges.append([s, e])
     ranges.sort()
-    out = {"compress": bool(value.get("compress", False)), "silence_trim": bool(value.get("silence_trim", False)),
-           "silence_ranges": ranges[:CUTS_MAX_RANGES]}
-    return out if (out["compress"] or out["silence_trim"] or out["silence_ranges"]) else None
+    out = {"compress": bool(value.get("compress", False)), "loud": bool(value.get("loud", False)),
+           "silence_trim": bool(value.get("silence_trim", False)), "silence_ranges": ranges[:CUTS_MAX_RANGES]}
+    return out if (out["compress"] or out["loud"] or out["silence_trim"] or out["silence_ranges"]) else None
 
 
 def audio_of(spec):
     a = (spec or {}).get("audio") if isinstance(spec, dict) else None
     return a if isinstance(a, dict) else {}
+
+
+# ---- Auto Edit E1 (lane B): the edit director's plan, every item toggleable
+
+DIRECTOR_MAX_ITEMS = 40
+DIRECTOR_SOURCES = ("transcript", "vision", "audio", "cut", "user")
+_EFFECT_RE = re.compile(r"^[a-z_]{2,20}$")
+
+
+def normalize_director(value, clip_duration=None):
+    """{version, generated_at, provider, vision, items:[{id, t, effect, params, reason, source, on}]} or None.
+    Unknown effects are kept (a newer plan degrades safely: only known effects render)."""
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        raise ValueError("director must be an object")
+    raw = value.get("items") or []
+    if not isinstance(raw, list) or len(raw) > DIRECTOR_MAX_ITEMS:
+        raise ValueError(f"director.items must be a list of at most {DIRECTOR_MAX_ITEMS}")
+    items, seen = [], set()
+    for it in raw:
+        if not isinstance(it, dict):
+            raise ValueError("director.items must be objects")
+        try:
+            t = round(float(it.get("t")), 2)
+        except (TypeError, ValueError):
+            raise ValueError("director item t must be seconds")
+        if t < 0 or (clip_duration is not None and t >= float(clip_duration)):
+            continue
+        effect = str(it.get("effect") or "")
+        if not _EFFECT_RE.match(effect):
+            raise ValueError("director item effect must be a short lowercase name")
+        iid = str(it.get("id") or f"{effect}-{int(round(t * 100))}")[:40]
+        if iid in seen:
+            continue
+        seen.add(iid)
+        params = _director_params(it.get("params"))
+        source = it.get("source") if it.get("source") in DIRECTOR_SOURCES else "user"
+        items.append({"id": iid, "t": t, "effect": effect, "params": params,
+                      "reason": str(it.get("reason") or "")[:120], "source": source, "on": bool(it.get("on", True))})
+    items.sort(key=lambda i: i["t"])
+    return {"version": int(value.get("version") or 1), "generated_at": str(value.get("generated_at") or "")[:40],
+            "provider": str(value.get("provider") or "")[:40], "vision": bool(value.get("vision")), "items": items}
+
+
+_PARAM_RANGES = {"hold": (0.2, 2.0), "dur": (0.3, 3.0), "factor": (0.5, 1.0)}
+
+
+def _director_params(value):
+    """Known keys only (QA b85de37 Low): sfx ∈ bundled SFX, emoji ∈ bundled emoji, numbers in range; else ValueError."""
+    from shared import edit_director
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise ValueError("director item params must be an object")
+    out = {}
+    for k, v in value.items():
+        if k == "sfx":
+            if v in (None, ""):
+                continue
+            if v not in edit_director.SFX:
+                raise ValueError(f"Unknown sound {str(v)[:30]!r}")
+            out[k] = v
+        elif k == "emoji":
+            if v not in edit_director.EMOJI:
+                raise ValueError(f"Unknown emoji {str(v)[:30]!r}")
+            out[k] = v
+        elif k in _PARAM_RANGES:
+            try:
+                x = float(v)
+            except (TypeError, ValueError):
+                raise ValueError(f"director item {k} must be a number")
+            lo, hi = _PARAM_RANGES[k]
+            if not lo <= x <= hi:
+                raise ValueError(f"director item {k} must be {lo:g}–{hi:g}")
+            out[k] = x
+        else:
+            raise ValueError(f"Unknown director item param {str(k)[:30]!r}")
+    return out
+
+
+def director_of(spec):
+    d = (spec or {}).get("director") if isinstance(spec, dict) else None
+    return d if isinstance(d, dict) else None
+
+
+# ---- Auto Edit E4 (lane B): per-clip look (colour preset, vignette, grain)
+
+LOOK_PRESETS = ("none", "vivid_gaming", "warm", "moody")
+
+
+def normalize_look(value):
+    """{preset, vignette, grain} or None (neutral)."""
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        raise ValueError("look must be an object")
+    preset = value.get("preset") or "none"
+    if preset not in LOOK_PRESETS:
+        raise ValueError(f"Unknown look {str(preset)[:30]!r}")
+    out = {"preset": preset, "vignette": bool(value.get("vignette")), "grain": bool(value.get("grain"))}
+    return None if out == {"preset": "none", "vignette": False, "grain": False} else out
+
+
+def look_of(spec):
+    v = (spec or {}).get("look") if isinstance(spec, dict) else None
+    return v if isinstance(v, dict) else None

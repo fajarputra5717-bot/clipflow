@@ -220,3 +220,16 @@ class GainFilter(unittest.TestCase):
         self.assertTrue(f.startswith("volume=0.84dB,alimiter=limit="))
         self.assertTrue(f.endswith("aresample=48000,aformat=channel_layouts=mono|stereo"))
         self.assertIn("volume=-1.5dB", r.gain_filter(-1.5))
+
+
+class PunchFilter(unittest.TestCase):
+    """Loud & punchy (owner 2026-10-12): level to -20 LUFS, fast compressor +6 dB, limiter at -6 dBFS."""
+    def test_chain(self):
+        f = r.punch_filter(-28.9)
+        self.assertTrue(f.startswith("volume=8.9dB,acompressor="))
+        self.assertIn("makeup=2", f)
+        self.assertIn("alimiter=limit=0.5012", f)
+
+    def test_gain_clamped(self):
+        self.assertTrue(r.punch_filter(-80).startswith("volume=24dB,"))
+        self.assertTrue(r.punch_filter(0).startswith("volume=-10dB,"))

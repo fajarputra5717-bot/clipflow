@@ -254,7 +254,12 @@ watermark in the `applying` step (`apply_watermark_overlay()`).
 `shared/retention.py` (Lane B) = pure ffmpeg argv/filter builders: silence trim + `TimeMap` word re-timing,
 two-pass loudnorm, punch-in zoom. Wired so far: ONLY loudnorm, via `normalize_loudness()` on native finals, Submagic finals and previews
 (091: never fatal; a failure keeps the file and sets a `render_warnings` "loudness" chip). Finals: (−14 LUFS, limiter −1 dBTP minus codec headroom, video stream-copied, verified with
-ebur128 and logged). It is the LAST audio step: any future SFX/music mix goes before it. Silence trim and
+ebur128 and logged). It is the LAST audio step: SFX (`render_steps.mix_sfx`, 193) mix before it.
+Auto Edit render order (191–196): `render_vertical` layout → `zoom_stage` = motion (punch/shake from the plan + manual
+markers) → look → emoji pops, all BEFORE watermark + captions (text never zooms) → `apply_cuts` (freeze/slow-mo warps)
+→ `mix_sfx` → `normalize_loudness` (per-clip `audio.loud` = "Loud & punchy"). Plan = `edit_spec.director`
+(`shared/edit_director.py`); packs = `shared/style_packs.py`. Bundled assets: `worker/assets/LICENSES.md` — SFX CC0 only;
+emoji are Twemoji CC-BY 4.0 (attribution placement on published clips: owner decision pending). Silence trim and
 zoom stay unwired (opt-in later via the Audio/Effects tabs). Cuts change the timeline: re-time
 words/markers with `retention.TimeMap` built from the same keep segments.
 
@@ -291,7 +296,8 @@ throttle (via `updated_at`). `autoRender:false` on upload, explicit
 ## AI calls (R-20)
 
 Every AI call goes through `shared/ai/router.py`
-`ai_generate_json(prompt, schema, *, task, max_tokens)` — worker
+`ai_generate_json(prompt, schema, *, task, max_tokens, images=None)` (191: optional JPEG bytes → Gemini image parts /
+Claude image blocks; Auto Edit's `edit_moments` task sends preview frames while `EDIT_DIRECTOR_VISION` is true) — worker
 (`analyze_hooks`, task `hooks`) and main.py (`new_hook`,
 `subtitle_fix`, `description`). Providers live in `shared/ai/<name>.py`
 and raise only `shared/errors.py` types: `AITransientError`

@@ -24,7 +24,15 @@ def model_for(task, setting):
     return setting("GEMINI_ANALYSIS_MODEL")
 
 
-def generate_json(prompt, schema, *, task, max_tokens, setting):
+def _contents(prompt, images):
+    """Text only, or text + JPEG parts (images = list of bytes)."""
+    if not images:
+        return prompt
+    from google.genai import types
+    return [prompt, *[types.Part.from_bytes(data=b, mime_type="image/jpeg") for b in images]]
+
+
+def generate_json(prompt, schema, *, task, max_tokens, setting, images=None):
     """(data, model, usage). Parsed JSON exactly as Gemini returned it (a list for hooks,
     an object elsewhere). `schema` and `max_tokens` are not sent: the
     baseline used only response_mime_type=application/json and adding
@@ -42,7 +50,7 @@ def generate_json(prompt, schema, *, task, max_tokens, setting):
     try:
         response = client.models.generate_content(
             model=model,
-            contents=prompt,
+            contents=_contents(prompt, images),
             config={"response_mime_type": "application/json"},
         )
         m = response.usage_metadata

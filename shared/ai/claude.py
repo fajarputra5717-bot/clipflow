@@ -82,12 +82,22 @@ def _tool_schema(schema):
     return schema, False
 
 
-def _request(client, model, prompt, tool, max_tokens, forced):
+def _content(text, images):
+    """A plain string, or text + base64 JPEG image blocks (Auto Edit E1 vision)."""
+    if not images:
+        return text
+    import base64
+    return [{"type": "text", "text": text}] + [
+        {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg",
+                                      "data": base64.b64encode(b).decode("ascii")}} for b in images]
+
+
+def _request(client, model, prompt, tool, max_tokens, forced, images=None):
     kwargs = dict(
         model=model,
         max_tokens=max_tokens,
         tools=[tool],
-        messages=[{"role": "user", "content": prompt}],
+        messages=[{"role": "user", "content": _content(prompt, images)}],
     )
     if forced:
         kwargs["tool_choice"] = {"type": "tool", "name": TOOL_NAME}
@@ -95,10 +105,11 @@ def _request(client, model, prompt, tool, max_tokens, forced):
         kwargs["tool_choice"] = {"type": "auto"}
         kwargs["messages"] = [{
             "role": "user",
-            "content": (
+            "content": _content(
                 prompt.rstrip()
                 + f"\n\nReturn your answer by calling the {TOOL_NAME} "
-                "tool exactly once. Do not answer in plain text."
+                "tool exactly once. Do not answer in plain text.",
+                images,
             ),
         }]
     if model.startswith(_FALLBACK_MODELS):
@@ -117,7 +128,7 @@ def _rejects_forced(exc):
     )
 
 
-def generate_json(prompt, schema, *, task, max_tokens, setting):
+def generate_json(prompt, schema, *, task, max_tokens, setting, images=None):
     api_key = setting("ANTHROPIC_API_KEY")
     if not api_key:
         raise AINotConfiguredError(
@@ -146,13 +157,13 @@ def generate_json(prompt, schema, *, task, max_tokens, setting):
         forced = model not in _no_forced_tool_choice
         try:
             response = _request(client, model, prompt, tool, max_tokens,
-                                forced)
+                                forced, images)
         except anthropic.BadRequestError as exc:
             if not (forced and _rejects_forced(exc)):
                 raise
             _no_forced_tool_choice.add(model)
             response = _request(client, model, prompt, tool, max_tokens,
-                                False)
+                                False, images)
     except anthropic.APIConnectionError as exc:
         # Includes APITimeoutError.
         raise AITransientError(str(exc), provider=NAME, cause=exc) from exc

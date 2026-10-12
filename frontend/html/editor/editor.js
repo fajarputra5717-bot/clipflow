@@ -60,7 +60,9 @@
       E.mode = "seek";
       E.zoom = { on: E.state.zoom.on, intensity: E.state.zoom.intensity, markers: E.state.zoom.markers.slice() };
       E.progress = { on: E.state.progress.on, color: E.state.progress.color };
-      E.audio = { compress: E.state.audio.compress, silence_trim: E.state.audio.silence_trim,
+      E.plan = (E.state.director.items || []).map((i) => ({ ...i }));
+      E.look = { preset: E.state.look.preset, vignette: E.state.look.vignette, grain: E.state.look.grain };
+      E.audio = { compress: E.state.audio.compress, loud: !!E.state.audio.loud, silence_trim: E.state.audio.silence_trim,
                   silence_ranges: (E.state.audio.silence_ranges || []).map((r) => r.slice()) };
       loadCaptions();
       render();
@@ -179,6 +181,7 @@
           <canvas class="ed-tl-wave" id="edWave" aria-hidden="true"></canvas>
           <div id="edBands" aria-hidden="true"></div>
           <div class="ed-zoom-lane" id="edZoomLane" aria-label="Zoom punch-ins"></div>
+          <div class="ed-plan-lane" id="edPlanLane" role="group" aria-label="Auto edit plan"></div>
           <div class="ed-tl-words" role="group" aria-label="Words and pauses">${pauses}${words}</div>
           <div class="ed-trim-shade l" id="edShadeL" aria-hidden="true"></div><div class="ed-trim-shade r" id="edShadeR" aria-hidden="true"></div>
           <div class="ed-trim-h" id="edTrimA" role="slider" tabindex="0" aria-label="Clip start" data-ed-trim="a"></div>
@@ -235,7 +238,7 @@
     E.cuts.removed.forEach(([s, e]) => { keep = subtract(keep, s, e); });
     return keep;
   }
-  const outputSeconds = () => plannedKeep().reduce((a, [s, e]) => a + e - s, 0);
+  const outputSeconds = () => plannedKeep().reduce((a, [s, e]) => a + e - s, 0) + planExtra();
   function toggleRange(a, b) {
     E.cuts.removed = covered(a, b) ? subtract(E.cuts.removed, a, b) : merge([...E.cuts.removed, [a, b]]);
     cutsChanged();
@@ -282,6 +285,7 @@
     const out = outputSeconds(), o = $("edOut");
     if (o) o.textContent = `Output ${out.toFixed(1)} s`;
     paintZoom();
+    paintPlan();
     const hint = $("edTlHint");
     if (hint) hint.textContent = E.mode === "zoom" ? `Zoom mode: click the timeline to add a punch-in (max ${E.state.zoom.max_markers}), click a ◆ to remove it.`
       : E.mode === "cut" ? "Cut mode: click a word or pause to cut it, click again to restore. Drag the orange handles to trim."
@@ -298,6 +302,89 @@
       <button type="button" class="ed-zoom-mark" data-ed-zoom-mark="${k}" style="left:${m * PPS}px" title="Punch-in at ${m.toFixed(2)} s · click to remove" aria-label="Zoom punch-in at ${m.toFixed(1)} seconds, remove"></button>`).join("");
     const b = document.querySelector("[data-ed-zoom-add]");
     if (b) b.disabled = E.zoom.markers.length >= E.state.zoom.max_markers;
+  }
+  // ---- Auto Edit E1: the edit director's plan. Source-time items, each toggleable (timeline lane + list).
+  const FX = { punch: ["◆", "Punch zoom"], push: ["↗", "Slow push-in"], zoom_out: ["↙", "Zoom out"], shake: ["≈", "Camera shake"],
+    flash: ["✦", "Flash"], whip: ["»", "Whip transition"], freeze: ["❚❚", "Freeze frame"], slowmo: ["½", "Slow-mo"], emoji: ["☺", "Emoji pop"] };
+  const fxName = (e) => (FX[e] || [null, e])[1];
+  const SFX_NAME = { whoosh: "Whoosh", boom: "Boom", bass_hit: "Bass hit", ding: "Ding", record_scratch: "Record scratch" };
+  const fxGlyph = (i) => (i.effect === "emoji" && i.params && i.params.emoji) || (FX[i.effect] || ["•"])[0];
+  function paintPlan() {
+    const lane = $("edPlanLane"); if (!lane || !E.tl) return;
+    lane.innerHTML = (E.plan || []).map((i) => `<button type="button" class="ed-plan-mark fx-${esc(i.effect)}" data-ed-plan-item="${esc(i.id)}"
+      style="left:${i.t * PPS}px" aria-pressed="${i.on}" title="${esc(`${fxName(i.effect)} at ${i.t.toFixed(1)} s · ${i.reason} · click to turn ${i.on ? "off" : "on"}`)}"
+      aria-label="${esc(`${fxName(i.effect)} at ${i.t.toFixed(1)} seconds`)}">${esc(fxGlyph(i))}</button>`).join("");
+  }
+  function planGroupHtml() {
+    const d = E.state.director, items = E.plan || [], on = items.filter((i) => i.on).length;
+    const later = (i) => d.rendered.includes(i.effect) ? "" : ` · arrives in ${d.arrives_in[i.effect] || "a later step"}`;
+    return `
+      <div class="ed-group">
+        <div class="ed-row"><div><div class="ed-label">Auto edit</div>
+          <div class="ed-hint">${items.length ? `${on} of ${items.length} effects on · at most one per ${d.min_gap} s, never under the title card${d.vision ? " · frames checked"
+              : d.frames_ready ? " · frames weren't checked: Regenerate to include them" : " · frames are checked after the next Render preview"}`
+            : "AI picks the strongest moments (hook, punchline, shock, laugh) and plans a few effects. You keep the final say."}</div></div>
+          <button type="button" class="sm" data-ed-plan-gen>${items.length ? "Regenerate plan" : "Generate plan"}</button></div>
+        ${items.length ? `<div class="ed-plan-list">${items.map((i) => `
+          <div class="ed-plan-row ${i.on ? "" : "is-off"}"><span class="ed-plan-t">${i.t.toFixed(1)} s</span>
+            <span class="ed-plan-fx fx-${esc(i.effect)}" aria-hidden="true">${esc(fxGlyph(i))}</span>
+            <span class="ed-plan-what"><select class="ed-plan-sel" data-ed-plan-fx="${esc(i.id)}" aria-label="Effect at ${i.t.toFixed(1)} s">${(d.effects || [i.effect]).map((x) =>
+              `<option value="${esc(x)}" ${x === i.effect ? "selected" : ""}>${esc(fxName(x))}</option>`).join("")}</select><span class="ed-plan-opts">${i.effect === "emoji" ? `<select class="ed-plan-sel" data-ed-plan-emoji="${esc(i.id)}" aria-label="Emoji">${(d.emoji || ["😂"]).map((x) =>
+                `<option ${x === ((i.params || {}).emoji || "😂") ? "selected" : ""}>${x}</option>`).join("")}</select>` : ""}
+              <select class="ed-plan-sel" data-ed-plan-sfx="${esc(i.id)}" aria-label="Sound at ${i.t.toFixed(1)} s"><option value="">No sound</option>${(d.sfx || []).map((x) =>
+                `<option value="${esc(x)}" ${x === (i.params || {}).sfx ? "selected" : ""}>${esc(SFX_NAME[x] || x)}</option>`).join("")}</select></span>
+              <span class="ed-hint">${esc(i.reason)}${esc(later(i))}${i.effect === "flash" ? " · also lightens the watermark for 0.2 s" : ""}</span></span>
+            ${sw(`data-ed-plan-item="${esc(i.id)}"`, i.on, `${fxName(i.effect)} at ${i.t.toFixed(1)} s`)}</div>`).join("")}</div>` : ""}
+      </div>`;
+  }
+  function setPlanEffect(id, effect) {
+    const it = (E.plan || []).find((i) => i.id === id); if (!it || it.effect === effect) return;
+    it.effect = effect; it.params = { ...((E.state.director.defaults || {})[effect] || {}) };
+    paintCuts(); if (E.tab === "effects") repaintPanel();
+    E.dirty = true; paintHook();
+    saver("plan", "/plan", () => ({ items: E.plan }));
+  }
+  // E2: seconds freeze frames / slow-mo add (same rule as shared/edit_director.time_extra, simple non-overlapping case)
+  function planExtra() {
+    const keep = plannedKeep(), dflt = (E.state.director && E.state.director.defaults) || {};
+    const inKeep = (t) => keep.some(([a, b]) => a <= t && t < b);
+    const overlap = (a, b) => keep.reduce((x, [s, e]) => x + Math.max(0, Math.min(b, e) - Math.max(a, s)), 0);
+    return (E.plan || []).filter((i) => i.on).reduce((x, i) => {
+      const p = { ...(dflt[i.effect] || {}), ...(i.params || {}) };
+      if (i.effect === "freeze" && inKeep(i.t)) return x + Number(p.hold || 0.6);
+      if (i.effect === "slowmo") return x + overlap(i.t, i.t + Number(p.dur || 1.2)) * (1 / Math.max(0.5, Number(p.factor || 0.5)) - 1);
+      return x;
+    }, 0);
+  }
+  function setPlanParam(id, key, value) {           // E3: per-item sound / emoji
+    const it = (E.plan || []).find((i) => i.id === id); if (!it) return;
+    const p = { ...(it.params || {}) };
+    if (value) p[key] = value; else delete p[key];
+    it.params = p;
+    paintCuts(); if (E.tab === "effects") repaintPanel();
+    E.dirty = true; paintHook();
+    saver("plan", "/plan", () => ({ items: E.plan }));
+  }
+  function togglePlan(id) {
+    const it = (E.plan || []).find((i) => i.id === id); if (!it) return;
+    it.on = !it.on;
+    paintCuts(); if (E.tab === "effects") repaintPanel();
+    saver("plan", "/plan", () => ({ items: E.plan }));
+  }
+  async function generatePlan(btn) {
+    if (E.busy) return;
+    E.busy = true;                 // QA a156a53: no render while the (synchronous) plan call runs, or it renders without it
+    const r = document.querySelector("[data-ed-render]"); if (r) r.disabled = true;
+    setBusy(btn, true, "Planning…");
+    try {
+      await flushSavers();
+      E.state = await api(edUrl(E.jid, E.cid) + "/plan", { method: "POST" });
+      E.plan = (E.state.director.items || []).map((i) => ({ ...i }));
+      E.dirty = true; paintHook(); paintPlan();
+      if (E.tab === "effects") repaintPanel();
+      paintState(E.plan.length ? undefined : "No strong moments found: nothing planned");
+    } catch (e) { setBusy(btn, false); paintState("Plan failed: " + e.message); }
+    finally { E.busy = false; const rb = document.querySelector("[data-ed-render]"); if (rb && !rb.classList.contains("is-busy")) rb.disabled = false; }
   }
   function addZoom(t) {
     if (!E.tl || E.zoom.markers.length >= E.state.zoom.max_markers) return;
@@ -329,7 +416,15 @@
   }
 
   // rendered preview's keep (source time) ↔ video time
+  // E2: with freeze / slow-mo the preview's time base is pieces [s, e, speed, hold] (source s..e plays at speed,
+  // then the last frame holds for hold s); without them, keep segments.
   function toOut(t) {
+    const P = E.tl && E.tl.pieces;
+    if (P) {
+      let acc = 0;
+      for (const [a, b, sp, h] of P) { if (t < b) return acc + Math.max(0, t - a) / sp; acc += (b - a) / sp + h; }
+      return acc;
+    }
     const keep = E.tl && E.tl.keep;
     if (!keep) return t;
     let acc = 0;
@@ -337,6 +432,17 @@
     return acc;
   }
   function toSrc(o) {
+    const P = E.tl && E.tl.pieces;
+    if (P) {
+      let acc = 0;
+      for (const [a, b, sp, h] of P) {
+        const d = (b - a) / sp;
+        if (o <= acc + d) return a + (o - acc) * sp;
+        if (o <= acc + d + h) return b;          // inside a freeze: the held frame
+        acc += d + h;
+      }
+      return P.length ? P[P.length - 1][1] : o;
+    }
     const keep = E.tl && E.tl.keep;
     if (!keep) return o;
     let acc = 0;
@@ -404,9 +510,47 @@
   }
   const sw = (attr, on, label) => `<button class="ed-switch" type="button" role="switch" aria-checked="${on}" aria-label="${label}" ${attr}></button>`;
 
+  const LOOK_NAME = { none: "Neutral", vivid_gaming: "Vivid Gaming", warm: "Warm", moody: "Moody" };
+  function lookGroupHtml() {        // E4: grades the footage only; captions, emoji and watermark keep their colours
+    const L = E.look, presets = E.state.look.presets || ["none"];
+    return `
+      <div class="ed-group">
+        <div class="ed-label">Look</div>
+        <div class="ed-hint">Colour grade for the footage. Captions, emoji and the watermark keep their colours.</div>
+        <div class="ed-chips" role="group" aria-label="Look">${presets.map((x) =>
+          `<button type="button" class="ed-chip" data-ed-look-preset="${esc(x)}" aria-pressed="${L.preset === x}">${esc(LOOK_NAME[x] || x)}</button>`).join("")}</div>
+        <div class="ed-row"><span class="ed-label" id="edVigLbl">Vignette</span>${sw('data-ed-look-vignette aria-labelledby="edVigLbl"', L.vignette, "Vignette")}</div>
+        <div class="ed-row"><span class="ed-label" id="edGrainLbl">Light grain</span>${sw('data-ed-look-grain aria-labelledby="edGrainLbl"', L.grain, "Light grain")}</div>
+      </div>`;
+  }
+  const saveLook = () => saver("look", "/look", () => E.look);
+  function packGroupHtml() {        // E5: a pack presets captions, effects + sounds, density, look, progress, loudness
+    const P = E.state.pack;
+    return `
+      <div class="ed-group">
+        <div class="ed-row ed-row-tight"><div class="ed-label">Style pack</div>${P.from_campaign ? `<span class="tag">from campaign</span>` : ""}</div>
+        <div class="ed-chips" role="group" aria-label="Style pack">${P.options.map((o) =>
+          `<button type="button" class="ed-chip" data-ed-pack="${esc(o.id)}" aria-pressed="${o.id === P.id}">${esc(o.name)}</button>`).join("")}</div>
+        <div class="ed-hint">Sets captions, effects + sounds (one per ${P.options.find((o) => o.id === P.id)?.min_gap || 3} s), look, progress bar and loudness, then plans the clip. Change anything afterwards.</div>
+      </div>`;
+  }
+  async function applyPack(btn) {
+    if (E.busy) return;
+    if (!armed(btn, "Tap again: replaces captions, look, sounds, plan")) return;   // QA 8fdbdc1 Low: say what it overwrites
+    btn.classList.remove("is-armed");
+    E.busy = true; setBusy(btn, true, "Applying…");
+    try {
+      await flushSavers();
+      const r = await api(edUrl(E.jid, E.cid) + "/pack", { method: "POST", body: JSON.stringify({ pack: btn.dataset.edPack }) });
+      E.busy = false;
+      await open(E.jid, E.cid);                    // every tab's state changed: reload, stay on Effects
+      E.tab = "effects"; render();
+      E.dirty = true; paintHook(); paintState(r.pack_note || undefined);
+    } catch (e) { E.busy = false; setBusy(btn, false); paintState("Pack not applied: " + e.message); }
+  }
   function effectsPanel() {
     const z = E.zoom, p = E.progress, n = z.markers.length;
-    return `
+    return packGroupHtml() + planGroupHtml() + lookGroupHtml() + `
       <div class="ed-group">
         <div class="ed-row"><div><div class="ed-label">Zoom punch-ins</div>
           <div class="ed-hint">${n} punch-in${n === 1 ? "" : "s"} on the timeline: add them in ◆ Zoom mode (key Z).</div></div>
@@ -444,6 +588,9 @@
         <div class="ed-row"><div><div class="ed-label">Light compression</div>
           <div class="ed-hint">Evens out loud peaks (shouts, laughs) before loudness normalisation.</div></div>
           ${sw("data-ed-compress", a.compress, "Light compression")}</div>
+        <div class="ed-row"><div><div class="ed-label">Loud &amp; punchy</div>
+          <div class="ed-hint">Hits -14 LUFS even on quiet, peaky audio by limiting the loudest peaks (up to ~6 dB). Shots and shouts sound flatter.</div></div>
+          ${sw("data-ed-loud", !!a.loud, "Loud and punchy")}</div>
       </div>
       <div class="ed-group">
         <div class="ed-row"><div><div class="ed-label">Loudness</div>
@@ -951,7 +1098,7 @@
 
   // ------------------------------------------------------------------ events (delegated, data-*)
   document.addEventListener("click", (e) => {
-    const t = e.target.closest("[data-ed-back],[data-ed-hook-on],[data-ed-hook-dur],[data-ed-render],[data-ed-play],[data-ed-tab],[data-ed-zoom-on],[data-ed-progress-on],[data-ed-progress-color],[data-ed-compress],[data-ed-silence],[data-ed-word],[data-ed-pause],[data-ed-mode],[data-ed-suggest],[data-ed-fillers],[data-ed-cuts-reset],[data-ed-zoom-add],[data-ed-zoom-mark],[data-ed-trim],[data-ed-seekarea],[data-ed-preset],[data-ed-cap-all],[data-ed-kw],[data-ed-kw-color],[data-ed-fix-typos],[data-ed-cap-reset],[data-ed-capy-on],[data-ed-new-hook],[data-ed-thumb-pick],[data-ed-thumb-gen],[data-ed-burn],[data-ed-gen-desc],[data-ed-sm],[data-ed-versions],[data-ed-restore],[data-ed-approve]");
+    const t = e.target.closest("[data-ed-back],[data-ed-hook-on],[data-ed-hook-dur],[data-ed-render],[data-ed-play],[data-ed-tab],[data-ed-zoom-on],[data-ed-progress-on],[data-ed-progress-color],[data-ed-compress],[data-ed-silence],[data-ed-word],[data-ed-pause],[data-ed-mode],[data-ed-suggest],[data-ed-fillers],[data-ed-cuts-reset],[data-ed-zoom-add],[data-ed-zoom-mark],[data-ed-trim],[data-ed-seekarea],[data-ed-preset],[data-ed-cap-all],[data-ed-kw],[data-ed-kw-color],[data-ed-fix-typos],[data-ed-cap-reset],[data-ed-capy-on],[data-ed-new-hook],[data-ed-thumb-pick],[data-ed-thumb-gen],[data-ed-burn],[data-ed-gen-desc],[data-ed-sm],[data-ed-versions],[data-ed-restore],[data-ed-approve],[data-ed-plan-gen],[data-ed-plan-item],[data-ed-loud],[data-ed-look-preset],[data-ed-look-vignette],[data-ed-look-grain],[data-ed-pack]");
     if (!t || !E.state && !t.matches("[data-ed-back]")) return;
     if (t.matches("[data-ed-back]")) {                       // back to the Review page (step 4) for this job
       e.preventDefault(); const jid = E.jid; close(false); location.hash = `#review/${encodeURIComponent(jid || "")}`;
@@ -1028,6 +1175,8 @@
       moveSeg();
       return;
     }
+    if (t.matches("[data-ed-plan-gen]")) return generatePlan(t);
+    if (t.matches("[data-ed-plan-item]")) { e.stopPropagation(); return togglePlan(t.dataset.edPlanItem); }
     if (t.matches("[data-ed-burn]")) {
       const X = E.state.export; X.burn = !X.burn; E.state.captions.burn = X.burn; repaintPanel();
       saver("burn", `/api/jobs/${encodeURIComponent(E.jid)}/render-options`, () => ({ burn_subtitles: X.burn }), "PATCH"); return;
@@ -1040,6 +1189,11 @@
     if (t.matches("[data-ed-zoom-on]")) { E.zoom.on = !E.zoom.on; repaintPanel(); zoomChanged(); return; }
     if (t.matches("[data-ed-progress-on]")) { E.progress.on = !E.progress.on; repaintPanel(); saveProgress(); return; }
     if (t.matches("[data-ed-progress-color]")) { E.progress.color = t.dataset.edProgressColor; repaintPanel(); saveProgress(); return; }
+    if (t.matches("[data-ed-pack]")) return applyPack(t);
+    if (t.matches("[data-ed-look-preset]")) { E.look.preset = t.dataset.edLookPreset; repaintPanel(); saveLook(); return; }
+    if (t.matches("[data-ed-look-vignette]")) { E.look.vignette = !E.look.vignette; repaintPanel(); saveLook(); return; }
+    if (t.matches("[data-ed-look-grain]")) { E.look.grain = !E.look.grain; repaintPanel(); saveLook(); return; }
+    if (t.matches("[data-ed-loud]")) { E.audio.loud = !E.audio.loud; repaintPanel(); saveAudio(); return; }
     if (t.matches("[data-ed-compress]")) { E.audio.compress = !E.audio.compress; repaintPanel(); saveAudio(); return; }
     if (t.matches("[data-ed-silence]")) {
       if (!E.audio.silence_trim) {
@@ -1124,6 +1278,9 @@
     document.body.appendChild(b); document.body.classList.add("is-staging");
   }).catch(() => {});
   document.addEventListener("change", (e) => {
+    if (E.state && e.target.matches && e.target.matches("[data-ed-plan-fx]")) return setPlanEffect(e.target.dataset.edPlanFx, e.target.value);
+    if (E.state && e.target.matches && e.target.matches("[data-ed-plan-sfx]")) return setPlanParam(e.target.dataset.edPlanSfx, "sfx", e.target.value);
+    if (E.state && e.target.matches && e.target.matches("[data-ed-plan-emoji]")) return setPlanParam(e.target.dataset.edPlanEmoji, "emoji", e.target.value);
     if (E.state && e.target.matches && e.target.matches("[data-ed-thumb-upload]")) uploadThumb(e.target);
   });
   document.addEventListener("toggle", (e) => {                 // keep "Style, font…" open across repaints

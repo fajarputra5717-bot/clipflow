@@ -1727,7 +1727,14 @@ def set_render_warning(candidate_id, code, message=None):
         log(f"Could not record render warning {code} for {candidate_id}: {exc}")
 
 
+PEAK_GUARD_MARGIN = 0.1   # dB under the -1 dBTP ceiling the encoded file must reach (else re-limited)
 LOUDNESS_TRIM_TOL = 0.5   # QA Low 2: finals land within ±0.5 LU of the target when a trim can get them there
+
+
+def edit_specs_loud(candidate):
+    """The clip's "Loud & punchy" switch (edit_spec.audio.loud)."""
+    from shared import edit_spec
+    return bool((edit_spec.audio_of((candidate or {}).get("edit_spec")) or {}).get("loud"))
 
 
 def _loudness_ok(m, tol=1.0):
@@ -1747,7 +1754,7 @@ def _loudnorm_pass(src, dst, af, audio_bitrate, timeout):
     return retention.parse_ebur128(vout)
 
 
-def normalize_loudness(path, duration, *, candidate_id=None, audio_bitrate="128k"):
+def normalize_loudness(path, duration, *, candidate_id=None, audio_bitrate="128k", punchy=False):
     """
     -14 LUFS / -1 dBTP, two-pass (085), video stream-copied, on previews and
     finals. Every output is re-measured with ebur128 (pre-P1 #2): more than
@@ -1760,6 +1767,8 @@ def normalize_loudness(path, duration, *, candidate_id=None, audio_bitrate="128k
     tmp = path.with_name(path.stem + ".loudnorm.tmp.mp4")
     tmp2 = path.with_name(path.stem + ".loudnorm2.tmp.mp4")
     tmp3 = path.with_name(path.stem + ".loudnorm3.tmp.mp4")
+    tmp4 = path.with_name(path.stem + ".loudnorm4.tmp.mp4")
+    tmp_p = path.with_name(path.stem + ".punch.tmp.mkv")    # PCM: the pre-chain adds no AAC generation
     try:
         if not has_audio_stream(path):
             log(f"Loudness: {path.name} has no audio, skipped")
@@ -1770,8 +1779,19 @@ def normalize_loudness(path, duration, *, candidate_id=None, audio_bitrate="128k
         timeout = render_timeout_seconds(duration)
         _, out = run_command(retention.loudnorm_measure_cmd(str(path)).argv, timeout=timeout)
         measured = retention.parse_loudnorm(out)
-        after = _loudnorm_pass(path, tmp, retention.loudnorm_filter(measured), audio_bitrate, timeout)
-        result, note = tmp, ""
+        src, note = path, ""
+        if punchy and measured:   # owner 2026-10-12: per-clip "Loud & punchy" (≈ up to 6 dB of limiting)
+            run_command(["ffmpeg", "-hide_banner", "-nostats", "-y", "-i", str(path), "-map", "0:v?", "-map", "0:a",
+                         "-c:v", "copy", "-af", retention.punch_filter(measured["input_i"]), "-c:a", "pcm_s16le",
+                         str(tmp_p)], timeout=timeout)
+            _, out = run_command(retention.loudnorm_measure_cmd(str(tmp_p)).argv, timeout=timeout)
+            punched = retention.parse_loudnorm(out)
+            if punched:
+                log(f"Loud & punchy: {measured['input_i']:.1f} LUFS / {measured['input_tp']:.1f} dBTP -> "
+                    f"{punched['input_i']:.1f} LUFS / {punched['input_tp']:.1f} dBTP before normalising")
+                src, measured, note = tmp_p, punched, " (loud & punchy)"
+        after = _loudnorm_pass(src, tmp, retention.loudnorm_filter(measured), audio_bitrate, timeout)
+        result = tmp
         if not _loudness_ok(after):
             first = f"{after['i']:.1f} LUFS / {after['tp']:.1f} dBTP" if after else "unmeasured"
             _, out2 = run_command(retention.loudnorm_measure_cmd(str(tmp)).argv, timeout=timeout)
@@ -1782,17 +1802,54 @@ def normalize_loudness(path, duration, *, candidate_id=None, audio_bitrate="128k
                 retention.loudnorm_filter(retention.parse_loudnorm(out2), codec_headroom_db=headroom),
                 audio_bitrate, timeout,
             )
-            note = f" (pass 1 {first}; corrective pass, headroom {headroom:.1f} dB)"
+            note += f" (pass 1 {first}; corrective pass, headroom {headroom:.1f} dB)"
             result, after = tmp2, after2
         # QA Low 2: compression (and the true-peak corrective pass) leave the limiter eating ~1 LU. Trim by the
         # MEASURED error; keep the trim only if it is closer to the target and the peak is no worse.
-        if after and abs(after["i"] - retention.LOUDNORM_I) > LOUDNESS_TRIM_TOL:
-            gain = max(-6.0, min(6.0, retention.LOUDNORM_I - after["i"]))
-            trimmed = _loudnorm_pass(result, tmp3, retention.gain_filter(gain), audio_bitrate, timeout)
-            if (trimmed and abs(trimmed["i"] - retention.LOUDNORM_I) < abs(after["i"] - retention.LOUDNORM_I)
-                    and trimmed["tp"] <= max(retention.LOUDNORM_TP, after["tp"])):
-                note += f" (trim {gain:+.1f} dB: {after['i']:.1f} -> {trimmed['i']:.1f} LUFS)"
-                result, after = tmp3, trimmed
+        # QA Low 2 / a156a53 re-check: the limiter + AAC leave some clips (compression on) > 0.5 LU under -14.
+        # Up to two trims, stop once within LOUDNESS_TRIM_TOL: (1) redo the normalising pass from the ORIGINAL
+        # with the target offset by the measured error, (2) a plain gain on the current result. Each is kept
+        # only if closer to -14 and its true peak is no worse (tested on real clips: neither alone always wins).
+        if measured and after and abs(after["i"] - retention.LOUDNORM_I) > LOUDNESS_TRIM_TOL:
+            err = max(-3.0, min(3.0, retention.LOUDNORM_I - after["i"]))
+            hr = headroom if result == tmp2 else retention.CODEC_HEADROOM_DB
+            tries = [("retarget", src, retention.loudnorm_filter(measured, i=retention.LOUDNORM_I + err,
+                                                                  codec_headroom_db=hr), tmp3),
+                     ("gain", None, None, tmp4)]
+            log(f"Loudness trim: {path.name} at {after['i']:.1f} LUFS / {after['tp']:.1f} dBTP, "
+                f"{err:+.1f} LU to target, limiter headroom {hr:.1f} dB")
+            for name, src, af, dst in tries:
+                if abs(after["i"] - retention.LOUDNORM_I) <= LOUDNESS_TRIM_TOL:
+                    break
+                if name == "gain":
+                    src, af = result, retention.gain_filter(max(-6.0, min(6.0, retention.LOUDNORM_I - after["i"])))
+                tried = (f"target {retention.LOUDNORM_I + err:.1f} LUFS" if name == "retarget"
+                         else f"gain {max(-6.0, min(6.0, retention.LOUDNORM_I - after['i'])):+.1f} dB")
+                trimmed = _loudnorm_pass(src, dst, af, audio_bitrate, timeout)
+                if not trimmed:
+                    log(f"Loudness trim {name} ({tried}): unmeasured, rejected")
+                    continue
+                closer = abs(trimmed["i"] - retention.LOUDNORM_I) < abs(after["i"] - retention.LOUDNORM_I)
+                peak_ok = trimmed["tp"] <= max(retention.LOUDNORM_TP, after["tp"])
+                verdict = "accepted" if closer and peak_ok else (
+                    "rejected: not closer" if not closer else f"rejected: peak {trimmed['tp']:.1f} dBTP over the ceiling")
+                log(f"Loudness trim {name} ({tried}): {trimmed['i']:.1f} LUFS / {trimmed['tp']:.1f} dBTP, {verdict}")
+                if closer and peak_ok:
+                    note += f" (trim {name}: {after['i']:.1f} -> {trimmed['i']:.1f} LUFS)"
+                    result, after = dst, trimmed
+        # The ENCODED file must stay ≤ -1 dBTP (AAC overshoots): re-limit the result, up to twice, if it doesn't.
+        for attempt in (1, 2):      # QA 8fdbdc1 Low: keep a 0.1 dB margin (a file at exactly -1.0 has none)
+            if not after or after["tp"] <= retention.LOUDNORM_TP - PEAK_GUARD_MARGIN:
+                break
+            hr2 = retention.CODEC_HEADROOM_DB + (after["tp"] - retention.LOUDNORM_TP) + PEAK_GUARD_MARGIN + 0.3 * attempt
+            dst = tmp4 if result != tmp4 else tmp3
+            relimited = _loudnorm_pass(result, dst, retention.gain_filter(0.0, codec_headroom_db=hr2), audio_bitrate, timeout)
+            log(f"Loudness peak guard {attempt}: {after['tp']:.1f} dBTP -> "
+                + (f"{relimited['i']:.1f} LUFS / {relimited['tp']:.1f} dBTP (limiter headroom {hr2:.1f} dB)" if relimited else "unmeasured"))
+            if not relimited:
+                break
+            result, after = dst, relimited
+            note += f" (re-limited to {after['tp']:.1f} dBTP)"
         os.replace(result, path)
     except JobCancelled:
         raise
@@ -1806,6 +1863,8 @@ def normalize_loudness(path, duration, *, candidate_id=None, audio_bitrate="128k
         tmp.unlink(missing_ok=True)
         tmp2.unlink(missing_ok=True)
         tmp3.unlink(missing_ok=True)
+        tmp4.unlink(missing_ok=True)
+        tmp_p.unlink(missing_ok=True)
     before = (f"{measured['input_i']:.1f} LUFS / {measured['input_tp']:.1f} dBTP"
               if measured else "silent (limiter only)")
     now = f"{after['i']:.1f} LUFS / {after['tp']:.1f} dBTP" if after else "unmeasured"
@@ -5631,9 +5690,10 @@ def create_preview(
     )
 
     render_steps.apply_cuts(preview_path, candidate, duration, preset=setting("FFMPEG_PREVIEW_PRESET"), crf=setting("FFMPEG_PREVIEW_CRF"), run=run_command, timeout=render_timeout_seconds(duration), log=log)
+    render_steps.mix_sfx(preview_path, candidate, duration, run=run_command, timeout=render_timeout_seconds(duration), log=log)
     # QA P0: previews sound like the final (same chain + verify, never fatal).
     normalize_loudness(preview_path, duration, candidate_id=candidate_id,
-                       audio_bitrate="96k")
+                       audio_bitrate="96k", punchy=edit_specs_loud(candidate))
     render_steps.write_timeline(preview_path, source_segments, duration, candidate, PREVIEW_DIR, source_path=video_path, start=start, log=log)
 
     # A locked thumbnail (an AI option or a manual upload the user
@@ -6100,9 +6160,10 @@ def render_final_candidate(
     )
 
     render_steps.apply_cuts(output_path, candidate, duration, preset=setting("FFMPEG_PRESET"), crf=setting("FFMPEG_CRF"), run=run_command, timeout=render_timeout_seconds(duration), log=log)
+    render_steps.mix_sfx(output_path, candidate, duration, run=run_command, timeout=render_timeout_seconds(duration), log=log)
     # QA #2: loudness last (after every audio step of the render).
     update_candidate(candidate_id, progress=90, message="Normalising loudness")
-    normalize_loudness(output_path, duration, candidate_id=candidate_id)
+    normalize_loudness(output_path, duration, candidate_id=candidate_id, punchy=edit_specs_loud(candidate))
     set_render_warning(candidate_id, "final_outdated")  # 114: this final is current
 
     # Same rule as the preview: don't clobber a thumbnail the user
@@ -7829,6 +7890,7 @@ def process_submagic_task(candidate):
                 output_path,
                 float(candidate.get("end_time") or 0) - float(candidate.get("start_time") or 0),
                 candidate_id=candidate_id,
+                punchy=edit_specs_loud(candidate),
             )
 
             thumbnail_locked = bool(candidate.get("thumbnail_locked"))

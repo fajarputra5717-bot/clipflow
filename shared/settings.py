@@ -127,6 +127,8 @@ DEFAULT_SETTINGS = {
     "YTDLP_POT_URL": "http://pot:4416",
     "YTDLP_MIN_GAP_SECONDS": "20",
     "YTDLP_COOKIES_FILE": "/run/secrets/clipflow/youtube-cookies.txt",
+    # Auto Edit E1 (lane-b): send 4–6 sampled frames with the edit-plan prompt (vision-capable utility model)
+    "EDIT_DIRECTOR_VISION": "true",
 }
 
 SECRET_SETTING_KEYS = {

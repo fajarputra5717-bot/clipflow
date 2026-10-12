@@ -160,3 +160,10 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 188 · 2026-10-12 · Phone top bar: full-width title when idle, wider island while it runs; auto-import disk wait capped at 24 h; 'Step n ·' eyebrows removed · index.html, main.py, shared, tests
 189 · 2026-10-12 · P5 part 1: automatic YouTube view pulls (videos.list, API key, 6 h/daily/stop cadence, quota budget), island 'Updating views…' · shared, worker, main.py, index.html, tests
 190 · 2026-10-13 · View pulls: rate limits transient, only real key errors alert, UI says pulls replace typed YouTube views (Lane C Lows on 189) · shared/view_pull.py, index.html, tests
+191 · 2026-10-13 · Auto Edit E1 (lane-b): edit plan / director (AI picks moments, optional frame images to the AI, task edit_moments, EDIT_DIRECTOR_VISION) · shared/ai, edit_spec, edit_director, render_steps
+192 · 2026-10-13 · Auto Edit E2 (lane-b): motion + time effects (punch, shake, freeze, slow-mo; warps in the cut stage) · shared/retention, render_steps
+193 · 2026-10-13 · Auto Edit E3 (lane-b): emoji pops (Twemoji, CC-BY 4.0) + in-house CC0 SFX mixed before loudness · worker/assets, retention, worker
+194 · 2026-10-13 · Auto Edit E4 (lane-b): look filters · shared/retention, edit_spec, render_steps
+195 · 2026-10-13 · Auto Edit E5 (lane-b): style packs · shared/style_packs, edit_spec, editor
+196 · 2026-10-13 · Loudness (lane-b): trim re-targets the normalising pass from the original; per-clip Loud & punchy; peak guard 0.1 dB margin · worker normalize_loudness
+197 · 2026-10-13 · Merge lane-b 05f3208 (Auto Edit E1–E5, loudness, source_watch doc update; Lane C Merge OK) · merge

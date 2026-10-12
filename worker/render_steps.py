@@ -353,13 +353,26 @@ def apply_cuts(path, candidate: dict, clip_duration: float, *, preset, crf, run,
     (retention.silence_trim_graph). Goes through the worker's run_command (cancel + watchdog).
     Returns the output duration, or None when the clip has no cuts. Loudnorm runs after this."""
     from shared import retention
+    from shared import edit_director
     keep = cut_plan(candidate, clip_duration, _probe_fps(path))
     compress = bool(edit_specs.audio_of(candidate.get("edit_spec")).get("compress"))
-    if not keep and not compress:
+    warps = edit_director.warps(edit_specs.director_of(candidate.get("edit_spec")))   # Auto Edit E2: freeze / slow-mo
+    if not keep and not compress and not warps:
         return None
     tmp = Path(str(path) + ".cut.mp4")
-    if keep:
-        graph = retention.silence_trim_graph(keep, crossfade=retention.CUT_CROSSFADE, duration=float(clip_duration))
+    pieces = None
+    if warps:
+        base = keep or [(0.0, float(clip_duration))]
+        pieces = retention.warp_pieces(base, warps)
+        if all(sp == 1.0 and not hold for _s, _e, sp, hold in pieces):
+            pieces = None                     # every warp fell outside the kept time
+    if not keep and not compress and not pieces:
+        return None
+    if keep or pieces:
+        base = keep or [(0.0, float(clip_duration))]
+        graph = (retention.warp_graph(base, pieces, crossfade=retention.CUT_CROSSFADE, duration=float(clip_duration))
+                 if pieces else
+                 retention.silence_trim_graph(keep, crossfade=retention.CUT_CROSSFADE, duration=float(clip_duration)))
         amap = "[atrim]"
         if compress:                      # task 5: light compression, then loudnorm (Lane A) runs last
             graph += f";[atrim]{COMPRESSOR}[acomp]"
@@ -371,9 +384,36 @@ def apply_cuts(path, candidate: dict, clip_duration: float, *, preset, crf, run,
              "-c:v", "copy", "-af", COMPRESSOR, "-c:a", "aac", "-b:a", "128k", "-ar", "48000",
              "-movflags", "+faststart", str(tmp)], timeout=timeout)
     tmp.replace(path)
-    out = sum(b - a for a, b in keep) if keep else float(clip_duration)
-    log(f"Cuts: {len(keep or [])} segments, {clip_duration:.1f} s -> {out:.1f} s" + (" + light compression" if compress else ""))
-    return out if keep else None
+    out = (retention.pieces_output_seconds(pieces) if pieces else
+           sum(b - a for a, b in keep) if keep else float(clip_duration))
+    log(f"Cuts: {len(keep or [])} segments, {clip_duration:.1f} s -> {out:.1f} s" + (" + light compression" if compress else "")
+        + (f" + time effects ({', '.join(w[0] for w in warps)})" if pieces else ""))
+    return out if (keep or pieces) else None
+
+
+# --------------------------------------------------------------------------- SFX (Auto Edit E3)
+
+ASSETS = Path(__file__).resolve().parent / "assets"     # /app/assets in the image (emoji/, sfx/, LICENSES.md)
+
+
+def mix_sfx(path, candidate: dict, clip_duration: float, *, run, timeout=None, log=print) -> int:
+    """After apply_cuts, before loudness: mix the plan's SFX (items with params.sfx) at their OUTPUT times, ducked
+    under the speech; video copied. Returns how many were mixed (0 = untouched)."""
+    from shared import edit_director, retention
+    director = edit_specs.director_of(candidate.get("edit_spec"))
+    if not director:
+        return 0
+    keep = cut_plan(candidate, clip_duration, _probe_fps(path))
+    w = edit_director.warps(director)
+    pieces = retention.warp_pieces(keep or [(0.0, float(clip_duration))], w) if w else None
+    events = edit_director.sfx_events(director, keep, pieces)
+    argv = retention.sfx_mix_cmd(str(path), str(path) + ".sfx.mp4", events, str(ASSETS / "sfx"))
+    if not argv:
+        return 0
+    run(argv, timeout=timeout)
+    Path(str(path) + ".sfx.mp4").replace(path)
+    log(f"SFX: {len(events)} mixed under the speech ({', '.join(n for _t, n in events)})")
+    return len(events)
 
 
 # --------------------------------------------------------------------------- zoom (task 4)
@@ -402,22 +442,66 @@ def zoom_stage(filters: list, last: str, width: int, height: int, output_path=No
     cand = ctx.get("candidate")
     if not cand or ctx.get("output") is None or output_path is None or ctx["output"] != str(output_path):
         return last                                   # not the render begin_render() announced
-    z = edit_specs.zoom_of(cand.get("edit_spec"))
-    if not z or not z.get("on", True) or not z.get("markers"):
-        return last
+    from shared import edit_director
+    spec = cand.get("edit_spec")
+    z = edit_specs.zoom_of(spec) or {}
+    manual = list(z.get("markers") or []) if z.get("on", True) else []
+    cuts = edit_specs.cuts_of(spec) or {}
+    planned = edit_director.motion_events(edit_specs.director_of(spec), cuts.get("removed") or [])   # Auto Edit E1/E2
+    events = [("punch", m) for m in manual] + planned
     peak = edit_specs.zoom_peak(z.get("intensity", edit_specs.ZOOM_DEFAULT_INTENSITY))
-    if peak <= 1.0:
-        return last
-    wins = retention.plan_zoom_windows(z["markers"], ctx["duration"])
-    zf = retention.zoom_filter(wins, width=width, height=height, peak=peak)
-    if not zf:
-        return last
-    filters.append(f"[{last}]{zf}[zoomed];")
-    log(f"Zoom: {len(wins)} punch-in(s), peak {peak:.2f}, canvas {width}x{height}")
-    return "zoomed"
+    mf = retention.motion_filter(events, width=width, height=height, punch_peak=peak, duration=ctx["duration"]) if events else None
+    if mf:
+        filters.append(f"[{last}]{mf}[zoomed];")
+        last = "zoomed"
+        n_punch = len(retention.plan_zoom_windows([e[1] for e in events if e[0] == "punch"], ctx["duration"])) if peak > 1.0 else 0
+        other = sorted({e[0] for e in planned if e[0] != "punch"})
+        log(f"Zoom: {n_punch} punch-in(s) ({sum(1 for e in planned if e[0] == 'punch')} from the edit plan), peak {peak:.2f}, "
+            f"canvas {width}x{height}" + (f"; motion from the plan: {', '.join(other)}" if other else ""))
+    # E4: the look grades the footage only (after the motion, before emoji / watermark / captions)
+    look = edit_specs.look_of(spec)
+    lf = retention.look_filter(look)
+    if lf:
+        filters.append(f"[{last}]{lf}[looked];")
+        last = "looked"
+        log(f"Look: {look.get('preset')}" + (" + vignette" if look.get("vignette") else "") + (" + grain" if look.get("grain") else ""))
+    # E3: emoji pops AFTER the motion (they don't zoom/shake) and BEFORE watermark + captions (never cover them)
+    emojis = edit_director.emoji_events(edit_specs.director_of(spec))
+    if emojis:
+        chunks, last = retention.emoji_filters(last, emojis, str(ASSETS / "emoji"), width=width, height=height,
+                                               dur=edit_director.EMOJI_DUR)
+        filters.extend(chunks)
+        log(f"Emoji: {len(emojis)} pop(s) from the edit plan")
+    return last
 
 
 # --------------------------------------------------------------------------- timeline (task 2)
+
+def retention_warp_pieces(keep, warps):
+    from shared import retention
+    return retention.warp_pieces(keep, warps)
+
+
+def _sample_frames(candidate, duration, previews_dir, source_path, start, log=print) -> list:
+    """Auto Edit E1: FRAME_COUNT small JPEGs from the SOURCE clip window (source time = the plan's time basis)
+    → previews/<cid>.frame-N.jpg (named with the candidate id, so the orphan sweep keeps them). Never fatal."""
+    import subprocess
+    from shared import edit_director
+    if not source_path or start is None or not isinstance(candidate, dict):
+        return []
+    cuts = edit_specs.cuts_of(candidate.get("edit_spec")) or {}
+    out = []
+    for n, t in enumerate(edit_director.frame_times(float(duration), removed=cuts.get("removed") or [],
+                                                    trim=cuts.get("trim"))):
+        name = f"{candidate['id']}.frame-{n}.jpg"
+        try:
+            subprocess.run(edit_director.frame_cmd(str(source_path), float(start), t, str(Path(previews_dir) / name)),
+                           check=True, capture_output=True, timeout=30)
+            out.append({"t": t, "file": name})
+        except (subprocess.SubprocessError, OSError) as e:
+            log(f"WARNING: frame {n} at {t:.1f} s skipped: {str(e)[-120:]}")
+    return out
+
 
 def write_timeline(preview_path, segments, duration, candidate, previews_dir, *, source_path=None, start=None, log=print):
     """After a preview render: waveform peaks + word chips → previews/<cid>.timeline.json, in SOURCE
@@ -429,6 +513,13 @@ def write_timeline(preview_path, segments, duration, candidate, previews_dir, *,
         keep = cut_plan(candidate, duration, _probe_fps(preview_path)) if isinstance(candidate, dict) else None
         data = timeline.build(source_path or preview_path, segments, duration,
                               start=start if source_path else None, keep=keep)
+        data["frames"] = _sample_frames(candidate, duration, previews_dir, source_path, start, log=log)
+        if isinstance(candidate, dict):       # E2: freeze / slow-mo change the preview's time base
+            from shared import edit_director
+            w = edit_director.warps(edit_specs.director_of(candidate.get("edit_spec")))
+            if w:
+                data["pieces"] = [[round(a, 3), round(b, 3), sp, round(h, 3)] for a, b, sp, h in
+                                  retention_warp_pieces(keep or [(0.0, float(duration))], w)]
         timeline.write_cache(timeline.cache_path(previews_dir, candidate_id), data, preview_path)
         log(f"Timeline: {len(data['words'])} words, {len(data['peaks'] or [])} peaks")
     except Exception as e:

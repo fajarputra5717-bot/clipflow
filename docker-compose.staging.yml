@@ -13,6 +13,8 @@ x-app-env: &app-env
   # never delete anything from staging sweeps (and /data is read-only anyway)
   ORPHAN_SWEEP_DRY_RUN: "true"
   RETENTION_DAYS_INTERMEDIATE: "36500"
+  # 167: yt-dlp call spacing writes a timestamp; /data is read-only here (own spacing for staging)
+  YTDLP_LAST_CALL_FILE: /data-staging/.ytdlp-last-call
 
 x-logging: &logging
   driver: json-file
@@ -83,6 +85,7 @@ services:
       - ./frontend/html:/usr/share/nginx/html:ro
       - ./frontend/conf.d:/etc/nginx/conf.d:ro
       - ./worker/fonts:/usr/share/nginx/fonts:ro
+      - ./shared/ui:/usr/share/nginx/ui:ro      # 168: /ui/tokens.css (same mount as production)
     depends_on: [backend]
     logging: *logging
 
