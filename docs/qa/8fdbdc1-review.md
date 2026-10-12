@@ -8,3 +8,6 @@ No High/Medium. Low:
 2. Low · applying a pack silently overwrites the clip's look, progress bar, Loud & punchy and zoom intensity (by design; the UI says "two-tap apply": not looked at).
 Not verified: pack chips UI + "from campaign" tag visually, Fandra → Gaming Hype / other campaigns → Podcast Clean defaults, Funny/Meme laugh mapping (ding stand-in; none of my clips had laugh moments), a FINAL render with a pack by me.
 Merge: OK.
+
+## Re-check 2026-10-13 · 05f3208 (both E5 Lows) on staging
+Peak guard: clip C with Drama / Tension re-rendered (33 s): worker "-28.6 LUFS / -7.7 dBTP → -14.6 LUFS / -1.3 dBTP (trim retarget: -15.0 -> -14.4 LUFS) (re-limited to -1.3 dBTP)"; my ebur128 on the preview: -14.6 LUFS, peak -1.3 dBFS (before: -14.4 / -1.0): margin ≥ 0.3 dB. Low 1 CLOSED. Pack confirm text "Tap again: replaces captions, look, sounds, plan" present in editor.js (grep; not seen in the UI): Low 2 CLOSED (read only). Lane B's E1-E5 are complete on lane-b; merge to main is Lane A's step (needs its own post-merge check: I'll run one on the merge commit).
