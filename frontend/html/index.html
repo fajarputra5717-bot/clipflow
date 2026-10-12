@@ -1575,7 +1575,11 @@ body:has(#editorSection:not(.hidden)) .ed-foot{bottom:calc(var(--pill-btn) + 30p
 .ai-form label{display:grid;gap:4px;font-size:var(--fs-small);color:var(--muted)}
 .ai-form .ai-check{display:flex;align-items:center;gap:8px;color:var(--text)}
 .ai-form button{justify-self:start}
-@media(max-width:600px){.ai-imports a.ai-title,.ai-guard a{display:inline-flex;align-items:center;min-height:var(--hit);min-width:var(--hit)}.ai-imports a.ai-title{display:flex}
+.ai-confirm{margin-top:var(--s-3);padding-top:var(--s-3);border-top:1px solid var(--line)}
+.ai-confirm h4{margin:0 0 2px;font-size:var(--fs-base)}
+.ai-confirm a.ai-title{color:inherit;display:block}
+.ai-confirm .ai-li>button{flex:none}
+@media(max-width:600px){.ai-confirm a.ai-title{display:flex;align-items:center;min-height:var(--hit)}.ai-imports a.ai-title,.ai-guard a{display:inline-flex;align-items:center;min-height:var(--hit);min-width:var(--hit)}.ai-imports a.ai-title{display:flex}
   .ai-form .ai-check{min-height:var(--hit)}.ai-form .ai-check input{width:24px;height:24px}}
 /* 182 (Lane C Medium, owner rule): every touch target on a phone is ≥ 44 px, Lane B's compact pages included (they
    live in this document; `body …:not()` outranks editor.css's compact rules). Controls drawn at a fixed size keep
@@ -4243,8 +4247,24 @@ async function loadCdAutoImport(slug){
   box.innerHTML=`<h3>Auto-import</h3><ul class="ai-list">${c.channels.map(ch=>{const lbl=`cd-ai-${ch.label}`.replace(/[^\w-]/g,"_");
     return `<li class="ai-li ai-li-col"><div class="ai-row"><div class="ai-grow"><div class="ai-title" id="${lbl}">${esc(ch.label)}</div>
       <div class="ai-sub">${esc(ch.line)}</div><div class="ai-sub ai-guard">${esc(ch.guard_text||"")}</div>${ch.error?`<div class="ai-err">${esc(ch.error)}</div>`:""}</div>
-      <button class="ai-switch" type="button" role="switch" aria-checked="${ch.watched}" aria-labelledby="${lbl}" data-ai-watch="${esc(c.slug)}" data-ai-channel="${esc(ch.channel)}"${!c.can_watch&&!ch.watched?" disabled":""}></button></div>${f(ch)}</li>`}).join("")}</ul>`;
+      <button class="ai-switch" type="button" role="switch" aria-checked="${ch.watched}" aria-labelledby="${lbl}" data-ai-watch="${esc(c.slug)}" data-ai-channel="${esc(ch.channel)}"${!c.can_watch&&!ch.watched?" disabled":""}></button></div>${f(ch)}</li>`}).join("")}</ul>
+    ${confirmListHtml((d.imports||[]).filter(v=>v.confirmable))}`;
 }
+// 187: "Found, not imported: confirm?" — videos the rules couldn't vouch for (no upload time / unknown length).
+function confirmListHtml(rows){
+  if(!rows.length)return "";
+  return `<div class="ai-confirm"><h4>Found, not imported: confirm?</h4><p class="ai-sub">ClipFlow couldn't tell if these are new uploads or how long they are, so it didn't import them on its own.</p>
+    <ul class="ai-list">${rows.map(v=>`<li class="ai-li"><div class="ai-grow"><a class="ai-title" href="${esc(v.url)}" target="_blank" rel="noopener">${esc(v.title)}</a>
+      <div class="ai-sub">${[v.channel,v.duration_fmt,v.when_fmt,v.label.replace(/^Skipped · /,"")].filter(Boolean).map(esc).join(" · ")}</div></div>
+      <button class="secondary" type="button" data-ai-confirm="${esc(v.id)}">Import anyway</button></li>`).join("")}</ul></div>`;
+}
+document.addEventListener("click",async e=>{
+  const b=e.target.closest("[data-ai-confirm]");if(!b)return;
+  setBusy(b,true,"Importing…");
+  try{await api(`/api/auto-import/imports/${encodeURIComponent(b.dataset.aiConfirm)}/import`,{method:"POST"});
+    showToast("Importing: it shows in Analyze in a moment");if(campaignOpen)loadCdAutoImport(campaignOpen)}
+  catch(err){setBusy(b,false);showToast("Couldn't import: "+err.message)}
+});
 document.addEventListener("submit",async e=>{
   const form=e.target.closest("[data-ai-guard]");if(!form)return;
   e.preventDefault();const btn=form.querySelector("button[type=submit]"),v=n=>form.elements[n].value.trim();

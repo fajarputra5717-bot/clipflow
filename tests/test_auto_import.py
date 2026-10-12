@@ -51,6 +51,14 @@ class AutoImportTest(unittest.TestCase):
         self.assertEqual(why(item(published_at=None), stale=True), "Older than the watch")
 
 
+class ConfirmableTest(unittest.TestCase):
+    def test_reasons_match(self):   # 187: the confirm list keys off these exact strings
+        stale = why(item(published_at=None), stale=True)
+        for r in (why(item(published_at=None)), stale, why(item(duration=None))):
+            self.assertIn(r, auto_import.CONFIRMABLE)
+        self.assertNotIn(why(item(duration=120)), auto_import.CONFIRMABLE)
+
+
 class GuardrailTest(unittest.TestCase):
     def g(self, **raw):
         return auto_import.normalize_guardrails(raw)

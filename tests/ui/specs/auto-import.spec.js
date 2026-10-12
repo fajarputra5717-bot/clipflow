@@ -70,3 +70,20 @@ test("deploy rule (184): a route the backend doesn't know yet shows 'updating', 
   await app.locator('#flow [data-nav="import"]').click();
   await expect(app.locator("#importBody .error-box")).toHaveText("ClipFlow is updating… try again in a minute.");
 });
+
+test("Campaign page: 'Found, not imported: confirm?' imports a video on request (187)", async ({ app, api }) => {
+  seed(api);
+  api.autoImport.imports.push({ id: "i3", title: "Old VOD reupload", url: "https://www.youtube.com/watch?v=c", campaign_name: "Fandra Octo",
+    channel: "@fandraocto", duration_fmt: "", when_fmt: "12 Oct, 10:00", status: "skipped", label: "Skipped · No upload time", badge: "cancelled",
+    job_id: null, confirmable: true });
+  api.campaigns = [{ slug: "fandra-octo", name: "Fandra Octo", platforms: [], status: { code: "active", label: "Active" }, mine: {} }];
+  api.campaignDetail = { "fandra-octo": { slug: "fandra-octo", name: "Fandra Octo", status: { code: "active", label: "Active", detail: "" }, mine: {}, view: {} } };
+  await app.evaluate(() => { location.hash = "#campaign/fandra-octo"; });
+  const list = app.locator("#cdAutoImport .ai-confirm");
+  await expect(list.locator("h4")).toHaveText("Found, not imported: confirm?");
+  await expect(list.locator(".ai-li")).toHaveCount(1);                    // the "Under 5 min" skip is NOT confirmable
+  await expect(list).toContainText("No upload time");
+  await list.getByRole("button", { name: "Import anyway" }).click();
+  await expect.poll(() => api.calls.filter((c) => c.method === "POST" && c.path === "/api/auto-import/imports/i3/import").length).toBe(1);
+  await expect(app.locator("#cdAutoImport .ai-confirm")).toHaveCount(0);
+});

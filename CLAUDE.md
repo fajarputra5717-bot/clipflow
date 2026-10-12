@@ -367,7 +367,7 @@ Owned tables carry `user_id` NOT NULL (`jobs`, `watermark_assets`, `platform_acc
 their job; **every new table from now on**). Rule: every SQL that reads or writes user data filters by the caller's id
 (`current_user(request)["id"]`); another user's row answers **404**, never 403/200. The middleware guard
 `_path_owned()` already enforces it for `/api/jobs/{id}[/candidates/{cid}]…`, `/api/assets/watermarks/{id}…` and
-`/api/accounts/{id}…`, `/api/posts/{id}…`;
+`/api/accounts/{id}…`, `/api/posts/{id}…`, `/api/auto-import/imports/{id}…` (187);
 lists and inserts do it in the handler. A new route family keyed by an owned id → add its regex to the guard.
 Admin is scoped like everyone except `/api/activity` (sees all, `owner` set). Campaigns are a shared catalogue
 (admin edits; P3 adds `created_by` + `visibility`); `source_videos` is a shared download cache.
@@ -405,6 +405,7 @@ Auto-import (183): `shared/auto_import.py` rules; `source_watches` (user switch)
 `run_import_loop()` → `create_job_for()` (the ONE job-creation path; Analyze's POST /api/jobs uses it too). Step `#import`.
 Guardrails (184) per watch in `source_watches.guardrails`, only via `auto_import.normalize_guardrails()`; edited on the
 Campaign page. Daily cap = worker; disk pause + Telegram note (`telegram_sends` kind `note`) = backend import loop.
+Skips in `auto_import.CONFIRMABLE` (couldn't vouch, not ruled out) get "Import anyway" on the Campaign page (187).
 Track (181): `GET /api/track` = `shared/track.py` (own posts → tiles, by campaign/platform, top clips; money only via
 payouts, pre-formatted), step `#track`. Reminders (148): service `sender` (`riftstorm-sender`, worker image `--telegram-only`) owns `telegram_sends` + 
 `queue_due_reminders()` (worker has `TELEGRAM_SENDER=separate`; without it the worker does both). One reminder per

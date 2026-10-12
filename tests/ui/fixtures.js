@@ -180,6 +180,11 @@ async function mockApi(page, api) {
       }
       return json(d);
     }
+    if (/^\/api\/auto-import\/imports\/[^/]+\/import$/.test(path) && method === "POST") {   // 187
+      const id = path.split("/")[4], d = api.autoImport || { campaigns: [], imports: [] };
+      for (const v of d.imports) if (v.id === id) Object.assign(v, { status: "found", label: "Importing", badge: "idle", confirmable: false });
+      return json(d);
+    }
     if (path === "/api/track" && method === "GET") return json(api.track || { tiles: { posts: 0 }, campaigns: [], platforms: [], top: [], skipped_currencies: [] });   // 181
     if (path === "/api/schedule" && method === "GET") return json(api.schedule || { overdue: [], days: [], posting_times: {} });   // P2.5 S3
     { const m = path.match(/^\/api\/jobs\/([^/]+)\/candidates\/([^/]+)\/(schedule-plan|schedule)$/);   // P2.5 S2 mocks

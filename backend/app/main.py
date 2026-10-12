@@ -99,6 +99,7 @@ JOB_PATH_RE = re.compile(r"^/api/jobs/([^/]+)(?:/candidates/([^/]+))?(?:/|$)")
 WATERMARK_PATH_RE = re.compile(r"^/api/assets/watermarks/([^/]+)(?:/|$)")
 ACCOUNT_PATH_RE = re.compile(r"^/api/accounts/([^/]+)(?:/|$)")
 POST_PATH_RE = re.compile(r"^/api/posts/([^/]+)(?:/|$)")
+IMPORT_PATH_RE = re.compile(r"^/api/auto-import/imports/([^/]+)(?:/|$)")   # 187: source_imports rows
 
 
 def _path_owned(user: dict, path: str) -> bool:
@@ -106,7 +107,8 @@ def _path_owned(user: dict, path: str) -> bool:
     w = WATERMARK_PATH_RE.match(path)
     a = ACCOUNT_PATH_RE.match(path)
     po = POST_PATH_RE.match(path)
-    if not m and not w and not a and not po:
+    im = IMPORT_PATH_RE.match(path)
+    if not m and not w and not a and not po and not im:
         return True
     with get_db() as conn:
         with conn.cursor() as cur:
@@ -122,6 +124,9 @@ def _path_owned(user: dict, path: str) -> bool:
                     )
                     return bool(cur.fetchone())
                 return True
+            if im:
+                cur.execute("SELECT 1 FROM source_imports WHERE id = %s AND user_id = %s", (im.group(1), user["id"]))
+                return bool(cur.fetchone())
             if a:
                 cur.execute(
                     "SELECT 1 FROM platform_accounts WHERE id = %s AND user_id = %s",
@@ -4327,6 +4332,8 @@ def _duration_fmt(sec) -> str:
 def _import_state(status, reason, job_status) -> tuple[str, str]:
     """(label, badge) of one recent import; badge = a badgeClass() bucket in index.html."""
     if status == "found":
+        if reason and reason.startswith("Paused"):
+            return (reason, "idle")
         return ("Waiting for disk space" if reason == "Waiting for disk space" else "Importing", "idle")
     if status == "skipped":
         return (f"Skipped · {reason}" if reason else "Skipped", "cancelled")
@@ -4405,7 +4412,8 @@ def get_auto_import(request: Request, campaign: Optional[str] = None):
         imports.append({"id": iid, "title": title or url, "url": url, "campaign_name": names.get(slug, slug or ""),
                         "channel": auto_import.channel_label(ch), "duration_fmt": _duration_fmt(dur),
                         "when_fmt": created.astimezone(WIB_TZ).strftime("%-d %b, %H:%M"), "status": status,
-                        "label": label, "badge": badge, "job_id": job_id})
+                        "label": label, "badge": badge, "job_id": job_id,
+                        "confirmable": status == "skipped" and reason in auto_import.CONFIRMABLE})
     return {"interval_min": _auto_import_interval(), "disk_free_gb": round(disk_status()["free_mb"] / 1024),
             "campaigns": out, "imports": imports}
 
@@ -4472,6 +4480,27 @@ def put_auto_import_watch(req: WatchRequest, request: Request):
     return get_auto_import(request, campaign=rules["slug"] if req.guardrails is not None else None)
 
 
+@app.post("/api/auto-import/imports/{import_id}/import")
+def confirm_auto_import(import_id: str, request: Request):
+    """187: "Import anyway" for a skipped video the rules couldn't vouch for (auto_import.CONFIRMABLE: no upload time,
+    unknown length). Back to `found` with reason CONFIRMED; the import loop makes the job via create_job_for (campaign
+    checks, "Already imported" and the disk pause still apply; a switched-off watch doesn't block it). Owner-scoped
+    (middleware IMPORT_PATH_RE)."""
+    user = current_user(request)
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE source_imports SET status = 'found', reason = %s, attempts = 0, retry_after = NULL, updated_at = NOW() "
+                "WHERE id = %s AND user_id = %s AND status = 'skipped' AND reason = ANY(%s) RETURNING campaign",
+                (auto_import.CONFIRMED, import_id, user["id"], list(auto_import.CONFIRMABLE)),
+            )
+            row = cur.fetchone()
+        conn.commit()
+    if not row:
+        raise HTTPException(status_code=409, detail="This video can't be imported from here (already imported or not waiting for a confirm)")
+    return get_auto_import(request, campaign=row[0])
+
+
 IMPORT_LOOP_SECONDS = 15
 IMPORT_MAX_ATTEMPTS = 3
 
@@ -4512,7 +4541,7 @@ def promote_found_imports(limit: int = 5) -> int:
             cur.execute(
                 """
                 SELECT i.id, i.user_id, i.campaign, i.url, i.attempts, u.username, u.role, u.active,
-                       w.guardrails, i.title, i.duration, i.channel, w.enabled
+                       w.guardrails, i.title, i.duration, i.channel, w.enabled, i.reason
                 FROM source_imports i JOIN users u ON u.id = i.user_id
                 LEFT JOIN source_watches w ON w.id = i.watch_id
                 WHERE i.status = 'found' AND (i.retry_after IS NULL OR i.retry_after <= NOW())
@@ -4520,7 +4549,7 @@ def promote_found_imports(limit: int = 5) -> int:
                 """,
                 (limit,),
             )
-            for iid, uid, slug, url, attempts, username, role, active, guard_raw, title, dur, channel, watch_on in cur.fetchall():
+            for iid, uid, slug, url, attempts, username, role, active, guard_raw, title, dur, channel, watch_on, reason_now in cur.fetchall():
                 status, reason, job_id, retry = "imported", None, None, None
                 try:
                     guard = auto_import.normalize_guardrails(guard_raw)
@@ -4533,7 +4562,7 @@ def promote_found_imports(limit: int = 5) -> int:
                     free_gb = disk_status()["free_mb"] / 1024
                     if not active:
                         status, reason = "skipped", "Account disabled"
-                    elif watch_on is False:
+                    elif watch_on is False and reason_now != auto_import.CONFIRMED:
                         status, reason = "skipped", "Auto-import switched off"
                     elif job_id:
                         status, reason = "skipped", "Already imported"
