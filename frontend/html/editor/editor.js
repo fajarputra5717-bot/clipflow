@@ -61,6 +61,7 @@
       E.zoom = { on: E.state.zoom.on, intensity: E.state.zoom.intensity, markers: E.state.zoom.markers.slice() };
       E.progress = { on: E.state.progress.on, color: E.state.progress.color };
       E.plan = (E.state.director.items || []).map((i) => ({ ...i }));
+      E.look = { preset: E.state.look.preset, vignette: E.state.look.vignette, grain: E.state.look.grain };
       E.audio = { compress: E.state.audio.compress, loud: !!E.state.audio.loud, silence_trim: E.state.audio.silence_trim,
                   silence_ranges: (E.state.audio.silence_ranges || []).map((r) => r.slice()) };
       loadCaptions();
@@ -509,9 +510,23 @@
   }
   const sw = (attr, on, label) => `<button class="ed-switch" type="button" role="switch" aria-checked="${on}" aria-label="${label}" ${attr}></button>`;
 
+  const LOOK_NAME = { none: "Neutral", vivid_gaming: "Vivid Gaming", warm: "Warm", moody: "Moody" };
+  function lookGroupHtml() {        // E4: grades the footage only; captions, emoji and watermark keep their colours
+    const L = E.look, presets = E.state.look.presets || ["none"];
+    return `
+      <div class="ed-group">
+        <div class="ed-label">Look</div>
+        <div class="ed-hint">Colour grade for the footage. Captions, emoji and the watermark keep their colours.</div>
+        <div class="ed-chips" role="group" aria-label="Look">${presets.map((x) =>
+          `<button type="button" class="ed-chip" data-ed-look-preset="${esc(x)}" aria-pressed="${L.preset === x}">${esc(LOOK_NAME[x] || x)}</button>`).join("")}</div>
+        <div class="ed-row"><span class="ed-label" id="edVigLbl">Vignette</span>${sw('data-ed-look-vignette aria-labelledby="edVigLbl"', L.vignette, "Vignette")}</div>
+        <div class="ed-row"><span class="ed-label" id="edGrainLbl">Light grain</span>${sw('data-ed-look-grain aria-labelledby="edGrainLbl"', L.grain, "Light grain")}</div>
+      </div>`;
+  }
+  const saveLook = () => saver("look", "/look", () => E.look);
   function effectsPanel() {
     const z = E.zoom, p = E.progress, n = z.markers.length;
-    return planGroupHtml() + `
+    return planGroupHtml() + lookGroupHtml() + `
       <div class="ed-group">
         <div class="ed-row"><div><div class="ed-label">Zoom punch-ins</div>
           <div class="ed-hint">${n} punch-in${n === 1 ? "" : "s"} on the timeline: add them in ◆ Zoom mode (key Z).</div></div>
@@ -1059,7 +1074,7 @@
 
   // ------------------------------------------------------------------ events (delegated, data-*)
   document.addEventListener("click", (e) => {
-    const t = e.target.closest("[data-ed-back],[data-ed-hook-on],[data-ed-hook-dur],[data-ed-render],[data-ed-play],[data-ed-tab],[data-ed-zoom-on],[data-ed-progress-on],[data-ed-progress-color],[data-ed-compress],[data-ed-silence],[data-ed-word],[data-ed-pause],[data-ed-mode],[data-ed-suggest],[data-ed-fillers],[data-ed-cuts-reset],[data-ed-zoom-add],[data-ed-zoom-mark],[data-ed-trim],[data-ed-seekarea],[data-ed-preset],[data-ed-cap-all],[data-ed-kw],[data-ed-kw-color],[data-ed-fix-typos],[data-ed-cap-reset],[data-ed-capy-on],[data-ed-new-hook],[data-ed-thumb-pick],[data-ed-thumb-gen],[data-ed-burn],[data-ed-gen-desc],[data-ed-sm],[data-ed-versions],[data-ed-restore],[data-ed-approve],[data-ed-plan-gen],[data-ed-plan-item],[data-ed-loud]");
+    const t = e.target.closest("[data-ed-back],[data-ed-hook-on],[data-ed-hook-dur],[data-ed-render],[data-ed-play],[data-ed-tab],[data-ed-zoom-on],[data-ed-progress-on],[data-ed-progress-color],[data-ed-compress],[data-ed-silence],[data-ed-word],[data-ed-pause],[data-ed-mode],[data-ed-suggest],[data-ed-fillers],[data-ed-cuts-reset],[data-ed-zoom-add],[data-ed-zoom-mark],[data-ed-trim],[data-ed-seekarea],[data-ed-preset],[data-ed-cap-all],[data-ed-kw],[data-ed-kw-color],[data-ed-fix-typos],[data-ed-cap-reset],[data-ed-capy-on],[data-ed-new-hook],[data-ed-thumb-pick],[data-ed-thumb-gen],[data-ed-burn],[data-ed-gen-desc],[data-ed-sm],[data-ed-versions],[data-ed-restore],[data-ed-approve],[data-ed-plan-gen],[data-ed-plan-item],[data-ed-loud],[data-ed-look-preset],[data-ed-look-vignette],[data-ed-look-grain]");
     if (!t || !E.state && !t.matches("[data-ed-back]")) return;
     if (t.matches("[data-ed-back]")) {                       // back to the Review page (step 4) for this job
       e.preventDefault(); const jid = E.jid; close(false); location.hash = `#review/${encodeURIComponent(jid || "")}`;
@@ -1150,6 +1165,9 @@
     if (t.matches("[data-ed-zoom-on]")) { E.zoom.on = !E.zoom.on; repaintPanel(); zoomChanged(); return; }
     if (t.matches("[data-ed-progress-on]")) { E.progress.on = !E.progress.on; repaintPanel(); saveProgress(); return; }
     if (t.matches("[data-ed-progress-color]")) { E.progress.color = t.dataset.edProgressColor; repaintPanel(); saveProgress(); return; }
+    if (t.matches("[data-ed-look-preset]")) { E.look.preset = t.dataset.edLookPreset; repaintPanel(); saveLook(); return; }
+    if (t.matches("[data-ed-look-vignette]")) { E.look.vignette = !E.look.vignette; repaintPanel(); saveLook(); return; }
+    if (t.matches("[data-ed-look-grain]")) { E.look.grain = !E.look.grain; repaintPanel(); saveLook(); return; }
     if (t.matches("[data-ed-loud]")) { E.audio.loud = !E.audio.loud; repaintPanel(); saveAudio(); return; }
     if (t.matches("[data-ed-compress]")) { E.audio.compress = !E.audio.compress; repaintPanel(); saveAudio(); return; }
     if (t.matches("[data-ed-silence]")) {

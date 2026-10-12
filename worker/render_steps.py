@@ -458,6 +458,13 @@ def zoom_stage(filters: list, last: str, width: int, height: int, output_path=No
         other = sorted({e[0] for e in planned if e[0] != "punch"})
         log(f"Zoom: {n_punch} punch-in(s) ({sum(1 for e in planned if e[0] == 'punch')} from the edit plan), peak {peak:.2f}, "
             f"canvas {width}x{height}" + (f"; motion from the plan: {', '.join(other)}" if other else ""))
+    # E4: the look grades the footage only (after the motion, before emoji / watermark / captions)
+    look = edit_specs.look_of(spec)
+    lf = retention.look_filter(look)
+    if lf:
+        filters.append(f"[{last}]{lf}[looked];")
+        last = "looked"
+        log(f"Look: {look.get('preset')}" + (" + vignette" if look.get("vignette") else "") + (" + grain" if look.get("grain") else ""))
     # E3: emoji pops AFTER the motion (they don't zoom/shake) and BEFORE watermark + captions (never cover them)
     emojis = edit_director.emoji_events(edit_specs.director_of(spec))
     if emojis:

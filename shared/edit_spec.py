@@ -449,3 +449,26 @@ def _director_params(value):
 def director_of(spec):
     d = (spec or {}).get("director") if isinstance(spec, dict) else None
     return d if isinstance(d, dict) else None
+
+
+# ---- Auto Edit E4 (lane B): per-clip look (colour preset, vignette, grain)
+
+LOOK_PRESETS = ("none", "vivid_gaming", "warm", "moody")
+
+
+def normalize_look(value):
+    """{preset, vignette, grain} or None (neutral)."""
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        raise ValueError("look must be an object")
+    preset = value.get("preset") or "none"
+    if preset not in LOOK_PRESETS:
+        raise ValueError(f"Unknown look {str(preset)[:30]!r}")
+    out = {"preset": preset, "vignette": bool(value.get("vignette")), "grain": bool(value.get("grain"))}
+    return None if out == {"preset": "none", "vignette": False, "grain": False} else out
+
+
+def look_of(spec):
+    v = (spec or {}).get("look") if isinstance(spec, dict) else None
+    return v if isinstance(v, dict) else None

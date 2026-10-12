@@ -63,3 +63,19 @@ class Sfx(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Look(unittest.TestCase):
+    """Auto Edit E4: look_filter + normalize_look."""
+    def test_filter(self):
+        self.assertIsNone(r.look_filter(None))
+        self.assertIsNone(r.look_filter({"preset": "none"}))
+        self.assertEqual(r.look_filter({"preset": "moody", "vignette": True, "grain": True}),
+                         r.LOOKS["moody"] + ",vignette=angle=PI/5,noise=alls=6:allf=t")
+
+    def test_normalize(self):
+        from shared import edit_spec as S
+        self.assertIsNone(S.normalize_look({"preset": "none"}))
+        self.assertEqual(S.normalize_look({"preset": "warm", "grain": 1}), {"preset": "warm", "vignette": False, "grain": True})
+        with self.assertRaises(ValueError):
+            S.normalize_look({"preset": "sepia"})

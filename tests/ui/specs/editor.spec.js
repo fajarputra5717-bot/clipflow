@@ -20,6 +20,7 @@ function editorState(over = {}) {
     director: { items: [], rendered: ["emoji", "flash", "freeze", "punch", "push", "shake", "slowmo", "whip", "zoom_out"], arrives_in: {}, min_gap: 3, frames_ready: false,
       effects: ["punch", "push", "zoom_out", "shake", "flash", "whip", "freeze", "slowmo", "emoji"], defaults: { emoji: { emoji: "😂" }, freeze: { hold: 0.6 }, slowmo: { dur: 1.2, factor: 0.5 } },
       sfx: ["whoosh", "boom", "bass_hit", "ding", "record_scratch"], emoji: ["😂", "😭", "💀"] },
+    look: { preset: "none", vignette: false, grain: false, presets: ["none", "vivid_gaming", "warm", "moody"] },
     ...over,
   };
 }
@@ -53,7 +54,7 @@ async function mockEditor(page, api, timeline = TIMELINE) {
   api.editor = editorState();
   await page.route(/\/api\/jobs\/[^/]+\/candidates\/[^/]+\/editor\/timeline/, (route) =>
     route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(timeline) }));
-  await page.route(/\/api\/jobs\/[^/]+\/candidates\/[^/]+\/editor(\/hook-title|\/cuts|\/zoom|\/progress|\/audio|\/plan)?(\?.*)?$/, async (route) => {
+  await page.route(/\/api\/jobs\/[^/]+\/candidates\/[^/]+\/editor(\/hook-title|\/cuts|\/zoom|\/progress|\/audio|\/plan|\/look)?(\?.*)?$/, async (route) => {
     const req = route.request();
     if (req.method() === "PUT") {
       const body = req.postDataJSON(), path = new URL(req.url()).pathname;
@@ -63,6 +64,7 @@ async function mockEditor(page, api, timeline = TIMELINE) {
       else if (path.endsWith("/progress")) api.editor.progress = { ...api.editor.progress, ...body };
       else if (path.endsWith("/audio")) api.editor.audio = { ...api.editor.audio, ...body };
       else if (path.endsWith("/plan")) api.editor.director = { ...api.editor.director, items: body.items };
+      else if (path.endsWith("/look")) api.editor.look = { ...api.editor.look, ...body };
       else api.editor.hook_title = { ...api.editor.hook_title, ...body };
     }
     if (req.method() === "POST" && new URL(req.url()).pathname.endsWith("/plan")) {   // Auto Edit E1
@@ -503,5 +505,20 @@ test.describe("Editor Auto edit E3 sound + emoji", () => {
     await app.locator('[data-ed-plan-emoji="shake-350"]').selectOption("💀");
     await expect.poll(() => api.calls.filter((c) => c.method === "PUT" && c.path.endsWith("/plan")).pop()?.body.items.find((i) => i.id === "shake-350")?.params)
       .toEqual({ emoji: "💀" });
+  });
+});
+
+// Auto Edit E4: Look = colour preset chips + vignette + grain switches (PUT /look).
+test.describe("Editor Auto edit E4 look", () => {
+  test.use({ reducedMotion: "reduce" });
+  test("pick Moody and vignette: PUT /look", async ({ app, api }) => {
+    await mockEditor(app, api);
+    await app.evaluate(() => { location.hash = "#editor/job-done/cand-a"; });
+    await app.locator('[data-ed-tab="effects"]').click();
+    await app.locator('[data-ed-look-preset="moody"]').click();
+    await app.locator("[data-ed-look-vignette]").click();
+    await expect(app.locator('[data-ed-look-preset="moody"]')).toHaveAttribute("aria-pressed", "true");
+    await expect.poll(() => api.calls.filter((c) => c.method === "PUT" && c.path.endsWith("/look")).pop()?.body)
+      .toEqual({ preset: "moody", vignette: true, grain: false });
   });
 });

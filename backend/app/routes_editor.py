@@ -126,6 +126,8 @@ def _state(c: dict) -> dict:
         "watermark": _watermark_state(c),
         "export": _export_state(c),
         "director": _director_state(spec, c),
+        "look": {"preset": "none", "vignette": False, "grain": False, **(edit_specs.look_of(spec) or {}),
+                 "presets": list(edit_specs.LOOK_PRESETS)},
         "hook_title": {
             "on": bool(ht.get("on", False)), "text": ht.get("text", ""),
             "duration": ht.get("duration", edit_specs.HOOK_TITLE_DEFAULT_DURATION),
@@ -374,6 +376,22 @@ def put_progress(job_id: str, candidate_id: str, body: ProgressIn, user: dict = 
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     return _save_spec_key(job_id, candidate_id, user, "progress", value)
+
+
+class LookIn(BaseModel):
+    preset: str = "none"
+    vignette: bool = False
+    grain: bool = False
+
+
+@editor.put("/look")
+def put_look(job_id: str, candidate_id: str, body: LookIn, user: dict = Depends(get_current_user)):
+    """Auto Edit E4: colour preset + vignette + grain for this clip (footage only, previews and finals)."""
+    try:
+        value = edit_specs.normalize_look(body.model_dump())
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return _save_spec_key(job_id, candidate_id, user, "look", value)
 
 
 class AudioIn(BaseModel):

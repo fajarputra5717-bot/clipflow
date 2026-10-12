@@ -582,6 +582,32 @@ def sfx_mix_cmd(src: str, dst: str, events: Sequence[tuple], asset_dir: str, *, 
     return argv
 
 
+# --------------------------------------------------------------------------- (g) look (Auto Edit E4)
+# Colour grade + vignette + grain on the FOOTAGE only: zoom stage, after the motion, before emoji/watermark/captions
+# (caption colours and the watermark stay exact). ffmpeg eq/colorbalance (no LUT files to license).
+LOOKS = {
+    "vivid_gaming": "eq=saturation=1.35:contrast=1.08:gamma=0.98,colorbalance=bs=0.04:rh=0.03,unsharp=5:5:0.4",
+    "warm": "colorbalance=rm=0.07:gm=0.02:bm=-0.06:rh=0.04:bh=-0.05,eq=saturation=1.08",   # shadows untouched: blacks stay black
+    "moody": "eq=contrast=1.12:brightness=-0.03:saturation=0.82,colorbalance=bs=0.06:bm=0.03:rh=0.02",
+}
+VIGNETTE = "vignette=angle=PI/5"
+GRAIN = "noise=alls=6:allf=t"
+
+
+def look_filter(look: Optional[dict]) -> Optional[str]:
+    """{preset: none|vivid_gaming|warm|moody, vignette, grain} → filter chain, or None for a neutral look."""
+    if not look:
+        return None
+    parts = []
+    if look.get("preset") in LOOKS:
+        parts.append(LOOKS[look["preset"]])
+    if look.get("vignette"):
+        parts.append(VIGNETTE)
+    if look.get("grain"):
+        parts.append(GRAIN)
+    return ",".join(parts) or None
+
+
 # --------------------------------------------------------------------------- (b) loudnorm
 
 def loudnorm_measure_cmd(src: str, *, i: float = LOUDNORM_I, tp: float = LOUDNORM_TP,
