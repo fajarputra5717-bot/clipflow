@@ -175,3 +175,4 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 203 · 2026-10-13 · Phone text fields ≥ 44 px (Settings 34/36 px → 44), touch.spec covers inputs + sheets (deep audit M3) · index.html, touch.spec
 204 · 2026-10-13 · Publish/Schedule/Track load errors: plain lead + Retry, detail as small print (deep audit M5) · index.html, load-errors.spec
 205 · 2026-10-14 · Segmented buttons: pressed = accent from aria-pressed only (dark theme showed them inverted), contrast ≥ 4.5 · index.html, touch.spec, CLAUDE.md
+206 · 2026-10-14 · Layout shift: late notes keep their line, Review's loading line is replaced not pushed; all cases 0.000 (was ≤ 0.084) (deep audit M4) · index.html, review.js, cls.spec
