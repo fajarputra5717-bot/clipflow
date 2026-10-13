@@ -116,7 +116,7 @@ html[data-theme="dark"]{color-scheme:dark}
 [data-theme="dark"] .choice.active{background:rgba(10,132,255,.12)}
 [data-theme="dark"] .status-box{border-color:rgba(255,255,255,.09)}
 [data-theme="dark"] .queue-thumb{background:#2c2c2e;border-color:rgba(255,255,255,.08)}
-[data-theme="dark"] .queue-thumb:empty{background:linear-gradient(100deg,#2c2c2e 30%,#3a3a3c 50%,#2c2c2e 70%);background-size:200% 100%}
+[data-theme="dark"] .queue-thumb:empty{background:#2c2c2e}[data-theme="dark"] .queue-thumb:empty::after{background:linear-gradient(100deg,transparent 30%,#3a3a3c 50%,transparent 70%)}
 [data-theme="dark"] .candidate-card{border-color:rgba(255,255,255,.09);box-shadow:0 2px 12px rgba(0,0,0,.3)}
 [data-theme="dark"] .preview-frame{border-color:rgba(255,255,255,.1)}
 [data-theme="dark"] .edit-drawer-inner{border-color:rgba(255,255,255,.09);background:rgba(35,35,37,.72)}
@@ -256,7 +256,7 @@ a{color:inherit}
 }
 @media (prefers-reduced-motion:reduce){
   .job-island,.job-island-bar,.tab,.tabs,.tabs:before,.tabs:after,.tab-indicator,.view-section,
-  .job-card,.queue-card,.queue-thumb,.queue-thumb:empty,.thumb-option{transition:none!important;animation:none!important}
+  .job-card,.queue-card,.queue-thumb,.queue-thumb:empty,.queue-thumb:empty::after,.thumb-option{transition:none!important;animation:none!important}
 }
 body.resizing .topbar,body.resizing .tabs,body.resizing .job-island,
 body.resizing .tab-indicator,body.resizing .topbar-logo{
@@ -464,8 +464,9 @@ button.primary:hover:not(:disabled){background:#0077ed!important}
 }
 .badge.idle{background:var(--badge-idle-bg);border-color:var(--badge-idle-line);color:var(--badge-idle-fg)}
 .badge.running{background:var(--badge-run-bg);border-color:var(--badge-run-line);color:var(--badge-run-fg);position:relative;overflow:hidden;isolation:isolate}
-.badge.running::after{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;background:linear-gradient(100deg,transparent 30%,var(--badge-shimmer-peak) 50%,transparent 70%) no-repeat;background-size:250% 100%;animation:badgeShimmer 1.8s linear infinite}
-@keyframes badgeShimmer{0%{background-position:150% 0}100%{background-position:-50% 0}}
+/* audit L8: shimmers slide a fixed gradient with transform (compositor), never background-position */
+.badge.running::after{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;background:linear-gradient(100deg,transparent 30%,var(--badge-shimmer-peak) 50%,transparent 70%) no-repeat;transform:translateX(-100%);animation:badgeShimmer 1.8s linear infinite}
+@keyframes badgeShimmer{from{transform:translateX(-100%)}to{transform:translateX(100%)}}
 @media (prefers-reduced-motion:reduce){.badge.running::after{animation:none;display:none}}
 .badge.attention{background:var(--badge-warn-bg);border-color:var(--badge-warn-line);color:var(--badge-warn-fg)}
 .badge.completed{background:var(--badge-good-bg);border-color:var(--badge-good-line);color:var(--badge-good-fg)}
@@ -521,13 +522,11 @@ summary > .chev{margin-left:auto}
 .queue-card .actions{position:relative;z-index:3}
 .queue-preview{display:grid;grid-template-columns:72px minmax(0,1fr);gap:11px;align-items:center;margin-top:10px}
 .queue-thumb{width:72px;aspect-ratio:9/16;border-radius:12px;overflow:hidden;background:#e8e8ed;border:1px solid rgba(0,0,0,.06);position:relative}
-.queue-thumb:empty{
-  background:linear-gradient(100deg,#e8e8ed 30%,#f3f3f5 50%,#e8e8ed 70%);
-  background-size:200% 100%;animation:shimmer 1.7s ease-in-out infinite;
-}
+.queue-thumb:empty{background:#e8e8ed}
+.queue-thumb:empty::after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(100deg,transparent 30%,#f3f3f5 50%,transparent 70%);transform:translateX(-100%);animation:shimmer 1.7s ease-in-out infinite}
 .queue-thumb img{width:100%;height:100%;object-fit:cover;display:block;opacity:0;transition:opacity var(--dur-4) var(--ease)}
 .queue-thumb img.loaded{opacity:1}
-@keyframes shimmer{0%{background-position:150% 0}100%{background-position:-50% 0}}
+@keyframes shimmer{from{transform:translateX(-100%)}to{transform:translateX(100%)}}
 .job-card,.queue-card{
   animation:cardIn var(--dur-4) var(--ease) both;
   animation-delay:calc(var(--i,0) * 55ms);
@@ -743,19 +742,18 @@ summary > .chev{margin-left:auto}
    notice these are one-click AI shortcuts rather than plain buttons.
    Uses Apple's "Intelligence" pink→purple→indigo trio so AI actions
    read as distinctly AI-flavored against the blue accent everywhere else. */
-.ai-highlight{position:relative;overflow:hidden;animation:aiGlow 2.8s ease-in-out infinite}
+.ai-highlight{position:relative;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,.06),0 0 0 1px rgba(175,82,222,.16)}
+.ai-highlight:before{content:"";position:absolute;inset:0;pointer-events:none;border-radius:inherit;opacity:0;
+  box-shadow:inset 0 0 0 1px rgba(175,82,222,.34),inset 0 0 16px rgba(175,82,222,.22);animation:aiGlow 2.8s ease-in-out infinite}
 .ai-highlight:after{
   content:"";position:absolute;inset:0;pointer-events:none;border-radius:inherit;
   background:linear-gradient(105deg,transparent 20%,rgba(175,82,222,.35) 50%,transparent 80%);
-  background-size:250% 100%;animation:aiShine 3.4s linear infinite;
+  transform:translateX(-100%);animation:aiShine 3.4s linear infinite;
 }
-@keyframes aiGlow{
-  0%,100%{box-shadow:0 2px 10px rgba(0,0,0,.06),0 0 0 1px rgba(175,82,222,.10)}
-  50%{box-shadow:0 6px 20px rgba(175,82,222,.22),0 0 0 1px rgba(175,82,222,.30)}
-}
-@keyframes aiShine{0%{background-position:180% 0}100%{background-position:-80% 0}}
+@keyframes aiGlow{0%,100%{opacity:0}50%{opacity:1}}
+@keyframes aiShine{from{transform:translateX(-100%)}to{transform:translateX(100%)}}
 .ai-highlight:disabled{animation:none;box-shadow:0 2px 10px rgba(0,0,0,.06)}
-.ai-highlight:disabled:after{display:none}
+.ai-highlight:disabled:after,.ai-highlight:disabled:before{display:none}
 .final-box{margin-top:10px;padding:10px;border-radius:14px;background:rgba(30,184,90,.06);border:1px solid rgba(30,184,90,.2)}
 .final-box strong{font-size:10.5px}.final-box .actions{margin-top:7px}
 .error-box{padding:10px;border-radius:13px;border:1px solid rgba(255,59,48,.22);background:rgba(255,59,48,.06);color:#c00f0c;font-size:10.5px}
@@ -791,7 +789,7 @@ summary > .chev{margin-left:auto}
 .running-job-item:hover{transform:translateY(-2px);border-color:rgba(0,113,227,.3);background:#fff;box-shadow:0 8px 22px rgba(0,0,0,.08)}
 .running-job-item:active{transform:scale(var(--press));transition-duration:var(--dur-1)}
 .running-job-main{display:flex;align-items:center;gap:10px}.running-job-info{min-width:0;display:flex;flex-direction:column;gap:2px}.running-job-name{font-size:10.5px;font-weight:700}.running-job-stage{font-size:9px;font-weight:700;transition:color var(--dur-3) ease}.running-job-meta{display:flex;justify-content:space-between;gap:8px;font-size:8.5px;color:var(--muted2);margin-top:7px}
-@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.72)}}@keyframes bars{to{transform:scaleY(.55);opacity:.55}}@keyframes analyzeGlow{0%,100%{box-shadow:0 4px 14px rgba(0,113,227,.20),0 0 0 1px rgba(0,113,227,.10)}50%{box-shadow:0 8px 26px rgba(0,113,227,.38),0 0 0 1px rgba(0,113,227,.24)}}@keyframes shine{from{background-position:180% 0}to{background-position:-20% 0}}@keyframes sweep{from{background-position:180% 0}to{background-position:-20% 0}}@keyframes flow{from{background-position:0 0}to{background-position:180% 0}}@keyframes viewIn{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}@keyframes viewOut{from{opacity:1;transform:none}to{opacity:0;transform:translateY(-5px)}}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.72)}}@keyframes bars{to{transform:scaleY(.55);opacity:.55}}@keyframes viewIn{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}@keyframes viewOut{from{opacity:1;transform:none}to{opacity:0;transform:translateY(-5px)}}
 @media(max-width:760px){
   .container{width:calc(100% - 14px);margin-top:10px}.brand{margin-bottom:10px}.brand h1{font-size:16px}.logo{width:40px;height:40px;border-radius:13px}
   .topbar{top:5px}.tab{padding:9px 14px;font-size:11px}
@@ -832,6 +830,13 @@ img.topbar-logo-icon{background:none;padding:0;object-fit:cover}
   opacity:0;transform:scale(.96);transition:opacity var(--dur-2) var(--ease),transform var(--dur-3) var(--ease-out);
 }
 .sheet-layer.open .sheet{opacity:1;transform:scale(1)}
+/* audit L9: on desktop the full-viewport backdrop blur + the sheet's own backdrop blur re-rendered every frame of the
+   open animation (headless 1280: 6–9 frames > 34 ms, worst 83 ms → 0–1, worst 33–50). The sheet is near-opaque anyway,
+   so desktop drops both blurs and dims a little more; phones keep the frosted material. */
+@media (min-width:601px){
+  .sheet-backdrop{backdrop-filter:none;-webkit-backdrop-filter:none;background:rgba(0,0,0,.34)}
+  .sheet{backdrop-filter:none;-webkit-backdrop-filter:none;background:var(--panel)}
+}
 .sheet-head{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-1);padding:var(--sp-2) var(--sp-2) var(--sp-1) var(--sp-3)}
 .sheet-head h2{margin:0;font-size:20px}
 .sheet-close{width:var(--hit);height:var(--hit);min-height:var(--hit);padding:0;display:grid;place-items:center;border-radius:50%;background:var(--line);border-color:transparent;color:var(--muted);box-shadow:none}
