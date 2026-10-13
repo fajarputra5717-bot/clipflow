@@ -171,3 +171,14 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 199 · 2026-10-13 · P5 parts 2+3: automatic Instagram + Facebook view pulls with the user's own META_ACCESS_TOKEN · shared/view_pull.py, worker, main.py, settings, index.html
 200 · 2026-10-13 · Meta view pulls: per-metric FB retry, per-object permission errors stay per post, one user's crash never skips others (Lane C Lows on 199) · shared/view_pull.py, worker
 201 · 2026-10-13 · Merge lane-b a26b041: emoji from Noto Emoji (Apache 2.0, no on-video credit) + AI frames per style pack (on: Gaming Hype, Funny/Meme) · worker/assets, shared/style_packs.py, routes_editor.py
+202 · 2026-10-13 · Closed job overlay visibility:hidden + inert (deep audit M2) · index.html, overlays.spec
+203 · 2026-10-13 · Phone text fields ≥ 44 px (Settings 34/36 px → 44), touch.spec covers inputs + sheets (deep audit M3) · index.html, touch.spec
+204 · 2026-10-13 · Publish/Schedule/Track load errors: plain lead + Retry, detail as small print (deep audit M5) · index.html, load-errors.spec
+205 · 2026-10-14 · Segmented buttons: pressed = accent from aria-pressed only (dark theme showed them inverted), contrast ≥ 4.5 · index.html, touch.spec, CLAUDE.md
+206 · 2026-10-14 · Layout shift: late notes keep their line, Review's loading line is replaced not pushed; all cases 0.000 (was ≤ 0.084) (deep audit M4) · index.html, review.js, cls.spec
+207 · 2026-10-14 · Phone sliders ≥ 44 px (5 editor sliders were 40 px; deep audit M3 follow-up) · index.html, touch.spec
+208 · 2026-10-14 · Island "+N" opens a live, keyboard-accessible list of every task (it vanished under the pointer on desktop); pill opens the list (2+) or the task (1) · index.html, island-list.spec, CLAUDE.md
+209 · 2026-10-14 · Logs to journald (survive recreates); nginx JSON 503 + GET retries absorb the ~1.5 s deploy gap (deep audit M6) · docker-compose.yml, conf.d, index.html, load-errors.spec
+210 · 2026-10-14 · Review/Pick status filter (.rv-seg) pressed = accent + white like .seg (Lane C Low on 205) · editor.css, touch.spec
+211 · 2026-10-14 · FastAPI /docs, /redoc, /openapi.json off in production, kept on staging (deep audit L10) · main.py
+212 · 2026-10-14 · user_sessions expires_at index; /api/activity polls on one connection + one transaction (was 2 + 2) (deep audit L11) · auth.py, main.py

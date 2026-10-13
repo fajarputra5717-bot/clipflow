@@ -31,7 +31,7 @@
 [hidden]{display:none!important} /* author display rules must never un-hide [hidden] (070) */
  :root{
   --bg:#f5f5f7;--panel:#ffffff;--panel2:#fbfbfd;--input:#ffffff;
-  --fill:rgba(120,120,128,.12);--fill2:rgba(120,120,128,.2);--seg-thumb:#ffffff;
+  --fill:rgba(120,120,128,.12);--fill2:rgba(120,120,128,.2);--seg-thumb:#ffffff;--seg-on:#0071e3;
   --shadow:0 1px 2px rgba(0,0,0,.04),0 8px 24px rgba(0,0,0,.05); /* 107: flow-preview card shadow */ /* segmented controls (edit tabs) */
   --line:rgba(0,0,0,.08);--line2:rgba(0,0,0,.13);--text:#1d1d1f;--muted:#6e6e73;
   --muted2:#86868b;--accent:#0071e3;--accent2:#2997ff;--lux:#0071e3;--lux2:#2997ff;
@@ -75,7 +75,7 @@ html{color-scheme:light}
 html[data-theme="dark"]{color-scheme:dark}
 :root[data-theme="dark"]{
   --bg:#000000;--panel:#1c1c1e;--panel2:#232325;--input:#1c1c1e;
-  --fill:rgba(142,142,147,.16);--fill2:rgba(142,142,147,.28);--seg-thumb:#636366;
+  --fill:rgba(142,142,147,.16);--fill2:rgba(142,142,147,.28);--seg-thumb:#636366;--seg-on:#0066cc;
   --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.35);
   --line:rgba(255,255,255,.11);--line2:rgba(255,255,255,.17);--text:#f5f5f7;--muted:#98989d;
   --muted2:#8e8e93;--accent:#0a84ff;--accent2:#409cff;--lux:#0a84ff;--lux2:#409cff;
@@ -762,13 +762,13 @@ summary > .chev{margin-left:auto}
 .empty{text-align:center;padding:35px 15px;color:var(--muted);font-size:11.5px}
 .job-overlay{
   position:fixed;right:20px;top:78px;width:min(360px,calc(100vw - 28px));z-index:100;
-  opacity:0;pointer-events:none;
+  opacity:0;pointer-events:none;visibility:hidden;
   transform-origin:top right;
   transform:translateY(-16px) scale(.82);
   filter:blur(8px);
-  transition:opacity var(--dur-3) var(--ease),transform var(--dur-4) var(--ease),filter var(--dur-3) ease
+  transition:opacity var(--dur-3) var(--ease),transform var(--dur-4) var(--ease),filter var(--dur-3) ease,visibility 0s linear var(--dur-4)
 }
-.job-overlay.open{opacity:1;pointer-events:auto;transform:translateY(0) scale(1);filter:blur(0)}
+.job-overlay.open{opacity:1;pointer-events:auto;visibility:visible;transform:translateY(0) scale(1);filter:blur(0);transition-delay:0s}
 .job-overlay-card{border:1px solid rgba(0,0,0,.08);border-radius:20px;background:rgba(255,255,255,.86);backdrop-filter:var(--material-blur);-webkit-backdrop-filter:var(--material-blur);box-shadow:0 20px 55px rgba(0,0,0,.18);padding:13px;transition:box-shadow var(--dur-3) ease}
 .job-overlay-head{display:flex;justify-content:space-between;align-items:center;gap:10px}.job-overlay-title{font-size:12px;font-weight:700}.job-overlay-summary{font-size:9.5px;color:var(--muted);margin-top:2px;transition:opacity var(--dur-2) ease}
 .job-overlay-close{width:31px;height:31px;min-height:31px;padding:0;border-radius:50%;background:#f5f5f7;border-color:rgba(0,0,0,.08)!important;color:var(--text);transition:transform var(--dur-4) var(--ease),background var(--dur-3) ease}
@@ -776,6 +776,18 @@ summary > .chev{margin-left:auto}
 .job-overlay-close:active{transform:scale(var(--press)) rotate(90deg);transition-duration:var(--dur-1)}
 .running-job-list{display:grid;gap:7px;margin-top:10px}
 .running-job-item{padding:9px;border-radius:14px;background:var(--panel2);border:1px solid rgba(0,0,0,.06);cursor:pointer;transition:transform var(--dur-3) var(--ease),border-color var(--dur-3) ease,background var(--dur-3) ease,box-shadow var(--dur-3) var(--ease)}
+.job-overlay .running-job-item,[data-theme="dark"] .job-overlay .running-job-item{display:block;width:100%;text-align:left;font:inherit;font-weight:400;color:var(--text);min-height:0;height:auto}
+.job-overlay .running-job-item{background:var(--panel2)}[data-theme="dark"] .job-overlay .running-job-item{background:#2c2c2e}
+.running-job-item:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.running-job-main .rj-lead{flex:none;width:40px;height:40px;border-radius:10px;overflow:hidden;display:grid;place-items:center;background:var(--fill)}
+.running-job-main .rj-lead img{width:100%;height:100%;object-fit:cover}
+.running-job-item .running-job-info{flex:1;min-width:0}.running-job-item .running-job-name{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.running-job-item .running-job-stage{display:block}
+.running-job-item.is-indeterminate .progress-ring{display:none}
+.rj-open{color:var(--accent);font-weight:600;margin-left:auto}
+.job-overlay .running-job-name{font-size:13px}.job-overlay .running-job-stage{font-size:12px}.job-overlay .running-job-meta{font-size:11px}
+.job-overlay .job-overlay-title{font-size:15px}.job-overlay .job-overlay-summary{font-size:12px}
+.job-overlay .job-overlay-card,[data-theme="dark"] .job-overlay .job-overlay-card{background:var(--panel)}
 .running-job-item:hover{transform:translateY(-2px);border-color:rgba(0,113,227,.3);background:#fff;box-shadow:0 8px 22px rgba(0,0,0,.08)}
 .running-job-item:active{transform:scale(var(--press));transition-duration:var(--dur-1)}
 .running-job-main{display:flex;align-items:center;gap:10px}.running-job-info{min-width:0;display:flex;flex-direction:column;gap:2px}.running-job-name{font-size:10.5px;font-weight:700}.running-job-stage{font-size:9px;font-weight:700;transition:color var(--dur-3) ease}.running-job-meta{display:flex;justify-content:space-between;gap:8px;font-size:8.5px;color:var(--muted2);margin-top:7px}
@@ -1027,6 +1039,7 @@ img.topbar-logo-icon{background:none;padding:0;object-fit:cover}
   opacity:0;transform:translateX(-24px) scale(.4);transition:opacity var(--dur-2) var(--ease),transform var(--dur-3) var(--ease-spring);
 }
 .island-more::after{content:"";position:absolute;inset:-4px}
+.island-more{-webkit-tap-highlight-color:transparent}
 .island-more.on{opacity:1;transform:none}
 .island-more:not(.on){pointer-events:none}
 .island.is-failed .isl-bar{display:none}
@@ -1047,8 +1060,9 @@ button:not([class]):not([role]):hover:not(:disabled),button[class=""]:not([role]
 button.secondary,[data-theme="dark"] button.secondary{background:var(--fill);border-color:transparent;color:var(--text);box-shadow:none}
 button.secondary:hover:not(:disabled),[data-theme="dark"] button.secondary:hover:not(:disabled){background:var(--fill2);box-shadow:none}
 /* dark: plain (unclassed) primary buttons use the accent, like the mockup; classed components keep their own */
-[data-theme="dark"] button:not([class]):not([role]),[data-theme="dark"] button[class=""]:not([role]){background:var(--accent);border-color:transparent!important;color:#fff}
-[data-theme="dark"] button:not([class]):not([role]):hover:not(:disabled),[data-theme="dark"] button[class=""]:not([role]):hover:not(:disabled){background:#409cff}
+/* a toggle (aria-pressed) is never a primary action: its colour comes from its own pressed state (segmented bug, 205) */
+[data-theme="dark"] button:not([class]):not([role]):not([aria-pressed]),[data-theme="dark"] button[class=""]:not([role]):not([aria-pressed]){background:var(--accent);border-color:transparent!important;color:#fff}
+[data-theme="dark"] button:not([class]):not([role]):not([aria-pressed]):hover:not(:disabled),[data-theme="dark"] button[class=""]:not([role]):not([aria-pressed]):hover:not(:disabled){background:#409cff}
 .panel{padding:var(--sp-3);border-color:var(--line);box-shadow:var(--shadow)}
 [data-theme="dark"] .panel{border-color:var(--line)}
 input,select,textarea{font-size:15px;padding:11px 14px;border-radius:12px;background:var(--input);border-color:var(--line2)}
@@ -1141,9 +1155,11 @@ select::-ms-expand{display:none}
 .grid-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--sp-2)}
 .seg{display:inline-flex;padding:3px;border-radius:999px;background:var(--fill);gap:2px;flex-wrap:wrap}
 .seg button,[data-theme="dark"] .seg button{min-height:36px;background:transparent;color:var(--text);font-weight:500;padding:0 14px;border:0!important;border-radius:999px;box-shadow:none;transition:background var(--dur-2) var(--ease-out),box-shadow var(--dur-2) var(--ease-out)}
-.seg button:hover:not(:disabled):not([aria-pressed="true"]){background:var(--fill)}
-.seg button[aria-pressed="true"],[data-theme="dark"] .seg button[aria-pressed="true"]{background:var(--seg-thumb);box-shadow:0 1px 3px rgba(0,0,0,.12);font-weight:600}
-.seg-note{margin:6px 0 0}
+.seg button:hover:not(:disabled):not([aria-pressed="true"]),[data-theme="dark"] .seg button:hover:not(:disabled):not([aria-pressed="true"]){background:var(--fill2);box-shadow:none}
+/* 205: selected = accent + white (≥ 4.5:1: light #0071e3 4.7, dark #0066cc 5.6), unselected = the neutral track */
+.seg button[aria-pressed="true"],[data-theme="dark"] .seg button[aria-pressed="true"],
+.seg button[aria-pressed="true"]:hover:not(:disabled),[data-theme="dark"] .seg button[aria-pressed="true"]:hover:not(:disabled){background:var(--seg-on);color:#fff;box-shadow:0 1px 3px rgba(0,0,0,.12);font-weight:600}
+.seg-note{margin:6px 0 0;min-height:1.4em;min-height:1lh}   /* audit M4: filled after the API answers; keep the line so nothing below jumps */
 .from-campaign{display:inline-block;margin-left:6px;padding:0 7px;border-radius:999px;background:var(--badge-run-bg);color:var(--accent);font-size:11px;font-weight:600;letter-spacing:0;text-transform:none;vertical-align:1px}
 .layouts{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}
 .layout-opt,[data-theme="dark"] .layout-opt{display:flex;flex-direction:column;align-items:stretch;background:var(--panel2);color:var(--text);border:1px solid var(--line2)!important;border-radius:16px;padding:12px;gap:10px;font-weight:600;font-size:13px;min-height:0;text-align:center;box-shadow:none}
@@ -1366,6 +1382,7 @@ select::-ms-expand{display:none}
 .qviews b{color:var(--text)}
 .qviews-err{color:var(--warn)}
 .qviews-hint{flex-basis:100%;font-size:12px}
+.load-error{display:flex;flex-direction:column;align-items:flex-start;gap:8px}.load-error p{margin:0}.load-error-detail{color:var(--muted);font-size:12px;overflow-wrap:anywhere}
 .qviews form,.qclaim{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .qviews input,.qclaim input{width:150px;min-height:36px;padding:6px 12px}
 .qviews button,.qclaim button{min-height:36px;padding:0 12px;border-radius:999px;font-size:13px}
@@ -1454,7 +1471,7 @@ body{font-size:var(--fs-base)}
   padding:4px;border-radius:var(--r-pill);background:var(--material-thick,var(--material));-webkit-backdrop-filter:var(--material-blur);backdrop-filter:var(--material-blur);
   border:1px solid var(--hairline);box-shadow:0 10px 30px rgba(0,0,0,.14);
   transition:opacity var(--dur-2) var(--ease-out),transform var(--dur-3) var(--ease-out),visibility 0s}
-.flow-pill .flow{display:flex;gap:2px;padding:0;margin:0;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.flow-pill .flow{display:flex;gap:2px;padding:0;margin:0;min-height:var(--pill-btn);overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
 .flow-pill .flow::-webkit-scrollbar{display:none}
 .flow-pill .flow li{flex:none;display:block}
 .flow-pill .flow li+li::before{display:none}
@@ -1605,6 +1622,9 @@ body:has(#editorSection:not(.hidden)) .ed-foot{bottom:calc(var(--pill-btn) + 30p
   .ed-switch::before{content:"";position:absolute;inset:-9px -1px}
   .ed-sw::after,.ed-sw-sm::after{inset:-9px!important}
   .ed-kw{max-height:200px}
+  /* audit M3: text fields + sliders too (Settings rows were 34 px, posting times + reminder lead 36 px, editor sliders 40 px) */
+  body input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=color]):not([type=hidden]),
+  body textarea{min-height:var(--hit)}
 }
 </style>
 <link rel="stylesheet" href="editor/editor.css"><!-- Editor + Review pages (149) -->
@@ -1634,7 +1654,7 @@ body:has(#editorSection:not(.hidden)) .ed-foot{bottom:calc(var(--pill-btn) + 30p
   </form>
 </div>
 
-<div id="jobOverlay" class="job-overlay" aria-hidden="true">
+<div id="jobOverlay" class="job-overlay" aria-hidden="true" inert>
   <div class="job-overlay-card">
     <div class="job-overlay-head">
       <div><div class="job-overlay-title">Running jobs</div><div id="jobOverlaySummary" class="job-overlay-summary">No jobs running</div></div>
@@ -1823,7 +1843,7 @@ body:has(#editorSection:not(.hidden)) .ed-foot{bottom:calc(var(--pill-btn) + 30p
       <div class="isl-x-actions"><button class="isl-cancel" id="islCancel" type="button" hidden>Cancel</button></div>
     </div>
   </div>
-  <button class="island-more" id="islandMore" type="button" hidden aria-label="Show all running jobs"></button>
+  <button class="island-more" id="islandMore" type="button" hidden aria-label="Show all running jobs" aria-haspopup="dialog" aria-controls="jobOverlay" aria-expanded="false"></button>
   <span class="sr-only" id="islandLive" role="status" aria-live="polite"></span>
 </div>
 <div id="publishSheetHost"></div><!-- 144: the ≤ 600 px Publish panel (bottom sheet) lives here, outside the transformed .view-section; empty when closed -->
@@ -2223,9 +2243,21 @@ async function signOut(){
   try{await fetch(API+"/api/auth/logout",{method:"POST"})}catch{}
   location.reload();
 }
+// Audit M6: a deploy recreates the backend (~10–20 s of 502 from nginx, then 503 while it migrates). Reads (GET/HEAD)
+// wait it out quietly (1 + 2.5 + 5 s) before anything says "updating"; writes are never retried (no double submit).
+const DEPLOY_RETRY_MS=[1000,2500,5000];
+async function fetchThroughDeploy(url,options){
+  const read=!options.method||/^(GET|HEAD)$/i.test(options.method);
+  for(let i=0;;i++){
+    let r=null;
+    try{r=await fetch(url,options)}catch(e){if(!read||i>=DEPLOY_RETRY_MS.length)throw e}
+    if(r&&(!read||![502,503,504].includes(r.status)||i>=DEPLOY_RETRY_MS.length))return r;
+    await new Promise(ok=>setTimeout(ok,DEPLOY_RETRY_MS[i]));
+  }
+}
 async function authFetch(url,options={},retried=false){
   if(loginPending)await loginPending;
-  const r=await fetch(API+url,options);
+  const r=await fetchThroughDeploy(API+url,options);
   if(r.status===401&&!retried&&!url.startsWith("/api/auth/")){await showLogin("Your session ended. Sign in again.");return authFetch(url,options,true)}
   return r;
 }
@@ -2988,7 +3020,8 @@ function paintIsland(){
   setText(more,extra?`+${extra}`:""); // text node patched, the circle itself is never re-mounted
   // The split only exists in compact mode: it merges into the island while expanded (so the expanded
   // shape stays centred and never overflows a phone), and springs back out afterwards.
-  requestAnimationFrame(()=>{const want=!!extra&&ISL.mode==="compact";
+  // 208: on desktop "+N" also stays beside the hover-expanded island, so it is still there when the pointer arrives.
+  requestAnimationFrame(()=>{const want=!!extra&&(ISL.mode==="compact"||(ISL.mode==="expanded"&&!ev&&innerWidth>600));
     if(!want){more.classList.remove("on");more.hidden=true;return}
     if(more.hidden){more.hidden=false;void more.offsetWidth}more.classList.add("on")});
   if(ev){
@@ -3041,48 +3074,74 @@ function fireIslandEvent(j){
   if(type==="failed")ISL.failSeen=false;
   ISL.eventTimer=setTimeout(()=>{ISL.event=null;if(type==="failed")ISL.failTitle=`Failed · ${title}`;updateJobIsland()},2500);
 }
-function islandToggle(){
+function islandToggle(fromKeyboard){
   if(ISL.event){clearTimeout(ISL.eventTimer);ISL.event=null;ISL.failSeen=true;return updateJobIsland()}
   if(!ISL.failSeen){ISL.failSeen=true;return updateJobIsland()}
+  // 208: several tasks → the pill opens the list of all of them; exactly one → it opens that task (its page)
+  const tasks=allActiveTasks();
+  if(tasks.length>1)return overlayOpen?closeJobOverlay():openJobOverlay({focus:fromKeyboard});
+  if(tasks.length===1&&openRunningTask(tasks[0]))return;
   ISL.pinned=!ISL.pinned;updateJobIsland();
+}
+// One place that knows where a running task lives (list rows + a single-task pill).
+function openRunningTask(t){
+  if(!t)return false;
+  if(t.nav){go(t.nav);return true}                                   // 183: an auto-import check opens its step
+  if(t.kind==="candidate"&&t.jobId){go("#review/"+encodeURIComponent(t.jobId));return true}   // 179: the clip's job
+  if(t.kind==="job"){saveActive(t.jobId);showTab("current");startPolling(t.jobId);return true}
+  return false;                                                       // telegram / views: nothing to open
 }
 function islandCollapse(){if(ISL.pinned||ISL.hover){ISL.pinned=false;ISL.hover=false;updateJobIsland()}}
 (function wireIsland(){
   const m=$("islandMain");let hoverT=null;
-  m.addEventListener("click",e=>{e.stopPropagation();islandToggle()});
-  m.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();islandToggle()}});
+  m.addEventListener("click",e=>{e.stopPropagation();islandToggle(e.detail===0)});
+  m.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();islandToggle(true)}});
   const fine=matchMedia("(hover:hover) and (pointer:fine)");
-  $("island").addEventListener("mouseenter",()=>{if(!fine.matches)return;clearTimeout(hoverT);hoverT=setTimeout(()=>{ISL.hover=true;if(!ISL.failSeen)ISL.failSeen=true;updateJobIsland()},120)});
+  // 208: hover-expand starts on the pill body only. On the whole #island it also fired over "+N", and the expanded
+  // shape swallows "+N", so the circle vanished under the pointer and could never be clicked.
+  $("islandMore").addEventListener("mouseenter",()=>clearTimeout(hoverT));   // also keeps a pending collapse from moving it
+  $("islandMore").addEventListener("mouseleave",()=>{if(!fine.matches)return;clearTimeout(hoverT);hoverT=setTimeout(()=>{ISL.hover=false;updateJobIsland()},220)});
+  m.addEventListener("mouseenter",()=>{if(!fine.matches||overlayOpen)return;clearTimeout(hoverT);hoverT=setTimeout(()=>{ISL.hover=true;if(!ISL.failSeen)ISL.failSeen=true;updateJobIsland()},120)});
   $("island").addEventListener("mouseleave",()=>{if(!fine.matches)return;clearTimeout(hoverT);hoverT=setTimeout(()=>{ISL.hover=false;updateJobIsland()},220)});
-  $("islandMore").addEventListener("click",e=>{e.stopPropagation();overlayOpen?closeJobOverlay():openJobOverlay()});
+  $("islandMore").addEventListener("click",e=>{e.stopPropagation();overlayOpen?closeJobOverlay():openJobOverlay({focus:e.detail===0})});
   $("islCancel").addEventListener("click",e=>{e.stopPropagation();const l=ISL.lead;if(l&&typeof window.cancelJob==="function")window.cancelJob(l.jobId,e.currentTarget)});
   document.addEventListener("click",e=>{if(!e.target.closest("#island"))islandCollapse()});
-  document.addEventListener("keydown",e=>{if(e.key==="Escape")islandCollapse()});
+  document.addEventListener("keydown",e=>{if(e.key!=="Escape")return;
+    if(overlayOpen){closeJobOverlay();const more=$("islandMore");(more.hidden?$("islandMain"):more).focus({preventScroll:true});return}
+    islandCollapse()});
   window.addEventListener("resize",()=>{if(ISL.mode!=="hidden")setIslandMode(ISL.mode,{force:true})},{passive:true});
 })();
 function renderJobOverlay(){
-  const overlay=$("jobOverlay");overlay.classList.toggle("open",overlayOpen);overlay.setAttribute("aria-hidden",String(!overlayOpen));
   const items=allActiveTasks();
+  if(overlayOpen&&!items.length)overlayOpen=false;   // 208: the last task finished while the list was open
+  const overlay=$("jobOverlay");overlay.classList.toggle("open",overlayOpen);overlay.setAttribute("aria-hidden",String(!overlayOpen));overlay.inert=!overlayOpen;
+  $("islandMore").setAttribute("aria-expanded",String(overlayOpen));
   $("jobOverlaySummary").textContent=items.length?`${items.length} job${items.length===1?"":"s"} running`:"No jobs running";
   // Keyed rows, patched in place (like the Import cards): the ring glides instead of re-mounting per poll.
   const list=$("jobOverlayList"),keep=new Set(),key=j=>j.kind+":"+j.id;let prev=null;
   for(const j of items){
     const k=key(j),p=pct(j.progress),color=stageColor(j.status);keep.add(k);
     let row=[...list.children].find(r=>r.dataset.key===k);
-    if(!row){row=document.createElement("div");row.className="running-job-item";row.dataset.key=k;
-      row.dataset.runningJob=j.id;row.dataset.runningKind=j.kind;row.dataset.runningJobid=j.jobId;row.dataset.runningNav=j.nav||"";
-      row.innerHTML=`<div class="running-job-main">${progressRing(p,color,34,4)}<div class="running-job-info"><div class="running-job-name"></div><div class="running-job-stage"></div></div></div><div class="running-job-meta"><span class="rj-msg"></span><span>${esc(String(j.id).slice(0,8))}</span></div>`}
+    if(!row){row=document.createElement("button");row.type="button";row.className="running-job-item";row.dataset.key=k;
+      row.dataset.runningJob=j.id;row.dataset.runningKind=j.kind;row.dataset.runningJobid=j.jobId||"";row.dataset.runningNav=j.nav||"";
+      row.innerHTML=`<span class="running-job-main"><span class="rj-lead"></span><span class="running-job-info"><span class="running-job-name"></span><span class="running-job-stage"></span></span>${progressRing(p,color,34,4)}</span><span class="running-job-meta"><span class="rj-msg"></span><span class="rj-open" aria-hidden="true">Open ›</span></span>`}
+    const lead=row.querySelector(".rj-lead"),lk=(j.indeterminate?"spin":"")+(j.kind==="job"?"job:"+j.jobId:"dot");
+    if(lead.dataset.key!==lk){lead.dataset.key=lk;lead.innerHTML=islandThumb(j)}
+    row.classList.toggle("is-indeterminate",!!j.indeterminate);
     const ring=row.querySelector(".progress-ring-bar"),c=Number(ring.getAttribute("stroke-dasharray")),off=String(+(c*(1-p/100)).toFixed(3));
     setAttr(ring,"stroke-dashoffset",off);setText(row.querySelector(".progress-ring-pct"),p+"%");
     const rw=row.querySelector(".progress-ring");if(rw.style.getPropertyValue("--ring-color")!==color)rw.style.setProperty("--ring-color",color);
-    setText(row.querySelector(".running-job-name"),j.kind==="candidate"?(j.title||"Candidate"):platformLabel(j.platform));
-    const st=row.querySelector(".running-job-stage");setText(st,j.actionLabel||stageLabel(j.status));if(st.dataset.color!==color){st.dataset.color=color;st.style.color=color}
+    const name=islandTitle(j),stage=islandVerb(j).replace(/\s*·$/,"");
+    setText(row.querySelector(".running-job-name"),name);
+    setAttr(row,"aria-label",`${name}: ${stage}${j.indeterminate?"":`, ${p}%`}. Open`);
+    const st=row.querySelector(".running-job-stage");setText(st,stage);if(st.dataset.color!==color){st.dataset.color=color;st.style.color=color}
     setText(row.querySelector(".rj-msg"),j.message||"");
     const at=prev?prev.nextElementSibling:list.firstElementChild;if(at!==row)list.insertBefore(row,at);prev=row;
   }
   for(const r of [...list.children])if(!keep.has(r.dataset.key))r.remove();
 }
-function openJobOverlay(){if(!allActiveTasks().length)return;overlayOpen=true;renderJobOverlay();updateJobIsland()}
+function openJobOverlay(o={}){if(!allActiveTasks().length)return;overlayOpen=true;ISL.hover=false;ISL.pinned=false;renderJobOverlay();updateJobIsland();   // 208: a hover-expanded island would cover the list
+  if(o.focus)requestAnimationFrame(()=>$("jobOverlayList").querySelector(".running-job-item")?.focus({preventScroll:true}))}
 function closeJobOverlay(){overlayOpen=false;renderJobOverlay();updateJobIsland()}
 async function refreshRunningJobs(){
   try{
@@ -3515,9 +3574,20 @@ function renderPublish(){
   $("publishSheetHost").innerHTML=sheetRow?publishPanelHtml(sheetRow):"";
   $("publishList").innerHTML=html||`<div class="publish-empty">${total?`Every clip here is posted on all its platforms. <button class="plain" type="button" data-publish-filter="all">Show all</button>`:`No finished clips yet. Approve a clip in <button class="plain" type="button" data-nav="queue">Review</button>; it lands here once its final render is done.`}</div>`;
 }
+// audit M5: a page that can't load says so in words + Retry (like Review/Editor), the server's detail only as small print.
+const LOAD_RETRY={publish:()=>loadPublish(),schedule:()=>loadSchedule(),track:()=>loadTrack()};
+function loadErrorHtml(what,key,err){
+  const d=String(err&&err.message||"").trim();
+  return `<div class="panel error-box load-error" role="alert"><p><b>Couldn't load ${esc(what)}.</b> Check your connection and try again.</p>${d?`<small class="load-error-detail">${esc(d)}</small>`:""}<button class="secondary" type="button" data-retry-load="${esc(key)}">Retry</button></div>`;
+}
+document.addEventListener("click",async e=>{
+  const b=e.target.closest("[data-retry-load]");if(!b)return;
+  const fn=LOAD_RETRY[b.dataset.retryLoad];if(!fn)return;
+  setBusy(b,true,"Retrying…");try{await fn()}finally{if(document.contains(b))setBusy(b,false)}
+});
 async function loadPublish(){
   try{const [q]=await Promise.all([api("/api/publish-queue"),accountsCache.length?null:loadAccounts()]);publishGroups=q.groups||[];renderPublish()}
-  catch(err){$("publishList").innerHTML=`<div class="error-box">${esc(err.message)}</div>`}
+  catch(err){$("publishList").innerHTML=loadErrorHtml("the publish list","publish",err)}
 }
 function publishRow(k){for(const g of publishGroups)for(const r of g.rows)if(publishRowKey(r)===k)return r;return null}
 function publishCard(cid){for(const g of publishGroups)for(const c of g.cards||[])if(c.candidate_id===cid)return c;return null}
@@ -3741,7 +3811,7 @@ function weekStartIso(offset){const now=new Date(),wib=new Date(now.getTime()+WI
 async function loadSchedule(){
   const from=weekStartIso(scheduleWeek),to=new Date(new Date(from).getTime()+7*864e5).toISOString();
   try{scheduleData=await api(`/api/schedule?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);renderScheduleView()}
-  catch(err){$("scheduleList").innerHTML=`<div class="error-box">${esc(err.message)}</div>`}
+  catch(err){$("scheduleList").innerHTML=loadErrorHtml("the schedule","schedule",err)}
 }
 function schedRowHtml(p){
   const base=`/api/jobs/${encodeURIComponent(p.job_id)}/candidates/${encodeURIComponent(p.candidate_id)}`,open=schedMarkOpen[p.id];
@@ -3977,9 +4047,7 @@ document.addEventListener("click",e=>{
   if(ri){
     const kind=ri.dataset.runningKind,jobId=ri.dataset.runningJobid||ri.dataset.runningJob;
     closeJobOverlay();
-    if(ri.dataset.runningNav)return go(ri.dataset.runningNav);   // 183: an auto-import check opens its step
-    if(kind==="candidate"){go("#review/"+encodeURIComponent(jobId))}   // 179: the clip's job on the Review page
-    else{saveActive(jobId);showTab("current");startPolling(jobId)}
+    openRunningTask({kind,jobId,nav:ri.dataset.runningNav});
   }
 });
 document.addEventListener("keydown",e=>{
@@ -4175,7 +4243,7 @@ window.addEventListener("hashchange",routeHash);
 let trackData=null;
 async function loadTrack(){
   try{trackData=await api("/api/track");renderTrack()}
-  catch(err){$("trackBody").innerHTML=`<div class="error-box">${esc(err.message)}</div>`}
+  catch(err){$("trackBody").innerHTML=loadErrorHtml("your numbers","track",err)}
 }
 function trackTable(title,rows,first){
   if(!rows.length)return "";

@@ -42,12 +42,13 @@
         .map((v) => [v, v.classList.contains("hidden")]);
       R.hidden.forEach(([v]) => v.classList.add("hidden"));
       s.hidden = false; s.classList.remove("hidden"); R.open = true;
-      s.innerHTML = `<div class="rv-filters" id="rvFilters" role="group" aria-label="Filter clips"></div>
-        <div id="rvBody"><div class="panel rv-loading">Loading clips…</div></div>`;
+      // audit M4: the loading line sits where the filters will appear (replaced, not pushed down: no layout shift)
+      s.innerHTML = `<div class="rv-filters" id="rvFilters" role="group" aria-label="Filter clips"><div class="panel rv-loading">Loading clips…</div></div>
+        <div id="rvBody"></div>`;
       try {
         const [f, jobs, camps] = await Promise.all([api("/api/review/filter"), api("/api/jobs?scope=queue"), api("/api/campaigns").catch(() => [])]);
         R.filter = f; R.jobs = jobs; R.campaigns = Array.isArray(camps) ? camps : [];
-      } catch (e) { $("rvBody").innerHTML = `<div class="panel error-box">Can't load the review list: ${esc(e.message)}</div>`; return; }
+      } catch (e) { $("rvFilters").innerHTML = ""; $("rvBody").innerHTML = `<div class="panel error-box">Can't load the review list: ${esc(e.message)}</div>`; return; }
     }
     const t = $("pageTitle"); if (t) t.textContent = "Review";
     if (jobFromHash) {

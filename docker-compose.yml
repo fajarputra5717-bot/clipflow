@@ -9,9 +9,13 @@ x-app-env: &app-env
   TZ: ${TZ:-Asia/Jakarta}
   PYTHONUNBUFFERED: "1"
 
+# Audit M6: logs go to the host's persistent journal (/var/log/journal), so they survive container recreation on deploy
+# (json-file logs died with the container: no 7-day review was possible). `docker compose logs` still works; history:
+#   journalctl CONTAINER_NAME=riftstorm-backend --since "7 days ago"
+# Retention = journald's own cap (default 10 % of the disk, max 4 GB; ~48 MB used when this changed).
 x-logging: &logging
-  driver: json-file
-  options: { max-size: "20m", max-file: "3" }
+  driver: journald
+  options: { tag: "{{.Name}}" }
 
 services:
   postgres:

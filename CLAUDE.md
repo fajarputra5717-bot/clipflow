@@ -33,7 +33,8 @@ Frontend changes need no rebuild (directory bind mount); hard-refresh the browse
 frontend is live on save, so UI that calls a new endpoint goes live before the backend knows it: `api()` turns
 FastAPI's bare 404 "Not Found" (unknown route) and 502/503/504 into "ClipFlow is updating…", never a raw error box.
 Keep handler 404 details specific ("Job not found"), never the bare "Not Found". Deploy the backend promptly.
-Logs: `docker compose logs -f --tail=200 worker`.
+Logs: `docker compose logs -f --tail=200 worker`; across redeploys (209, journald): `journalctl CONTAINER_NAME=riftstorm-worker --since "7 days ago"`.
+Deploy gap (209): nginx answers /api 502/504 as JSON 503 + Retry-After; the frontend retries GETs (1/2.5/5 s), never writes.
 DB shell: `docker compose exec postgres psql -U clipflow -d clipflow`.
 
 **Change history lives in `docs/changes/`, not here.** Read
@@ -375,7 +376,8 @@ their job; **every new table from now on**). Rule: every SQL that reads or write
 `_path_owned()` already enforces it for `/api/jobs/{id}[/candidates/{cid}]…`, `/api/assets/watermarks/{id}…` and
 `/api/accounts/{id}…`, `/api/posts/{id}…`, `/api/auto-import/imports/{id}…` (187);
 lists and inserts do it in the handler. A new route family keyed by an owned id → add its regex to the guard.
-Admin is scoped like everyone except `/api/activity` (sees all, `owner` set). Campaigns are a shared catalogue
+Admin is scoped like everyone except `/api/activity` (sees all, `owner` set). Hot polls (212, `REQUEST_DB_PATHS`) reuse the middleware's auth
+connection via `request_db(request)` (one connection + one transaction); everything else uses `get_db()`. Campaigns are a shared catalogue
 (admin edits; P3 adds `created_by` + `visibility`); `source_videos` is a shared download cache.
 Writing tests (cross-user, settings, qa-tmp users) run on staging only (:8080/:8001), never production.
 
@@ -453,6 +455,9 @@ planned post: `reminded_at` set in the queueing transaction; > 1 h late = `misse
   `jobs.layout`); campaign `default_layout`/`default_language` pre-fill with a "from campaign" tag unless touched;
   estimate from `GET /api/analysis-estimate`. POST /api/jobs payload unchanged (analyze.spec pins it).
   `initToolbar()` (scroll → `--p` on `#toolbar`) stays the only scroll driver.
+  Toggles (205): a button's pressed look comes ONLY from `aria-pressed="true"` (`.seg`: `--seg-on` accent + white,
+  ≥ 4.5:1 in both themes; unpressed = the neutral track). Generic "primary button" rules exclude `[aria-pressed]`
+  (the dark one once painted class-less segment buttons blue). touch.spec's 205 sweep checks every page/tab/sheet.
 - **URL = view (170/171):** `go(hash)` + `routeHash()` (registered before lane-b's scripts: it closes the other lane-b
   page first). New view → give it a hash there. Bare URL → last view per user. `#editor` alone = Pick a clip
   (`#pickSection`, same saved Review filters); `lastEditorClip` (per user) = what the pill's Editor reopens.
@@ -464,7 +469,10 @@ planned post: `reminded_at` set in the queueing transaction; > 1 h late = `misse
   spring curves from `springEasing()` (emitted as CSS `linear()`), content
   layers cross-fade (+60 ms, staggered). Events: busy → review/completed
   = ✓ auto-expand 2.5 s; → failed = red expand, then red compact until
-  seen. "+N" split only in compact; it opens `#jobOverlay`. Cancel shows
+  seen. "+N" (aria-expanded, controls `#jobOverlay`) opens the live list of every task (208: rows are buttons with the
+  task's name, thumbnail/spinner, stage, %, "Open" → `openRunningTask()`, the one opener); 2+ tasks → a click on the pill
+  opens it too, 1 task → the pill opens that task. Hover-expand starts on `#islandMain` only and "+N" stays beside the
+  expanded island on desktop (it used to vanish under the pointer). Esc / outside click close; empty list auto-closes. Cancel shows
   only if a global `cancelJob(jobId)` exists: it does (R-08's `window.cancelJob(id, btn)`,
   confirm + `POST /api/jobs/{id}/cancel`; the island passes its button for `setBusy`). Reduced motion: opacity
   cross-fade only. Sheets make `#appShell` and `#island` inert.

@@ -1,6 +1,6 @@
 // 182 (Lane C Medium, owner rule): on a phone every visible control is ≥ 44 px tall, or its invisible hit area
 // (::before/::after) is. Same mocked pages as the screenshot tour (shots.spec.js), Editor tabs included.
-const { test, expect, job } = require("../fixtures");
+const { test, expect, job, nav } = require("../fixtures");
 test.use({ reducedMotion: "reduce" });
 
 const camp = { slug: "ime-roleplay", name: "IME Roleplay X Motion Klip", brief_pending: false, platforms: ["tiktok", "instagram", "youtube"],
@@ -40,6 +40,9 @@ const row = (o) => ({ candidate_id: "cand-a", job_id: "job-done", job_title: "Mo
   filename: "x.mp4", post: null, campaign: "ime-roleplay", ...o });
 
 async function seed(app, api) {
+  api.settings = { GEMINI_API_KEY: { value: "••••••••", configured: true, source: "db", scope: "global" },
+    CLIPS_PER_JOB: { value: "4", source: "default", scope: "user" }, REMINDER_LEAD_MIN: { value: "15", source: "default", scope: "user" },
+    POSTING_TIMES: { value: '{"tiktok":["12:00"]}', source: "default", scope: "user" } };   // audit M3: Settings fields render
   api.campaigns = [camp];
   api.current = [job({ id: "job-run", status: "transcribing", progress: 40, source_title: "Live stream part 2", campaign: "ime-roleplay" }), job({ id: "job-done", status: "review", source_title: "Citer Molotov Ketemu KDM", campaign: "ime-roleplay" })];
   api.jobs = { ...api.jobs, "job-run": api.current[0] };   // the running job is polled
@@ -77,6 +80,7 @@ const STEPS = [
 async function smallTargets(app) {
   return app.evaluate(() => {
     const hit = (e) => {   // [height, width] incl. absolutely positioned ::before/::after hit areas
+      if (e.matches("input[type=checkbox],input[type=radio]") && e.closest("label")) e = e.closest("label");   // the label is the target
       const r = e.getBoundingClientRect(); let h = r.height, w = r.width;
       for (const p of ["::before", "::after"]) {
         const cs = getComputedStyle(e, p);
@@ -87,8 +91,11 @@ async function smallTargets(app) {
       }
       return [h, w];
     };
-    const vis = (e) => { const cs = getComputedStyle(e); return e.offsetParent && cs.visibility !== "hidden" && !e.closest("[inert],#island,.acct-menu:not(.open),.sheet-layer:not(.open),.job-overlay:not(.open)"); };
-    return [...document.querySelectorAll("button,a[href],summary,select,[role=switch],[role=tab],[role=slider]")].filter(vis)
+    const vis = (e) => { const cs = getComputedStyle(e); return e.offsetParent && cs.visibility !== "hidden" && Number(cs.opacity) > 0 && !e.closest("#island,.acct-menu:not(.open),.sheet-layer:not(.open),.job-overlay:not(.open)") && !(e.closest("[inert]") && !document.querySelector(".sheet-layer.open")?.contains(e)); };
+    // audit M3: text/number inputs + textareas count too (Settings, editor numbers)
+    const sel = "button,a[href],summary,select,[role=switch],[role=tab],[role=slider],textarea," +
+      "input:not([type=hidden]):not([type=file]):not([type=color])";
+    return [...document.querySelectorAll(sel)].filter(vis)
       .filter((e) => { const r = e.getBoundingClientRect(); const [h, w] = hit(e); return r.width > 0 && r.bottom > 0 && (h < 43.5 || w < 43.5); })
       .map((e) => `${e.tagName.toLowerCase()}.${[...e.classList].join(".")} ${Math.round(e.getBoundingClientRect().width)}x${Math.round(e.getBoundingClientRect().height)} "${(e.textContent || e.getAttribute("aria-label") || "").trim().slice(0, 20)}"`);
   });
@@ -108,5 +115,62 @@ test("phone: every control on every page has a ≥ 44 px touch target", async ({
       const st = await smallTargets(app); if (st.length) bad[`${name}/${tab}`] = st;
     }
   }
+  for (const sheet of ["settings", "watermarks"]) {   // audit M3: the sheets (Settings inputs were 34–36 px)
+    await app.evaluate(() => { location.hash = ""; return window.showTab("current"); });
+    await app.locator("#accountMenuBtn").click();
+    await app.locator(`#accountMenu [data-nav="${sheet}"]`).click();
+    await app.waitForTimeout(700);
+    const st = await smallTargets(app); if (st.length) bad[`sheet-${sheet}`] = st;
+    await app.keyboard.press("Escape"); await app.waitForTimeout(400);
+  }
   expect(bad).toEqual({});
 });
+
+// 205 (dark-theme bug): a toggle's look must follow aria-pressed. Unpressed toggles never wear the accent (the dark
+// "primary button" rule once painted class-less segment buttons blue and left the pressed one grey); pressed .seg
+// buttons are the accent with white text ≥ 4.5:1. Every page, Editor tab and sheet, both themes.
+async function toggleProblems(app) {
+  return app.evaluate(() => {
+    const rgb = (c) => (c.match(/[\d.]+/g) || []).map(Number);
+    const lum = ([r, g, b]) => { const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }; return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b); };
+    const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
+    const blue = ([r, g, b, a = 1]) => a > 0.5 && b > 150 && b - r > 90 && b - g > 40;   // an accent-blue fill
+    const out = [];
+    for (const e of document.querySelectorAll("button[aria-pressed]")) {
+      if (!e.offsetParent || e.closest("#island,.sheet-layer:not(.open),.acct-menu:not(.open)")) continue;
+      const cs = getComputedStyle(e), bg = rgb(cs.backgroundColor), name = `${e.className || e.tagName} "${e.textContent.trim().slice(0, 16)}"`;
+      if (e.getAttribute("aria-pressed") === "false" && blue(bg)) out.push(`unpressed but blue: ${name}`);
+      if (e.getAttribute("aria-pressed") === "true" && e.closest(".seg,.rv-seg")) {   // 210: Review's own segmented filter too
+        if (!blue(bg)) out.push(`pressed but not accent: ${name} ${cs.backgroundColor}`);
+        else if (ratio(rgb(cs.color), bg) < 4.5) out.push(`pressed text ${ratio(rgb(cs.color), bg).toFixed(2)}:1: ${name}`);
+      }
+    }
+    return out;
+  });
+}
+for (const theme of ["dark", "light"]) {
+  test(`205: toggles follow aria-pressed on every page (${theme})`, async ({ app, api }) => {
+    test.setTimeout(90_000);
+    await app.evaluate((t) => localStorage.setItem("clipflow-theme", t), theme);
+    await seed(app, api);
+    const bad = {};
+    let segs = 0;
+    for (const [name, go] of STEPS) {
+      await go(app); await app.waitForTimeout(500);
+      segs += await app.locator(".seg button[aria-pressed=true]").count();
+      const s = await toggleProblems(app); if (s.length) bad[name] = s;
+      if (name === "5-editor") for (const tab of ["captions", "effects", "audio", "watermark", "thumbnail", "export"]) {
+        await app.locator(`[data-ed-tab="${tab}"]`).click(); await app.waitForTimeout(250);
+        const st = await toggleProblems(app); if (st.length) bad[`${name}/${tab}`] = st;
+      }
+    }
+    for (const sheet of ["settings", "watermarks"]) {
+      await app.evaluate(() => { location.hash = ""; return window.showTab("current"); });
+      await nav(app, sheet); await app.waitForTimeout(600);
+      const st = await toggleProblems(app); if (st.length) bad[`sheet-${sheet}`] = st;
+      await app.keyboard.press("Escape"); await app.waitForTimeout(300);
+    }
+    expect(segs, "the Analyze segmented controls were checked").toBeGreaterThan(3);
+    expect(bad).toEqual({});
+  });
+}
