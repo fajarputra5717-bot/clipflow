@@ -397,6 +397,32 @@ test.describe("Editor Effects + Audio tabs", () => {
     expect(await app.locator("#edPlayhead").evaluate((e) => e.style.transform)).toMatch(/^translateX\(/);
   });
 
+  test("Timeline keys (audit Low): focus the timeline, then Space plays/pauses, arrows step (Shift 1 s), Home/End; not in text fields", async ({ app, api }) => {
+    await openWithVideo(app, api, { muted: true, volume: 1 });
+    await app.evaluate(() => { const v = document.getElementById("edVideo"); v.pause(); v.currentTime = 1; });
+    const tl = app.locator("#edTlInner");
+    await tl.focus();
+    await expect(tl).toBeFocused();
+    await app.keyboard.press("ArrowRight");
+    await expect.poll(() => vid(app, (v) => +v.currentTime.toFixed(2))).toBe(1.1);
+    await app.keyboard.press("Shift+ArrowLeft");
+    await expect.poll(() => vid(app, (v) => +v.currentTime.toFixed(2))).toBe(0.1);
+    await app.keyboard.press("End");
+    await expect.poll(() => vid(app, (v) => v.duration - v.currentTime)).toBeLessThan(0.1);
+    await app.keyboard.press("Home");
+    await expect.poll(() => vid(app, (v) => v.currentTime)).toBe(0);
+    await app.keyboard.press("Space");
+    await expect.poll(() => vid(app, (v) => v.paused)).toBe(false);
+    await app.keyboard.press("Space");
+    await expect.poll(() => vid(app, (v) => v.paused)).toBe(true);
+    await app.locator('[data-ed-tab="effects"]').click();
+    const range = app.locator("[data-ed-zoom-intensity]");             // a slider keeps its own arrows
+    await range.focus();
+    const t0 = await vid(app, (v) => v.currentTime);
+    await app.keyboard.press("ArrowRight");
+    expect(await vid(app, (v) => v.currentTime)).toBe(t0);
+  });
+
   test("Audio: compression + silence trim save; loudness is read-only", async ({ app, api }) => {
     await openEd(app, api);
     await app.locator('[data-ed-tab="audio"]').click();

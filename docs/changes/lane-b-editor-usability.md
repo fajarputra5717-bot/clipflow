@@ -25,3 +25,7 @@
    (`E.tlW`). Dragging on the timeline's ruler/waveform (seek mode, not on a chip, handle or marker) now scrubs once
    per frame from a rect read at pointerdown. The waveform was already a canvas (`drawWave()`). Measured live at
    1280×800: 3 s of playback 378 → 32 layouts (67 → 7 ms); the 32 left are the time readouts' text, ≈ 0.2 ms each.
+6. Timeline keys (audit Low): the timeline (`#edTlInner`) takes focus (Tab or click) and announces its keys
+   (`aria-keyshortcuts`); with it focused, Space plays/pauses, ←/→ step 0.1 s, Shift 1 s, Home/End jump to the ends
+   (same `playerKey()` as the player; Home/End only on the timeline or scrub bar). Text fields, selects and sliders
+   keep their own keys.

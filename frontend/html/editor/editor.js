@@ -195,7 +195,9 @@
         <span class="ed-time" id="edTlTime">0:00.0 / ${fmt(dur)}</span></div>
       <div class="ed-hint" id="edTlHint"></div>
       <div class="ed-tl-scroll" id="edTlScroll">
-        <div class="ed-tl-inner" id="edTlInner" style="width:${W}px" data-ed-seekarea>
+        <div class="ed-tl-inner" id="edTlInner" style="width:${W}px" data-ed-seekarea tabindex="0" role="group"
+          aria-label="Timeline. Space play or pause, arrows step 0.1 s, Shift arrows 1 s, Home and End jump to the ends"
+          aria-keyshortcuts="Space ArrowLeft ArrowRight Shift+ArrowLeft Shift+ArrowRight Home End">
           <div class="ed-tl-ruler" aria-hidden="true">${ruler}</div>
           <canvas class="ed-tl-wave" id="edWave" aria-hidden="true"></canvas>
           <div id="edBands" aria-hidden="true"></div>
@@ -1110,6 +1112,10 @@
       return true;
     }
     if (k === "m") { setMuted(!E.muted); return true; }
+    if ((k === "Home" || k === "End") && t.closest && t.closest("[data-ed-seekarea],[data-ed-scrub]")) {   // audit Low: timeline keys
+      if (v.duration) { v.currentTime = k === "Home" ? 0 : Math.max(0, v.duration - 0.05); paintScrub(); paintPlayhead(true); paintHook(); }
+      return true;
+    }
     return false;
   }
   // 2a: desktop pages fit the window (editor.css .ed-fit): the height between the page top and the stepper pill.
