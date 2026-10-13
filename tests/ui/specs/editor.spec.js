@@ -406,6 +406,30 @@ test.describe("Editor Captions tab", () => {
     await expect(app.locator("[data-ed-preset]").first()).toBeVisible();
   }
 
+  test("tabs never clip a label (row scrolls + fades); keyword words show whole rows and scroll inside", async ({ app, api }) => {
+    await app.setViewportSize({ width: 360, height: 780 });
+    await openEd(app, api);
+    const tabs = await app.locator(".ed-seg button").evaluateAll((bs) => bs.map((b) => b.scrollWidth - b.clientWidth));
+    expect(Math.max(...tabs)).toBeLessThanOrEqual(0);
+    const seg = app.locator(".ed-seg");
+    if (await seg.evaluate((e) => e.scrollWidth > e.clientWidth)) {
+      await expect(seg).toHaveClass(/more-end/);
+      await app.locator('[data-ed-tab="export"]').click();
+      await expect(seg).toHaveClass(/more-start/);
+      await app.locator('[data-ed-tab="captions"]').click();
+    }
+    const kw = app.locator(".ed-kw");
+    await expect(kw).toHaveCount(1);
+    const m = await kw.evaluate((e) => { const b = e.querySelector("button"), gap = parseFloat(getComputedStyle(e).rowGap) || 0;
+      return { h: e.clientHeight, row: b.offsetHeight + gap, over: e.scrollHeight > e.clientHeight, ov: getComputedStyle(e).overflowY }; });
+    expect(m.ov).toBe("auto");
+    if (m.over) {
+      await expect(app.locator("#edKwMore")).toBeVisible();
+      await kw.evaluate((e) => { e.scrollTop = e.scrollHeight; });
+      await expect(app.locator("#edKwMore")).toBeHidden();
+    }
+  });
+
   test("preset is this clip's own; equal to the job's clears it; untouched keywords aren't sent", async ({ app, api }) => {
     await openEd(app, api);
     await expect(app.locator('[data-ed-preset="karaoke"]')).toHaveAttribute("aria-pressed", "true");

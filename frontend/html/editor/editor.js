@@ -700,6 +700,7 @@
         <div class="ed-kw" role="group" aria-label="Caption words: tap to highlight" style="--kw:${kw}">
           ${words.slice(0, 80).map(([t, w]) => `<button type="button" class="ed-kwword" data-ed-kw="${esc(t)}" aria-pressed="${C.keywords.has(t)}">${esc(w)}</button>`).join("")}
         </div>
+        <div class="ed-hint ed-kw-more" id="edKwMore" hidden>Scroll the words for more ↓</div>
       </div>
       ${hookGroupHtml()}
       <div class="ed-group">
@@ -1118,8 +1119,18 @@
   function setPlay(on) { const b = document.querySelector("[data-ed-play]"); if (b) { b.textContent = on ? "❚❚" : "▶"; b.setAttribute("aria-label", on ? "Pause" : "Play"); } }
   const fmt = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 
+  // 3: scroll areas that hold more than they show (tab row, keyword words) fade at the hidden edge.
+  function fadeEdges(el) {
+    const x = el.scrollWidth - el.clientWidth > 1, y = !x && el.scrollHeight - el.clientHeight > 1;
+    const start = x ? el.scrollLeft > 1 : y && el.scrollTop > 1;
+    const end = x ? el.scrollLeft < el.scrollWidth - el.clientWidth - 1 : y && el.scrollTop < el.scrollHeight - el.clientHeight - 1;
+    el.classList.toggle("more-start", !!start); el.classList.toggle("more-end", !!end);
+    if (el.classList.contains("ed-kw")) { const m = $("edKwMore"); if (m) m.hidden = !end; }
+  }
+  function fadeAll() { document.querySelectorAll("#editorSection .ed-seg, #editorSection .ed-kw").forEach(fadeEdges); }
   function moveSeg() {
     const seg = document.querySelector(".ed-seg"); if (!seg) return;
+    requestAnimationFrame(fadeAll);
     const b = seg.querySelector('[aria-selected="true"]'), ind = seg.querySelector(".ed-seg-ind");
     ind.style.width = b.offsetWidth + "px"; ind.style.transform = `translateX(${b.offsetLeft}px)`;
     if (seg.scrollWidth > seg.clientWidth) seg.scrollTo({ left: b.offsetLeft - (seg.clientWidth - b.offsetWidth) / 2, behavior: reduced() ? "auto" : "smooth" });
@@ -1390,6 +1401,10 @@
   document.addEventListener("toggle", (e) => {                 // keep "Style, font…" open across repaints
     if (E.cap && e.target.matches && e.target.matches("[data-ed-style-more]")) E.cap.styleOpen = e.target.open;
   }, true);
+  document.addEventListener("scroll", (e) => {
+    const t = e.target; if (t && t.classList && (t.classList.contains("ed-seg") || t.classList.contains("ed-kw"))) fadeEdges(t);
+  }, { capture: true, passive: true });
+  document.addEventListener("click", () => { if (E.state) requestAnimationFrame(fadeAll); });   // after panel repaints
   window.addEventListener("hashchange", route);
   window.addEventListener("resize", () => { if (E.cid) { fitPage(); moveSeg(); } }, { passive: true });
   window.addEventListener("load", () => setTimeout(route, 0));

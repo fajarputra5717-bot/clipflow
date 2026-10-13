@@ -408,3 +408,16 @@ a.rv-frame:focus-visible{outline:none;box-shadow:var(--ring)}
 /* short desktop windows (scrolling layout): keep the sticky player clear of the sticky action bar */
 @media (min-width:900px){.ed-player{height:calc(100vh - 290px)}}  /* top 142 before scrolling, bar top = 100vh - 128 */
 @media (max-width:600px){.ed-vol{display:none}.ed-scrub{height:44px}.ed-scrub-track{top:20px}.ed-scrub-pos b{top:15px}}
+/* 3: tab row scrolls sideways (never clips a label), with a fade at the hidden edge; keyword words show whole rows
+   and scroll inside their section, fading at the bottom while more words are below. */
+.ed-seg{display:flex;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.ed-seg::-webkit-scrollbar{display:none}
+.ed-seg button{flex:1 0 auto;padding:0 10px;overflow:visible;text-overflow:clip}
+.ed-seg.more-end{-webkit-mask-image:linear-gradient(to right,#000 calc(100% - 28px),transparent);mask-image:linear-gradient(to right,#000 calc(100% - 28px),transparent)}
+.ed-seg.more-start{-webkit-mask-image:linear-gradient(to left,#000 calc(100% - 28px),transparent);mask-image:linear-gradient(to left,#000 calc(100% - 28px),transparent)}
+.ed-seg.more-start.more-end{-webkit-mask-image:linear-gradient(to right,transparent,#000 28px,#000 calc(100% - 28px),transparent);mask-image:linear-gradient(to right,transparent,#000 28px,#000 calc(100% - 28px),transparent)}
+.ed-kw{--kw-row:var(--chip-h,24px);max-height:calc(var(--kw-row) * 4 + 4px * 3 + 4px);overscroll-behavior:contain;scrollbar-width:thin;align-content:flex-start}
+.ed-kw.more-end{-webkit-mask-image:linear-gradient(to bottom,#000 calc(100% - 16px),transparent);mask-image:linear-gradient(to bottom,#000 calc(100% - 16px),transparent)}
+.ed-kw.more-start.more-end{-webkit-mask-image:linear-gradient(to bottom,transparent,#000 10px,#000 calc(100% - 16px),transparent);mask-image:linear-gradient(to bottom,transparent,#000 10px,#000 calc(100% - 16px),transparent)}
+.ed-kw-more{margin-top:4px}
+@media (max-width:600px){.ed-kw{--kw-row:44px}.ed-seg button{padding:0 8px}}
