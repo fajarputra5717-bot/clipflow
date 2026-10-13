@@ -2243,9 +2243,21 @@ async function signOut(){
   try{await fetch(API+"/api/auth/logout",{method:"POST"})}catch{}
   location.reload();
 }
+// Audit M6: a deploy recreates the backend (~10–20 s of 502 from nginx, then 503 while it migrates). Reads (GET/HEAD)
+// wait it out quietly (1 + 2.5 + 5 s) before anything says "updating"; writes are never retried (no double submit).
+const DEPLOY_RETRY_MS=[1000,2500,5000];
+async function fetchThroughDeploy(url,options){
+  const read=!options.method||/^(GET|HEAD)$/i.test(options.method);
+  for(let i=0;;i++){
+    let r=null;
+    try{r=await fetch(url,options)}catch(e){if(!read||i>=DEPLOY_RETRY_MS.length)throw e}
+    if(r&&(!read||![502,503,504].includes(r.status)||i>=DEPLOY_RETRY_MS.length))return r;
+    await new Promise(ok=>setTimeout(ok,DEPLOY_RETRY_MS[i]));
+  }
+}
 async function authFetch(url,options={},retried=false){
   if(loginPending)await loginPending;
-  const r=await fetch(API+url,options);
+  const r=await fetchThroughDeploy(API+url,options);
   if(r.status===401&&!retried&&!url.startsWith("/api/auth/")){await showLogin("Your session ended. Sign in again.");return authFetch(url,options,true)}
   return r;
 }

@@ -25,3 +25,21 @@ for (const [name, url, go, box, lead] of PAGES) {
     await expect(app.locator(`${box} .load-error`)).toHaveCount(0);
   });
 }
+
+test("audit M6: a read that hits a deploy (502/503) is retried quietly and loads; a write is never resent", async ({ app, api }) => {
+  let n = 0;
+  await app.route(/\/api\/publish-queue/, (route) => (++n <= 2
+    ? route.fulfill({ status: n === 1 ? 502 : 503, contentType: "application/json", body: '{"detail":"ClipFlow is updating… try again in a minute."}' })
+    : route.fallback()));
+  await app.evaluate(() => window.showTab("publish"));
+  await expect.poll(() => n, { timeout: 8_000 }).toBeGreaterThanOrEqual(3);
+  await expect(app.locator("#publishList .load-error")).toHaveCount(0);
+  let posts = 0;
+  await app.route(/\/api\/accounts$/, (route) => {
+    if (route.request().method() !== "POST") return route.fallback();
+    posts++; return route.fulfill({ status: 502, contentType: "application/json", body: "{}" });
+  });
+  const res = await app.evaluate(() => window.api("/api/accounts", { method: "POST", body: "{}" }).then(() => "ok", (e) => e.message));
+  expect(res).toBe("ClipFlow is updating… try again in a minute.");
+  expect(posts).toBe(1);
+});

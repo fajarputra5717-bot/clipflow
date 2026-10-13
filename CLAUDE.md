@@ -33,7 +33,8 @@ Frontend changes need no rebuild (directory bind mount); hard-refresh the browse
 frontend is live on save, so UI that calls a new endpoint goes live before the backend knows it: `api()` turns
 FastAPI's bare 404 "Not Found" (unknown route) and 502/503/504 into "ClipFlow is updating…", never a raw error box.
 Keep handler 404 details specific ("Job not found"), never the bare "Not Found". Deploy the backend promptly.
-Logs: `docker compose logs -f --tail=200 worker`.
+Logs: `docker compose logs -f --tail=200 worker`; across redeploys (209, journald): `journalctl CONTAINER_NAME=riftstorm-worker --since "7 days ago"`.
+Deploy gap (209): nginx answers /api 502/504 as JSON 503 + Retry-After; the frontend retries GETs (1/2.5/5 s), never writes.
 DB shell: `docker compose exec postgres psql -U clipflow -d clipflow`.
 
 **Change history lives in `docs/changes/`, not here.** Read

@@ -178,3 +178,4 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 206 · 2026-10-14 · Layout shift: late notes keep their line, Review's loading line is replaced not pushed; all cases 0.000 (was ≤ 0.084) (deep audit M4) · index.html, review.js, cls.spec
 207 · 2026-10-14 · Phone sliders ≥ 44 px (5 editor sliders were 40 px; deep audit M3 follow-up) · index.html, touch.spec
 208 · 2026-10-14 · Island "+N" opens a live, keyboard-accessible list of every task (it vanished under the pointer on desktop); pill opens the list (2+) or the task (1) · index.html, island-list.spec, CLAUDE.md
+209 · 2026-10-14 · Logs to journald (survive recreates); nginx JSON 503 + GET retries absorb the ~1.5 s deploy gap (deep audit M6) · docker-compose.yml, conf.d, index.html, load-errors.spec
