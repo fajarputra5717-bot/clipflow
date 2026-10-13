@@ -1,6 +1,6 @@
 // 182 (Lane C Medium, owner rule): on a phone every visible control is ≥ 44 px tall, or its invisible hit area
 // (::before/::after) is. Same mocked pages as the screenshot tour (shots.spec.js), Editor tabs included.
-const { test, expect, job } = require("../fixtures");
+const { test, expect, job, nav } = require("../fixtures");
 test.use({ reducedMotion: "reduce" });
 
 const camp = { slug: "ime-roleplay", name: "IME Roleplay X Motion Klip", brief_pending: false, platforms: ["tiktok", "instagram", "youtube"],
@@ -125,3 +125,52 @@ test("phone: every control on every page has a ≥ 44 px touch target", async ({
   }
   expect(bad).toEqual({});
 });
+
+// 205 (dark-theme bug): a toggle's look must follow aria-pressed. Unpressed toggles never wear the accent (the dark
+// "primary button" rule once painted class-less segment buttons blue and left the pressed one grey); pressed .seg
+// buttons are the accent with white text ≥ 4.5:1. Every page, Editor tab and sheet, both themes.
+async function toggleProblems(app) {
+  return app.evaluate(() => {
+    const rgb = (c) => (c.match(/[\d.]+/g) || []).map(Number);
+    const lum = ([r, g, b]) => { const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }; return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b); };
+    const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
+    const blue = ([r, g, b, a = 1]) => a > 0.5 && b > 150 && b - r > 90 && b - g > 40;   // an accent-blue fill
+    const out = [];
+    for (const e of document.querySelectorAll("button[aria-pressed]")) {
+      if (!e.offsetParent || e.closest("#island,.sheet-layer:not(.open),.acct-menu:not(.open)")) continue;
+      const cs = getComputedStyle(e), bg = rgb(cs.backgroundColor), name = `${e.className || e.tagName} "${e.textContent.trim().slice(0, 16)}"`;
+      if (e.getAttribute("aria-pressed") === "false" && blue(bg)) out.push(`unpressed but blue: ${name}`);
+      if (e.getAttribute("aria-pressed") === "true" && e.closest(".seg")) {
+        if (!blue(bg)) out.push(`pressed but not accent: ${name} ${cs.backgroundColor}`);
+        else if (ratio(rgb(cs.color), bg) < 4.5) out.push(`pressed text ${ratio(rgb(cs.color), bg).toFixed(2)}:1: ${name}`);
+      }
+    }
+    return out;
+  });
+}
+for (const theme of ["dark", "light"]) {
+  test(`205: toggles follow aria-pressed on every page (${theme})`, async ({ app, api }) => {
+    test.setTimeout(90_000);
+    await app.evaluate((t) => localStorage.setItem("clipflow-theme", t), theme);
+    await seed(app, api);
+    const bad = {};
+    let segs = 0;
+    for (const [name, go] of STEPS) {
+      await go(app); await app.waitForTimeout(500);
+      segs += await app.locator(".seg button[aria-pressed=true]").count();
+      const s = await toggleProblems(app); if (s.length) bad[name] = s;
+      if (name === "5-editor") for (const tab of ["captions", "effects", "audio", "watermark", "thumbnail", "export"]) {
+        await app.locator(`[data-ed-tab="${tab}"]`).click(); await app.waitForTimeout(250);
+        const st = await toggleProblems(app); if (st.length) bad[`${name}/${tab}`] = st;
+      }
+    }
+    for (const sheet of ["settings", "watermarks"]) {
+      await app.evaluate(() => { location.hash = ""; return window.showTab("current"); });
+      await nav(app, sheet); await app.waitForTimeout(600);
+      const st = await toggleProblems(app); if (st.length) bad[`sheet-${sheet}`] = st;
+      await app.keyboard.press("Escape"); await app.waitForTimeout(300);
+    }
+    expect(segs, "the Analyze segmented controls were checked").toBeGreaterThan(3);
+    expect(bad).toEqual({});
+  });
+}

@@ -31,7 +31,7 @@
 [hidden]{display:none!important} /* author display rules must never un-hide [hidden] (070) */
  :root{
   --bg:#f5f5f7;--panel:#ffffff;--panel2:#fbfbfd;--input:#ffffff;
-  --fill:rgba(120,120,128,.12);--fill2:rgba(120,120,128,.2);--seg-thumb:#ffffff;
+  --fill:rgba(120,120,128,.12);--fill2:rgba(120,120,128,.2);--seg-thumb:#ffffff;--seg-on:#0071e3;
   --shadow:0 1px 2px rgba(0,0,0,.04),0 8px 24px rgba(0,0,0,.05); /* 107: flow-preview card shadow */ /* segmented controls (edit tabs) */
   --line:rgba(0,0,0,.08);--line2:rgba(0,0,0,.13);--text:#1d1d1f;--muted:#6e6e73;
   --muted2:#86868b;--accent:#0071e3;--accent2:#2997ff;--lux:#0071e3;--lux2:#2997ff;
@@ -75,7 +75,7 @@ html{color-scheme:light}
 html[data-theme="dark"]{color-scheme:dark}
 :root[data-theme="dark"]{
   --bg:#000000;--panel:#1c1c1e;--panel2:#232325;--input:#1c1c1e;
-  --fill:rgba(142,142,147,.16);--fill2:rgba(142,142,147,.28);--seg-thumb:#636366;
+  --fill:rgba(142,142,147,.16);--fill2:rgba(142,142,147,.28);--seg-thumb:#636366;--seg-on:#0066cc;
   --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.35);
   --line:rgba(255,255,255,.11);--line2:rgba(255,255,255,.17);--text:#f5f5f7;--muted:#98989d;
   --muted2:#8e8e93;--accent:#0a84ff;--accent2:#409cff;--lux:#0a84ff;--lux2:#409cff;
@@ -1047,8 +1047,9 @@ button:not([class]):not([role]):hover:not(:disabled),button[class=""]:not([role]
 button.secondary,[data-theme="dark"] button.secondary{background:var(--fill);border-color:transparent;color:var(--text);box-shadow:none}
 button.secondary:hover:not(:disabled),[data-theme="dark"] button.secondary:hover:not(:disabled){background:var(--fill2);box-shadow:none}
 /* dark: plain (unclassed) primary buttons use the accent, like the mockup; classed components keep their own */
-[data-theme="dark"] button:not([class]):not([role]),[data-theme="dark"] button[class=""]:not([role]){background:var(--accent);border-color:transparent!important;color:#fff}
-[data-theme="dark"] button:not([class]):not([role]):hover:not(:disabled),[data-theme="dark"] button[class=""]:not([role]):hover:not(:disabled){background:#409cff}
+/* a toggle (aria-pressed) is never a primary action: its colour comes from its own pressed state (segmented bug, 205) */
+[data-theme="dark"] button:not([class]):not([role]):not([aria-pressed]),[data-theme="dark"] button[class=""]:not([role]):not([aria-pressed]){background:var(--accent);border-color:transparent!important;color:#fff}
+[data-theme="dark"] button:not([class]):not([role]):not([aria-pressed]):hover:not(:disabled),[data-theme="dark"] button[class=""]:not([role]):not([aria-pressed]):hover:not(:disabled){background:#409cff}
 .panel{padding:var(--sp-3);border-color:var(--line);box-shadow:var(--shadow)}
 [data-theme="dark"] .panel{border-color:var(--line)}
 input,select,textarea{font-size:15px;padding:11px 14px;border-radius:12px;background:var(--input);border-color:var(--line2)}
@@ -1141,8 +1142,10 @@ select::-ms-expand{display:none}
 .grid-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--sp-2)}
 .seg{display:inline-flex;padding:3px;border-radius:999px;background:var(--fill);gap:2px;flex-wrap:wrap}
 .seg button,[data-theme="dark"] .seg button{min-height:36px;background:transparent;color:var(--text);font-weight:500;padding:0 14px;border:0!important;border-radius:999px;box-shadow:none;transition:background var(--dur-2) var(--ease-out),box-shadow var(--dur-2) var(--ease-out)}
-.seg button:hover:not(:disabled):not([aria-pressed="true"]){background:var(--fill)}
-.seg button[aria-pressed="true"],[data-theme="dark"] .seg button[aria-pressed="true"]{background:var(--seg-thumb);box-shadow:0 1px 3px rgba(0,0,0,.12);font-weight:600}
+.seg button:hover:not(:disabled):not([aria-pressed="true"]),[data-theme="dark"] .seg button:hover:not(:disabled):not([aria-pressed="true"]){background:var(--fill2);box-shadow:none}
+/* 205: selected = accent + white (≥ 4.5:1: light #0071e3 4.7, dark #0066cc 5.6), unselected = the neutral track */
+.seg button[aria-pressed="true"],[data-theme="dark"] .seg button[aria-pressed="true"],
+.seg button[aria-pressed="true"]:hover:not(:disabled),[data-theme="dark"] .seg button[aria-pressed="true"]:hover:not(:disabled){background:var(--seg-on);color:#fff;box-shadow:0 1px 3px rgba(0,0,0,.12);font-weight:600}
 .seg-note{margin:6px 0 0}
 .from-campaign{display:inline-block;margin-left:6px;padding:0 7px;border-radius:999px;background:var(--badge-run-bg);color:var(--accent);font-size:11px;font-weight:600;letter-spacing:0;text-transform:none;vertical-align:1px}
 .layouts{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}

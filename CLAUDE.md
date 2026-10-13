@@ -453,6 +453,9 @@ planned post: `reminded_at` set in the queueing transaction; > 1 h late = `misse
   `jobs.layout`); campaign `default_layout`/`default_language` pre-fill with a "from campaign" tag unless touched;
   estimate from `GET /api/analysis-estimate`. POST /api/jobs payload unchanged (analyze.spec pins it).
   `initToolbar()` (scroll → `--p` on `#toolbar`) stays the only scroll driver.
+  Toggles (205): a button's pressed look comes ONLY from `aria-pressed="true"` (`.seg`: `--seg-on` accent + white,
+  ≥ 4.5:1 in both themes; unpressed = the neutral track). Generic "primary button" rules exclude `[aria-pressed]`
+  (the dark one once painted class-less segment buttons blue). touch.spec's 205 sweep checks every page/tab/sheet.
 - **URL = view (170/171):** `go(hash)` + `routeHash()` (registered before lane-b's scripts: it closes the other lane-b
   page first). New view → give it a hash there. Bare URL → last view per user. `#editor` alone = Pick a clip
   (`#pickSection`, same saved Review filters); `lastEditorClip` (per user) = what the pill's Editor reopens.
