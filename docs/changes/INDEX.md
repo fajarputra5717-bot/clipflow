@@ -180,3 +180,4 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 208 · 2026-10-14 · Island "+N" opens a live, keyboard-accessible list of every task (it vanished under the pointer on desktop); pill opens the list (2+) or the task (1) · index.html, island-list.spec, CLAUDE.md
 209 · 2026-10-14 · Logs to journald (survive recreates); nginx JSON 503 + GET retries absorb the ~1.5 s deploy gap (deep audit M6) · docker-compose.yml, conf.d, index.html, load-errors.spec
 210 · 2026-10-14 · Review/Pick status filter (.rv-seg) pressed = accent + white like .seg (Lane C Low on 205) · editor.css, touch.spec
+211 · 2026-10-14 · FastAPI /docs, /redoc, /openapi.json off in production, kept on staging (deep audit L10) · main.py

@@ -51,9 +51,15 @@ DATA_ROOT = Path(os.environ.get("DATA_ROOT", "/data"))
 # APP
 # ============================================================
 
+# Audit L10: the interactive docs + OpenAPI schema list every route without auth. Production serves none of them;
+# staging keeps them (QA's unauthenticated sweep reads /openapi.json there). CLIPFLOW_ENV is env-only (auth.py).
+_API_DOCS = (os.getenv("CLIPFLOW_ENV") or "production").strip().lower() != "production"
 app = FastAPI(
     title="Riftstorm Clip Pipeline",
     version="4.0",
+    docs_url="/docs" if _API_DOCS else None,
+    redoc_url="/redoc" if _API_DOCS else None,
+    openapi_url="/openapi.json" if _API_DOCS else None,
 )
 
 
