@@ -24,6 +24,24 @@ test.describe("Nothing-clickable overlay regression", () => {
     });
   }
 
+  test("audit M2: Tab never lands inside an invisible layer (closed overlays, menus, sheets)", async ({ app }) => {
+    const hidden = [];
+    for (let i = 0; i < 30; i++) {
+      await app.keyboard.press("Tab");
+      const bad = await app.evaluate(() => {
+        const el = document.activeElement;
+        if (!el || el === document.body) return null;
+        for (let n = el; n && n !== document.documentElement; n = n.parentElement) {
+          const cs = getComputedStyle(n);
+          if (cs.visibility === "hidden" || cs.display === "none" || Number(cs.opacity) === 0) return el.id || el.className || el.tagName;
+        }
+        return null;
+      });
+      if (bad) hidden.push(bad);
+    }
+    expect(hidden).toEqual([]);
+  });
+
   test("running-jobs overlay closes cleanly", async ({ app, api }) => {
     api.current = [job({ id: "r1", status: "transcribing", progress: 30 }),
                    job({ id: "r2", status: "analyzing", progress: 50 })];
@@ -35,6 +53,8 @@ test.describe("Nothing-clickable overlay regression", () => {
     await app.locator("#jobOverlayClose").click();
     await expect(app.locator("#jobOverlay")).not.toHaveClass(/open/);
     await expect.poll(() => blockingProblems(app, ["#youtubeUrl"])).toEqual([]);
+    await expect(app.locator("#jobOverlay")).toHaveAttribute("inert", "");
+    await expect(app.locator("#jobOverlay")).toHaveCSS("visibility", "hidden");
   });
 
   test("169: account menu closes on outside click and on Escape, and releases the page", async ({ app }) => {

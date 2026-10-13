@@ -762,13 +762,13 @@ summary > .chev{margin-left:auto}
 .empty{text-align:center;padding:35px 15px;color:var(--muted);font-size:11.5px}
 .job-overlay{
   position:fixed;right:20px;top:78px;width:min(360px,calc(100vw - 28px));z-index:100;
-  opacity:0;pointer-events:none;
+  opacity:0;pointer-events:none;visibility:hidden;
   transform-origin:top right;
   transform:translateY(-16px) scale(.82);
   filter:blur(8px);
-  transition:opacity var(--dur-3) var(--ease),transform var(--dur-4) var(--ease),filter var(--dur-3) ease
+  transition:opacity var(--dur-3) var(--ease),transform var(--dur-4) var(--ease),filter var(--dur-3) ease,visibility 0s linear var(--dur-4)
 }
-.job-overlay.open{opacity:1;pointer-events:auto;transform:translateY(0) scale(1);filter:blur(0)}
+.job-overlay.open{opacity:1;pointer-events:auto;visibility:visible;transform:translateY(0) scale(1);filter:blur(0);transition-delay:0s}
 .job-overlay-card{border:1px solid rgba(0,0,0,.08);border-radius:20px;background:rgba(255,255,255,.86);backdrop-filter:var(--material-blur);-webkit-backdrop-filter:var(--material-blur);box-shadow:0 20px 55px rgba(0,0,0,.18);padding:13px;transition:box-shadow var(--dur-3) ease}
 .job-overlay-head{display:flex;justify-content:space-between;align-items:center;gap:10px}.job-overlay-title{font-size:12px;font-weight:700}.job-overlay-summary{font-size:9.5px;color:var(--muted);margin-top:2px;transition:opacity var(--dur-2) ease}
 .job-overlay-close{width:31px;height:31px;min-height:31px;padding:0;border-radius:50%;background:#f5f5f7;border-color:rgba(0,0,0,.08)!important;color:var(--text);transition:transform var(--dur-4) var(--ease),background var(--dur-3) ease}
@@ -1634,7 +1634,7 @@ body:has(#editorSection:not(.hidden)) .ed-foot{bottom:calc(var(--pill-btn) + 30p
   </form>
 </div>
 
-<div id="jobOverlay" class="job-overlay" aria-hidden="true">
+<div id="jobOverlay" class="job-overlay" aria-hidden="true" inert>
   <div class="job-overlay-card">
     <div class="job-overlay-head">
       <div><div class="job-overlay-title">Running jobs</div><div id="jobOverlaySummary" class="job-overlay-summary">No jobs running</div></div>
@@ -3061,7 +3061,7 @@ function islandCollapse(){if(ISL.pinned||ISL.hover){ISL.pinned=false;ISL.hover=f
   window.addEventListener("resize",()=>{if(ISL.mode!=="hidden")setIslandMode(ISL.mode,{force:true})},{passive:true});
 })();
 function renderJobOverlay(){
-  const overlay=$("jobOverlay");overlay.classList.toggle("open",overlayOpen);overlay.setAttribute("aria-hidden",String(!overlayOpen));
+  const overlay=$("jobOverlay");overlay.classList.toggle("open",overlayOpen);overlay.setAttribute("aria-hidden",String(!overlayOpen));overlay.inert=!overlayOpen;
   const items=allActiveTasks();
   $("jobOverlaySummary").textContent=items.length?`${items.length} job${items.length===1?"":"s"} running`:"No jobs running";
   // Keyed rows, patched in place (like the Import cards): the ring glides instead of re-mounting per poll.
