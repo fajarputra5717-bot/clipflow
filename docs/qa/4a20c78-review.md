@@ -19,3 +19,8 @@ Result: **PASS (conditional)** — no High/Medium found; live Meta behaviour unv
 - Any real Graph call (token scopes, `/me/accounts` shape, `views` insights on IG, `video_reels`/`video_insights` on FB, Bearer header acceptance).
 - Live staging PUT/GET of META_ACCESS_TOKEN and the island item (needs restage to 4a20c78); publish "from Instagram / Facebook" wording only via Lane A's UI spec.
 - Telegram note delivery.
+
+## Addendum: 200 (c4f8bf8), all 3 Lows closed
+- Low 1: a request-kind error on the combined FB metric call now retries each metric alone and keeps whatever returns; only if none return does the last error stand (key/transient still abort). Low 2: `meta_error_kind(..., per_object=True)` maps 10/2xx to 'request' for every call except `me/accounts`; 190/102 stay 'key'. Low 3: unexpected exception is logged and stored on the user's run row (kind stays transient), loop continues with the next user.
+- `tests.test_view_pull` 8/8 on c4f8bf8; worker.py parses; prod backend/worker/sender restarted 06:44 UTC in the stated order, all riftstorm-* restarts=0.
+- Still not verified: real Graph calls (no Meta token).
