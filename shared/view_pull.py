@@ -155,16 +155,20 @@ def fb_plays(data: Optional[dict]) -> Optional[int]:
     return next((m[k] for k in FB_METRICS if m.get(k) is not None), None)
 
 
-def meta_error_kind(status: int, data: Optional[dict]) -> str:
+def meta_error_kind(status: int, data: Optional[dict], per_object: bool = False) -> str:
     """'key' (token expired/invalid, or a permission missing: tell the user) | 'transient' (rate limits, 5xx, Meta's
-    temporary errors: next run) | 'request' (this object: not ours, metric unavailable…: an error on that post only)."""
+    temporary errors: next run) | 'request' (this object: not ours, metric unavailable…: an error on that post only).
+    QA 199 Low 2: a permission error (10, 2xx) on a call about ONE media/Page/video is that object's problem
+    (per_object=True → 'request'); only on the token-wide `/me/accounts` call does it mean the token lacks it."""
     err = (data or {}).get("error") or {}
     try:
         code = int(err.get("code"))
     except (TypeError, ValueError):
         code = None
-    if code == 190 or code == 102 or code == 10 or (code is not None and 200 <= code <= 299):
+    if code in (190, 102):
         return "key"
+    if code == 10 or (code is not None and 200 <= code <= 299):
+        return "request" if per_object else "key"
     if code in (1, 2, 4, 17, 32, 341, 368, 613) or (code is not None and 80001 <= code <= 80014) \
             or err.get("is_transient") or status == 429 or status >= 500:
         return "transient"

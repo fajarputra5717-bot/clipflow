@@ -81,8 +81,11 @@ class MetaRulesTest(unittest.TestCase):   # 199
     def test_errors(self):
         e = lambda code, **kw: {"error": {"code": code, **kw}}
         self.assertEqual(vp.meta_error_kind(400, e(190)), "key")          # expired / invalid token
-        self.assertEqual(vp.meta_error_kind(403, e(200)), "key")          # permission missing
+        self.assertEqual(vp.meta_error_kind(403, e(200)), "key")          # permission missing on /me/accounts
         self.assertEqual(vp.meta_error_kind(400, e(10)), "key")
+        self.assertEqual(vp.meta_error_kind(403, e(200), per_object=True), "request")   # QA 199 Low 2: one object
+        self.assertEqual(vp.meta_error_kind(400, e(10), per_object=True), "request")
+        self.assertEqual(vp.meta_error_kind(400, e(190), per_object=True), "key")
         self.assertEqual(vp.meta_error_kind(400, e(4)), "transient")      # app rate limit
         self.assertEqual(vp.meta_error_kind(400, e(80002)), "transient")  # Instagram BUC limit
         self.assertEqual(vp.meta_error_kind(500, None), "transient")

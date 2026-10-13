@@ -8438,7 +8438,8 @@ class _MetaClient:
             data = None
         if resp.status_code != 200:
             message = str(((data or {}).get("error") or {}).get("message") or "")[:200]
-            raise _MetaError(view_pull.meta_error_kind(resp.status_code, data), f"HTTP {resp.status_code}: {message}")
+            raise _MetaError(view_pull.meta_error_kind(resp.status_code, data, per_object=path != "me/accounts"),
+                             f"HTTP {resp.status_code}: {message}")
         return data or {}
 
     def listing(self, path, fields, oldest, time_key, token=None):
@@ -8541,7 +8542,22 @@ def _pull_meta_user(user_id, token, posts, now, http):
                     results.append((row, None, "Not found on the Facebook Pages your Meta token can see"))
                 else:
                     try:
-                        data = client.get(f"{vid}/video_insights", {"metric": ",".join(view_pull.FB_METRICS)}, owner[vid])
+                        try:
+                            data = client.get(f"{vid}/video_insights", {"metric": ",".join(view_pull.FB_METRICS)}, owner[vid])
+                        except _MetaError as exc:
+                            # QA 199 Low 1: one metric name Graph rejects fails the whole list → ask for each alone
+                            if exc.kind != "request":
+                                raise
+                            data, last_err = {"data": []}, exc
+                            for metric in view_pull.FB_METRICS:
+                                try:
+                                    data["data"] += client.get(f"{vid}/video_insights", {"metric": metric}, owner[vid]).get("data") or []
+                                except _MetaError as one:
+                                    if one.kind != "request":
+                                        raise
+                                    last_err = one
+                            if not data["data"]:
+                                raise last_err
                         views = view_pull.fb_plays(data)
                         results.append((row, views, None if views is not None else "Facebook returned no play count yet"))
                     except _MetaError as exc:
@@ -8592,6 +8608,9 @@ def pull_meta_views(now=None, http=None):
         updated, calls, kind, err = 0, 0, "transient", "interrupted"
         try:
             updated, calls, kind, err = _pull_meta_user(user_id, token, posts, now, http)
+        except Exception as exc:   # QA 199 Low 3: one user's unexpected error never skips the others
+            err = f"{type(exc).__name__}: {str(exc)[:150]}"
+            log(f"View pull (meta) failed for user {user_id}: {err}")
         finally:
             with db() as conn:
                 conn.execute(
