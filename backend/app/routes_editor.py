@@ -206,6 +206,15 @@ def _pack_state(spec: dict, c: dict) -> dict:
             "options": style_packs.options()}
 
 
+def _vision_on(spec: dict, c: dict, user: dict | None = None) -> bool:
+    """Frames go with the plan call when the clip's pack wants them (owner 2026-10-13) and the global
+    EDIT_DIRECTOR_VISION switch is on."""
+    if not style_packs.PACKS[style_packs.resolve(spec, c.get("campaign"))[0]]["vision"]:
+        return False
+    kw = {"user_id": user["id"]} if user else {}
+    return str(_core().runtime_setting("EDIT_DIRECTOR_VISION", **kw) or "true").lower() not in ("false", "0", "no", "off")
+
+
 def _director_state(spec: dict, c: dict) -> dict:
     """Auto Edit E1: the plan (empty until generated) + which effects render today. frames_ready = the current
     preview has sampled frames (a plan made before them has vision false: the UI suggests regenerating)."""
@@ -213,7 +222,7 @@ def _director_state(spec: dict, c: dict) -> dict:
     frames_ready = (_core().DATA_ROOT / "previews" / f"{c['id']}.frame-0.jpg").is_file()
     return {**d, "rendered": sorted(edit_director.RENDERED_EFFECTS), "arrives_in": edit_director.ARRIVES_IN,
             "min_gap": style_packs.PACKS[style_packs.resolve(spec, c.get("campaign"))[0]]["min_gap"],
-            "frames_ready": frames_ready,
+            "frames_ready": frames_ready, "vision_on": _vision_on(spec, c),
             "effects": list(edit_director.EFFECTS), "defaults": edit_director.PARAMS_FOR,
             "sfx": list(edit_director.SFX), "emoji": list(edit_director.EMOJI)}
 
@@ -617,8 +626,7 @@ def _plan_inputs(c: dict, user: dict):
     ht = edit_specs.hook_title_of(spec) or {}
     card = float(ht.get("duration") or edit_specs.HOOK_TITLE_DEFAULT_DURATION) if ht.get("on") else 0.0
     frames = []
-    vision_on = str(core.runtime_setting("EDIT_DIRECTOR_VISION", user_id=user["id"]) or "true").lower() not in (
-        "false", "0", "no", "off")
+    vision_on = _vision_on(spec, c, user)
     if vision_on:
         for f in (cached.get("frames") or [])[: edit_director.FRAME_COUNT]:
             path = previews / str(f.get("file", ""))

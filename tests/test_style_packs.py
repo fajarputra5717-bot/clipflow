@@ -21,6 +21,7 @@ class Packs(unittest.TestCase):
         self.assertTrue(g["loud"] and g["progress"])
         self.assertFalse(f["loud"] or d["loud"] or c["loud"])
         self.assertEqual([x["min_gap"] for x in (g, f, d, c)], [3, 3, 5, 6])
+        self.assertEqual([x["vision"] for x in (g, f, d, c)], [True, True, False, False])   # owner 2026-10-13
         self.assertFalse(any(e in ("emoji", "shake") for k in d["map"].values() for e, _ in k))     # drama: no emoji, no shake
         self.assertFalse(any(p.get("sfx") or e in ("emoji", "shake") for k in c["map"].values() for e, p in k))  # podcast
         self.assertEqual(P.pack_for_campaign("ime-roleplay"), "gaming_hype")

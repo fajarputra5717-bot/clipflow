@@ -17,7 +17,7 @@ function editorState(over = {}) {
                  picked: null, locked: false, current_url: "/api/jobs/job-done/candidates/cand-a/thumbnail", generating: false },
     watermark: { width: 320, opacity: 1, custom: false },
     export: { burn: true, description: "", submagic: { status: null, preview_url: null, error: null } },
-    director: { items: [], rendered: ["emoji", "flash", "freeze", "punch", "push", "shake", "slowmo", "whip", "zoom_out"], arrives_in: {}, min_gap: 3, frames_ready: false,
+    director: { items: [], rendered: ["emoji", "flash", "freeze", "punch", "push", "shake", "slowmo", "whip", "zoom_out"], arrives_in: {}, min_gap: 3, frames_ready: false, vision_on: true,
       effects: ["punch", "push", "zoom_out", "shake", "flash", "whip", "freeze", "slowmo", "emoji"], defaults: { emoji: { emoji: "😂" }, freeze: { hold: 0.6 }, slowmo: { dur: 1.2, factor: 0.5 } },
       sfx: ["whoosh", "boom", "bass_hit", "ding", "record_scratch"], emoji: ["😂", "😭", "💀"] },
     look: { preset: "none", vignette: false, grain: false, presets: ["none", "vivid_gaming", "warm", "moody"] },

@@ -322,7 +322,7 @@
       <div class="ed-group">
         <div class="ed-row"><div><div class="ed-label">Auto edit</div>
           <div class="ed-hint">${items.length ? `${on} of ${items.length} effects on · at most one per ${d.min_gap} s, never under the title card${d.vision ? " · frames checked"
-              : d.frames_ready ? " · frames weren't checked: Regenerate to include them" : " · frames are checked after the next Render preview"}`
+              : d.vision_on === false ? "" : d.frames_ready ? " · frames weren't checked: Regenerate to include them" : " · frames are checked after the next Render preview"}`
             : "AI picks the strongest moments (hook, punchline, shock, laugh) and plans a few effects. You keep the final say."}</div></div>
           <button type="button" class="sm" data-ed-plan-gen>${items.length ? "Regenerate plan" : "Generate plan"}</button></div>
         ${items.length ? `<div class="ed-plan-list">${items.map((i) => `
