@@ -1609,8 +1609,8 @@ body:has(#editorSection:not(.hidden)) .ed-foot{bottom:calc(var(--pill-btn) + 30p
   .ed-switch::before{content:"";position:absolute;inset:-9px -1px}
   .ed-sw::after,.ed-sw-sm::after{inset:-9px!important}
   .ed-kw{max-height:200px}
-  /* audit M3: text fields too (Settings rows were 34 px, posting times + reminder lead 36 px) */
-  body input:not([type=range]):not([type=checkbox]):not([type=radio]):not([type=file]):not([type=color]):not([type=hidden]),
+  /* audit M3: text fields + sliders too (Settings rows were 34 px, posting times + reminder lead 36 px, editor sliders 40 px) */
+  body input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=color]):not([type=hidden]),
   body textarea{min-height:var(--hit)}
 }
 </style>

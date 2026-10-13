@@ -176,3 +176,4 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 204 · 2026-10-13 · Publish/Schedule/Track load errors: plain lead + Retry, detail as small print (deep audit M5) · index.html, load-errors.spec
 205 · 2026-10-14 · Segmented buttons: pressed = accent from aria-pressed only (dark theme showed them inverted), contrast ≥ 4.5 · index.html, touch.spec, CLAUDE.md
 206 · 2026-10-14 · Layout shift: late notes keep their line, Review's loading line is replaced not pushed; all cases 0.000 (was ≤ 0.084) (deep audit M4) · index.html, review.js, cls.spec
+207 · 2026-10-14 · Phone sliders ≥ 44 px (5 editor sliders were 40 px; deep audit M3 follow-up) · index.html, touch.spec

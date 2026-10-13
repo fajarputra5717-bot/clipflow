@@ -94,7 +94,7 @@ async function smallTargets(app) {
     const vis = (e) => { const cs = getComputedStyle(e); return e.offsetParent && cs.visibility !== "hidden" && Number(cs.opacity) > 0 && !e.closest("#island,.acct-menu:not(.open),.sheet-layer:not(.open),.job-overlay:not(.open)") && !(e.closest("[inert]") && !document.querySelector(".sheet-layer.open")?.contains(e)); };
     // audit M3: text/number inputs + textareas count too (Settings, editor numbers)
     const sel = "button,a[href],summary,select,[role=switch],[role=tab],[role=slider],textarea," +
-      "input:not([type=hidden]):not([type=range]):not([type=file]):not([type=color])";
+      "input:not([type=hidden]):not([type=file]):not([type=color])";
     return [...document.querySelectorAll(sel)].filter(vis)
       .filter((e) => { const r = e.getBoundingClientRect(); const [h, w] = hit(e); return r.width > 0 && r.bottom > 0 && (h < 43.5 || w < 43.5); })
       .map((e) => `${e.tagName.toLowerCase()}.${[...e.classList].join(".")} ${Math.round(e.getBoundingClientRect().width)}x${Math.round(e.getBoundingClientRect().height)} "${(e.textContent || e.getAttribute("aria-label") || "").trim().slice(0, 20)}"`);
