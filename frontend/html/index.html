@@ -830,6 +830,13 @@ img.topbar-logo-icon{background:none;padding:0;object-fit:cover}
   opacity:0;transform:scale(.96);transition:opacity var(--dur-2) var(--ease),transform var(--dur-3) var(--ease-out);
 }
 .sheet-layer.open .sheet{opacity:1;transform:scale(1)}
+/* audit L9: on desktop the full-viewport backdrop blur + the sheet's own backdrop blur re-rendered every frame of the
+   open animation (headless 1280: 6–9 frames > 34 ms, worst 83 ms → 0–1, worst 33–50). The sheet is near-opaque anyway,
+   so desktop drops both blurs and dims a little more; phones keep the frosted material. */
+@media (min-width:601px){
+  .sheet-backdrop{backdrop-filter:none;-webkit-backdrop-filter:none;background:rgba(0,0,0,.34)}
+  .sheet{backdrop-filter:none;-webkit-backdrop-filter:none;background:var(--panel)}
+}
 .sheet-head{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-1);padding:var(--sp-2) var(--sp-2) var(--sp-1) var(--sp-3)}
 .sheet-head h2{margin:0;font-size:20px}
 .sheet-close{width:var(--hit);height:var(--hit);min-height:var(--hit);padding:0;display:grid;place-items:center;border-radius:50%;background:var(--line);border-color:transparent;color:var(--muted);box-shadow:none}
