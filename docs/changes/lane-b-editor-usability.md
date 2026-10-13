@@ -9,3 +9,10 @@
    `display:contents`. Height `--ed-fit-h` = window minus the page top and the stepper pill (`fitPage()`, on render +
    resize). The inspector panel scrolls inside. Shorter or narrower windows keep the scrolling layout. Phone (≤ 899):
    video (sticky), timeline right under it, then the inspector tabs, via flex `order`.
+3. Player (owner fix 2): sound on by default; mute + volume remembered per browser (`localStorage`
+   `clipflow.editor.sound`, try/catch, re-read on open). If the browser refuses autoplay with sound, it plays muted and
+   the speaker shows it (not saved). Row under the video: play · time · scrub bar (transform-only) · mute · volume
+   (volume hidden ≤ 600 px: phones ignore it). Keys (`playerKey()`): Space/K play-pause, ←/→ 0.1 s, Shift 1 s, J back
+   1 s, L play then 1.5×/2× (browsers can't play in reverse), M mute; never in text fields/selects/sliders or outside
+   the editor; Space still activates a focused button/switch/tab. Short desktop windows: the sticky player ends above
+   the sticky action bar. UI tests serve a 4 s WebM (`tests/ui/media/clip-4s.webm`) with byte ranges.

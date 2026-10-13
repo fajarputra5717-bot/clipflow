@@ -392,3 +392,19 @@ a.rv-frame:focus-visible{outline:none;box-shadow:var(--ring)}
   .ed-player{position:sticky}
   .ed-insp{margin-top:var(--sp-2)}
 }
+/* 2b: player row = play · time · scrub bar · mute · volume. The scrub bar moves by transform only. */
+.ed-pctrl{gap:8px}
+.ed-scrub{position:relative;flex:1 1 120px;min-width:80px;height:28px;cursor:pointer;touch-action:none;outline:none}
+.ed-scrub-track{position:absolute;left:0;right:0;top:12px;height:4px;border-radius:2px;background:var(--fill2,rgba(120,120,128,.24));overflow:hidden}
+.ed-scrub-fill{position:absolute;inset:0;background:var(--accent);transform:scaleX(0);transform-origin:0 50%;will-change:transform}
+.ed-scrub-pos{position:absolute;inset:0;pointer-events:none;transform:translateX(0);will-change:transform}
+.ed-scrub-pos b{position:absolute;left:-7px;top:7px;width:14px;height:14px;border-radius:50%;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.35)}
+.ed-scrub:focus-visible .ed-scrub-pos b{box-shadow:var(--ring)}
+.ed-scrub[aria-disabled="true"]{opacity:.4;cursor:default}
+.ed-vol{width:84px;flex:none}
+.ed-note:empty{display:none}
+.ed-fit .ed-pctrl{flex-wrap:wrap}
+.ed-fit .ed-note{flex-basis:100%}
+/* short desktop windows (scrolling layout): keep the sticky player clear of the sticky action bar */
+@media (min-width:900px){.ed-player{height:calc(100vh - 290px)}}  /* top 142 before scrolling, bar top = 100vh - 128 */
+@media (max-width:600px){.ed-vol{display:none}.ed-scrub{height:44px}.ed-scrub-track{top:20px}.ed-scrub-pos b{top:15px}}

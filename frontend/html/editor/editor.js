@@ -16,7 +16,15 @@
   const reduced = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const PPS = 100;                              // timeline pixels per second
   const ZOOM_SPAN = 1.75;                       // ramp 0.25 + hold 1.0 + ramp 0.25 + merge gap: retention.plan_zoom_windows
-  const E = { zoom: { on: true, intensity: 50, markers: [] }, zoomT: 0, mode: "seek", cuts: { trim: null, removed: [] }, cutT: 0, drag: null, tl: null, raf: 0, nowWord: -1, jid: null, cid: null, state: null, hook: null, saveT: 0, pollT: 0, hidden: [], tab: "captions", busy: false, muted: true };
+  // 2b: preview sound is on by default; volume + mute are remembered per browser (a viewer convenience only).
+  const SOUND_KEY = "clipflow.editor.sound";
+  function loadSound() {
+    try { const v = JSON.parse(localStorage.getItem(SOUND_KEY) || "{}");
+      return { muted: v.muted === true, volume: Number.isFinite(v.volume) ? Math.min(1, Math.max(0, v.volume)) : 1 }; }
+    catch { return { muted: false, volume: 1 }; }
+  }
+  function saveSound() { try { localStorage.setItem(SOUND_KEY, JSON.stringify({ muted: E.muted, volume: E.volume })); } catch {} }
+  const E = { zoom: { on: true, intensity: 50, markers: [] }, zoomT: 0, mode: "seek", cuts: { trim: null, removed: [] }, cutT: 0, drag: null, tl: null, raf: 0, nowWord: -1, jid: null, cid: null, state: null, hook: null, saveT: 0, pollT: 0, hidden: [], tab: "captions", busy: false, ...loadSound() };
 
   function section() {
     let s = $("editorSection");
@@ -42,6 +50,7 @@
   async function open(jid, cid) {
     const s = section();
     if (!s) return;
+    if (!E.cid) Object.assign(E, loadSound());   // 2b: the remembered sound, fresh per open (another tab may have changed it)
     if (!E.cid) {                         // remember which views were showing, to restore on close
       E.hidden = [...s.parentElement.querySelectorAll(":scope > .view-section")]
         .filter((v) => v !== s).map((v) => [v, v.classList.contains("hidden"), v.hidden]);
@@ -110,10 +119,16 @@
             <div class="ed-prog" id="edProg" aria-hidden="true"><i></i></div>
           </div>
           <div class="ed-pctrl">
-            <button class="icon-btn" type="button" data-ed-play aria-label="Play" ${c.has_preview ? "" : "disabled"}>▶</button>
+            <button class="icon-btn" type="button" data-ed-play aria-label="Play" title="Play / pause (Space)" ${c.has_preview ? "" : "disabled"}>▶</button>
             <span class="ed-time" id="edTime">0:00</span>
+            <div class="ed-scrub" id="edScrub" data-ed-scrub role="slider" tabindex="${c.has_preview ? 0 : -1}" aria-label="Seek"
+              aria-valuemin="0" aria-valuemax="0" aria-valuenow="0" aria-valuetext="0:00" ${c.has_preview ? "" : `aria-disabled="true"`}>
+              <span class="ed-scrub-track"><i class="ed-scrub-fill" id="edScrubFill"></i></span>
+              <span class="ed-scrub-pos" id="edScrubPos"><b></b></span></div>
             <button class="icon-btn ed-mute" type="button" data-ed-mute aria-label="${E.muted ? "Unmute" : "Mute"}"
-              title="${E.muted ? "Unmute" : "Mute"}" ${c.has_preview ? "" : "disabled"}>${muteIcon(E.muted)}</button>
+              title="${E.muted ? "Unmute (M)" : "Mute (M)"}" ${c.has_preview ? "" : "disabled"}>${muteIcon(E.muted)}</button>
+            <input class="ed-vol" type="range" min="0" max="1" step="0.05" value="${E.volume}" data-ed-vol aria-label="Volume"
+              ${c.has_preview ? "" : "disabled"}>
             <span class="ed-note" id="edNote"></span>
           </div>
         </div>
@@ -497,7 +512,7 @@
 
   function loop() {
     const v = $("edVideo");
-    paintPlayhead(true);
+    paintPlayhead(true); paintScrub();
     if (v && !v.paused && E.cid) E.raf = requestAnimationFrame(loop);
   }
 
@@ -1027,22 +1042,68 @@
   function wirePlayer() {
     const v = $("edVideo"); if (!v) return;
     const tick = () => { paintHook(); const tm = $("edTime"); if (tm) tm.textContent = fmt(v.currentTime); };
+    v.volume = E.volume;
     v.addEventListener("timeupdate", tick);
-    v.addEventListener("seeked", () => { tick(); paintPlayhead(false); });
+    v.addEventListener("seeked", () => { tick(); paintPlayhead(false); paintScrub(); });
+    v.addEventListener("loadedmetadata", paintScrub);
     v.addEventListener("play", () => { setPlay(true); cancelAnimationFrame(E.raf); E.raf = requestAnimationFrame(loop); });
-    v.addEventListener("pause", () => setPlay(false));
-    if (!reduced()) v.play().catch(() => {});
+    v.addEventListener("pause", () => { setPlay(false); v.playbackRate = 1; });
+    if (!reduced()) v.play().catch((err) => {
+      if (err && err.name === "NotAllowedError" && !v.muted) { setMuted(true, false); v.play().catch(() => {}); }
+    });
   }
-  // Audit High (2026-10): the preview has sound. Muted by default (autoplay); the choice holds for this session.
+  // Audit High (2026-10) + 2b: the preview has sound (on by default, remembered); the browser may refuse to autoplay
+  // with sound, then it plays muted and the speaker shows it (not saved).
   const muteIcon = (m) => m
     ? `<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M3 9h4l5-4v14l-5-4H3z"/><path d="M16 9l5 6M21 9l-5 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>`
     : `<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M3 9h4l5-4v14l-5-4H3z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18 6a8.5 8.5 0 0 1 0 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>`;
-  function setMuted(m) {
-    E.muted = m;
+  function setMuted(m, save = true) {
+    E.muted = m; if (save) saveSound();
     const v = $("edVideo"); if (v) v.muted = m;
     const b = document.querySelector("[data-ed-mute]");
-    if (b) { b.innerHTML = muteIcon(m); b.setAttribute("aria-label", m ? "Unmute" : "Mute"); b.title = m ? "Unmute" : "Mute"; }
+    if (b) { b.innerHTML = muteIcon(m); b.setAttribute("aria-label", m ? "Unmute" : "Mute"); b.title = m ? "Unmute (M)" : "Mute (M)"; }
     const n = $("edAudioNote"); if (n && E.tab === "audio") n.outerHTML = audioPanel().match(/<div class="ed-note-box"[\s\S]*?<\/div>/)[0];
+  }
+  // 2b: scrub bar under the video (output time). Transform only: fill scaleX, knob translateX on a track-wide layer.
+  function paintScrub() {
+    const v = $("edVideo"), el = $("edScrub"); if (!v || !el) return;
+    const d = v.duration || 0, p = d ? Math.min(1, v.currentTime / d) : 0;
+    $("edScrubFill").style.transform = `scaleX(${p})`;
+    $("edScrubPos").style.transform = `translateX(${(p * 100).toFixed(3)}%)`;
+    el.setAttribute("aria-valuemax", d.toFixed(1)); el.setAttribute("aria-valuenow", v.currentTime.toFixed(1));
+    el.setAttribute("aria-valuetext", fmt(v.currentTime));
+    const tm = $("edTime"); if (tm) tm.textContent = fmt(v.currentTime);
+  }
+  function scrubTo(clientX) {
+    const v = $("edVideo"), el = $("edScrub"); if (!v || !el || !v.duration) return;
+    const r = el.getBoundingClientRect();
+    v.currentTime = Math.max(0, Math.min(1, (clientX - r.left) / r.width)) * v.duration;
+    paintScrub(); paintPlayhead(true);
+  }
+  function nudge(dt) {
+    const v = $("edVideo"); if (!v || !v.duration) return;
+    v.currentTime = Math.max(0, Math.min(v.duration, v.currentTime + dt));
+    paintScrub(); paintPlayhead(true); paintHook();
+  }
+  // Space play/pause · ←/→ 0.1 s · Shift+←/→ 1 s · J back 1 s · K play/pause · L play (again: 1.5×, 2×) · M mute.
+  // Never while typing (text fields, selects, sliders keep their own keys) or when focus is outside the editor.
+  function playerKey(e) {
+    const v = $("edVideo"); if (!v || e.metaKey || e.ctrlKey || e.altKey) return false;
+    const t = e.target;
+    if (t.closest && t.closest("input,textarea,select,[contenteditable],[data-ed-trim]")) return false;
+    if (t !== document.body && !(t.closest && t.closest("#editorSection"))) return false;
+    const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+    if (k === " " && t.closest && t.closest("button,a,summary,[role=switch],[role=tab]")) return false;  // Space activates them
+    if (k === " " || k === "k") { v.paused ? v.play().catch(() => {}) : v.pause(); return true; }
+    if (k === "ArrowLeft" || k === "ArrowRight") { nudge((e.shiftKey ? 1 : 0.1) * (k === "ArrowRight" ? 1 : -1)); return true; }
+    if (k === "j") { nudge(-1); return true; }
+    if (k === "l") {
+      if (v.paused) { v.playbackRate = 1; v.play().catch(() => {}); }
+      else v.playbackRate = v.playbackRate >= 2 ? 2 : v.playbackRate + 0.5;
+      return true;
+    }
+    if (k === "m") { setMuted(!E.muted); return true; }
+    return false;
   }
   // 2a: desktop pages fit the window (editor.css .ed-fit): the height between the page top and the stepper pill.
   function fitPage() {
@@ -1250,6 +1311,16 @@
     const inner = $("edTlInner"); setTrim(E.drag, (e.clientX - inner.getBoundingClientRect().left) / PPS); paintCuts();
   });
   document.addEventListener("pointerup", () => { if (E.drag) { E.drag = null; cutsChanged(); } });
+  document.addEventListener("pointerdown", (e) => {
+    const sc = E.state && e.target.closest && e.target.closest("[data-ed-scrub]");
+    if (!sc || sc.getAttribute("aria-disabled") === "true") return;
+    sc.setPointerCapture(e.pointerId); E.scrubbing = true; scrubTo(e.clientX); e.preventDefault();
+  });
+  document.addEventListener("pointermove", (e) => {
+    if (!E.scrubbing) return;
+    cancelAnimationFrame(E.scrubRaf); const x = e.clientX; E.scrubRaf = requestAnimationFrame(() => scrubTo(x));
+  });
+  ["pointerup", "pointercancel"].forEach((n) => document.addEventListener(n, () => { E.scrubbing = false; }));
   document.addEventListener("keydown", (e) => {
     if (!E.state) return;
     const h = e.target.closest && e.target.closest("[data-ed-trim]");
@@ -1257,6 +1328,7 @@
       const [lo, hi] = trimWin(), step = (e.shiftKey ? 1 : 0.1) * (e.key === "ArrowRight" ? 1 : -1);
       setTrim(h.dataset.edTrim, (h.dataset.edTrim === "a" ? lo : hi) + step); cutsChanged(); e.preventDefault(); return;
     }
+    if (playerKey(e)) { e.preventDefault(); return; }
     if ((e.key === "c" || e.key === "C") && !e.target.closest("input,textarea,select,[contenteditable]") && !e.metaKey && !e.ctrlKey) {
       setMode(E.mode === "cut" ? "seek" : "cut");
     }
@@ -1265,6 +1337,11 @@
     }
   });
   document.addEventListener("input", (e) => {
+    if (E.state && e.target.matches && e.target.matches("[data-ed-vol]")) {
+      E.volume = Number(e.target.value); const v = $("edVideo"); if (v) v.volume = E.volume;
+      if (E.volume > 0 && E.muted) setMuted(false); else saveSound();
+      return;
+    }
     if (e.target.matches && e.target.matches("[data-ed-zoom-intensity]") && E.state) {
       E.zoom.intensity = Number(e.target.value); const o = $("edZoomOut"); if (o) o.textContent = `${E.zoom.intensity}%`;
       zoomChanged(); return;
