@@ -376,7 +376,8 @@ their job; **every new table from now on**). Rule: every SQL that reads or write
 `_path_owned()` already enforces it for `/api/jobs/{id}[/candidates/{cid}]…`, `/api/assets/watermarks/{id}…` and
 `/api/accounts/{id}…`, `/api/posts/{id}…`, `/api/auto-import/imports/{id}…` (187);
 lists and inserts do it in the handler. A new route family keyed by an owned id → add its regex to the guard.
-Admin is scoped like everyone except `/api/activity` (sees all, `owner` set). Campaigns are a shared catalogue
+Admin is scoped like everyone except `/api/activity` (sees all, `owner` set). Hot polls (212, `REQUEST_DB_PATHS`) reuse the middleware's auth
+connection via `request_db(request)` (one connection + one transaction); everything else uses `get_db()`. Campaigns are a shared catalogue
 (admin edits; P3 adds `created_by` + `visibility`); `source_videos` is a shared download cache.
 Writing tests (cross-user, settings, qa-tmp users) run on staging only (:8080/:8001), never production.
 

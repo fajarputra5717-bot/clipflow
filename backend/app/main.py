@@ -2,6 +2,7 @@ import hashlib
 import hmac
 import json
 import os
+from contextlib import contextmanager
 import re
 import secrets
 import shutil
@@ -152,38 +153,80 @@ def _path_owned(user: dict, path: str) -> bool:
             return bool(cur.fetchone())
 
 
+# Audit L11: the hot polled reads use ONE connection + ONE transaction per request: the middleware keeps its auth
+# connection on request.state.db for these paths, the handler reuses it (request_db), the middleware commits + closes.
+REQUEST_DB_PATHS = {"/api/activity"}
+
+
 def _resolve_principal(request: Request) -> Optional[dict]:
+    conn = get_db()
+    try:
+        user = _principal_from(conn, request)
+    except Exception:
+        conn.close()
+        raise
+    if user and request.url.path in REQUEST_DB_PATHS:
+        request.state.db = conn
+        return user
+    with conn:   # commit + close, as before
+        pass
+    return user
+
+
+def _close_request_db(request: Request) -> None:
+    conn = getattr(request.state, "db", None)
+    if conn is None:
+        return
+    request.state.db = None
+    try:
+        if not conn.closed:
+            conn.commit()
+    finally:
+        conn.close()
+
+
+@contextmanager
+def request_db(request: Request):
+    """The request's own connection when the middleware kept one (REQUEST_DB_PATHS), else a fresh one."""
+    conn = getattr(request.state, "db", None)
+    if conn is not None:
+        yield conn
+        return
     with get_db() as conn:
-        token = request.cookies.get(auth.SESSION_COOKIE, "")
-        if token:
-            user = auth.session_user(conn, token)
-            if user:
-                user["via"] = "session"
-                return user
+        yield conn
 
-        supplied = request.headers.get(API_KEY_HEADER, "")
-        bearer = request.headers.get("authorization", "")
-        if bearer[:7].lower() == "bearer ":
-            supplied = supplied or bearer[7:].strip()
-        if supplied:
-            # Only per-user tokens; the shared CLIPFLOW_API_KEY was removed (127).
-            user = auth.api_token_user(conn, supplied)
-            if user:
-                user["via"] = "api_token"
-                return user
-            return None
 
-        mt = request.query_params.get(MEDIA_TOKEN_PARAM, "")
-        if (
-            mt
-            and request.method in ("GET", "HEAD")
-            and MEDIA_PATH_RE.match(request.url.path)
-        ):
-            uid = auth.media_token_user_id(conn, mt)
-            user = auth.active_user(conn, uid) if uid else None
-            if user:
-                user["via"] = "media_token"
-                return user
+def _principal_from(conn, request: Request) -> Optional[dict]:
+    token = request.cookies.get(auth.SESSION_COOKIE, "")
+    if token:
+        user = auth.session_user(conn, token)
+        if user:
+            user["via"] = "session"
+            return user
+
+    supplied = request.headers.get(API_KEY_HEADER, "")
+    bearer = request.headers.get("authorization", "")
+    if bearer[:7].lower() == "bearer ":
+        supplied = supplied or bearer[7:].strip()
+    if supplied:
+        # Only per-user tokens; the shared CLIPFLOW_API_KEY was removed (127).
+        user = auth.api_token_user(conn, supplied)
+        if user:
+            user["via"] = "api_token"
+            return user
+        return None
+
+    mt = request.query_params.get(MEDIA_TOKEN_PARAM, "")
+    if (
+        mt
+        and request.method in ("GET", "HEAD")
+        and MEDIA_PATH_RE.match(request.url.path)
+    ):
+        uid = auth.media_token_user_id(conn, mt)
+        user = auth.active_user(conn, uid) if uid else None
+        if user:
+            user["via"] = "media_token"
+            return user
     return None
 
 
@@ -205,6 +248,15 @@ def _origin_allowed(request: Request) -> bool:
 
 @app.middleware("http")
 async def require_user(request: Request, call_next):
+    request.state.db = None
+    try:
+        return await _require_user(request, call_next)
+    finally:   # every exit (401/403/404 or the handler's response) closes a kept request connection (L11)
+        if request.state.db is not None:
+            await run_in_threadpool(_close_request_db, request)
+
+
+async def _require_user(request: Request, call_next):
     path = request.url.path
     request.state.user = None
     if (path == "/api" or path.startswith("/api/")) and path not in OPEN_API_PATHS:
@@ -2760,7 +2812,7 @@ def list_activity(request: Request):
     user = current_user(request)
     see_all = user["role"] == "admin"
     items = []
-    with get_db() as conn:
+    with request_db(request) as conn:   # L11: the middleware's auth connection, one transaction for the whole poll
         with conn.cursor() as cur:
             cur.execute(
                 """

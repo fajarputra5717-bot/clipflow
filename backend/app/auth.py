@@ -69,6 +69,9 @@ SCHEMA = [
     )
     """,
     "CREATE INDEX IF NOT EXISTS idx_user_sessions_user ON user_sessions (user_id)",
+    # Audit L11: the expiry sweep on every login (DELETE … WHERE expires_at < NOW()) had no index. The token lookup has
+    # the primary key; at ~20 rows Postgres seq-scans one page by choice and switches to the index as the table grows.
+    "CREATE INDEX IF NOT EXISTS idx_user_sessions_expires ON user_sessions (expires_at)",
     # Part 5: set by an admin create/reset (temp password); the session can only
     # change its password until it is cleared by POST /api/auth/password.
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN NOT NULL DEFAULT FALSE",
