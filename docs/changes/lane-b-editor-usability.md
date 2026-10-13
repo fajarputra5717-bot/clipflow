@@ -15,7 +15,7 @@
    (volume hidden ≤ 600 px: phones ignore it). Keys (`playerKey()`): Space/K play-pause, ←/→ 0.1 s, Shift 1 s, J back
    1 s, L play then 1.5×/2× (browsers can't play in reverse), M mute; never in text fields/selects/sliders or outside
    the editor; Space still activates a focused button/switch/tab. Short desktop windows: the sticky player ends above
-   the sticky action bar. UI tests serve a 4 s WebM (`tests/ui/media/clip-4s.webm`) with byte ranges.
+   the sticky action bar. The scrub bar clips its knob layer (8 px inset) so it never widens the page at 100 %. UI tests serve a 4 s WebM (`tests/ui/media/clip-4s.webm`) with byte ranges.
 4. Inspector (owner fix 3): the tab row is a sideways scroller (labels never ellipsize; 8–10 px padding) with a fade at
    the hidden edge (`fadeEdges()`, classes `more-start`/`more-end`); keyword words show 4 whole rows (24 px chips
    desktop, 44 px phone) and scroll inside their section, fading at the bottom with "Scroll the words for more ↓"

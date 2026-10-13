@@ -1080,10 +1080,11 @@
     }
     txt($("edTime"), fmt(v.currentTime));
   }
+  const SCRUB_PAD = 8;            // editor.css .ed-scrub inner inset: the knob stays inside the (clipped) bar at 0 and 100 %
   function scrubTo(clientX, rect) {
     const v = $("edVideo"), el = $("edScrub"); if (!v || !el || !v.duration) return;
     const r = rect || el.getBoundingClientRect();
-    v.currentTime = Math.max(0, Math.min(1, (clientX - r.left) / r.width)) * v.duration;
+    v.currentTime = Math.max(0, Math.min(1, (clientX - r.left - SCRUB_PAD) / (r.width - 2 * SCRUB_PAD))) * v.duration;
     paintScrub(); paintPlayhead(true);
   }
   function nudge(dt) {

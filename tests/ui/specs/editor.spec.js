@@ -372,6 +372,9 @@ test.describe("Editor Effects + Audio tabs", () => {
     await app.mouse.click(bar.x + bar.width * 0.75, bar.y + bar.height / 2);
     await expect.poll(() => vid(app, (v) => Math.round(v.currentTime / v.duration * 100))).toBeGreaterThanOrEqual(72);
     expect(await app.locator("#edScrubFill").evaluate((e) => e.style.transform)).toMatch(/^scaleX\(0\.7/);
+    await app.evaluate(() => { const v = document.getElementById("edVideo"); v.currentTime = v.duration - 0.05; });
+    await expect.poll(() => app.locator("#edScrubFill").evaluate((e) => e.style.transform)).toMatch(/^scaleX\(0\.9/);
+    expect(await app.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(0);   // knob at 100 % stays inside
     if (info.project.name === "desktop") {                           // controls row never under the action bar or pill
       const pc = await app.locator(".ed-pctrl").boundingBox(), foot = await app.locator(".ed-foot").boundingBox();
       expect(foot.y >= pc.y + pc.height || foot.x >= pc.x + pc.width).toBe(true);
