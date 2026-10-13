@@ -776,6 +776,18 @@ summary > .chev{margin-left:auto}
 .job-overlay-close:active{transform:scale(var(--press)) rotate(90deg);transition-duration:var(--dur-1)}
 .running-job-list{display:grid;gap:7px;margin-top:10px}
 .running-job-item{padding:9px;border-radius:14px;background:var(--panel2);border:1px solid rgba(0,0,0,.06);cursor:pointer;transition:transform var(--dur-3) var(--ease),border-color var(--dur-3) ease,background var(--dur-3) ease,box-shadow var(--dur-3) var(--ease)}
+.job-overlay .running-job-item,[data-theme="dark"] .job-overlay .running-job-item{display:block;width:100%;text-align:left;font:inherit;font-weight:400;color:var(--text);min-height:0;height:auto}
+.job-overlay .running-job-item{background:var(--panel2)}[data-theme="dark"] .job-overlay .running-job-item{background:#2c2c2e}
+.running-job-item:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.running-job-main .rj-lead{flex:none;width:40px;height:40px;border-radius:10px;overflow:hidden;display:grid;place-items:center;background:var(--fill)}
+.running-job-main .rj-lead img{width:100%;height:100%;object-fit:cover}
+.running-job-item .running-job-info{flex:1;min-width:0}.running-job-item .running-job-name{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.running-job-item .running-job-stage{display:block}
+.running-job-item.is-indeterminate .progress-ring{display:none}
+.rj-open{color:var(--accent);font-weight:600;margin-left:auto}
+.job-overlay .running-job-name{font-size:13px}.job-overlay .running-job-stage{font-size:12px}.job-overlay .running-job-meta{font-size:11px}
+.job-overlay .job-overlay-title{font-size:15px}.job-overlay .job-overlay-summary{font-size:12px}
+.job-overlay .job-overlay-card,[data-theme="dark"] .job-overlay .job-overlay-card{background:var(--panel)}
 .running-job-item:hover{transform:translateY(-2px);border-color:rgba(0,113,227,.3);background:#fff;box-shadow:0 8px 22px rgba(0,0,0,.08)}
 .running-job-item:active{transform:scale(var(--press));transition-duration:var(--dur-1)}
 .running-job-main{display:flex;align-items:center;gap:10px}.running-job-info{min-width:0;display:flex;flex-direction:column;gap:2px}.running-job-name{font-size:10.5px;font-weight:700}.running-job-stage{font-size:9px;font-weight:700;transition:color var(--dur-3) ease}.running-job-meta{display:flex;justify-content:space-between;gap:8px;font-size:8.5px;color:var(--muted2);margin-top:7px}
@@ -1027,6 +1039,7 @@ img.topbar-logo-icon{background:none;padding:0;object-fit:cover}
   opacity:0;transform:translateX(-24px) scale(.4);transition:opacity var(--dur-2) var(--ease),transform var(--dur-3) var(--ease-spring);
 }
 .island-more::after{content:"";position:absolute;inset:-4px}
+.island-more{-webkit-tap-highlight-color:transparent}
 .island-more.on{opacity:1;transform:none}
 .island-more:not(.on){pointer-events:none}
 .island.is-failed .isl-bar{display:none}
@@ -1830,7 +1843,7 @@ body:has(#editorSection:not(.hidden)) .ed-foot{bottom:calc(var(--pill-btn) + 30p
       <div class="isl-x-actions"><button class="isl-cancel" id="islCancel" type="button" hidden>Cancel</button></div>
     </div>
   </div>
-  <button class="island-more" id="islandMore" type="button" hidden aria-label="Show all running jobs"></button>
+  <button class="island-more" id="islandMore" type="button" hidden aria-label="Show all running jobs" aria-haspopup="dialog" aria-controls="jobOverlay" aria-expanded="false"></button>
   <span class="sr-only" id="islandLive" role="status" aria-live="polite"></span>
 </div>
 <div id="publishSheetHost"></div><!-- 144: the ≤ 600 px Publish panel (bottom sheet) lives here, outside the transformed .view-section; empty when closed -->
@@ -2995,7 +3008,8 @@ function paintIsland(){
   setText(more,extra?`+${extra}`:""); // text node patched, the circle itself is never re-mounted
   // The split only exists in compact mode: it merges into the island while expanded (so the expanded
   // shape stays centred and never overflows a phone), and springs back out afterwards.
-  requestAnimationFrame(()=>{const want=!!extra&&ISL.mode==="compact";
+  // 208: on desktop "+N" also stays beside the hover-expanded island, so it is still there when the pointer arrives.
+  requestAnimationFrame(()=>{const want=!!extra&&(ISL.mode==="compact"||(ISL.mode==="expanded"&&!ev&&innerWidth>600));
     if(!want){more.classList.remove("on");more.hidden=true;return}
     if(more.hidden){more.hidden=false;void more.offsetWidth}more.classList.add("on")});
   if(ev){
@@ -3048,48 +3062,74 @@ function fireIslandEvent(j){
   if(type==="failed")ISL.failSeen=false;
   ISL.eventTimer=setTimeout(()=>{ISL.event=null;if(type==="failed")ISL.failTitle=`Failed · ${title}`;updateJobIsland()},2500);
 }
-function islandToggle(){
+function islandToggle(fromKeyboard){
   if(ISL.event){clearTimeout(ISL.eventTimer);ISL.event=null;ISL.failSeen=true;return updateJobIsland()}
   if(!ISL.failSeen){ISL.failSeen=true;return updateJobIsland()}
+  // 208: several tasks → the pill opens the list of all of them; exactly one → it opens that task (its page)
+  const tasks=allActiveTasks();
+  if(tasks.length>1)return overlayOpen?closeJobOverlay():openJobOverlay({focus:fromKeyboard});
+  if(tasks.length===1&&openRunningTask(tasks[0]))return;
   ISL.pinned=!ISL.pinned;updateJobIsland();
+}
+// One place that knows where a running task lives (list rows + a single-task pill).
+function openRunningTask(t){
+  if(!t)return false;
+  if(t.nav){go(t.nav);return true}                                   // 183: an auto-import check opens its step
+  if(t.kind==="candidate"&&t.jobId){go("#review/"+encodeURIComponent(t.jobId));return true}   // 179: the clip's job
+  if(t.kind==="job"){saveActive(t.jobId);showTab("current");startPolling(t.jobId);return true}
+  return false;                                                       // telegram / views: nothing to open
 }
 function islandCollapse(){if(ISL.pinned||ISL.hover){ISL.pinned=false;ISL.hover=false;updateJobIsland()}}
 (function wireIsland(){
   const m=$("islandMain");let hoverT=null;
-  m.addEventListener("click",e=>{e.stopPropagation();islandToggle()});
-  m.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();islandToggle()}});
+  m.addEventListener("click",e=>{e.stopPropagation();islandToggle(e.detail===0)});
+  m.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();islandToggle(true)}});
   const fine=matchMedia("(hover:hover) and (pointer:fine)");
-  $("island").addEventListener("mouseenter",()=>{if(!fine.matches)return;clearTimeout(hoverT);hoverT=setTimeout(()=>{ISL.hover=true;if(!ISL.failSeen)ISL.failSeen=true;updateJobIsland()},120)});
+  // 208: hover-expand starts on the pill body only. On the whole #island it also fired over "+N", and the expanded
+  // shape swallows "+N", so the circle vanished under the pointer and could never be clicked.
+  $("islandMore").addEventListener("mouseenter",()=>clearTimeout(hoverT));   // also keeps a pending collapse from moving it
+  $("islandMore").addEventListener("mouseleave",()=>{if(!fine.matches)return;clearTimeout(hoverT);hoverT=setTimeout(()=>{ISL.hover=false;updateJobIsland()},220)});
+  m.addEventListener("mouseenter",()=>{if(!fine.matches||overlayOpen)return;clearTimeout(hoverT);hoverT=setTimeout(()=>{ISL.hover=true;if(!ISL.failSeen)ISL.failSeen=true;updateJobIsland()},120)});
   $("island").addEventListener("mouseleave",()=>{if(!fine.matches)return;clearTimeout(hoverT);hoverT=setTimeout(()=>{ISL.hover=false;updateJobIsland()},220)});
-  $("islandMore").addEventListener("click",e=>{e.stopPropagation();overlayOpen?closeJobOverlay():openJobOverlay()});
+  $("islandMore").addEventListener("click",e=>{e.stopPropagation();overlayOpen?closeJobOverlay():openJobOverlay({focus:e.detail===0})});
   $("islCancel").addEventListener("click",e=>{e.stopPropagation();const l=ISL.lead;if(l&&typeof window.cancelJob==="function")window.cancelJob(l.jobId,e.currentTarget)});
   document.addEventListener("click",e=>{if(!e.target.closest("#island"))islandCollapse()});
-  document.addEventListener("keydown",e=>{if(e.key==="Escape")islandCollapse()});
+  document.addEventListener("keydown",e=>{if(e.key!=="Escape")return;
+    if(overlayOpen){closeJobOverlay();const more=$("islandMore");(more.hidden?$("islandMain"):more).focus({preventScroll:true});return}
+    islandCollapse()});
   window.addEventListener("resize",()=>{if(ISL.mode!=="hidden")setIslandMode(ISL.mode,{force:true})},{passive:true});
 })();
 function renderJobOverlay(){
-  const overlay=$("jobOverlay");overlay.classList.toggle("open",overlayOpen);overlay.setAttribute("aria-hidden",String(!overlayOpen));overlay.inert=!overlayOpen;
   const items=allActiveTasks();
+  if(overlayOpen&&!items.length)overlayOpen=false;   // 208: the last task finished while the list was open
+  const overlay=$("jobOverlay");overlay.classList.toggle("open",overlayOpen);overlay.setAttribute("aria-hidden",String(!overlayOpen));overlay.inert=!overlayOpen;
+  $("islandMore").setAttribute("aria-expanded",String(overlayOpen));
   $("jobOverlaySummary").textContent=items.length?`${items.length} job${items.length===1?"":"s"} running`:"No jobs running";
   // Keyed rows, patched in place (like the Import cards): the ring glides instead of re-mounting per poll.
   const list=$("jobOverlayList"),keep=new Set(),key=j=>j.kind+":"+j.id;let prev=null;
   for(const j of items){
     const k=key(j),p=pct(j.progress),color=stageColor(j.status);keep.add(k);
     let row=[...list.children].find(r=>r.dataset.key===k);
-    if(!row){row=document.createElement("div");row.className="running-job-item";row.dataset.key=k;
-      row.dataset.runningJob=j.id;row.dataset.runningKind=j.kind;row.dataset.runningJobid=j.jobId;row.dataset.runningNav=j.nav||"";
-      row.innerHTML=`<div class="running-job-main">${progressRing(p,color,34,4)}<div class="running-job-info"><div class="running-job-name"></div><div class="running-job-stage"></div></div></div><div class="running-job-meta"><span class="rj-msg"></span><span>${esc(String(j.id).slice(0,8))}</span></div>`}
+    if(!row){row=document.createElement("button");row.type="button";row.className="running-job-item";row.dataset.key=k;
+      row.dataset.runningJob=j.id;row.dataset.runningKind=j.kind;row.dataset.runningJobid=j.jobId||"";row.dataset.runningNav=j.nav||"";
+      row.innerHTML=`<span class="running-job-main"><span class="rj-lead"></span><span class="running-job-info"><span class="running-job-name"></span><span class="running-job-stage"></span></span>${progressRing(p,color,34,4)}</span><span class="running-job-meta"><span class="rj-msg"></span><span class="rj-open" aria-hidden="true">Open ›</span></span>`}
+    const lead=row.querySelector(".rj-lead"),lk=(j.indeterminate?"spin":"")+(j.kind==="job"?"job:"+j.jobId:"dot");
+    if(lead.dataset.key!==lk){lead.dataset.key=lk;lead.innerHTML=islandThumb(j)}
+    row.classList.toggle("is-indeterminate",!!j.indeterminate);
     const ring=row.querySelector(".progress-ring-bar"),c=Number(ring.getAttribute("stroke-dasharray")),off=String(+(c*(1-p/100)).toFixed(3));
     setAttr(ring,"stroke-dashoffset",off);setText(row.querySelector(".progress-ring-pct"),p+"%");
     const rw=row.querySelector(".progress-ring");if(rw.style.getPropertyValue("--ring-color")!==color)rw.style.setProperty("--ring-color",color);
-    setText(row.querySelector(".running-job-name"),j.kind==="candidate"?(j.title||"Candidate"):platformLabel(j.platform));
-    const st=row.querySelector(".running-job-stage");setText(st,j.actionLabel||stageLabel(j.status));if(st.dataset.color!==color){st.dataset.color=color;st.style.color=color}
+    const name=islandTitle(j),stage=islandVerb(j).replace(/\s*·$/,"");
+    setText(row.querySelector(".running-job-name"),name);
+    setAttr(row,"aria-label",`${name}: ${stage}${j.indeterminate?"":`, ${p}%`}. Open`);
+    const st=row.querySelector(".running-job-stage");setText(st,stage);if(st.dataset.color!==color){st.dataset.color=color;st.style.color=color}
     setText(row.querySelector(".rj-msg"),j.message||"");
     const at=prev?prev.nextElementSibling:list.firstElementChild;if(at!==row)list.insertBefore(row,at);prev=row;
   }
   for(const r of [...list.children])if(!keep.has(r.dataset.key))r.remove();
 }
-function openJobOverlay(){if(!allActiveTasks().length)return;overlayOpen=true;renderJobOverlay();updateJobIsland()}
+function openJobOverlay(o={}){if(!allActiveTasks().length)return;overlayOpen=true;ISL.hover=false;ISL.pinned=false;renderJobOverlay();updateJobIsland();   // 208: a hover-expanded island would cover the list
+  if(o.focus)requestAnimationFrame(()=>$("jobOverlayList").querySelector(".running-job-item")?.focus({preventScroll:true}))}
 function closeJobOverlay(){overlayOpen=false;renderJobOverlay();updateJobIsland()}
 async function refreshRunningJobs(){
   try{
@@ -3995,9 +4035,7 @@ document.addEventListener("click",e=>{
   if(ri){
     const kind=ri.dataset.runningKind,jobId=ri.dataset.runningJobid||ri.dataset.runningJob;
     closeJobOverlay();
-    if(ri.dataset.runningNav)return go(ri.dataset.runningNav);   // 183: an auto-import check opens its step
-    if(kind==="candidate"){go("#review/"+encodeURIComponent(jobId))}   // 179: the clip's job on the Review page
-    else{saveActive(jobId);showTab("current");startPolling(jobId)}
+    openRunningTask({kind,jobId,nav:ri.dataset.runningNav});
   }
 });
 document.addEventListener("keydown",e=>{

@@ -467,7 +467,10 @@ planned post: `reminded_at` set in the queueing transaction; > 1 h late = `misse
   spring curves from `springEasing()` (emitted as CSS `linear()`), content
   layers cross-fade (+60 ms, staggered). Events: busy → review/completed
   = ✓ auto-expand 2.5 s; → failed = red expand, then red compact until
-  seen. "+N" split only in compact; it opens `#jobOverlay`. Cancel shows
+  seen. "+N" (aria-expanded, controls `#jobOverlay`) opens the live list of every task (208: rows are buttons with the
+  task's name, thumbnail/spinner, stage, %, "Open" → `openRunningTask()`, the one opener); 2+ tasks → a click on the pill
+  opens it too, 1 task → the pill opens that task. Hover-expand starts on `#islandMain` only and "+N" stays beside the
+  expanded island on desktop (it used to vanish under the pointer). Esc / outside click close; empty list auto-closes. Cancel shows
   only if a global `cancelJob(jobId)` exists: it does (R-08's `window.cancelJob(id, btn)`,
   confirm + `POST /api/jobs/{id}/cancel`; the island passes its button for `setBusy`). Reduced motion: opacity
   cross-fade only. Sheets make `#appShell` and `#island` inert.
