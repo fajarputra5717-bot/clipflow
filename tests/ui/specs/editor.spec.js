@@ -378,6 +378,22 @@ test.describe("Editor Effects + Audio tabs", () => {
     }
   });
 
+  test("Timeline: dragging the ruler/waveform scrubs the video; the playhead moves by transform", async ({ app, api }) => {
+    await openWithVideo(app, api, { muted: true, volume: 1 });
+    await app.evaluate(() => { const v = document.getElementById("edVideo"); v.pause(); v.currentTime = 0; });
+    await app.evaluate(() => {                                        // phone: just under the sticky player
+      const a = document.querySelector("[data-ed-seekarea]").getBoundingClientRect(), p = document.querySelector(".ed-player").getBoundingClientRect();
+      if (a.top < p.bottom || a.bottom > innerHeight - 200) window.scrollBy(0, a.top - p.bottom - 8);
+    });
+    const area = await app.locator("[data-ed-seekarea]").boundingBox();
+    const y = area.y + 30;                                             // waveform band, no chips there
+    await app.mouse.move(area.x + 40, y); await app.mouse.down();       // clear of the trim handle at 0
+    for (let i = 1; i <= 8; i++) await app.mouse.move(area.x + 40 + i * 25, y);
+    await app.mouse.up();
+    await expect.poll(() => vid(app, (v) => v.currentTime)).toBeGreaterThan(1);
+    expect(await app.locator("#edPlayhead").evaluate((e) => e.style.transform)).toMatch(/^translateX\(/);
+  });
+
   test("Audio: compression + silence trim save; loudness is read-only", async ({ app, api }) => {
     await openEd(app, api);
     await app.locator('[data-ed-tab="audio"]').click();

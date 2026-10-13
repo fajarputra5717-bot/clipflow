@@ -168,6 +168,7 @@
 
   function renderTimeline() {
     const el = $("edTl"), tl = E.tl;
+    E.tlW = 0;                                       // timeline width, re-read on the next frame
     if (!el || !tl) return;
     const dur = Number(tl.duration) || 0, W = Math.max(1, Math.ceil(dur * PPS));
     let ruler = "";
@@ -487,6 +488,8 @@
     }
   }
 
+  // 4: per-frame painters write the DOM only when a value changes (an equal textContent still re-lays the line out).
+  const txt = (el, v) => { if (el && el.textContent !== v) el.textContent = v; };
   function wordAt(t) {                              // last word that started at or before t
     const w = E.tl ? E.tl.words : [];
     let lo = 0, hi = w.length - 1, ans = -1;
@@ -498,16 +501,16 @@
     const v = $("edVideo"), ph = $("edPlayhead");
     if (!ph || !E.tl) return;
     const t = toSrc(v ? v.currentTime : 0), x = t * PPS;
+    const sc = follow && $("edTlScroll"), left = sc ? sc.scrollLeft : 0, width = sc ? (E.tlW ||= sc.clientWidth) : 0;  // reads first
     ph.style.transform = `translateX(${x}px)`;
-    const tm = $("edTlTime"); if (tm) tm.textContent = `${fmt(t)}.${Math.floor((t % 1) * 10)} / ${fmt(E.tl.duration)}`;
+    txt($("edTlTime"), `${fmt(t)}.${Math.floor((t % 1) * 10)} / ${fmt(E.tl.duration)}`);
     const i = wordAt(t);
     if (i !== E.nowWord) {
       document.querySelector(".ed-word.now")?.classList.remove("now");
       if (i >= 0) document.querySelector(`[data-ed-word="${i}"]`)?.classList.add("now");
       E.nowWord = i;
     }
-    const sc = $("edTlScroll");
-    if (follow && sc && (x < sc.scrollLeft + 24 || x > sc.scrollLeft + sc.clientWidth - 48)) sc.scrollLeft = Math.max(0, x - 48);
+    if (follow && sc && (x < left + 24 || x > left + width - 48)) sc.scrollLeft = Math.max(0, x - 48);
   }
 
   function loop() {
@@ -1024,11 +1027,11 @@
       if (on) { prog.style.setProperty("--prog", E.progress.color); prog.firstElementChild.style.transform = `scaleX(${dur ? Math.min(1, v.currentTime / dur) : 0})`; }
     }
     const note = $("edNote");
-    if (note) note.textContent = E.dirty ? "The card on the video is a live preview: Render preview bakes it in." : "";
-    el.querySelector("span").textContent = hookText();
+    txt(note, E.dirty ? "The card on the video is a live preview: Render preview bakes it in." : "");
+    txt(el.querySelector("span"), hookText());
     el.classList.toggle("show", show);
     const cnt = $("edHookCount");
-    if (cnt) cnt.textContent = `${(E.hook.text || "").length}/${E.hook.max_chars}` + (E.hook.text ? "" : " · empty = the clip title");
+    txt(cnt, `${(E.hook.text || "").length}/${E.hook.max_chars}` + (E.hook.text ? "" : " · empty = the clip title"));
   }
 
   function paintState(msg) {
@@ -1042,7 +1045,7 @@
 
   function wirePlayer() {
     const v = $("edVideo"); if (!v) return;
-    const tick = () => { paintHook(); const tm = $("edTime"); if (tm) tm.textContent = fmt(v.currentTime); };
+    const tick = () => { paintHook(); if (v.paused) paintScrub(); };       // while playing, loop() paints every frame
     v.volume = E.volume;
     v.addEventListener("timeupdate", tick);
     v.addEventListener("seeked", () => { tick(); paintPlayhead(false); paintScrub(); });
@@ -1071,13 +1074,15 @@
     const d = v.duration || 0, p = d ? Math.min(1, v.currentTime / d) : 0;
     $("edScrubFill").style.transform = `scaleX(${p})`;
     $("edScrubPos").style.transform = `translateX(${(p * 100).toFixed(3)}%)`;
-    el.setAttribute("aria-valuemax", d.toFixed(1)); el.setAttribute("aria-valuenow", v.currentTime.toFixed(1));
-    el.setAttribute("aria-valuetext", fmt(v.currentTime));
-    const tm = $("edTime"); if (tm) tm.textContent = fmt(v.currentTime);
+    const now = v.currentTime.toFixed(1);
+    if (el.getAttribute("aria-valuenow") !== now) {
+      el.setAttribute("aria-valuemax", d.toFixed(1)); el.setAttribute("aria-valuenow", now); el.setAttribute("aria-valuetext", fmt(v.currentTime));
+    }
+    txt($("edTime"), fmt(v.currentTime));
   }
-  function scrubTo(clientX) {
+  function scrubTo(clientX, rect) {
     const v = $("edVideo"), el = $("edScrub"); if (!v || !el || !v.duration) return;
-    const r = el.getBoundingClientRect();
+    const r = rect || el.getBoundingClientRect();
     v.currentTime = Math.max(0, Math.min(1, (clientX - r.left) / r.width)) * v.duration;
     paintScrub(); paintPlayhead(true);
   }
@@ -1325,13 +1330,26 @@
   document.addEventListener("pointerdown", (e) => {
     const sc = E.state && e.target.closest && e.target.closest("[data-ed-scrub]");
     if (!sc || sc.getAttribute("aria-disabled") === "true") return;
-    sc.setPointerCapture(e.pointerId); E.scrubbing = true; scrubTo(e.clientX); e.preventDefault();
+    try { sc.setPointerCapture(e.pointerId); } catch {}
+    E.scrubbing = true; E.scrubRect = sc.getBoundingClientRect(); scrubTo(e.clientX); e.preventDefault();
   });
   document.addEventListener("pointermove", (e) => {
     if (!E.scrubbing) return;
-    cancelAnimationFrame(E.scrubRaf); const x = e.clientX; E.scrubRaf = requestAnimationFrame(() => scrubTo(x));
+    cancelAnimationFrame(E.scrubRaf); const x = e.clientX; E.scrubRaf = requestAnimationFrame(() => scrubTo(x, E.scrubRect));
   });
-  ["pointerup", "pointercancel"].forEach((n) => document.addEventListener(n, () => { E.scrubbing = false; }));
+  // 4: drag on the timeline's ruler/waveform (seek mode, not on a chip/handle/marker) scrubs, once per frame.
+  document.addEventListener("pointerdown", (e) => {
+    const area = E.state && E.mode === "seek" && e.button === 0 && e.target.closest && e.target.closest("[data-ed-seekarea]");
+    if (!area || e.target.closest("button,[data-ed-trim]")) return;
+    try { area.setPointerCapture(e.pointerId); } catch {}
+    E.tlScrub = area.getBoundingClientRect().left;   // read once: no layout read per frame while dragging
+  });
+  document.addEventListener("pointermove", (e) => {
+    if (E.tlScrub == null) return;
+    const x = e.clientX; cancelAnimationFrame(E.scrubRaf);
+    E.scrubRaf = requestAnimationFrame(() => { if (E.tlScrub != null) { seek((x - E.tlScrub) / PPS); paintScrub(); } });
+  });
+  ["pointerup", "pointercancel"].forEach((n) => document.addEventListener(n, () => { E.scrubbing = false; E.tlScrub = null; }));
   document.addEventListener("keydown", (e) => {
     if (!E.state) return;
     const h = e.target.closest && e.target.closest("[data-ed-trim]");
@@ -1406,7 +1424,7 @@
   }, { capture: true, passive: true });
   document.addEventListener("click", () => { if (E.state) requestAnimationFrame(fadeAll); });   // after panel repaints
   window.addEventListener("hashchange", route);
-  window.addEventListener("resize", () => { if (E.cid) { fitPage(); moveSeg(); } }, { passive: true });
+  window.addEventListener("resize", () => { if (E.cid) { E.tlW = 0; fitPage(); moveSeg(); } }, { passive: true });
   window.addEventListener("load", () => setTimeout(route, 0));
   window.clipflowEditor = { open: (jid, cid) => { location.hash = `#editor/${jid}/${cid}`; }, close };
 })();
