@@ -40,6 +40,9 @@ const row = (o) => ({ candidate_id: "cand-a", job_id: "job-done", job_title: "Mo
   filename: "x.mp4", post: null, campaign: "ime-roleplay", ...o });
 
 async function seed(app, api) {
+  api.settings = { GEMINI_API_KEY: { value: "••••••••", configured: true, source: "db", scope: "global" },
+    CLIPS_PER_JOB: { value: "4", source: "default", scope: "user" }, REMINDER_LEAD_MIN: { value: "15", source: "default", scope: "user" },
+    POSTING_TIMES: { value: '{"tiktok":["12:00"]}', source: "default", scope: "user" } };   // audit M3: Settings fields render
   api.campaigns = [camp];
   api.current = [job({ id: "job-run", status: "transcribing", progress: 40, source_title: "Live stream part 2", campaign: "ime-roleplay" }), job({ id: "job-done", status: "review", source_title: "Citer Molotov Ketemu KDM", campaign: "ime-roleplay" })];
   api.jobs = { ...api.jobs, "job-run": api.current[0] };   // the running job is polled
@@ -77,6 +80,7 @@ const STEPS = [
 async function smallTargets(app) {
   return app.evaluate(() => {
     const hit = (e) => {   // [height, width] incl. absolutely positioned ::before/::after hit areas
+      if (e.matches("input[type=checkbox],input[type=radio]") && e.closest("label")) e = e.closest("label");   // the label is the target
       const r = e.getBoundingClientRect(); let h = r.height, w = r.width;
       for (const p of ["::before", "::after"]) {
         const cs = getComputedStyle(e, p);
@@ -87,8 +91,11 @@ async function smallTargets(app) {
       }
       return [h, w];
     };
-    const vis = (e) => { const cs = getComputedStyle(e); return e.offsetParent && cs.visibility !== "hidden" && !e.closest("[inert],#island,.acct-menu:not(.open),.sheet-layer:not(.open),.job-overlay:not(.open)"); };
-    return [...document.querySelectorAll("button,a[href],summary,select,[role=switch],[role=tab],[role=slider]")].filter(vis)
+    const vis = (e) => { const cs = getComputedStyle(e); return e.offsetParent && cs.visibility !== "hidden" && Number(cs.opacity) > 0 && !e.closest("#island,.acct-menu:not(.open),.sheet-layer:not(.open),.job-overlay:not(.open)") && !(e.closest("[inert]") && !document.querySelector(".sheet-layer.open")?.contains(e)); };
+    // audit M3: text/number inputs + textareas count too (Settings, editor numbers)
+    const sel = "button,a[href],summary,select,[role=switch],[role=tab],[role=slider],textarea," +
+      "input:not([type=hidden]):not([type=range]):not([type=file]):not([type=color])";
+    return [...document.querySelectorAll(sel)].filter(vis)
       .filter((e) => { const r = e.getBoundingClientRect(); const [h, w] = hit(e); return r.width > 0 && r.bottom > 0 && (h < 43.5 || w < 43.5); })
       .map((e) => `${e.tagName.toLowerCase()}.${[...e.classList].join(".")} ${Math.round(e.getBoundingClientRect().width)}x${Math.round(e.getBoundingClientRect().height)} "${(e.textContent || e.getAttribute("aria-label") || "").trim().slice(0, 20)}"`);
   });
@@ -107,6 +114,14 @@ test("phone: every control on every page has a ≥ 44 px touch target", async ({
       await t.click(); await app.waitForTimeout(300);
       const st = await smallTargets(app); if (st.length) bad[`${name}/${tab}`] = st;
     }
+  }
+  for (const sheet of ["settings", "watermarks"]) {   // audit M3: the sheets (Settings inputs were 34–36 px)
+    await app.evaluate(() => { location.hash = ""; return window.showTab("current"); });
+    await app.locator("#accountMenuBtn").click();
+    await app.locator(`#accountMenu [data-nav="${sheet}"]`).click();
+    await app.waitForTimeout(700);
+    const st = await smallTargets(app); if (st.length) bad[`sheet-${sheet}`] = st;
+    await app.keyboard.press("Escape"); await app.waitForTimeout(400);
   }
   expect(bad).toEqual({});
 });
