@@ -78,7 +78,7 @@
   function close(setHash = true) {
     clearTimeout(E.saveT); clearTimeout(E.cutT); clearTimeout(E.zoomT); clearInterval(E.pollT); clearInterval(E.thumbT); clearInterval(E.smT); cancelAnimationFrame(E.raf); E.tl = null; E.nowWord = -1; E.drag = null;
     const s = $("editorSection");
-    if (s) { s.hidden = true; s.classList.add("hidden"); s.innerHTML = ""; }
+    if (s) { s.hidden = true; s.classList.add("hidden"); s.innerHTML = ""; s.classList.remove("ed-fit"); }
     E.hidden.forEach(([v, hadHidden]) => v.classList.toggle("hidden", hadHidden));
     E.hidden = []; E.cid = E.jid = null; E.state = null;
     document.body.classList.remove("editor-open");
@@ -133,6 +133,7 @@
         <span class="ed-spacer"></span>
         <button class="primary" type="button" data-ed-render>Render preview</button>
       </div>`;
+    fitPage();
     wirePlayer();
     paintHook();
     paintState();
@@ -1043,6 +1044,16 @@
     if (b) { b.innerHTML = muteIcon(m); b.setAttribute("aria-label", m ? "Unmute" : "Mute"); b.title = m ? "Unmute" : "Mute"; }
     const n = $("edAudioNote"); if (n && E.tab === "audio") n.outerHTML = audioPanel().match(/<div class="ed-note-box"[\s\S]*?<\/div>/)[0];
   }
+  // 2a: desktop pages fit the window (editor.css .ed-fit): the height between the page top and the stepper pill.
+  function fitPage() {
+    const s = $("editorSection"); if (!s || !E.cid) return;
+    s.classList.add("ed-fit");
+    const pill = $("flowNav"), shown = pill && pill.offsetHeight > 0;   // its resting spot (it may be mid-animation)
+    const reserve = shown ? pill.offsetHeight + (parseFloat(getComputedStyle(pill).bottom) || 0) : 0;
+    const top = s.getBoundingClientRect().top + window.scrollY;
+    const bottom = window.innerHeight - reserve - 12;
+    s.style.setProperty("--ed-fit-h", `${Math.max(420, Math.floor(bottom - top))}px`);
+  }
   function setPlay(on) { const b = document.querySelector("[data-ed-play]"); if (b) { b.textContent = on ? "❚❚" : "▶"; b.setAttribute("aria-label", on ? "Pause" : "Play"); } }
   const fmt = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 
@@ -1303,7 +1314,7 @@
     if (E.cap && e.target.matches && e.target.matches("[data-ed-style-more]")) E.cap.styleOpen = e.target.open;
   }, true);
   window.addEventListener("hashchange", route);
-  window.addEventListener("resize", () => { if (E.cid) moveSeg(); }, { passive: true });
+  window.addEventListener("resize", () => { if (E.cid) { fitPage(); moveSeg(); } }, { passive: true });
   window.addEventListener("load", () => setTimeout(route, 0));
   window.clipflowEditor = { open: (jid, cid) => { location.hash = `#editor/${jid}/${cid}`; }, close };
 })();

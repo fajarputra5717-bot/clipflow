@@ -233,6 +233,27 @@ test.describe("Editor zoom punch-ins", () => {
 });
 
 test.describe("Editor page", () => {
+  test("layout: desktop fits the window (no page scroll, timeline docked, inspector scrolls); phone = video, timeline, inspector", async ({ app, api }, info) => {
+    await mockEditor(app, api);
+    await app.evaluate(() => { location.hash = "#editor/job-done/cand-a"; });
+    await expect(app.locator(".ed-tl-inner")).toBeVisible();
+    const box = async (q) => app.locator(q).first().boundingBox();
+    if (info.project.name === "desktop") {
+      for (const [w, h] of [[1280, 800], [1440, 900]]) {
+        await app.setViewportSize({ width: w, height: h });
+        await expect.poll(() => app.evaluate(() => document.documentElement.scrollHeight - innerHeight)).toBeLessThanOrEqual(0);
+        const tl = await box(".ed-tlwrap"), pill = await box("#flowNav"), foot = await box(".ed-foot"), frame = await box(".ed-frame");
+        expect(tl.y + tl.height).toBeLessThanOrEqual(pill.y);                 // docked above the stepper, fully visible
+        expect(foot.y).toBeGreaterThanOrEqual(frame.y + frame.height);        // action bar under the video, not over it
+        expect(await app.locator(".ed-panel").evaluate((e) => getComputedStyle(e).overflowY)).toBe("auto");
+      }
+    } else {
+      const player = await box(".ed-player"), tl = await box(".ed-tlwrap"), insp = await box(".ed-insp");
+      expect(tl.y).toBeGreaterThanOrEqual(player.y + player.height - 1);
+      expect(insp.y).toBeGreaterThan(tl.y);
+    }
+  });
+
   test("hook title card: toggle, text, duration are saved", async ({ app, api }) => {
     await mockEditor(app, api);
     await app.evaluate(() => { location.hash = "#editor/job-done/cand-a"; });
