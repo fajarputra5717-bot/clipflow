@@ -173,3 +173,4 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 201 · 2026-10-13 · Merge lane-b a26b041: emoji from Noto Emoji (Apache 2.0, no on-video credit) + AI frames per style pack (on: Gaming Hype, Funny/Meme) · worker/assets, shared/style_packs.py, routes_editor.py
 202 · 2026-10-13 · Closed job overlay visibility:hidden + inert (deep audit M2) · index.html, overlays.spec
 203 · 2026-10-13 · Phone text fields ≥ 44 px (Settings 34/36 px → 44), touch.spec covers inputs + sheets (deep audit M3) · index.html, touch.spec
+204 · 2026-10-13 · Publish/Schedule/Track load errors: plain lead + Retry, detail as small print (deep audit M5) · index.html, load-errors.spec

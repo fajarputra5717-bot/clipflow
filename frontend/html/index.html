@@ -1366,6 +1366,7 @@ select::-ms-expand{display:none}
 .qviews b{color:var(--text)}
 .qviews-err{color:var(--warn)}
 .qviews-hint{flex-basis:100%;font-size:12px}
+.load-error{display:flex;flex-direction:column;align-items:flex-start;gap:8px}.load-error p{margin:0}.load-error-detail{color:var(--muted);font-size:12px;overflow-wrap:anywhere}
 .qviews form,.qclaim{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .qviews input,.qclaim input{width:150px;min-height:36px;padding:6px 12px}
 .qviews button,.qclaim button{min-height:36px;padding:0 12px;border-radius:999px;font-size:13px}
@@ -3518,9 +3519,20 @@ function renderPublish(){
   $("publishSheetHost").innerHTML=sheetRow?publishPanelHtml(sheetRow):"";
   $("publishList").innerHTML=html||`<div class="publish-empty">${total?`Every clip here is posted on all its platforms. <button class="plain" type="button" data-publish-filter="all">Show all</button>`:`No finished clips yet. Approve a clip in <button class="plain" type="button" data-nav="queue">Review</button>; it lands here once its final render is done.`}</div>`;
 }
+// audit M5: a page that can't load says so in words + Retry (like Review/Editor), the server's detail only as small print.
+const LOAD_RETRY={publish:()=>loadPublish(),schedule:()=>loadSchedule(),track:()=>loadTrack()};
+function loadErrorHtml(what,key,err){
+  const d=String(err&&err.message||"").trim();
+  return `<div class="panel error-box load-error" role="alert"><p><b>Couldn't load ${esc(what)}.</b> Check your connection and try again.</p>${d?`<small class="load-error-detail">${esc(d)}</small>`:""}<button class="secondary" type="button" data-retry-load="${esc(key)}">Retry</button></div>`;
+}
+document.addEventListener("click",async e=>{
+  const b=e.target.closest("[data-retry-load]");if(!b)return;
+  const fn=LOAD_RETRY[b.dataset.retryLoad];if(!fn)return;
+  setBusy(b,true,"Retrying…");try{await fn()}finally{if(document.contains(b))setBusy(b,false)}
+});
 async function loadPublish(){
   try{const [q]=await Promise.all([api("/api/publish-queue"),accountsCache.length?null:loadAccounts()]);publishGroups=q.groups||[];renderPublish()}
-  catch(err){$("publishList").innerHTML=`<div class="error-box">${esc(err.message)}</div>`}
+  catch(err){$("publishList").innerHTML=loadErrorHtml("the publish list","publish",err)}
 }
 function publishRow(k){for(const g of publishGroups)for(const r of g.rows)if(publishRowKey(r)===k)return r;return null}
 function publishCard(cid){for(const g of publishGroups)for(const c of g.cards||[])if(c.candidate_id===cid)return c;return null}
@@ -3744,7 +3756,7 @@ function weekStartIso(offset){const now=new Date(),wib=new Date(now.getTime()+WI
 async function loadSchedule(){
   const from=weekStartIso(scheduleWeek),to=new Date(new Date(from).getTime()+7*864e5).toISOString();
   try{scheduleData=await api(`/api/schedule?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);renderScheduleView()}
-  catch(err){$("scheduleList").innerHTML=`<div class="error-box">${esc(err.message)}</div>`}
+  catch(err){$("scheduleList").innerHTML=loadErrorHtml("the schedule","schedule",err)}
 }
 function schedRowHtml(p){
   const base=`/api/jobs/${encodeURIComponent(p.job_id)}/candidates/${encodeURIComponent(p.candidate_id)}`,open=schedMarkOpen[p.id];
@@ -4178,7 +4190,7 @@ window.addEventListener("hashchange",routeHash);
 let trackData=null;
 async function loadTrack(){
   try{trackData=await api("/api/track");renderTrack()}
-  catch(err){$("trackBody").innerHTML=`<div class="error-box">${esc(err.message)}</div>`}
+  catch(err){$("trackBody").innerHTML=loadErrorHtml("your numbers","track",err)}
 }
 function trackTable(title,rows,first){
   if(!rows.length)return "";
