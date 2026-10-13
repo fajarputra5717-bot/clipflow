@@ -19,7 +19,7 @@
 4. Inspector (owner fix 3): the tab row is a sideways scroller (labels never ellipsize; 8–10 px padding) with a fade at
    the hidden edge (`fadeEdges()`, classes `more-start`/`more-end`); keyword words show 4 whole rows (24 px chips
    desktop, 44 px phone) and scroll inside their section, fading at the bottom with "Scroll the words for more ↓"
-   (`#edKwMore`) while words are hidden below.
+   (`#edKwMore`) while words are hidden below (4 px tolerance: chip tap areas overhang the box, QA e82389e Low).
 5. Smooth motion (owner fix 4): playhead, scrub bar and progress move by transform only. Per-frame painters write the
    DOM only when a value changes (`txt()`); layout reads come before writes, and the timeline width is cached
    (`E.tlW`). Dragging on the timeline's ruler/waveform (seek mode, not on a chip, handle or marker) now scrubs once

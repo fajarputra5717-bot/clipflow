@@ -1126,9 +1126,10 @@
 
   // 3: scroll areas that hold more than they show (tab row, keyword words) fade at the hidden edge.
   function fadeEdges(el) {
-    const x = el.scrollWidth - el.clientWidth > 1, y = !x && el.scrollHeight - el.clientHeight > 1;
-    const start = x ? el.scrollLeft > 1 : y && el.scrollTop > 1;
-    const end = x ? el.scrollLeft < el.scrollWidth - el.clientWidth - 1 : y && el.scrollTop < el.scrollHeight - el.clientHeight - 1;
+    // 4 px tolerance: chips' invisible tap areas (::after) overhang the box by a few px without hiding any word
+    const x = el.scrollWidth - el.clientWidth > 1, y = !x && el.scrollHeight - el.clientHeight > 4;
+    const start = x ? el.scrollLeft > 1 : y && el.scrollTop > 4;
+    const end = x ? el.scrollLeft < el.scrollWidth - el.clientWidth - 1 : y && el.scrollTop < el.scrollHeight - el.clientHeight - 4;
     el.classList.toggle("more-start", !!start); el.classList.toggle("more-end", !!end);
     if (el.classList.contains("ed-kw")) { const m = $("edKwMore"); if (m) m.hidden = !end; }
   }
