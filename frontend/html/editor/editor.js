@@ -16,7 +16,7 @@
   const reduced = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const PPS = 100;                              // timeline pixels per second
   const ZOOM_SPAN = 1.75;                       // ramp 0.25 + hold 1.0 + ramp 0.25 + merge gap: retention.plan_zoom_windows
-  const E = { zoom: { on: true, intensity: 50, markers: [] }, zoomT: 0, mode: "seek", cuts: { trim: null, removed: [] }, cutT: 0, drag: null, tl: null, raf: 0, nowWord: -1, jid: null, cid: null, state: null, hook: null, saveT: 0, pollT: 0, hidden: [], tab: "captions", busy: false };
+  const E = { zoom: { on: true, intensity: 50, markers: [] }, zoomT: 0, mode: "seek", cuts: { trim: null, removed: [] }, cutT: 0, drag: null, tl: null, raf: 0, nowWord: -1, jid: null, cid: null, state: null, hook: null, saveT: 0, pollT: 0, hidden: [], tab: "captions", busy: false, muted: true };
 
   function section() {
     let s = $("editorSection");
@@ -104,7 +104,7 @@
       <div class="ed-grid">
         <div class="ed-player">
           <div class="ed-frame" id="edFrame">
-            ${c.has_preview ? `<video id="edVideo" src="${previewSrc()}" playsinline loop muted preload="metadata"></video>`
+            ${c.has_preview ? `<video id="edVideo" src="${previewSrc()}" playsinline loop ${E.muted ? "muted" : ""} preload="metadata"></video>`
                             : `<div class="ed-novideo">No preview yet</div>`}
             <div class="ed-hook" id="edHook" aria-hidden="true"><span></span></div>
             <div class="ed-prog" id="edProg" aria-hidden="true"><i></i></div>
@@ -112,6 +112,8 @@
           <div class="ed-pctrl">
             <button class="icon-btn" type="button" data-ed-play aria-label="Play" ${c.has_preview ? "" : "disabled"}>▶</button>
             <span class="ed-time" id="edTime">0:00</span>
+            <button class="icon-btn ed-mute" type="button" data-ed-mute aria-label="${E.muted ? "Unmute" : "Mute"}"
+              title="${E.muted ? "Unmute" : "Mute"}" ${c.has_preview ? "" : "disabled"}>${muteIcon(E.muted)}</button>
             <span class="ed-note" id="edNote"></span>
           </div>
         </div>
@@ -580,6 +582,8 @@
       : `${sugg.length} pause${sugg.length === 1 ? "" : "s"} ≥ ${E.state.cuts.suggest_min_gap} s found in the speech. Off by default.`;
     const L = E.state.audio.loudness;
     return `
+      <div class="ed-note-box" id="edAudioNote">Audio edits are rendered, not live: Remove silences, Light compression, Loud &amp; punchy,
+        loudness and effect sounds are heard after <b>Render preview</b>${E.muted ? ". The player is muted: tap the speaker under the video to listen" : ""}.</div>
       <div class="ed-group">
         <div class="ed-row"><div><div class="ed-label">Remove silences</div><div class="ed-hint" id="edSilenceHint">${silenceHint}</div></div>
           ${sw("data-ed-silence", a.silence_trim, "Remove silences")}</div>
@@ -1028,6 +1032,17 @@
     v.addEventListener("pause", () => setPlay(false));
     if (!reduced()) v.play().catch(() => {});
   }
+  // Audit High (2026-10): the preview has sound. Muted by default (autoplay); the choice holds for this session.
+  const muteIcon = (m) => m
+    ? `<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M3 9h4l5-4v14l-5-4H3z"/><path d="M16 9l5 6M21 9l-5 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>`
+    : `<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M3 9h4l5-4v14l-5-4H3z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18 6a8.5 8.5 0 0 1 0 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>`;
+  function setMuted(m) {
+    E.muted = m;
+    const v = $("edVideo"); if (v) v.muted = m;
+    const b = document.querySelector("[data-ed-mute]");
+    if (b) { b.innerHTML = muteIcon(m); b.setAttribute("aria-label", m ? "Unmute" : "Mute"); b.title = m ? "Unmute" : "Mute"; }
+    const n = $("edAudioNote"); if (n && E.tab === "audio") n.outerHTML = audioPanel().match(/<div class="ed-note-box"[\s\S]*?<\/div>/)[0];
+  }
   function setPlay(on) { const b = document.querySelector("[data-ed-play]"); if (b) { b.textContent = on ? "❚❚" : "▶"; b.setAttribute("aria-label", on ? "Pause" : "Play"); } }
   const fmt = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 
@@ -1098,7 +1113,7 @@
 
   // ------------------------------------------------------------------ events (delegated, data-*)
   document.addEventListener("click", (e) => {
-    const t = e.target.closest("[data-ed-back],[data-ed-hook-on],[data-ed-hook-dur],[data-ed-render],[data-ed-play],[data-ed-tab],[data-ed-zoom-on],[data-ed-progress-on],[data-ed-progress-color],[data-ed-compress],[data-ed-silence],[data-ed-word],[data-ed-pause],[data-ed-mode],[data-ed-suggest],[data-ed-fillers],[data-ed-cuts-reset],[data-ed-zoom-add],[data-ed-zoom-mark],[data-ed-trim],[data-ed-seekarea],[data-ed-preset],[data-ed-cap-all],[data-ed-kw],[data-ed-kw-color],[data-ed-fix-typos],[data-ed-cap-reset],[data-ed-capy-on],[data-ed-new-hook],[data-ed-thumb-pick],[data-ed-thumb-gen],[data-ed-burn],[data-ed-gen-desc],[data-ed-sm],[data-ed-versions],[data-ed-restore],[data-ed-approve],[data-ed-plan-gen],[data-ed-plan-item],[data-ed-loud],[data-ed-look-preset],[data-ed-look-vignette],[data-ed-look-grain],[data-ed-pack]");
+    const t = e.target.closest("[data-ed-back],[data-ed-hook-on],[data-ed-hook-dur],[data-ed-render],[data-ed-play],[data-ed-mute],[data-ed-tab],[data-ed-zoom-on],[data-ed-progress-on],[data-ed-progress-color],[data-ed-compress],[data-ed-silence],[data-ed-word],[data-ed-pause],[data-ed-mode],[data-ed-suggest],[data-ed-fillers],[data-ed-cuts-reset],[data-ed-zoom-add],[data-ed-zoom-mark],[data-ed-trim],[data-ed-seekarea],[data-ed-preset],[data-ed-cap-all],[data-ed-kw],[data-ed-kw-color],[data-ed-fix-typos],[data-ed-cap-reset],[data-ed-capy-on],[data-ed-new-hook],[data-ed-thumb-pick],[data-ed-thumb-gen],[data-ed-burn],[data-ed-gen-desc],[data-ed-sm],[data-ed-versions],[data-ed-restore],[data-ed-approve],[data-ed-plan-gen],[data-ed-plan-item],[data-ed-loud],[data-ed-look-preset],[data-ed-look-vignette],[data-ed-look-grain],[data-ed-pack]");
     if (!t || !E.state && !t.matches("[data-ed-back]")) return;
     if (t.matches("[data-ed-back]")) {                       // back to the Review page (step 4) for this job
       e.preventDefault(); const jid = E.jid; close(false); location.hash = `#review/${encodeURIComponent(jid || "")}`;
@@ -1163,6 +1178,7 @@
     }
     if (t.matches("[data-ed-render]")) return renderPreview(t);
     if (t.matches("[data-ed-play]")) { const v = $("edVideo"); if (v) v.paused ? v.play() : v.pause(); return; }
+    if (t.matches("[data-ed-mute]")) { setMuted(!E.muted); return; }
     if (t.matches("[data-ed-tab]") && t.getAttribute("aria-disabled") !== "true") {
       const order = TABS.map(([id]) => id), from = order.indexOf(E.tab);
       E.tab = t.dataset.edTab;

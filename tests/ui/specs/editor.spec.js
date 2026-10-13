@@ -286,6 +286,24 @@ test.describe("Editor Effects + Audio tabs", () => {
     await expect.poll(() => lastPut(api, "/zoom")?.on, { timeout: 3000 }).toBe(false);
   });
 
+  test("Preview sound: muted by default, the speaker unmutes; Audio tab says edits are heard after Render preview", async ({ app, api }) => {
+    await mockEditor(app, api);
+    api.editor.candidate.has_preview = true;
+    await app.evaluate(() => { location.hash = "#editor/job-done/cand-a"; });
+    const mute = app.locator("[data-ed-mute]");
+    await expect(mute).toHaveAttribute("aria-label", "Unmute");
+    expect(await app.locator("#edVideo").evaluate((v) => v.muted)).toBe(true);
+    await app.locator('[data-ed-tab="audio"]').click();
+    await expect(app.locator("#edAudioNote")).toContainText("heard after Render preview");
+    await expect(app.locator("#edAudioNote")).toContainText("The player is muted");
+    await mute.click();
+    await expect(mute).toHaveAttribute("aria-label", "Mute");
+    expect(await app.locator("#edVideo").evaluate((v) => v.muted)).toBe(false);
+    await expect(app.locator("#edAudioNote")).not.toContainText("The player is muted");
+    await app.locator('[data-ed-tab="effects"]').click();             // re-render keeps the choice
+    expect(await app.locator("#edVideo").evaluate((v) => v.muted)).toBe(false);
+  });
+
   test("Audio: compression + silence trim save; loudness is read-only", async ({ app, api }) => {
     await openEd(app, api);
     await app.locator('[data-ed-tab="audio"]').click();
