@@ -17,7 +17,7 @@ class Assets(unittest.TestCase):
         for name in D.SFX:
             self.assertTrue((ASSETS / "sfx" / f"{name}.wav").is_file(), name)
             self.assertIn(f"{name}.wav", lic)
-        self.assertIn("CC-BY 4.0", lic)
+        self.assertIn("Noto Emoji", lic); self.assertIn("Apache License 2.0", lic); self.assertNotIn("Twemoji", lic)
         self.assertIn("watermark.png", lic)
 
 

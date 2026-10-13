@@ -259,7 +259,7 @@ Auto Edit render order (191–196): `render_vertical` layout → `zoom_stage` = 
 markers) → look → emoji pops, all BEFORE watermark + captions (text never zooms) → `apply_cuts` (freeze/slow-mo warps)
 → `mix_sfx` → `normalize_loudness` (per-clip `audio.loud` = "Loud & punchy"). Plan = `edit_spec.director`
 (`shared/edit_director.py`); packs = `shared/style_packs.py`. Bundled assets: `worker/assets/LICENSES.md` — SFX CC0 only;
-emoji are Twemoji CC-BY 4.0 (attribution placement on published clips: owner decision pending). Silence trim and
+emoji are Google Noto Emoji, Apache 2.0 (no on-video credit; `scripts/make_emoji.sh`). Silence trim and
 zoom stay unwired (opt-in later via the Audio/Effects tabs). Cuts change the timeline: re-time
 words/markers with `retention.TimeMap` built from the same keep segments.
 

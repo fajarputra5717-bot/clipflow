@@ -4,6 +4,8 @@ A pack = defaults for one clip: caption preset + keyword colour, which moments g
 (min seconds between effects), look, progress bar, Loud & punchy, zoom intensity. Applying a pack writes those
 edit_spec keys and regenerates the plan with the pack's mapping; every value stays overridable per clip afterwards.
 Campaign defaults: IME + Fandra → Gaming Hype, everything else (and no campaign) → Podcast Clean.
+vision = send preview frames with the plan call (owner 2026-10-13: on for Gaming Hype + Funny/Meme, off for
+Podcast Clean + Drama); the EDIT_DIRECTOR_VISION setting stays a global off switch on top.
 """
 from __future__ import annotations
 
@@ -24,6 +26,7 @@ PACKS: dict[str, dict] = {
             "cut": [("whip", {"sfx": "whoosh"})],
         },
         "min_gap": 3.0, "look": {"preset": "vivid_gaming"}, "progress": True, "loud": True, "zoom_intensity": 60,
+        "vision": True,
     },
     "funny_meme": {
         "name": "Funny / Meme",
@@ -37,6 +40,7 @@ PACKS: dict[str, dict] = {
             "reaction": [("emoji", {"emoji": "😂"})],
         },
         "min_gap": 3.0, "look": {"preset": "warm"}, "progress": False, "loud": False, "zoom_intensity": 50,
+        "vision": True,
     },
     "drama_tension": {
         "name": "Drama / Tension",
@@ -48,7 +52,7 @@ PACKS: dict[str, dict] = {
             "reaction": [("push", {})],
         },
         "min_gap": 5.0, "look": {"preset": "moody", "vignette": True}, "progress": False, "loud": False,
-        "zoom_intensity": 50,
+        "zoom_intensity": 50, "vision": False,
     },
     "podcast_clean": {
         "name": "Podcast Clean",
@@ -58,6 +62,7 @@ PACKS: dict[str, dict] = {
             "punchline": [("punch", {})],
         },
         "min_gap": 6.0, "look": None, "progress": False, "loud": False, "zoom_intensity": 25,
+        "vision": False,
     },
 }
 DEFAULT_PACK = "podcast_clean"
@@ -77,4 +82,4 @@ def resolve(spec: Optional[dict], campaign: Optional[str]) -> tuple[str, bool]:
 
 
 def options() -> list[dict]:
-    return [{"id": k, "name": v["name"], "min_gap": v["min_gap"]} for k, v in PACKS.items()]
+    return [{"id": k, "name": v["name"], "min_gap": v["min_gap"], "vision": v["vision"]} for k, v in PACKS.items()]

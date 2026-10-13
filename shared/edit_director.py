@@ -40,7 +40,7 @@ TIME_EFFECTS = ("freeze", "slowmo")                                         # cu
 EFFECTS = MOTION_EFFECTS + TIME_EFFECTS + ("emoji",)                        # what a plan item may be switched to
 RENDERED_EFFECTS = set(MOTION_EFFECTS) | set(TIME_EFFECTS) | {"emoji"}      # E3: emoji pops render too
 ARRIVES_IN: dict = {}
-# E3 assets (worker/assets, licences in worker/assets/LICENSES.md): Twemoji PNGs (CC-BY 4.0) + in-house SFX (CC0).
+# E3 assets (worker/assets, licences in worker/assets/LICENSES.md): Noto Emoji PNGs (Apache 2.0) + in-house SFX (CC0).
 EMOJI = {"😂": "1f602", "😭": "1f62d", "💀": "1f480", "🔥": "1f525", "😱": "1f631", "👀": "1f440", "🤯": "1f92f", "😎": "1f60e"}
 SFX = ("whoosh", "boom", "bass_hit", "ding", "record_scratch")   # "laugh" waits for a CC0 recording
 EMOJI_DUR = 1.4           # s on screen (pop in, hold, fade)
@@ -298,7 +298,7 @@ def time_extra(director: Optional[dict], keep) -> float:
 # ---- E3 render helpers (pure)
 
 def emoji_events(director: Optional[dict]) -> list[tuple]:
-    """[(t, twemoji code, side)] source seconds; consecutive pops alternate right/left so they don't stack."""
+    """[(t, emoji codepoint (file name), side)] source seconds; consecutive pops alternate right/left so they don't stack."""
     out = []
     for n, i in enumerate(_on(director, ("emoji",))):
         ch = (i.get("params") or {}).get("emoji") or PARAMS_FOR["emoji"]["emoji"]

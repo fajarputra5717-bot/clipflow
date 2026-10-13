@@ -37,8 +37,8 @@ cuts. Builders in `shared/retention.py` (pure argv/filter strings + tests); spee
 words/captions through a `TimeMap` built from the same segments.
 
 ## E3 · Overlays + SFX
-- Emoji pop-ups as PNG overlays (libass can't draw colour emoji). Set: **Twemoji** graphics, CC-BY 4.0
-  (not CC0): attribution in `assets/LICENSES.md` + docs. Positions avoid captions + watermark.
+- Emoji pop-ups as PNG overlays (libass can't draw colour emoji). Set: **Google Noto Emoji**, Apache 2.0
+  (owner 2026-10-13, replaced Twemoji CC-BY; no on-video credit): notice in `assets/LICENSES.md`. Positions avoid captions + watermark.
 - SFX (whoosh, boom, bass hit, ding, laugh, record scratch): **CC0 sources only**, each file listed in
   `assets/sfx/LICENSES.md` (source URL, author, licence). Mixed under speech with sidechain ducking; loudnorm
   stays the last audio step.
@@ -62,5 +62,8 @@ Loud & punchy (audio.loud, owner option 3) is ON in Gaming Hype, OFF elsewhere.
 Per effect type at least one frame at its peak; per clip at most 3 frames + one at a cut. Check: captions and
 watermark never covered, nothing off-canvas.
 
-## Open questions
-1. Vision default: on (6 frames, utility model) or off until we see the cost? (Currently on.)
+## Owner decisions 2026-10-13
+1. Emoji: Google Noto Emoji (Apache 2.0) replaces Twemoji (CC-BY); no on-video credit.
+2. Laugh SFX: owner supplies a CC0 recording (`worker/assets/sfx/laugh.wav` + freesound URL); Funny / Meme uses ding until then.
+3. Vision (frames with the plan call): on for Gaming Hype + Funny / Meme, off for Podcast Clean + Drama / Tension
+   (`style_packs.PACKS[*].vision`); `EDIT_DIRECTOR_VISION=false` still turns it off everywhere.
