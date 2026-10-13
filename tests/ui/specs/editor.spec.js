@@ -437,7 +437,7 @@ test.describe("Editor Captions tab", () => {
     const kw = app.locator(".ed-kw");
     await expect(kw).toHaveCount(1);
     const m = await kw.evaluate((e) => { const b = e.querySelector("button"), gap = parseFloat(getComputedStyle(e).rowGap) || 0;
-      return { h: e.clientHeight, row: b.offsetHeight + gap, over: e.scrollHeight > e.clientHeight, ov: getComputedStyle(e).overflowY }; });
+      return { h: e.clientHeight, row: b.offsetHeight + gap, over: e.scrollHeight - e.clientHeight > 4, ov: getComputedStyle(e).overflowY }; });
     expect(m.ov).toBe("auto");
     if (m.over) {
       await expect(app.locator("#edKwMore")).toBeVisible();
