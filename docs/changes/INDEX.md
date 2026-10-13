@@ -182,3 +182,4 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 210 · 2026-10-14 · Review/Pick status filter (.rv-seg) pressed = accent + white like .seg (Lane C Low on 205) · editor.css, touch.spec
 211 · 2026-10-14 · FastAPI /docs, /redoc, /openapi.json off in production, kept on staging (deep audit L10) · main.py
 212 · 2026-10-14 · user_sessions expires_at index; /api/activity polls on one connection + one transaction (was 2 + 2) (deep audit L11) · auth.py, main.py
+213 · 2026-10-14 · Shimmer/glow keyframes move to transform/opacity; 4 unused keyframes deleted (deep audit L8) · index.html
