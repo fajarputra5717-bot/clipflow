@@ -360,3 +360,68 @@ a.rv-frame:focus-visible{outline:none;box-shadow:var(--ring)}
 @media (max-width:600px){.ed-plan-sel{min-height:var(--hit,44px)}}
 /* E3: sound + emoji pickers per plan item */
 .ed-plan-opts{display:flex;flex-wrap:wrap;gap:var(--s-1,4px);margin:2px 0}
+/* Editor usability 2a (owner 2026-10-14). Desktop ≥ 900 wide and ≥ 768 tall: the page fits the window, with no page
+   scroll. Video left (fits the height), player controls + action bar under it, inspector right (scrolls inside),
+   timeline docked full width at the bottom. --ed-fit-h = window space between the page top and the stepper pill
+   (fitPage() in editor.js). .ed-grid/.ed-player become display:contents so their children sit in the page grid. */
+@media (min-width:900px) and (min-height:768px){
+  .ed-page.ed-fit{display:grid;height:var(--ed-fit-h,calc(100dvh - 180px));padding-bottom:0;overflow:hidden;
+    grid-template-columns:minmax(0,1fr) auto 380px;grid-template-rows:auto minmax(0,1fr) auto auto;column-gap:20px;row-gap:10px;
+    grid-template-areas:"head head head" "frame frame insp" "pctrl foot insp" "tl tl tl"}
+  .ed-fit .ed-grid,.ed-fit .ed-player{display:contents}
+  .ed-fit .ed-head{grid-area:head;margin:0}
+  .ed-fit .ed-frame{grid-area:frame;justify-self:center;height:100%;width:auto;max-width:100%;min-height:0}
+  .ed-fit .ed-pctrl{grid-area:pctrl;margin:0;justify-content:flex-start;flex-wrap:nowrap;min-width:0;padding:0 4px}
+  .ed-fit .ed-note{flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ed-fit .ed-foot{grid-area:foot;position:static;margin:0;box-shadow:none;align-self:center}
+  .ed-fit .ed-insp{grid-area:insp;display:flex;flex-direction:column;min-height:0}
+  .ed-fit .ed-panel{flex:1 1 0;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding-right:4px;scrollbar-gutter:stable}
+  .ed-fit .ed-tlwrap{grid-area:tl;min-width:0}
+  .ed-fit .ed-tlwrap .ed-tl{margin:0;padding:8px 10px}
+  .ed-fit .ed-tl-head{margin-bottom:6px}
+  .ed-fit .ed-foot{padding:4px 4px 4px 14px}
+  body.editor-open{padding-bottom:0;min-height:0}   /* the shell's pill reserve: --ed-fit-h already leaves it */
+  body.editor-open .container{margin-bottom:0}
+  body.editor-open .app-shell{min-height:0}
+}
+/* Phone / narrow (≤ 899): video on top (sticky), the timeline directly under it, inspector tabs below. */
+@media (max-width:899px){
+  .ed-page{display:flex;flex-direction:column}
+  .ed-grid{display:contents}
+  .ed-head{order:0}.ed-player{order:1}.ed-tlwrap{order:2}.ed-insp{order:3}.ed-foot{order:4}
+  .ed-player{position:sticky}
+  .ed-insp{margin-top:var(--sp-2)}
+}
+/* 2b: player row = play · time · scrub bar · mute · volume. The scrub bar moves by transform only. */
+.ed-pctrl{gap:8px}
+.ed-scrub{position:relative;flex:1 1 120px;min-width:80px;height:28px;cursor:pointer;touch-action:none;outline:none}
+.ed-scrub-track{position:absolute;left:8px;right:8px;top:12px;height:4px;border-radius:2px;background:var(--fill2,rgba(120,120,128,.24));overflow:hidden}
+.ed-scrub-fill{position:absolute;inset:0;background:var(--accent);transform:scaleX(0);transform-origin:0 50%;will-change:transform}
+.ed-scrub-pos{position:absolute;inset:0 8px;pointer-events:none;transform:translateX(0);will-change:transform}
+.ed-scrub{overflow:hidden}      /* the moved knob layer must not widen the page (it did at 100 % on phones) */
+.ed-scrub-pos b{position:absolute;left:-7px;top:7px;width:14px;height:14px;border-radius:50%;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.35)}
+.ed-scrub:focus-visible .ed-scrub-pos b{box-shadow:var(--ring)}
+.ed-scrub[aria-disabled="true"]{opacity:.4;cursor:default}
+.ed-vol{width:84px;flex:none}
+.ed-note:empty{display:none}
+.ed-fit .ed-pctrl{flex-wrap:wrap}
+.ed-fit .ed-note{flex-basis:100%}
+/* short desktop windows (scrolling layout): keep the sticky player clear of the sticky action bar */
+@media (min-width:900px){.ed-player{height:calc(100vh - 290px)}}  /* top 142 before scrolling, bar top = 100vh - 128 */
+@media (max-width:600px){.ed-vol{display:none}.ed-scrub{height:44px}.ed-scrub-track{top:20px}.ed-scrub-pos b{top:15px}}
+/* 3: tab row scrolls sideways (never clips a label), with a fade at the hidden edge; keyword words show whole rows
+   and scroll inside their section, fading at the bottom while more words are below. */
+.ed-seg{display:flex;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.ed-seg::-webkit-scrollbar{display:none}
+.ed-seg button{flex:1 0 auto;padding:0 10px;overflow:visible;text-overflow:clip}
+.ed-seg.more-end{-webkit-mask-image:linear-gradient(to right,#000 calc(100% - 28px),transparent);mask-image:linear-gradient(to right,#000 calc(100% - 28px),transparent)}
+.ed-seg.more-start{-webkit-mask-image:linear-gradient(to left,#000 calc(100% - 28px),transparent);mask-image:linear-gradient(to left,#000 calc(100% - 28px),transparent)}
+.ed-seg.more-start.more-end{-webkit-mask-image:linear-gradient(to right,transparent,#000 28px,#000 calc(100% - 28px),transparent);mask-image:linear-gradient(to right,transparent,#000 28px,#000 calc(100% - 28px),transparent)}
+.ed-kw{--kw-row:var(--chip-h,24px);max-height:calc(var(--kw-row) * 4 + 4px * 3 + 4px);overscroll-behavior:contain;scrollbar-width:thin;align-content:flex-start}
+.ed-kw.more-end{-webkit-mask-image:linear-gradient(to bottom,#000 calc(100% - 16px),transparent);mask-image:linear-gradient(to bottom,#000 calc(100% - 16px),transparent)}
+.ed-kw.more-start.more-end{-webkit-mask-image:linear-gradient(to bottom,transparent,#000 10px,#000 calc(100% - 16px),transparent);mask-image:linear-gradient(to bottom,transparent,#000 10px,#000 calc(100% - 16px),transparent)}
+.ed-kw-more{margin-top:4px}
+@media (max-width:600px){.ed-kw{--kw-row:44px}.ed-seg button{padding:0 8px}}
+/* Audit Low: the timeline takes keyboard focus (click or Tab) for Space / arrows / Shift+arrows / Home / End */
+.ed-tl-inner:focus{outline:none}
+.ed-tl-inner:focus-visible{box-shadow:inset 0 0 0 2px var(--accent)}

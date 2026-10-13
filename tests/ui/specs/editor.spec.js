@@ -233,6 +233,27 @@ test.describe("Editor zoom punch-ins", () => {
 });
 
 test.describe("Editor page", () => {
+  test("layout: desktop fits the window (no page scroll, timeline docked, inspector scrolls); phone = video, timeline, inspector", async ({ app, api }, info) => {
+    await mockEditor(app, api);
+    await app.evaluate(() => { location.hash = "#editor/job-done/cand-a"; });
+    await expect(app.locator(".ed-tl-inner")).toBeVisible();
+    const box = async (q) => app.locator(q).first().boundingBox();
+    if (info.project.name === "desktop") {
+      for (const [w, h] of [[1280, 800], [1440, 900]]) {
+        await app.setViewportSize({ width: w, height: h });
+        await expect.poll(() => app.evaluate(() => document.documentElement.scrollHeight - innerHeight)).toBeLessThanOrEqual(0);
+        const tl = await box(".ed-tlwrap"), pill = await box("#flowNav"), foot = await box(".ed-foot"), frame = await box(".ed-frame");
+        expect(tl.y + tl.height).toBeLessThanOrEqual(pill.y);                 // docked above the stepper, fully visible
+        expect(foot.y).toBeGreaterThanOrEqual(frame.y + frame.height);        // action bar under the video, not over it
+        expect(await app.locator(".ed-panel").evaluate((e) => getComputedStyle(e).overflowY)).toBe("auto");
+      }
+    } else {
+      const player = await box(".ed-player"), tl = await box(".ed-tlwrap"), insp = await box(".ed-insp");
+      expect(tl.y).toBeGreaterThanOrEqual(player.y + player.height - 1);
+      expect(insp.y).toBeGreaterThan(tl.y);
+    }
+  });
+
   test("hook title card: toggle, text, duration are saved", async ({ app, api }) => {
     await mockEditor(app, api);
     await app.evaluate(() => { location.hash = "#editor/job-done/cand-a"; });
@@ -286,6 +307,122 @@ test.describe("Editor Effects + Audio tabs", () => {
     await expect.poll(() => lastPut(api, "/zoom")?.on, { timeout: 3000 }).toBe(false);
   });
 
+  // 2b: a real 4 s clip so the player can play, seek and report duration.
+  const CLIP = require("fs").readFileSync(require("path").join(__dirname, "..", "media", "clip-4s.webm"));
+  async function openWithVideo(app, api, sound) {
+    await mockEditor(app, api);
+    api.editor.candidate.has_preview = true;
+    await app.route(/\/candidates\/cand-a\/preview(\?.*)?$/, (r) => {    // byte ranges, or the browser can't seek
+      const m = /bytes=(\d+)-(\d*)/.exec(r.request().headers()["range"] || "");
+      if (!m) return r.fulfill({ status: 200, contentType: "video/webm", headers: { "Accept-Ranges": "bytes" }, body: CLIP });
+      const a = +m[1], b = m[2] ? Math.min(+m[2], CLIP.length - 1) : CLIP.length - 1;
+      return r.fulfill({ status: 206, contentType: "video/webm", body: CLIP.subarray(a, b + 1),
+        headers: { "Accept-Ranges": "bytes", "Content-Range": `bytes ${a}-${b}/${CLIP.length}` } });
+    });
+    await app.evaluate((v) => { try { v ? localStorage.setItem("clipflow.editor.sound", JSON.stringify(v)) : localStorage.removeItem("clipflow.editor.sound"); } catch {} }, sound || null);
+    await app.evaluate(() => { location.hash = "#editor/job-done/cand-a"; });
+    await expect.poll(() => app.locator("#edVideo").evaluate((v) => v.duration || 0)).toBeGreaterThan(3);
+  }
+  const vid = (app, f) => app.locator("#edVideo").evaluate(f);
+
+  test("Preview sound: speaker toggles + is remembered with the volume; Audio tab says edits are heard after Render preview", async ({ app, api }) => {
+    await openWithVideo(app, api, { muted: true, volume: 0.4 });
+    const mute = app.locator("[data-ed-mute]");
+    await expect(mute).toHaveAttribute("aria-label", "Unmute");
+    expect(await vid(app, (v) => [v.muted, v.volume])).toEqual([true, 0.4]);
+    await app.locator('[data-ed-tab="audio"]').click();
+    await expect(app.locator("#edAudioNote")).toContainText("heard after Render preview");
+    await expect(app.locator("#edAudioNote")).toContainText("The player is muted");
+    await mute.click();
+    await expect(mute).toHaveAttribute("aria-label", "Mute");
+    expect(await vid(app, (v) => v.muted)).toBe(false);
+    await expect(app.locator("#edAudioNote")).not.toContainText("The player is muted");
+    await app.locator('[data-ed-tab="effects"]').click();             // re-render keeps the choice
+    expect(await vid(app, (v) => v.muted)).toBe(false);
+    expect(await app.evaluate(() => JSON.parse(localStorage.getItem("clipflow.editor.sound")))).toEqual({ muted: false, volume: 0.4 });
+  });
+
+  test("Player: sound on by default; Space/K, arrows (Shift = 1 s), J/L, M; keys ignored while typing; scrub bar seeks", async ({ app, api }, info) => {
+    await openWithVideo(app, api, null);
+    expect(await vid(app, (v) => v.volume)).toBe(1);
+    await app.evaluate(() => { const v = document.getElementById("edVideo"); v.pause(); v.currentTime = 1; document.activeElement?.blur(); });
+    await expect.poll(() => vid(app, (v) => v.currentTime)).toBe(1);
+    await app.keyboard.press("ArrowRight");
+    await expect.poll(() => vid(app, (v) => +v.currentTime.toFixed(2))).toBe(1.1);
+    await app.keyboard.press("Shift+ArrowRight");
+    await expect.poll(() => vid(app, (v) => +v.currentTime.toFixed(2))).toBe(2.1);
+    await app.keyboard.press("j");
+    await expect.poll(() => vid(app, (v) => +v.currentTime.toFixed(2))).toBe(1.1);
+    await app.keyboard.press("Space");
+    await expect.poll(() => vid(app, (v) => v.paused)).toBe(false);
+    await app.keyboard.press("l");
+    await expect.poll(() => vid(app, (v) => v.playbackRate)).toBe(1.5);
+    await app.keyboard.press("k");
+    await expect.poll(() => vid(app, (v) => [v.paused, v.playbackRate])).toEqual([true, 1]);
+    const was = await vid(app, (v) => v.muted);
+    await app.keyboard.press("m");
+    await expect.poll(() => vid(app, (v) => v.muted)).toBe(!was);
+    await app.locator('[data-ed-tab="captions"]').click();
+    await app.locator("#edCapText").focus();                         // typing never seeks
+    await expect(app.locator("#edCapText")).toBeFocused();
+    const t0 = await vid(app, (v) => v.currentTime);
+    await app.keyboard.press("ArrowLeft"); await app.keyboard.press("Space");
+    expect(await vid(app, (v) => [v.currentTime, v.paused])).toEqual([t0, true]);
+    const bar = await app.locator("#edScrub").boundingBox();
+    await app.mouse.click(bar.x + bar.width * 0.75, bar.y + bar.height / 2);
+    await expect.poll(() => vid(app, (v) => Math.round(v.currentTime / v.duration * 100))).toBeGreaterThanOrEqual(72);
+    expect(await app.locator("#edScrubFill").evaluate((e) => e.style.transform)).toMatch(/^scaleX\(0\.7/);
+    await app.evaluate(() => { const v = document.getElementById("edVideo"); v.currentTime = v.duration - 0.05; });
+    await expect.poll(() => app.locator("#edScrubFill").evaluate((e) => e.style.transform)).toMatch(/^scaleX\(0\.9/);
+    expect(await app.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(0);   // knob at 100 % stays inside
+    if (info.project.name === "desktop") {                           // controls row never under the action bar or pill
+      const pc = await app.locator(".ed-pctrl").boundingBox(), foot = await app.locator(".ed-foot").boundingBox();
+      expect(foot.y >= pc.y + pc.height || foot.x >= pc.x + pc.width).toBe(true);
+    }
+  });
+
+  test("Timeline: dragging the ruler/waveform scrubs the video; the playhead moves by transform", async ({ app, api }) => {
+    await openWithVideo(app, api, { muted: true, volume: 1 });
+    await app.evaluate(() => { const v = document.getElementById("edVideo"); v.pause(); v.currentTime = 0; });
+    await app.evaluate(() => {                                        // phone: just under the sticky player
+      const a = document.querySelector("[data-ed-seekarea]").getBoundingClientRect(), p = document.querySelector(".ed-player").getBoundingClientRect();
+      if (a.top < p.bottom || a.bottom > innerHeight - 200) window.scrollBy(0, a.top - p.bottom - 8);
+    });
+    const area = await app.locator("[data-ed-seekarea]").boundingBox();
+    const y = area.y + 30;                                             // waveform band, no chips there
+    await app.mouse.move(area.x + 40, y); await app.mouse.down();       // clear of the trim handle at 0
+    for (let i = 1; i <= 8; i++) await app.mouse.move(area.x + 40 + i * 25, y);
+    await app.mouse.up();
+    await expect.poll(() => vid(app, (v) => v.currentTime)).toBeGreaterThan(1);
+    expect(await app.locator("#edPlayhead").evaluate((e) => e.style.transform)).toMatch(/^translateX\(/);
+  });
+
+  test("Timeline keys (audit Low): focus the timeline, then Space plays/pauses, arrows step (Shift 1 s), Home/End; not in text fields", async ({ app, api }) => {
+    await openWithVideo(app, api, { muted: true, volume: 1 });
+    await app.evaluate(() => { const v = document.getElementById("edVideo"); v.pause(); v.currentTime = 1; });
+    const tl = app.locator("#edTlInner");
+    await tl.focus();
+    await expect(tl).toBeFocused();
+    await app.keyboard.press("ArrowRight");
+    await expect.poll(() => vid(app, (v) => +v.currentTime.toFixed(2))).toBe(1.1);
+    await app.keyboard.press("Shift+ArrowLeft");
+    await expect.poll(() => vid(app, (v) => +v.currentTime.toFixed(2))).toBe(0.1);
+    await app.keyboard.press("End");
+    await expect.poll(() => vid(app, (v) => v.duration - v.currentTime)).toBeLessThan(0.1);
+    await app.keyboard.press("Home");
+    await expect.poll(() => vid(app, (v) => v.currentTime)).toBe(0);
+    await app.keyboard.press("Space");
+    await expect.poll(() => vid(app, (v) => v.paused)).toBe(false);
+    await app.keyboard.press("Space");
+    await expect.poll(() => vid(app, (v) => v.paused)).toBe(true);
+    await app.locator('[data-ed-tab="effects"]').click();
+    const range = app.locator("[data-ed-zoom-intensity]");             // a slider keeps its own arrows
+    await range.focus();
+    const t0 = await vid(app, (v) => v.currentTime);
+    await app.keyboard.press("ArrowRight");
+    expect(await vid(app, (v) => v.currentTime)).toBe(t0);
+  });
+
   test("Audio: compression + silence trim save; loudness is read-only", async ({ app, api }) => {
     await openEd(app, api);
     await app.locator('[data-ed-tab="audio"]').click();
@@ -313,6 +450,30 @@ test.describe("Editor Captions tab", () => {
     await app.evaluate(() => { location.hash = "#editor/job-done/cand-a"; });
     await expect(app.locator("[data-ed-preset]").first()).toBeVisible();
   }
+
+  test("tabs never clip a label (row scrolls + fades); keyword words show whole rows and scroll inside", async ({ app, api }) => {
+    await app.setViewportSize({ width: 360, height: 780 });
+    await openEd(app, api);
+    const tabs = await app.locator(".ed-seg button").evaluateAll((bs) => bs.map((b) => b.scrollWidth - b.clientWidth));
+    expect(Math.max(...tabs)).toBeLessThanOrEqual(0);
+    const seg = app.locator(".ed-seg");
+    if (await seg.evaluate((e) => e.scrollWidth > e.clientWidth)) {
+      await expect(seg).toHaveClass(/more-end/);
+      await app.locator('[data-ed-tab="export"]').click();
+      await expect(seg).toHaveClass(/more-start/);
+      await app.locator('[data-ed-tab="captions"]').click();
+    }
+    const kw = app.locator(".ed-kw");
+    await expect(kw).toHaveCount(1);
+    const m = await kw.evaluate((e) => { const b = e.querySelector("button"), gap = parseFloat(getComputedStyle(e).rowGap) || 0;
+      return { h: e.clientHeight, row: b.offsetHeight + gap, over: e.scrollHeight - e.clientHeight > 4, ov: getComputedStyle(e).overflowY }; });
+    expect(m.ov).toBe("auto");
+    if (m.over) {
+      await expect(app.locator("#edKwMore")).toBeVisible();
+      await kw.evaluate((e) => { e.scrollTop = e.scrollHeight; });
+      await expect(app.locator("#edKwMore")).toBeHidden();
+    }
+  });
 
   test("preset is this clip's own; equal to the job's clears it; untouched keywords aren't sent", async ({ app, api }) => {
     await openEd(app, api);

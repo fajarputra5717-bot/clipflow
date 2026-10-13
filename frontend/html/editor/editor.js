@@ -16,7 +16,15 @@
   const reduced = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const PPS = 100;                              // timeline pixels per second
   const ZOOM_SPAN = 1.75;                       // ramp 0.25 + hold 1.0 + ramp 0.25 + merge gap: retention.plan_zoom_windows
-  const E = { zoom: { on: true, intensity: 50, markers: [] }, zoomT: 0, mode: "seek", cuts: { trim: null, removed: [] }, cutT: 0, drag: null, tl: null, raf: 0, nowWord: -1, jid: null, cid: null, state: null, hook: null, saveT: 0, pollT: 0, hidden: [], tab: "captions", busy: false };
+  // 2b: preview sound is on by default; volume + mute are remembered per browser (a viewer convenience only).
+  const SOUND_KEY = "clipflow.editor.sound";
+  function loadSound() {
+    try { const v = JSON.parse(localStorage.getItem(SOUND_KEY) || "{}");
+      return { muted: v.muted === true, volume: Number.isFinite(v.volume) ? Math.min(1, Math.max(0, v.volume)) : 1 }; }
+    catch { return { muted: false, volume: 1 }; }
+  }
+  function saveSound() { try { localStorage.setItem(SOUND_KEY, JSON.stringify({ muted: E.muted, volume: E.volume })); } catch {} }
+  const E = { zoom: { on: true, intensity: 50, markers: [] }, zoomT: 0, mode: "seek", cuts: { trim: null, removed: [] }, cutT: 0, drag: null, tl: null, raf: 0, nowWord: -1, jid: null, cid: null, state: null, hook: null, saveT: 0, pollT: 0, hidden: [], tab: "captions", busy: false, ...loadSound() };
 
   function section() {
     let s = $("editorSection");
@@ -42,6 +50,7 @@
   async function open(jid, cid) {
     const s = section();
     if (!s) return;
+    if (!E.cid) Object.assign(E, loadSound());   // 2b: the remembered sound, fresh per open (another tab may have changed it)
     if (!E.cid) {                         // remember which views were showing, to restore on close
       E.hidden = [...s.parentElement.querySelectorAll(":scope > .view-section")]
         .filter((v) => v !== s).map((v) => [v, v.classList.contains("hidden"), v.hidden]);
@@ -78,7 +87,7 @@
   function close(setHash = true) {
     clearTimeout(E.saveT); clearTimeout(E.cutT); clearTimeout(E.zoomT); clearInterval(E.pollT); clearInterval(E.thumbT); clearInterval(E.smT); cancelAnimationFrame(E.raf); E.tl = null; E.nowWord = -1; E.drag = null;
     const s = $("editorSection");
-    if (s) { s.hidden = true; s.classList.add("hidden"); s.innerHTML = ""; }
+    if (s) { s.hidden = true; s.classList.add("hidden"); s.innerHTML = ""; s.classList.remove("ed-fit"); }
     E.hidden.forEach(([v, hadHidden]) => v.classList.toggle("hidden", hadHidden));
     E.hidden = []; E.cid = E.jid = null; E.state = null;
     document.body.classList.remove("editor-open");
@@ -104,14 +113,22 @@
       <div class="ed-grid">
         <div class="ed-player">
           <div class="ed-frame" id="edFrame">
-            ${c.has_preview ? `<video id="edVideo" src="${previewSrc()}" playsinline loop muted preload="metadata"></video>`
+            ${c.has_preview ? `<video id="edVideo" src="${previewSrc()}" playsinline loop ${E.muted ? "muted" : ""} preload="metadata"></video>`
                             : `<div class="ed-novideo">No preview yet</div>`}
             <div class="ed-hook" id="edHook" aria-hidden="true"><span></span></div>
             <div class="ed-prog" id="edProg" aria-hidden="true"><i></i></div>
           </div>
           <div class="ed-pctrl">
-            <button class="icon-btn" type="button" data-ed-play aria-label="Play" ${c.has_preview ? "" : "disabled"}>▶</button>
+            <button class="icon-btn" type="button" data-ed-play aria-label="Play" title="Play / pause (Space)" ${c.has_preview ? "" : "disabled"}>▶</button>
             <span class="ed-time" id="edTime">0:00</span>
+            <div class="ed-scrub" id="edScrub" data-ed-scrub role="slider" tabindex="${c.has_preview ? 0 : -1}" aria-label="Seek"
+              aria-valuemin="0" aria-valuemax="0" aria-valuenow="0" aria-valuetext="0:00" ${c.has_preview ? "" : `aria-disabled="true"`}>
+              <span class="ed-scrub-track"><i class="ed-scrub-fill" id="edScrubFill"></i></span>
+              <span class="ed-scrub-pos" id="edScrubPos"><b></b></span></div>
+            <button class="icon-btn ed-mute" type="button" data-ed-mute aria-label="${E.muted ? "Unmute" : "Mute"}"
+              title="${E.muted ? "Unmute (M)" : "Mute (M)"}" ${c.has_preview ? "" : "disabled"}>${muteIcon(E.muted)}</button>
+            <input class="ed-vol" type="range" min="0" max="1" step="0.05" value="${E.volume}" data-ed-vol aria-label="Volume"
+              ${c.has_preview ? "" : "disabled"}>
             <span class="ed-note" id="edNote"></span>
           </div>
         </div>
@@ -131,6 +148,7 @@
         <span class="ed-spacer"></span>
         <button class="primary" type="button" data-ed-render>Render preview</button>
       </div>`;
+    fitPage();
     wirePlayer();
     paintHook();
     paintState();
@@ -150,6 +168,7 @@
 
   function renderTimeline() {
     const el = $("edTl"), tl = E.tl;
+    E.tlW = 0;                                       // timeline width, re-read on the next frame
     if (!el || !tl) return;
     const dur = Number(tl.duration) || 0, W = Math.max(1, Math.ceil(dur * PPS));
     let ruler = "";
@@ -176,7 +195,9 @@
         <span class="ed-time" id="edTlTime">0:00.0 / ${fmt(dur)}</span></div>
       <div class="ed-hint" id="edTlHint"></div>
       <div class="ed-tl-scroll" id="edTlScroll">
-        <div class="ed-tl-inner" id="edTlInner" style="width:${W}px" data-ed-seekarea>
+        <div class="ed-tl-inner" id="edTlInner" style="width:${W}px" data-ed-seekarea tabindex="0" role="group"
+          aria-label="Timeline. Space play or pause, arrows step 0.1 s, Shift arrows 1 s, Home and End jump to the ends"
+          aria-keyshortcuts="Space ArrowLeft ArrowRight Shift+ArrowLeft Shift+ArrowRight Home End">
           <div class="ed-tl-ruler" aria-hidden="true">${ruler}</div>
           <canvas class="ed-tl-wave" id="edWave" aria-hidden="true"></canvas>
           <div id="edBands" aria-hidden="true"></div>
@@ -469,6 +490,8 @@
     }
   }
 
+  // 4: per-frame painters write the DOM only when a value changes (an equal textContent still re-lays the line out).
+  const txt = (el, v) => { if (el && el.textContent !== v) el.textContent = v; };
   function wordAt(t) {                              // last word that started at or before t
     const w = E.tl ? E.tl.words : [];
     let lo = 0, hi = w.length - 1, ans = -1;
@@ -480,21 +503,21 @@
     const v = $("edVideo"), ph = $("edPlayhead");
     if (!ph || !E.tl) return;
     const t = toSrc(v ? v.currentTime : 0), x = t * PPS;
+    const sc = follow && $("edTlScroll"), left = sc ? sc.scrollLeft : 0, width = sc ? (E.tlW ||= sc.clientWidth) : 0;  // reads first
     ph.style.transform = `translateX(${x}px)`;
-    const tm = $("edTlTime"); if (tm) tm.textContent = `${fmt(t)}.${Math.floor((t % 1) * 10)} / ${fmt(E.tl.duration)}`;
+    txt($("edTlTime"), `${fmt(t)}.${Math.floor((t % 1) * 10)} / ${fmt(E.tl.duration)}`);
     const i = wordAt(t);
     if (i !== E.nowWord) {
       document.querySelector(".ed-word.now")?.classList.remove("now");
       if (i >= 0) document.querySelector(`[data-ed-word="${i}"]`)?.classList.add("now");
       E.nowWord = i;
     }
-    const sc = $("edTlScroll");
-    if (follow && sc && (x < sc.scrollLeft + 24 || x > sc.scrollLeft + sc.clientWidth - 48)) sc.scrollLeft = Math.max(0, x - 48);
+    if (follow && sc && (x < left + 24 || x > left + width - 48)) sc.scrollLeft = Math.max(0, x - 48);
   }
 
   function loop() {
     const v = $("edVideo");
-    paintPlayhead(true);
+    paintPlayhead(true); paintScrub();
     if (v && !v.paused && E.cid) E.raf = requestAnimationFrame(loop);
   }
 
@@ -580,6 +603,8 @@
       : `${sugg.length} pause${sugg.length === 1 ? "" : "s"} ≥ ${E.state.cuts.suggest_min_gap} s found in the speech. Off by default.`;
     const L = E.state.audio.loudness;
     return `
+      <div class="ed-note-box" id="edAudioNote">Audio edits are rendered, not live: Remove silences, Light compression, Loud &amp; punchy,
+        loudness and effect sounds are heard after <b>Render preview</b>${E.muted ? ". The player is muted: tap the speaker under the video to listen" : ""}.</div>
       <div class="ed-group">
         <div class="ed-row"><div><div class="ed-label">Remove silences</div><div class="ed-hint" id="edSilenceHint">${silenceHint}</div></div>
           ${sw("data-ed-silence", a.silence_trim, "Remove silences")}</div>
@@ -680,6 +705,7 @@
         <div class="ed-kw" role="group" aria-label="Caption words: tap to highlight" style="--kw:${kw}">
           ${words.slice(0, 80).map(([t, w]) => `<button type="button" class="ed-kwword" data-ed-kw="${esc(t)}" aria-pressed="${C.keywords.has(t)}">${esc(w)}</button>`).join("")}
         </div>
+        <div class="ed-hint ed-kw-more" id="edKwMore" hidden>Scroll the words for more ↓</div>
       </div>
       ${hookGroupHtml()}
       <div class="ed-group">
@@ -1003,11 +1029,11 @@
       if (on) { prog.style.setProperty("--prog", E.progress.color); prog.firstElementChild.style.transform = `scaleX(${dur ? Math.min(1, v.currentTime / dur) : 0})`; }
     }
     const note = $("edNote");
-    if (note) note.textContent = E.dirty ? "The card on the video is a live preview: Render preview bakes it in." : "";
-    el.querySelector("span").textContent = hookText();
+    txt(note, E.dirty ? "The card on the video is a live preview: Render preview bakes it in." : "");
+    txt(el.querySelector("span"), hookText());
     el.classList.toggle("show", show);
     const cnt = $("edHookCount");
-    if (cnt) cnt.textContent = `${(E.hook.text || "").length}/${E.hook.max_chars}` + (E.hook.text ? "" : " · empty = the clip title");
+    txt(cnt, `${(E.hook.text || "").length}/${E.hook.max_chars}` + (E.hook.text ? "" : " · empty = the clip title"));
   }
 
   function paintState(msg) {
@@ -1021,18 +1047,103 @@
 
   function wirePlayer() {
     const v = $("edVideo"); if (!v) return;
-    const tick = () => { paintHook(); const tm = $("edTime"); if (tm) tm.textContent = fmt(v.currentTime); };
+    const tick = () => { paintHook(); if (v.paused) paintScrub(); };       // while playing, loop() paints every frame
+    v.volume = E.volume;
     v.addEventListener("timeupdate", tick);
-    v.addEventListener("seeked", () => { tick(); paintPlayhead(false); });
+    v.addEventListener("seeked", () => { tick(); paintPlayhead(false); paintScrub(); });
+    v.addEventListener("loadedmetadata", paintScrub);
     v.addEventListener("play", () => { setPlay(true); cancelAnimationFrame(E.raf); E.raf = requestAnimationFrame(loop); });
-    v.addEventListener("pause", () => setPlay(false));
-    if (!reduced()) v.play().catch(() => {});
+    v.addEventListener("pause", () => { setPlay(false); v.playbackRate = 1; });
+    if (!reduced()) v.play().catch((err) => {
+      if (err && err.name === "NotAllowedError" && !v.muted) { setMuted(true, false); v.play().catch(() => {}); }
+    });
+  }
+  // Audit High (2026-10) + 2b: the preview has sound (on by default, remembered); the browser may refuse to autoplay
+  // with sound, then it plays muted and the speaker shows it (not saved).
+  const muteIcon = (m) => m
+    ? `<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M3 9h4l5-4v14l-5-4H3z"/><path d="M16 9l5 6M21 9l-5 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>`
+    : `<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M3 9h4l5-4v14l-5-4H3z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18 6a8.5 8.5 0 0 1 0 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>`;
+  function setMuted(m, save = true) {
+    E.muted = m; if (save) saveSound();
+    const v = $("edVideo"); if (v) v.muted = m;
+    const b = document.querySelector("[data-ed-mute]");
+    if (b) { b.innerHTML = muteIcon(m); b.setAttribute("aria-label", m ? "Unmute" : "Mute"); b.title = m ? "Unmute (M)" : "Mute (M)"; }
+    const n = $("edAudioNote"); if (n && E.tab === "audio") n.outerHTML = audioPanel().match(/<div class="ed-note-box"[\s\S]*?<\/div>/)[0];
+  }
+  // 2b: scrub bar under the video (output time). Transform only: fill scaleX, knob translateX on a track-wide layer.
+  function paintScrub() {
+    const v = $("edVideo"), el = $("edScrub"); if (!v || !el) return;
+    const d = v.duration || 0, p = d ? Math.min(1, v.currentTime / d) : 0;
+    $("edScrubFill").style.transform = `scaleX(${p})`;
+    $("edScrubPos").style.transform = `translateX(${(p * 100).toFixed(3)}%)`;
+    const now = v.currentTime.toFixed(1);
+    if (el.getAttribute("aria-valuenow") !== now) {
+      el.setAttribute("aria-valuemax", d.toFixed(1)); el.setAttribute("aria-valuenow", now); el.setAttribute("aria-valuetext", fmt(v.currentTime));
+    }
+    txt($("edTime"), fmt(v.currentTime));
+  }
+  const SCRUB_PAD = 8;            // editor.css .ed-scrub inner inset: the knob stays inside the (clipped) bar at 0 and 100 %
+  function scrubTo(clientX, rect) {
+    const v = $("edVideo"), el = $("edScrub"); if (!v || !el || !v.duration) return;
+    const r = rect || el.getBoundingClientRect();
+    v.currentTime = Math.max(0, Math.min(1, (clientX - r.left - SCRUB_PAD) / (r.width - 2 * SCRUB_PAD))) * v.duration;
+    paintScrub(); paintPlayhead(true);
+  }
+  function nudge(dt) {
+    const v = $("edVideo"); if (!v || !v.duration) return;
+    v.currentTime = Math.max(0, Math.min(v.duration, v.currentTime + dt));
+    paintScrub(); paintPlayhead(true); paintHook();
+  }
+  // Space play/pause · ←/→ 0.1 s · Shift+←/→ 1 s · J back 1 s · K play/pause · L play (again: 1.5×, 2×) · M mute.
+  // Never while typing (text fields, selects, sliders keep their own keys) or when focus is outside the editor.
+  function playerKey(e) {
+    const v = $("edVideo"); if (!v || e.metaKey || e.ctrlKey || e.altKey) return false;
+    const t = e.target;
+    if (t.closest && t.closest("input,textarea,select,[contenteditable],[data-ed-trim]")) return false;
+    if (t !== document.body && !(t.closest && t.closest("#editorSection"))) return false;
+    const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+    if (k === " " && t.closest && t.closest("button,a,summary,[role=switch],[role=tab]")) return false;  // Space activates them
+    if (k === " " || k === "k") { v.paused ? v.play().catch(() => {}) : v.pause(); return true; }
+    if (k === "ArrowLeft" || k === "ArrowRight") { nudge((e.shiftKey ? 1 : 0.1) * (k === "ArrowRight" ? 1 : -1)); return true; }
+    if (k === "j") { nudge(-1); return true; }
+    if (k === "l") {
+      if (v.paused) { v.playbackRate = 1; v.play().catch(() => {}); }
+      else v.playbackRate = v.playbackRate >= 2 ? 2 : v.playbackRate + 0.5;
+      return true;
+    }
+    if (k === "m") { setMuted(!E.muted); return true; }
+    if ((k === "Home" || k === "End") && t.closest && t.closest("[data-ed-seekarea],[data-ed-scrub]")) {   // audit Low: timeline keys
+      if (v.duration) { v.currentTime = k === "Home" ? 0 : Math.max(0, v.duration - 0.05); paintScrub(); paintPlayhead(true); paintHook(); }
+      return true;
+    }
+    return false;
+  }
+  // 2a: desktop pages fit the window (editor.css .ed-fit): the height between the page top and the stepper pill.
+  function fitPage() {
+    const s = $("editorSection"); if (!s || !E.cid) return;
+    s.classList.add("ed-fit");
+    const pill = $("flowNav"), shown = pill && pill.offsetHeight > 0;   // its resting spot (it may be mid-animation)
+    const reserve = shown ? pill.offsetHeight + (parseFloat(getComputedStyle(pill).bottom) || 0) : 0;
+    const top = s.getBoundingClientRect().top + window.scrollY;
+    const bottom = window.innerHeight - reserve - 12;
+    s.style.setProperty("--ed-fit-h", `${Math.max(420, Math.floor(bottom - top))}px`);
   }
   function setPlay(on) { const b = document.querySelector("[data-ed-play]"); if (b) { b.textContent = on ? "❚❚" : "▶"; b.setAttribute("aria-label", on ? "Pause" : "Play"); } }
   const fmt = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 
+  // 3: scroll areas that hold more than they show (tab row, keyword words) fade at the hidden edge.
+  function fadeEdges(el) {
+    // 4 px tolerance: chips' invisible tap areas (::after) overhang the box by a few px without hiding any word
+    const x = el.scrollWidth - el.clientWidth > 1, y = !x && el.scrollHeight - el.clientHeight > 4;
+    const start = x ? el.scrollLeft > 1 : y && el.scrollTop > 4;
+    const end = x ? el.scrollLeft < el.scrollWidth - el.clientWidth - 1 : y && el.scrollTop < el.scrollHeight - el.clientHeight - 4;
+    el.classList.toggle("more-start", !!start); el.classList.toggle("more-end", !!end);
+    if (el.classList.contains("ed-kw")) { const m = $("edKwMore"); if (m) m.hidden = !end; }
+  }
+  function fadeAll() { document.querySelectorAll("#editorSection .ed-seg, #editorSection .ed-kw").forEach(fadeEdges); }
   function moveSeg() {
     const seg = document.querySelector(".ed-seg"); if (!seg) return;
+    requestAnimationFrame(fadeAll);
     const b = seg.querySelector('[aria-selected="true"]'), ind = seg.querySelector(".ed-seg-ind");
     ind.style.width = b.offsetWidth + "px"; ind.style.transform = `translateX(${b.offsetLeft}px)`;
     if (seg.scrollWidth > seg.clientWidth) seg.scrollTo({ left: b.offsetLeft - (seg.clientWidth - b.offsetWidth) / 2, behavior: reduced() ? "auto" : "smooth" });
@@ -1098,7 +1209,7 @@
 
   // ------------------------------------------------------------------ events (delegated, data-*)
   document.addEventListener("click", (e) => {
-    const t = e.target.closest("[data-ed-back],[data-ed-hook-on],[data-ed-hook-dur],[data-ed-render],[data-ed-play],[data-ed-tab],[data-ed-zoom-on],[data-ed-progress-on],[data-ed-progress-color],[data-ed-compress],[data-ed-silence],[data-ed-word],[data-ed-pause],[data-ed-mode],[data-ed-suggest],[data-ed-fillers],[data-ed-cuts-reset],[data-ed-zoom-add],[data-ed-zoom-mark],[data-ed-trim],[data-ed-seekarea],[data-ed-preset],[data-ed-cap-all],[data-ed-kw],[data-ed-kw-color],[data-ed-fix-typos],[data-ed-cap-reset],[data-ed-capy-on],[data-ed-new-hook],[data-ed-thumb-pick],[data-ed-thumb-gen],[data-ed-burn],[data-ed-gen-desc],[data-ed-sm],[data-ed-versions],[data-ed-restore],[data-ed-approve],[data-ed-plan-gen],[data-ed-plan-item],[data-ed-loud],[data-ed-look-preset],[data-ed-look-vignette],[data-ed-look-grain],[data-ed-pack]");
+    const t = e.target.closest("[data-ed-back],[data-ed-hook-on],[data-ed-hook-dur],[data-ed-render],[data-ed-play],[data-ed-mute],[data-ed-tab],[data-ed-zoom-on],[data-ed-progress-on],[data-ed-progress-color],[data-ed-compress],[data-ed-silence],[data-ed-word],[data-ed-pause],[data-ed-mode],[data-ed-suggest],[data-ed-fillers],[data-ed-cuts-reset],[data-ed-zoom-add],[data-ed-zoom-mark],[data-ed-trim],[data-ed-seekarea],[data-ed-preset],[data-ed-cap-all],[data-ed-kw],[data-ed-kw-color],[data-ed-fix-typos],[data-ed-cap-reset],[data-ed-capy-on],[data-ed-new-hook],[data-ed-thumb-pick],[data-ed-thumb-gen],[data-ed-burn],[data-ed-gen-desc],[data-ed-sm],[data-ed-versions],[data-ed-restore],[data-ed-approve],[data-ed-plan-gen],[data-ed-plan-item],[data-ed-loud],[data-ed-look-preset],[data-ed-look-vignette],[data-ed-look-grain],[data-ed-pack]");
     if (!t || !E.state && !t.matches("[data-ed-back]")) return;
     if (t.matches("[data-ed-back]")) {                       // back to the Review page (step 4) for this job
       e.preventDefault(); const jid = E.jid; close(false); location.hash = `#review/${encodeURIComponent(jid || "")}`;
@@ -1163,6 +1274,7 @@
     }
     if (t.matches("[data-ed-render]")) return renderPreview(t);
     if (t.matches("[data-ed-play]")) { const v = $("edVideo"); if (v) v.paused ? v.play() : v.pause(); return; }
+    if (t.matches("[data-ed-mute]")) { setMuted(!E.muted); return; }
     if (t.matches("[data-ed-tab]") && t.getAttribute("aria-disabled") !== "true") {
       const order = TABS.map(([id]) => id), from = order.indexOf(E.tab);
       E.tab = t.dataset.edTab;
@@ -1223,6 +1335,29 @@
     const inner = $("edTlInner"); setTrim(E.drag, (e.clientX - inner.getBoundingClientRect().left) / PPS); paintCuts();
   });
   document.addEventListener("pointerup", () => { if (E.drag) { E.drag = null; cutsChanged(); } });
+  document.addEventListener("pointerdown", (e) => {
+    const sc = E.state && e.target.closest && e.target.closest("[data-ed-scrub]");
+    if (!sc || sc.getAttribute("aria-disabled") === "true") return;
+    try { sc.setPointerCapture(e.pointerId); } catch {}
+    E.scrubbing = true; E.scrubRect = sc.getBoundingClientRect(); scrubTo(e.clientX); e.preventDefault();
+  });
+  document.addEventListener("pointermove", (e) => {
+    if (!E.scrubbing) return;
+    cancelAnimationFrame(E.scrubRaf); const x = e.clientX; E.scrubRaf = requestAnimationFrame(() => scrubTo(x, E.scrubRect));
+  });
+  // 4: drag on the timeline's ruler/waveform (seek mode, not on a chip/handle/marker) scrubs, once per frame.
+  document.addEventListener("pointerdown", (e) => {
+    const area = E.state && E.mode === "seek" && e.button === 0 && e.target.closest && e.target.closest("[data-ed-seekarea]");
+    if (!area || e.target.closest("button,[data-ed-trim]")) return;
+    try { area.setPointerCapture(e.pointerId); } catch {}
+    E.tlScrub = area.getBoundingClientRect().left;   // read once: no layout read per frame while dragging
+  });
+  document.addEventListener("pointermove", (e) => {
+    if (E.tlScrub == null) return;
+    const x = e.clientX; cancelAnimationFrame(E.scrubRaf);
+    E.scrubRaf = requestAnimationFrame(() => { if (E.tlScrub != null) { seek((x - E.tlScrub) / PPS); paintScrub(); } });
+  });
+  ["pointerup", "pointercancel"].forEach((n) => document.addEventListener(n, () => { E.scrubbing = false; E.tlScrub = null; }));
   document.addEventListener("keydown", (e) => {
     if (!E.state) return;
     const h = e.target.closest && e.target.closest("[data-ed-trim]");
@@ -1230,6 +1365,7 @@
       const [lo, hi] = trimWin(), step = (e.shiftKey ? 1 : 0.1) * (e.key === "ArrowRight" ? 1 : -1);
       setTrim(h.dataset.edTrim, (h.dataset.edTrim === "a" ? lo : hi) + step); cutsChanged(); e.preventDefault(); return;
     }
+    if (playerKey(e)) { e.preventDefault(); return; }
     if ((e.key === "c" || e.key === "C") && !e.target.closest("input,textarea,select,[contenteditable]") && !e.metaKey && !e.ctrlKey) {
       setMode(E.mode === "cut" ? "seek" : "cut");
     }
@@ -1238,6 +1374,11 @@
     }
   });
   document.addEventListener("input", (e) => {
+    if (E.state && e.target.matches && e.target.matches("[data-ed-vol]")) {
+      E.volume = Number(e.target.value); const v = $("edVideo"); if (v) v.volume = E.volume;
+      if (E.volume > 0 && E.muted) setMuted(false); else saveSound();
+      return;
+    }
     if (e.target.matches && e.target.matches("[data-ed-zoom-intensity]") && E.state) {
       E.zoom.intensity = Number(e.target.value); const o = $("edZoomOut"); if (o) o.textContent = `${E.zoom.intensity}%`;
       zoomChanged(); return;
@@ -1286,8 +1427,12 @@
   document.addEventListener("toggle", (e) => {                 // keep "Style, font…" open across repaints
     if (E.cap && e.target.matches && e.target.matches("[data-ed-style-more]")) E.cap.styleOpen = e.target.open;
   }, true);
+  document.addEventListener("scroll", (e) => {
+    const t = e.target; if (t && t.classList && (t.classList.contains("ed-seg") || t.classList.contains("ed-kw"))) fadeEdges(t);
+  }, { capture: true, passive: true });
+  document.addEventListener("click", () => { if (E.state) requestAnimationFrame(fadeAll); });   // after panel repaints
   window.addEventListener("hashchange", route);
-  window.addEventListener("resize", () => { if (E.cid) moveSeg(); }, { passive: true });
+  window.addEventListener("resize", () => { if (E.cid) { E.tlW = 0; fitPage(); moveSeg(); } }, { passive: true });
   window.addEventListener("load", () => setTimeout(route, 0));
   window.clipflowEditor = { open: (jid, cid) => { location.hash = `#editor/${jid}/${cid}`; }, close };
 })();
