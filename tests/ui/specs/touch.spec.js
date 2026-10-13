@@ -140,7 +140,7 @@ async function toggleProblems(app) {
       if (!e.offsetParent || e.closest("#island,.sheet-layer:not(.open),.acct-menu:not(.open)")) continue;
       const cs = getComputedStyle(e), bg = rgb(cs.backgroundColor), name = `${e.className || e.tagName} "${e.textContent.trim().slice(0, 16)}"`;
       if (e.getAttribute("aria-pressed") === "false" && blue(bg)) out.push(`unpressed but blue: ${name}`);
-      if (e.getAttribute("aria-pressed") === "true" && e.closest(".seg")) {
+      if (e.getAttribute("aria-pressed") === "true" && e.closest(".seg,.rv-seg")) {   // 210: Review's own segmented filter too
         if (!blue(bg)) out.push(`pressed but not accent: ${name} ${cs.backgroundColor}`);
         else if (ratio(rgb(cs.color), bg) < 4.5) out.push(`pressed text ${ratio(rgb(cs.color), bg).toFixed(2)}:1: ${name}`);
       }

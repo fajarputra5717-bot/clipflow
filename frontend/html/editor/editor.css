@@ -157,7 +157,11 @@ body.is-staging #toolbar{top:22px}
 .rv-f-job select{width:100%}
 .rv-seg{display:inline-flex;padding:3px;border-radius:12px;background:var(--fill);gap:2px}
 .rv-seg button{min-height:34px;padding:0 14px;border:0;border-radius:9px;background:transparent;color:var(--text);font:500 13px var(--font-text);cursor:pointer}
-.rv-seg button[aria-pressed="true"]{background:var(--panel);font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.12)}
+/* 210 (QA Low on 205): same pressed look as the shell's .seg: accent + white from aria-pressed (dark was a 1.2:1 thumb) */
+.rv-seg button[aria-pressed="true"],[data-theme="dark"] .rv-seg button[aria-pressed="true"],
+.rv-seg button[aria-pressed="true"]:hover:not(:disabled),[data-theme="dark"] .rv-seg button[aria-pressed="true"]:hover:not(:disabled){background:var(--seg-on);color:#fff;font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.rv-seg button:not([aria-pressed="true"]):hover:not(:disabled),[data-theme="dark"] .rv-seg button:not([aria-pressed="true"]):hover:not(:disabled){background:var(--fill2);box-shadow:none}
+[data-theme="dark"] .rv-seg button:not([aria-pressed="true"]){background:transparent}
 .rv-camp-status{font-size:var(--fs-base);font-weight:600;color:var(--text);margin:4px 0 0}
 .rv-src{font-size:var(--fs-small);color:var(--muted);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rv-earn{margin-right:4px}
