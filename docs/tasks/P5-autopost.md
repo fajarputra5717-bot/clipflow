@@ -15,8 +15,8 @@ ClipFlow constraints that decide what works:
 | Part | What | State |
 |---|---|---|
 | 1 | YouTube views via Data API v3 `videos.list` (API key) | **Built (189)**: waiting for YOUTUBE_API_KEY |
-| 2 | Instagram Reels views (Graph API insights) | Spec below; needs the owner's Meta setup |
-| 3 | Facebook Reels views (Page video insights) | Spec below; needs the owner's Meta setup |
+| 2 | Instagram Reels views (Graph API insights) | **Built (199)**: waiting for a Meta token |
+| 3 | Facebook Reels views (Page video insights) | **Built (199)**: waiting for a Meta token |
 | 4 | TikTok views (Display API) | Spec below; needs a TikTok developer app |
 | 5 | Auto-post: Instagram Reels (own accounts, Standard Access) | After 2 |
 | 6 | Auto-post: Facebook Reels (own Pages) | After 3 |
@@ -86,9 +86,17 @@ so claim advice and Track need no change. Every auto-poster writes `clip_posts` 
 - [ ] Each Facebook destination is a **Page** you manage (not a profile), linked to the Instagram account if you use
       Facebook Login.
 - [ ] Meta developer account → create an app (type Business) → add Instagram (and Facebook Login / Pages) products.
-- [ ] Generate a long-lived token for your own accounts with: `instagram_business_basic`,
-      `instagram_business_content_publish`, `instagram_business_manage_insights` (Instagram Login), and for Pages:
-      `pages_show_list`, `pages_read_engagement`, `pages_manage_posts`, `read_insights`, `pages_manage_engagement`.
+- [ ] Link each Instagram account to its Facebook Page (Instagram app → Settings → Accounts Center, or the Page's
+      settings → Linked accounts). ClipFlow finds Instagram accounts through their Page.
+- [ ] Graph API Explorer (or your app's Facebook Login) → **user token** with `pages_show_list`,
+      `pages_read_engagement`, `read_insights`, `instagram_basic`, `instagram_manage_insights` → exchange it for a
+      **long-lived** token (60 days) → paste into ClipFlow Settings → Instagram & Facebook → "Your Meta token" (each
+      ClipFlow user pastes their own; it never applies to anyone else).
+- [ ] After the first pull (≤ 5 min, while ClipFlow is idle): compare one Instagram and one Facebook number on Publish
+      with the count shown in the app, and tell me if Facebook's differs (we can switch which "plays" metric we read).
+- [ ] Renew the token before it expires (~60 days); if Meta refuses it, ClipFlow stops pulling and sends you one
+      Telegram note.
+- [ ] (Parts 5+6, auto-post, later) add `instagram_content_publish`, `pages_manage_posts`, `pages_manage_engagement`.
 - [ ] Only if you'll ever post for accounts you don't manage: App Review + Business Verification (not needed for your
       own accounts).
 
@@ -103,5 +111,5 @@ so claim advice and Track need no change. Every auto-poster writes `clip_posts` 
 - [ ] Keep `TELEGRAM_*` set: failed auto-posts and refused tokens alert you there.
 
 ## Build order + gates
-1 (done) → 2 + 3 (one Meta token, views first: low risk) → 5 + 6 (auto-post to own IG/FB, Standard Access) →
+1 + 2 + 3 (built; waiting for keys) → 5 + 6 (auto-post to own IG/FB, Standard Access) →
 4 → 7/8 only as their audits pass. Lane C gate after each part; any open High blocks the next part.

@@ -8342,11 +8342,11 @@ def pull_youtube_views(now=None, http=None):
         conn.execute("UPDATE view_pull_runs SET status = 'failed', error = 'interrupted', finished_at = NOW() "
                      "WHERE status = 'running' AND started_at < NOW() - INTERVAL '30 minutes'")
         q = conn.execute("SELECT COALESCE(SUM(units), 0) AS used, COALESCE(BOOL_OR(error_kind = 'quota'), FALSE) AS blocked "
-                         "FROM view_pull_runs WHERE started_at >= %s", (view_pull.quota_day_start(now),)).fetchone()
+                         "FROM view_pull_runs WHERE platform = 'youtube' AND started_at >= %s", (view_pull.quota_day_start(now),)).fetchone()
         rows = conn.execute(
             "SELECT id, user_id, platform, url, external_id, posted_at, views_pulled_at FROM clip_posts "
             "WHERE platform = ANY(%s) AND status IN ('posted', 'claimed', 'paid') AND posted_at > %s",
-            (list(view_pull.PLATFORMS), now - timedelta(days=view_pull.STOP_DAYS)),
+            (["youtube"], now - timedelta(days=view_pull.STOP_DAYS)),
         ).fetchall()
         conn.commit()
     budget = max(0, (setting_int("VIEW_PULL_DAILY_UNITS", 1000) or 0) - int(q["used"]))
@@ -8413,17 +8413,220 @@ def pull_youtube_views(now=None, http=None):
     return {"updated": updated, "units": units, "error_kind": kind}
 
 
+class _MetaError(Exception):
+    def __init__(self, kind, message):
+        super().__init__(message)
+        self.kind = kind
+
+
+class _MetaClient:
+    """Graph API GETs with the token in the Authorization header (never a URL or a log line). Paging uses the `after`
+    cursor, not `paging.next` (that URL carries the token). Stops at META_MAX_CALLS per run."""
+
+    def __init__(self, http, token):
+        self.http, self.token, self.calls = http, token, 0
+
+    def get(self, path, params, token=None):
+        if self.calls >= view_pull.META_MAX_CALLS:
+            raise _MetaError("transient", f"call budget ({view_pull.META_MAX_CALLS}) used, rest next run")
+        self.calls += 1
+        resp = self.http.get(f"{view_pull.GRAPH_URL}/{path}", params=params,
+                             headers={"Authorization": f"Bearer {token or self.token}"}, timeout=20)
+        try:
+            data = resp.json()
+        except ValueError:
+            data = None
+        if resp.status_code != 200:
+            message = str(((data or {}).get("error") or {}).get("message") or "")[:200]
+            raise _MetaError(view_pull.meta_error_kind(resp.status_code, data), f"HTTP {resp.status_code}: {message}")
+        return data or {}
+
+    def listing(self, path, fields, oldest, time_key, token=None):
+        """Recent items newest first, until one is older than `oldest` (or META_LIST_PAGES pages)."""
+        out, after = [], None
+        for _ in range(view_pull.META_LIST_PAGES):
+            params = {"fields": fields, "limit": 50, **({"after": after} if after else {})}
+            data = self.get(path, params, token)
+            items = data.get("data") or []
+            out.extend(items)
+            after = ((data.get("paging") or {}).get("cursors") or {}).get("after")
+            last = view_pull_time(items[-1].get(time_key)) if items else None
+            if not items or not after or not (data.get("paging") or {}).get("next") or (last and last < oldest):
+                break
+        return out
+
+
+def view_pull_time(value):
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00").replace("+0000", "+00:00"))
+    except ValueError:
+        return None
+
+
+def _post_view_error(conn, row, now, message):
+    conn.execute("UPDATE clip_posts SET views_pulled_at = %s, views_error = %s WHERE id = %s", (now, message, row["id"]))
+
+
+def _pull_meta_user(user_id, token, posts, now, http):
+    """One user's Instagram + Facebook posts that are due. Returns (updated, calls, kind, err)."""
+    client = _MetaClient(http, token)
+    updated = 0
+    kind = err = None
+    oldest = min(p["posted_at"] for p in posts) - view_pull.META_LIST_SLACK
+
+    def write(results):
+        with db() as conn:
+            for row, views, problem in results:
+                if views is not None:
+                    _post_view_update(conn, row, views, now)
+                else:
+                    _post_view_error(conn, row, now, problem)
+            conn.commit()
+
+    try:
+        pages = client.listing("me/accounts", "id,name,access_token,instagram_business_account{id,username}",
+                               oldest, "_none")
+        ig = [p for p in posts if p["platform"] == "instagram"]
+        fb = [p for p in posts if p["platform"] == "facebook"]
+        results = []
+        if ig:
+            media = {}
+            for page in pages:
+                acct = (page.get("instagram_business_account") or {}).get("id")
+                if not acct:
+                    continue
+                try:
+                    for m in client.listing(f"{acct}/media", "id,shortcode,timestamp", oldest, "timestamp"):
+                        if m.get("shortcode"):
+                            media[m["shortcode"]] = m["id"]
+                except _MetaError as exc:
+                    if exc.kind != "request":
+                        raise
+                    log(f"View pull (meta): Instagram account {acct} skipped: {exc}")
+            for row in ig:
+                code = view_pull.instagram_shortcode(row["url"])
+                if not code:
+                    results.append((row, None, "No Instagram post code in the URL (use the instagram.com/reel/… link)"))
+                elif code not in media:
+                    results.append((row, None, "Not found on the Instagram accounts your Meta token can see"))
+                else:
+                    try:
+                        views = view_pull.ig_views(client.get(f"{media[code]}/insights", {"metric": "views"}))
+                        results.append((row, views, None if views is not None else "Instagram returned no view count yet"))
+                    except _MetaError as exc:
+                        if exc.kind != "request":
+                            raise
+                        results.append((row, None, f"Instagram: {exc}"[:300]))
+            write(results)
+            updated += sum(1 for _, v, _ in results if v is not None)
+            results = []
+        if fb:
+            owner = {}
+            for page in pages:
+                if not page.get("access_token"):
+                    continue
+                try:
+                    for v in client.listing(f"{page['id']}/video_reels", "id,created_time", oldest, "created_time",
+                                            page["access_token"]):
+                        owner[str(v.get("id"))] = page["access_token"]
+                except _MetaError as exc:
+                    if exc.kind != "request":
+                        raise
+                    log(f"View pull (meta): Facebook Page {page['id']} skipped: {exc}")
+            for row in fb:
+                vid = view_pull.facebook_video_id(row["url"], row["external_id"])
+                if not vid:
+                    results.append((row, None, "No Facebook video id in the URL (use the facebook.com/reel/… link)"))
+                elif vid not in owner:
+                    results.append((row, None, "Not found on the Facebook Pages your Meta token can see"))
+                else:
+                    try:
+                        data = client.get(f"{vid}/video_insights", {"metric": ",".join(view_pull.FB_METRICS)}, owner[vid])
+                        views = view_pull.fb_plays(data)
+                        results.append((row, views, None if views is not None else "Facebook returned no play count yet"))
+                    except _MetaError as exc:
+                        if exc.kind != "request":
+                            raise
+                        results.append((row, None, f"Facebook: {exc}"[:300]))
+            write(results)
+            updated += sum(1 for _, v, _ in results if v is not None)
+    except _MetaError as exc:
+        kind, err = exc.kind, str(exc)
+    except _requests.RequestException as exc:
+        kind, err = "transient", type(exc).__name__
+    return updated, client.calls, kind, err
+
+
+def pull_meta_views(now=None, http=None):
+    """Instagram + Facebook views for every user with a META_ACCESS_TOKEN (199). One view_pull_runs row per user
+    (platform 'meta'); a refused token is not retried until the user saves a different one, and the user hears about
+    it once in their own Telegram chat. Returns {user_id: summary} for the users that ran."""
+    http = http or _requests
+    now = now or datetime.now(timezone.utc)
+    with db() as conn:
+        tokens = {r["user_id"]: r["value"].strip() for r in conn.execute(
+            "SELECT s.user_id, s.value FROM user_settings s JOIN users u ON u.id = s.user_id "
+            "WHERE s.key = 'META_ACCESS_TOKEN' AND u.active AND COALESCE(s.value, '') <> ''").fetchall()}
+        if not tokens:
+            return {}
+        rows = conn.execute(
+            "SELECT id, user_id, platform, url, external_id, posted_at, views_pulled_at FROM clip_posts "
+            "WHERE platform = ANY(%s) AND status IN ('posted', 'claimed', 'paid') AND posted_at > %s AND user_id = ANY(%s)",
+            (list(view_pull.META_PLATFORMS), now - timedelta(days=view_pull.STOP_DAYS), list(tokens)),
+        ).fetchall()
+        last = {r["uid"]: r for r in conn.execute(
+            "SELECT DISTINCT ON (user_ids[1]) user_ids[1] AS uid, error_kind, token_hash FROM view_pull_runs "
+            "WHERE platform = 'meta' AND status <> 'running' ORDER BY user_ids[1], id DESC").fetchall()}
+        conn.commit()
+    out = {}
+    for user_id, token in tokens.items():
+        posts = [r for r in rows if r["user_id"] == user_id and view_pull.due(r, now)]
+        fp = view_pull.token_hash(token)
+        prev = last.get(user_id)
+        if not posts or (prev and prev["error_kind"] == "key" and prev["token_hash"] == fp):
+            continue
+        with db() as conn:
+            run_id = conn.execute("INSERT INTO view_pull_runs (platform, user_ids, posts, token_hash) "
+                                  "VALUES ('meta', %s, %s, %s) RETURNING id", ([user_id], len(posts), fp)).fetchone()["id"]
+            conn.commit()
+        updated, calls, kind, err = 0, 0, "transient", "interrupted"
+        try:
+            updated, calls, kind, err = _pull_meta_user(user_id, token, posts, now, http)
+        finally:
+            with db() as conn:
+                conn.execute(
+                    "UPDATE view_pull_runs SET status = %s, updated = %s, units = %s, error_kind = %s, error = %s, "
+                    "finished_at = NOW() WHERE id = %s",
+                    ("failed" if kind else "done", updated, calls, kind, err, run_id),
+                )
+                if kind == "key":
+                    chat = reminder_chat(conn, user_id)
+                    if chat and (os.getenv("TELEGRAM_BOT_TOKEN") or "").strip():
+                        conn.execute(
+                            "INSERT INTO telegram_sends (id, user_id, kind, chat_id, message, text) "
+                            "VALUES (%s, %s, 'note', %s, 'Note queued', %s)",
+                            (str(uuid.uuid4()), user_id, chat,
+                             f"⚠️ ClipFlow: Instagram/Facebook view counts stopped, Meta refused your token ({err}). "
+                             "Save a new one in Settings → Instagram & Facebook."),
+                        )
+                conn.commit()
+        log(f"View pull (meta): user {user_id}: {updated} updated, {calls} call(s){f', {kind}: {err}' if kind else ''}")
+        out[user_id] = {"updated": updated, "calls": calls, "error_kind": kind}
+    return out
+
+
 def maybe_pull_views():
     global _last_view_pass
     if time.time() - _last_view_pass < VIEW_PULL_EVERY_S:
         return
     _last_view_pass = time.time()
-    try:
-        pull_youtube_views()
-    except psycopg.errors.UndefinedTable:
-        return   # the backend hasn't migrated yet (189)
-    except Exception as exc:
-        log(f"View pull failed: {str(exc)[:200]}")
+    for name, pull in (("YouTube", pull_youtube_views), ("Meta", pull_meta_views)):   # one failing never stops the other
+        try:
+            pull()
+        except (psycopg.errors.UndefinedTable, psycopg.errors.UndefinedColumn):
+            return   # the backend hasn't migrated yet (189, 199)
+        except Exception as exc:
+            log(f"View pull ({name}) failed: {str(exc)[:200]}")
 
 
 if __name__ == "__main__":

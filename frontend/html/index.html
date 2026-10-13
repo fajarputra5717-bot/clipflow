@@ -3266,14 +3266,14 @@ const SETTINGS_GROUPS=[
   ["Clips & rendering",["CLIPS_PER_JOB","CLIP_TARGET_DURATION","CLIP_MIN_DURATION","CLIP_MAX_DURATION","PREVIEW_WIDTH","WATERMARK_WIDTH","WATERMARK_OPACITY","WATERMARK_POSITION_Y","SUBTITLE_SEAM_GAP","FULLFRAME_CAPTION_Y"]],
   ["YouTube",["YOUTUBE_API_KEY","VIEW_PULL_DAILY_UNITS","YOUTUBE_CLIENT_ID","YOUTUBE_CLIENT_SECRET","YOUTUBE_REFRESH_TOKEN"]],
   ["TikTok",["TIKTOK_CLIENT_KEY","TIKTOK_CLIENT_SECRET","TIKTOK_ACCESS_TOKEN"]],
-  ["Instagram",["INSTAGRAM_ACCESS_TOKEN","INSTAGRAM_BUSINESS_ACCOUNT_ID"]],
+  ["Instagram & Facebook",["META_ACCESS_TOKEN","INSTAGRAM_ACCESS_TOKEN","INSTAGRAM_BUSINESS_ACCOUNT_ID"]],
   ["Submagic",["SUBMAGIC_API_KEY","SUBMAGIC_TEMPLATE","SUBMAGIC_MAGIC_ZOOMS","SUBMAGIC_MAGIC_BROLLS"]],
   ["Subtitle defaults",["DEFAULT_SUBTITLE_STYLE","DEFAULT_SUBTITLE_FONT","DEFAULT_SUBTITLE_SIZE"]],
   ["Publishing",["HASHTAGS","CAMPAIGN_NAME"]],
   ["Storage",["DISK_SPACE_MIN_MB","RETENTION_DAYS_INTERMEDIATE","ORPHAN_SWEEP_DRY_RUN"]],
   ["Auto-import",["AUTO_IMPORT_INTERVAL_MIN"]]
 ];
-const SETTING_LABELS={WATERMARK_POSITION_Y:"Watermark height (% from top, new jobs)",SUBTITLE_SEAM_GAP:"Caption gap above facecam (%, new jobs)",FULLFRAME_CAPTION_Y:"Caption height, no-facecam clips (% from top)",DISK_SPACE_MIN_MB:"Disk reserve (MB)",AUTO_IMPORT_INTERVAL_MIN:"Check channels every (min)",YOUTUBE_API_KEY:"YouTube API key (view counts)",VIEW_PULL_DAILY_UNITS:"View pulls: max quota units a day",RETENTION_DAYS_INTERMEDIATE:"Keep downloads (days)",ORPHAN_SWEEP_DRY_RUN:"Orphan sweep dry run",GEMINI_API_KEY:"Gemini API key",GEMINI_ANALYSIS_MODEL:"Gemini model",GEMINI_MAX_ATTEMPTS:"Gemini attempts",WHISPER_MODEL:"Whisper model",WHISPER_LANGUAGE:"Fallback language",RUNWAY_API_KEY:"Runway API key",RUNWAY_MODEL:"Runway model",
+const SETTING_LABELS={WATERMARK_POSITION_Y:"Watermark height (% from top, new jobs)",SUBTITLE_SEAM_GAP:"Caption gap above facecam (%, new jobs)",FULLFRAME_CAPTION_Y:"Caption height, no-facecam clips (% from top)",DISK_SPACE_MIN_MB:"Disk reserve (MB)",AUTO_IMPORT_INTERVAL_MIN:"Check channels every (min)",YOUTUBE_API_KEY:"YouTube API key (view counts)",META_ACCESS_TOKEN:"Your Meta token (Instagram + Facebook view counts)",VIEW_PULL_DAILY_UNITS:"View pulls: max quota units a day",RETENTION_DAYS_INTERMEDIATE:"Keep downloads (days)",ORPHAN_SWEEP_DRY_RUN:"Orphan sweep dry run",GEMINI_API_KEY:"Gemini API key",GEMINI_ANALYSIS_MODEL:"Gemini model",GEMINI_MAX_ATTEMPTS:"Gemini attempts",WHISPER_MODEL:"Whisper model",WHISPER_LANGUAGE:"Fallback language",RUNWAY_API_KEY:"Runway API key",RUNWAY_MODEL:"Runway model",
   FACE_DETECTION_SAMPLE_COUNT:"Frames sampled",FACE_CONFIDENCE_THRESHOLD:"Confidence threshold",FACE_ZOOM_RATIO:"Facecam zoom",
   CLIPS_PER_JOB:"Clips per video (1–8, new jobs)",CLIP_TARGET_DURATION:"Target length (s)",CLIP_MIN_DURATION:"Minimum length (s)",CLIP_MAX_DURATION:"Maximum length (s)",PREVIEW_WIDTH:"Preview width (px)",WATERMARK_WIDTH:"Watermark width (px)",WATERMARK_OPACITY:"Watermark opacity",
   YOUTUBE_CLIENT_ID:"Client ID",YOUTUBE_CLIENT_SECRET:"Client secret",YOUTUBE_REFRESH_TOKEN:"Refresh token",TIKTOK_CLIENT_KEY:"Client key",TIKTOK_CLIENT_SECRET:"Client secret",TIKTOK_ACCESS_TOKEN:"Access token",
@@ -3373,11 +3373,13 @@ const PLATFORM_SHORT={youtube:"YouTube",instagram:"Reels",tiktok:"TikTok",facebo
 const ADVICE_BADGE={claim_now:["Claim now","completed"],wait:["Wait","idle"],missed:["Missed","failed"],claimed:["Claimed","attention"],unknown:["Check brief","idle"]};
 let claimOpen={};
 function fmtViews(n){return n==null?"—":Number(n).toLocaleString("id-ID")}
+const VIEWS_SOURCE_NAME={youtube:"YouTube",instagram:"Instagram",facebook:"Facebook"};
+function viewsSourceName(platform){return VIEWS_SOURCE_NAME[platform]||"the platform"}
 function postBlockHtml(r,k){
   const p=r.post,st=rowStatus(r);if(st==="ready"||st==="planned")return "";
   const a=p.advice,[al,ac]=a?(ADVICE_BADGE[a.action]||ADVICE_BADGE.unknown):[];
   const adv=a&&st==="posted"?`<div class="qadvice"><span class="badge ${ac}">${al}</span><span class="qadvice-msg">${esc(a.message)}</span>${a.deadline?`<small>claim by ${esc(fmtPostedAt(a.deadline))}</small>`:""}</div>`:"";
-  const views=`<div class="qviews">Views <b>${fmtViews(p.views)}</b>${p.views_at?` <span>as of ${esc(fmtPostedAt(p.views_at))}${p.views_source==="auto"?" · from YouTube":""}</span>`:" <span>not entered yet</span>"}${p.views_source==="auto"?` <span class="qviews-hint">Updated from YouTube automatically (also after a claim or payment); a number you type is replaced at the next pull.</span>`:""}${p.views_error?` <span class="qviews-err">${esc(p.views_error)}</span>`:""}
+  const views=`<div class="qviews">Views <b>${fmtViews(p.views)}</b>${p.views_at?` <span>as of ${esc(fmtPostedAt(p.views_at))}${p.views_source==="auto"?` · from ${esc(viewsSourceName(p.platform||r.platform))}`:""}</span>`:" <span>not entered yet</span>"}${p.views_source==="auto"?` <span class="qviews-hint">Updated from ${esc(viewsSourceName(p.platform||r.platform))} automatically (also after a claim or payment); a number you type is replaced at the next pull.</span>`:""}${p.views_error?` <span class="qviews-err">${esc(p.views_error)}</span>`:""}
     <form data-views-form="${esc(p.id)}" novalidate><input type="number" min="0" step="1" inputmode="numeric" aria-label="Current views" placeholder="Current views"><button class="secondary" type="submit">Save views</button></form></div>`;
   let money="";
   if(st==="claimed")money=`<div class="qmoney">Claimed at ${fmtViews(p.claimed_views)} views · expected <b>${esc(p.expected_fmt||"Rp ?")}</b></div>`;

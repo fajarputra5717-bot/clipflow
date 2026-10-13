@@ -258,3 +258,15 @@ test("189: YouTube views pulled automatically say so, and that a typed number ge
   await expect(r.locator(".qviews")).toContainText("from YouTube");
   await expect(r.locator(".qviews-hint")).toContainText("replaced at the next pull");
 });
+
+test("199: Instagram views pulled automatically name Instagram", async ({ app, api }) => {
+  api.publishGroups = [{ campaign: "fandra-octo", campaign_name: "Fandra", rows: [row({ campaign: "fandra-octo", platform: "instagram", platform_name: "Instagram Reels",
+    post: posted({ id: "p-i", platform: "instagram", account_handle: "fanig", url: "https://www.instagram.com/reel/ABCdef123/", views: 900,
+      views_at: new Date().toISOString(), views_source: "auto", views_error: null }) })] }];
+  await openPublish(app);
+  await app.click('[data-publish-filter="all"]');
+  await app.click('[data-chip="cand-a:instagram"]');
+  const r = app.locator('[data-publish-row="cand-a:instagram"]');
+  await expect(r.locator(".qviews")).toContainText("from Instagram");
+  await expect(r.locator(".qviews-hint")).toContainText("Updated from Instagram automatically");
+});

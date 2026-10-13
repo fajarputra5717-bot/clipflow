@@ -416,6 +416,10 @@ View pulls (P5 part 1, 189): `shared/view_pull.py` rules; worker `maybe_pull_vie
 views (videos.list, YOUTUBE_API_KEY in the `X-Goog-Api-Key` header, never a URL/log; cadence 6 h < 14 d, daily < 30 d, stop;
 ≤ VIEW_PULL_DAILY_UNITS per Pacific quota day, `view_pull_runs`). Writes exactly like a manual entry with source 'auto'
 (`clip_posts.views_source`, `clip_post_views.source`); a new platform's puller follows the same write path.
+Instagram + Facebook (199): `pull_meta_views()`, per user with their OWN `META_ACCESS_TOKEN` (USER_ONLY secret, never a
+global fallback): Pages + linked IG accounts → match posts by shortcode / reel id → insights; token in the header only,
+paging by `after` cursor (never `paging.next`); one `view_pull_runs` row per user (platform `meta`, `token_hash`: a
+refused token waits for a new one, one note to the user's own chat). YouTube's quota counts only `platform='youtube'`.
 Track (181): `GET /api/track` = `shared/track.py` (own posts → tiles, by campaign/platform, top clips; money only via
 payouts, pre-formatted), step `#track`. Reminders (148): service `sender` (`riftstorm-sender`, worker image `--telegram-only`) owns `telegram_sends` + 
 `queue_due_reminders()` (worker has `TELEGRAM_SENDER=separate`; without it the worker does both). One reminder per

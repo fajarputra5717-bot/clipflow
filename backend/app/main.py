@@ -602,6 +602,9 @@ def ensure_schema():
         )
         """,
         "CREATE INDEX IF NOT EXISTS idx_view_pull_runs_started ON view_pull_runs (started_at DESC)",
+        # P5 parts 2+3 (199): Instagram + Facebook pulls with the user's own META_ACCESS_TOKEN; one run row per user
+        # (platform 'meta'); token_hash = fingerprint so a refused token waits for a new one.
+        "ALTER TABLE view_pull_runs ADD COLUMN IF NOT EXISTS token_hash TEXT",
     ]
 
     try:
@@ -2836,7 +2839,7 @@ def list_activity(request: Request):
             for rid, platform, started in cur.fetchall():
                 items.append({"owner": None, "kind": "views", "id": f"views:{rid}", "job_id": None, "candidate_id": None,
                               "stage": "updating", "percent": None, "label": "Updating views…",
-                              "title": "YouTube" if platform == "youtube" else platform,
+                              "title": {"youtube": "YouTube", "meta": "Instagram & Facebook"}.get(platform, platform),
                               "updated_at": started.isoformat() if started else None})
     return {"items": items}
 

@@ -98,6 +98,8 @@ DEFAULT_SETTINGS = {
     # P5 part 1 (189): YouTube Data API v3 key for automatic view counts (videos.list, public statistics only).
     "YOUTUBE_API_KEY": "",
     "VIEW_PULL_DAILY_UNITS": "1000",
+    # P5 parts 2+3 (199): the user's OWN Meta token (Facebook Login, long-lived) for Instagram + Facebook view counts.
+    "META_ACCESS_TOKEN": "",
     # TIKTOK_* / INSTAGRAM_* have no consumer yet (no publisher code
     # in the baseline); kept so the UI fields stay saveable.
     "TIKTOK_CLIENT_KEY": "",
@@ -138,6 +140,7 @@ SECRET_SETTING_KEYS = {
     "YOUTUBE_CLIENT_SECRET",
     "YOUTUBE_REFRESH_TOKEN",
     "YOUTUBE_API_KEY",
+    "META_ACCESS_TOKEN",
     "TIKTOK_CLIENT_SECRET",
     "TIKTOK_ACCESS_TOKEN",
     "INSTAGRAM_ACCESS_TOKEN",
@@ -170,11 +173,12 @@ USER_SETTING_KEYS = {
     "HASHTAGS",
     "POSTING_TIMES",
     "REMINDER_LEAD_MIN",
+    "META_ACCESS_TOKEN",
 }
 
 # User-level keys with NO global fallback: the value names a row the user
 # owns (a watermark asset), so another user's value must never apply.
-USER_ONLY_KEYS = {"ACTIVE_WATERMARK_ID"}
+USER_ONLY_KEYS = {"ACTIVE_WATERMARK_ID", "META_ACCESS_TOKEN"}   # 199: a token reads ITS owner's accounts only
 
 
 def _present(value):
