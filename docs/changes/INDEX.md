@@ -170,3 +170,4 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 198 · 2026-10-13 · Auto-import limits API rejects unknown keys with 400 (Lane C Low) · shared/auto_import.py, main.py, tests
 199 · 2026-10-13 · P5 parts 2+3: automatic Instagram + Facebook view pulls with the user's own META_ACCESS_TOKEN · shared/view_pull.py, worker, main.py, settings, index.html
 200 · 2026-10-13 · Meta view pulls: per-metric FB retry, per-object permission errors stay per post, one user's crash never skips others (Lane C Lows on 199) · shared/view_pull.py, worker
+201 · 2026-10-13 · Merge lane-b a26b041: emoji from Noto Emoji (Apache 2.0, no on-video credit) + AI frames per style pack (on: Gaming Hype, Funny/Meme) · worker/assets, shared/style_packs.py, routes_editor.py
