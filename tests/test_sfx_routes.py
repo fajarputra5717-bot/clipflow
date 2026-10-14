@@ -71,7 +71,7 @@ class FreesoundClientTest(unittest.TestCase):
         self.assertEqual(params["query"], "laugh")
 
     def test_errors_never_echo_the_key(self):
-        for status, code in ((401, 503), (429, 429), (500, 502)):
+        for status, code in ((401, 409), (429, 429), (500, 424)):
             rs._cache.clear()
             with self.fake({"/search/text/": Resp(status, {})}), self.assertRaises(rs.HTTPException) as e:
                 rs.freesound_search(mock.Mock(), q="boom")
@@ -81,7 +81,7 @@ class FreesoundClientTest(unittest.TestCase):
     def test_no_key(self):
         with mock.patch.dict(os.environ, {"FREESOUND_API_KEY": ""}), self.assertRaises(rs.HTTPException) as e:
             rs.freesound_search(mock.Mock(), category="laugh")
-        self.assertEqual(e.exception.status_code, 503)
+        self.assertEqual(e.exception.status_code, 409)
 
     def test_save_rechecks_the_sound_itself(self):
         with self.fake({"/sounds/9/": Resp(200, snd(9, lic="http://creativecommons.org/licenses/by/4.0/"))}), \

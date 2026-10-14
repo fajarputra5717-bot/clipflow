@@ -4,7 +4,8 @@ Ownership (P1.5): rows are `sfx_assets` with user_id NOT NULL; every query filte
 user's sound answers 404 (main's guard SFX_PATH_RE also 404s /api/sfx/<uuid>… for rows that aren't the caller's).
 Files: DATA_ROOT/sfx/<user_id>/<id>.wav (relative path in the DB), served only through /api/sfx/<id>/file
 (MEDIA_PATH_RE). Freesound: key from env FREESOUND_API_KEY (Authorization header only, never a URL/log/response);
-previews stream through /api/sfx/freesound/<id>/preview so the browser never talks to Freesound.
+previews stream through /api/sfx/freesound/<id>/preview so the browser never talks to Freesound. Freesound trouble
+answers 409 (no/refused key) or 424 (Freesound failed), never 502/503: the frontend reads those as "ClipFlow is updating".
 
 Routes (all /api, behind the auth middleware):
   GET    /api/sfx                          categories (assigned sound, used by) + my sounds + freesound on/off
@@ -284,27 +285,27 @@ def _fs_key() -> str:
 def _fs_get(path: str, params: Optional[dict] = None) -> dict:
     key = _fs_key()
     if not key:
-        raise HTTPException(status_code=503, detail="Freesound isn't set up yet (FREESOUND_API_KEY)")
+        raise HTTPException(status_code=409, detail="Freesound isn't set up yet (FREESOUND_API_KEY)")
     try:
         r = requests.get(f"{lib.FREESOUND_API}{path}", params=params, timeout=FS_TIMEOUT,
                          headers={"Authorization": f"Token {key}"})
     except requests.RequestException as exc:
         print(f"[sfx] Freesound {path}: {type(exc).__name__}")
-        raise HTTPException(status_code=502, detail="Freesound didn't answer, try again")
+        raise HTTPException(status_code=424, detail="Freesound didn't answer, try again")
     if r.status_code == 404:
         raise HTTPException(status_code=404, detail="Sound not found on Freesound")
     if r.status_code in (401, 403):
         print(f"[sfx] Freesound refused the API key ({r.status_code})")
-        raise HTTPException(status_code=503, detail="Freesound refused the API key")
+        raise HTTPException(status_code=409, detail="Freesound refused the API key")
     if r.status_code == 429:
         raise HTTPException(status_code=429, detail="Freesound's limit is reached, try again later")
     if r.status_code != 200:
         print(f"[sfx] Freesound {path}: HTTP {r.status_code}")
-        raise HTTPException(status_code=502, detail="Freesound had a problem, try again")
+        raise HTTPException(status_code=424, detail="Freesound had a problem, try again")
     try:
         return r.json()
     except ValueError:
-        raise HTTPException(status_code=502, detail="Freesound sent an unreadable answer")
+        raise HTTPException(status_code=424, detail="Freesound sent an unreadable answer")
 
 
 def _fs_sound(fsid: int) -> dict:
@@ -349,11 +350,11 @@ def _fetch_preview(url: str) -> bytes:
         for chunk in r.iter_content(65536):
             buf += chunk
             if len(buf) > lib.PREVIEW_MAX_BYTES:
-                raise HTTPException(status_code=502, detail="Freesound preview is too large")
+                raise HTTPException(status_code=424, detail="Freesound preview is too large")
         return buf
     except requests.RequestException as exc:
         print(f"[sfx] preview fetch: {type(exc).__name__}")
-        raise HTTPException(status_code=502, detail="Couldn't load the preview, try again")
+        raise HTTPException(status_code=424, detail="Couldn't load the preview, try again")
 
 
 @router.get("/freesound/{fsid}/preview")
