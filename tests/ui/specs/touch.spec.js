@@ -188,3 +188,23 @@ for (const theme of ["dark", "light"]) {
     expect(bad).toEqual({});
   });
 }
+
+// UI phase 1 item 7: one accent. Every switch that is on uses the blue accent (it used to be green), on Auto-import and
+// in the Editor, both themes.
+test("switches that are on use the accent, not green", async ({ app, api }) => {
+  await seed(app, api);
+  const bad = [];
+  for (const theme of ["light", "dark"]) {
+    await app.evaluate((t) => window.applyTheme(t), theme);
+    for (const [name, go] of STEPS) {
+      await go(app); await app.waitForTimeout(500);
+      bad.push(...await app.evaluate(([n, t]) => {
+        const accent = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim(), probe = document.createElement("i");
+        probe.style.color = accent; document.body.append(probe); const want = getComputedStyle(probe).color; probe.remove();
+        return [...document.querySelectorAll('[role=switch][aria-checked="true"]')].filter((e) => e.offsetParent)
+          .map((e) => [e, getComputedStyle(e).backgroundColor]).filter(([, c]) => c !== want).map(([e, c]) => `${t} ${n} ${e.className} ${c} ≠ ${want}`);
+      }, [name, theme]));
+    }
+  }
+  expect(bad).toEqual([]);
+});
