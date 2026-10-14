@@ -36,6 +36,17 @@ class AIPermanentError(AIError):
     transient = False
 
 
+class AIProviderSkip(AITransientError):
+    """This provider can't take this request right now (Groq 429 rate limit, 413 too large, a request only it
+    rejects): the router moves to the next provider without counting a failure. retry_after (s) = how long to leave
+    it alone; final_transient = what the error means when no provider is left (429: try later; 413: never fits)."""
+
+    def __init__(self, message, *, provider=None, status=None, cause=None, retry_after=None, final_transient=True):
+        super().__init__(message, provider=provider, status=status, cause=cause)
+        self.retry_after = retry_after
+        self.final_transient = final_transient
+
+
 class AINotConfiguredError(AIPermanentError):
     """Provider has no API key. The router skips it instead of calling."""
 

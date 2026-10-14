@@ -9,11 +9,19 @@ One entry point for every AI call in backend and worker:
 shared.errors.AITransientError / AIPermanentError only.
 
 Failover policy (R-22):
-- Provider per task group, setting in {gemini, claude, auto}:
+- Provider per task group, setting in {gemini, groq, claude, auto}:
     CLIP_ANALYSIS_PROVIDER  -> hooks, new_hook
-    TEXT_UTILITY_PROVIDER   -> subtitle_fix, description
-  auto = Gemini first, Claude on transient errors. A provider without
-  an API key is skipped.
+    TEXT_UTILITY_PROVIDER   -> subtitle_fix, description (and any other task)
+  auto = Gemini -> Groq -> Claude (220), next one on transient errors. A
+  provider without an API key (or with a refused one) is skipped.
+- Up-front fit (220): a provider module may define accepts(); Groq says no
+  to calls with images and to prompts clearly over its per-request token
+  limit, so it is left out of the chain for that call (a forced provider
+  that can't take the call falls back to the auto chain, logged).
+- AIProviderSkip (Groq 429 rate limit / 413 too large): no retries, no
+  breaker failure; the provider is left alone for retry-after seconds and
+  the next one is tried. With no provider left: 429 -> transient (the job
+  retries later), 413 -> permanent.
 - Retries per provider with exponential backoff + jitter, capped at
   BACKOFF_CEILING_SECONDS. Single provider: GEMINI_MAX_ATTEMPTS
   attempts. auto: AUTO_ATTEMPTS_PER_PROVIDER, then fail over.
@@ -33,12 +41,19 @@ import random
 import threading
 import time
 
-from shared.errors import AIError, AINotConfiguredError, AITransientError
+from shared.errors import (
+    AIError,
+    AINotConfiguredError,
+    AIPermanentError,
+    AIProviderSkip,
+    AITransientError,
+)
 
-from . import claude, gemini
+from . import claude, gemini, groq
 
-PROVIDERS = {gemini.NAME: gemini, claude.NAME: claude}
-AUTO_ORDER = (gemini.NAME, claude.NAME)
+PROVIDERS = {gemini.NAME: gemini, groq.NAME: groq, claude.NAME: claude}
+AUTO_ORDER = (gemini.NAME, groq.NAME, claude.NAME)
+SKIP_PAUSE_CAP_SECONDS = 3600
 
 TASK_PROVIDER_SETTING = {
     "hooks": "CLIP_ANALYSIS_PROVIDER",
@@ -85,6 +100,12 @@ class _Breaker:
             self._failures[name] = 0
             self._open_until.pop(name, None)
 
+    def pause(self, name, seconds):
+        """Leave a provider alone for `seconds` (a 429's retry-after) without counting a failure."""
+        with self._lock:
+            until = time.monotonic() + max(0.0, min(seconds, SKIP_PAUSE_CAP_SECONDS))
+            self._open_until[name] = max(self._open_until.get(name, 0.0), until)
+
     def failure(self, name):
         with self._lock:
             count = self._failures.get(name, 0) + 1
@@ -122,8 +143,8 @@ def provider_health():
 def _policy(task):
     key = TASK_PROVIDER_SETTING.get(task, "TEXT_UTILITY_PROVIDER")
     value = str(_setting(key) or "auto").strip().lower()
-    if value not in ("gemini", "claude", "auto"):
-        _log(f"AI: {key}={value!r} is not gemini|claude|auto; using auto")
+    if value not in (*PROVIDERS, "auto"):
+        _log(f"AI: {key}={value!r} is not {'|'.join(PROVIDERS)}|auto; using auto")
         value = "auto"
     return value
 
@@ -135,13 +156,33 @@ def _int_setting(key, fallback):
         return fallback
 
 
-def _candidates(policy):
+def _fits(name, call):
+    """(True, "") unless the provider says up front it can't take this call."""
+    accepts = getattr(PROVIDERS[name], "accepts", None)
+    if not accepts or not call:
+        return True, ""
+    return accepts(call["prompt"], task=call["task"], max_tokens=call["max_tokens"],
+                   setting=_setting, images=call.get("images"))
+
+
+def _candidates(policy, call=None):
     if policy != "auto":
-        return [policy]
+        ok, why = _fits(policy, call)
+        if ok:
+            return [policy]
+        _log(f"AI: {policy} can't take task={call['task']} ({why}); using the auto chain without it")
     configured = [
         name for name in AUTO_ORDER
-        if PROVIDERS[name].is_configured(_setting)
+        if PROVIDERS[name].is_configured(_setting) and name != (policy if policy != "auto" else None)
     ]
+    fitting = []
+    for name in configured:
+        ok, why = _fits(name, call)
+        if ok:
+            fitting.append(name)
+        else:
+            _log(f"AI: skipping {name} for task={call['task']} up front: {why}")
+    configured = fitting or configured[:1] or []
     # Nothing configured: try the default so the caller gets the
     # provider's own "not configured" error.
     if not configured:
@@ -160,6 +201,26 @@ def _backoff(attempt):
 
 def ai_generate_json(prompt, schema, *, task, max_tokens, attempts=None,
                      with_meta=False, images=None):
+    """See _generate. A FORCED provider that answers AIProviderSkip (Groq 429/413: rate limit, too large; the
+    up-front check can't know the account limit before the first reply) falls back to the auto chain without it,
+    like an up-front skip (220)."""
+    try:
+        return _generate(prompt, schema, task=task, max_tokens=max_tokens, attempts=attempts,
+                         with_meta=with_meta, images=images)
+    except _ForcedSkip as skip:
+        _log(f"AI: forced {skip.name} can't take task={task} ({str(skip.error)[:140]}); using the auto chain without it")
+        return _generate(prompt, schema, task=task, max_tokens=max_tokens, attempts=attempts,
+                         with_meta=with_meta, images=images, exclude=skip.name)
+
+
+class _ForcedSkip(Exception):
+    def __init__(self, name, error):
+        super().__init__(str(error))
+        self.name, self.error = name, error
+
+
+def _generate(prompt, schema, *, task, max_tokens, attempts=None,
+              with_meta=False, images=None, exclude=None):
     """Parsed JSON; with_meta=True returns (data, meta) where meta =
     {"provider", "model", "failed_over", "usage"}. `attempts` overrides the
     per-provider attempt count (backend handlers pass 1 so a request
@@ -169,7 +230,12 @@ def ai_generate_json(prompt, schema, *, task, max_tokens, attempts=None,
         raise RuntimeError("shared.ai.router.configure() was not called")
 
     policy = _policy(task)
-    candidates = _candidates(policy)
+    forced = policy != "auto" and not exclude
+    if exclude:
+        policy = "auto"
+    candidates = _candidates(policy, {"prompt": prompt, "task": task, "max_tokens": max_tokens, "images": images})
+    if exclude:
+        candidates = [n for n in candidates if n != exclude] or [n for n in AUTO_ORDER if n != exclude][:1]
     per_provider = attempts or (
         AUTO_ATTEMPTS_PER_PROVIDER if policy == "auto"
         else _int_setting("GEMINI_MAX_ATTEMPTS", 4)
@@ -193,8 +259,25 @@ def ai_generate_json(prompt, schema, *, task, max_tokens, attempts=None,
                 )
             except AINotConfiguredError as exc:
                 last_error = exc
-                if policy != "auto":
+                if policy != "auto" and len(candidates) == 1:
                     raise
+                _log(f"AI: {name} not usable ({str(exc)[:120]}), next provider")
+                break
+            except AIProviderSkip as exc:
+                last_error = exc
+                if exc.retry_after:
+                    breaker.pause(name, exc.retry_after)
+                if is_last_provider and forced and len(candidates) == 1:
+                    raise _ForcedSkip(name, exc) from exc
+                if is_last_provider:
+                    _log(f"AI: {name} can't take task={task} and no provider is left: {str(exc)[:160]}")
+                    cls = AITransientError if exc.final_transient else AIPermanentError
+                    raise cls(str(exc), provider=name, status=exc.status, cause=exc) from exc
+                _log(
+                    f"AI: SKIP task={task} {name} -> {candidates[index + 1]}"
+                    f" ({exc.status or ''} {str(exc)[:160]})"
+                    + (f"; leaving {name} alone {exc.retry_after:.0f}s" if exc.retry_after else "")
+                )
                 break
             except AIError as exc:
                 last_error = exc

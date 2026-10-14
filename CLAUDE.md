@@ -313,9 +313,11 @@ Claude (`shared/ai/claude.py`) returns structured output via a strict
 tool; Sonnet 5.5 / Opus 5.5 reject forced `tool_choice`, so it forces
 only where the model accepts it. Claude model IDs live only in
 `DEFAULT_SETTINGS` (`CLAUDE_MODEL_ANALYSIS`, `CLAUDE_MODEL_UTILITY`).
-Failover (R-22): `CLIP_ANALYSIS_PROVIDER` / `TEXT_UTILITY_PROVIDER` ∈
-`gemini|claude|auto` (default auto = Gemini, then Claude on transient
-errors only). Circuit breaker 3 fails → 60 s, per process.
+Failover (R-22, 220): `CLIP_ANALYSIS_PROVIDER` / `TEXT_UTILITY_PROVIDER` ∈
+`gemini|groq|claude|auto` (default auto = Gemini → Groq → Claude, next on transient
+errors only). Circuit breaker 3 fails → 60 s, per process. Groq (`shared/ai/groq.py`, env-only GROQ_API_KEY):
+strict JSON schema; `accepts()` drops it up front for images or a prompt over its per-request token limit;
+429/413 raise `AIProviderSkip` = next provider, no breaker count (a new provider with hard quotas does the same).
 `clip_candidates.hook_provider` records who produced each hook — set
 it on any new hook-producing path (pass `with_meta=True`).
 Hook input (077): `select_hooks()` sends the WHOLE timed transcript (no cut) up to

@@ -6442,6 +6442,25 @@ def get_candidate_thumbnail(
 # APP SETTINGS
 # ============================================================
 
+# 220: Settings → AI & transcription shows the provider chain and who produced the caller's latest hooks.
+@app.get("/api/ai/status")
+def ai_status(request: Request):
+    user = current_user(request)
+    health = ai_router.provider_health()
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT c.hook_provider, c.created_at FROM clip_candidates c JOIN jobs j ON j.id = c.job_id "
+            "WHERE j.user_id = %s AND c.hook_provider IS NOT NULL ORDER BY c.created_at DESC LIMIT 1",
+            (user["id"],),
+        ).fetchone()
+    return {
+        "order": [{"name": n, "configured": health[n]["configured"]} for n in ai_router.AUTO_ORDER],
+        "analysis": str(runtime_setting("CLIP_ANALYSIS_PROVIDER") or "auto"),
+        "utility": str(runtime_setting("TEXT_UTILITY_PROVIDER") or "auto"),
+        "last_hooks": {"provider": row[0], "at": row[1].isoformat() if row[1] else None} if row else None,
+    }
+
+
 @app.get("/api/settings")
 def get_settings(request: Request):
     # P1.5: members get only the user-level keys (their own effective
@@ -6566,6 +6585,12 @@ def update_settings(req: SettingsUpdate, request: Request):
     v = str(req.values.get("REMINDER_LEAD_MIN") or "").strip()
     if v and (not v.isdigit() or not 0 <= int(v) <= 120):
         raise HTTPException(status_code=400, detail="Reminder lead must be a whole number of minutes from 0 to 120")
+    for key in ("CLIP_ANALYSIS_PROVIDER", "TEXT_UTILITY_PROVIDER"):   # 220
+        v = str(req.values.get(key) or "").strip().lower()
+        if v and v not in ("auto", *ai_router.PROVIDERS):
+            raise HTTPException(status_code=400, detail=f"{key} must be auto, {', '.join(ai_router.PROVIDERS)}")
+        if v:
+            req.values[key] = v
     if str(req.values.get("POSTING_TIMES") or "").strip():
         # P2.5 S1: stored normalised ({platform: sorted "HH:MM"} WIB); "" = back to the default.
         try:
