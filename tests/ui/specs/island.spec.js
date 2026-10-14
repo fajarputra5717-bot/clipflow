@@ -54,8 +54,7 @@ test.describe("Island progress mark", () => {
 // wide enough for "<verb> <subject>", never over the logo or the menu (incl. the "+N" split).
 test("phone: title uses the bar when idle; the island takes the middle without overlapping logo/menu", async ({ app, api }) => {
   test.skip(test.info().project.name !== "mobile", "phone layout");
-  const w = await app.evaluate(() => { const e = document.getElementById("pageContext"); e.textContent = "IME Roleplay X Motion Klip · a long job title"; return e.getBoundingClientRect().width; });
-  expect(w).toBeGreaterThan(200);
+  await expect(app.locator("#pageContext")).toBeHidden();   // UI phase 1 item 4: the top bar repeats no title
   api.current = [job({ id: "run-1", status: "transcribing", progress: 40, source_title: "Fandra main Minecraft hardcore" }),
                  job({ id: "run-2", status: "queued", progress: 0, source_title: "Second" })];
   await expect(app.locator("#islandMore")).toBeVisible({ timeout: 8_000 });

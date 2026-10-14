@@ -1732,7 +1732,7 @@ body:has(#editorSection:not(.hidden)) .ed-foot{bottom:calc(var(--dock-h) + var(-
   <header class="appbar" id="toolbar">
     <a class="appbar-brand" href="#" data-nav-home aria-label="ClipFlow home"><img class="brand-mark" src="clipflow-mark.svg" alt="" width="28" height="28"></a>
     <h1 class="sr-only" id="pageTitle">Analyze</h1>
-    <span class="appbar-context" id="pageContext"></span>
+    <span class="appbar-context" id="pageContext" hidden></span>
     <div class="toolbar-trail">
       <button class="icon-btn appbar-wide" type="button" data-nav="watermarks" aria-haspopup="dialog" aria-controls="watermarkSheet" aria-label="Watermarks" title="Watermarks"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="3"/><path d="m3.5 15.5 4.5-4.5 4 4"/><path d="M14.5 16h3"/></svg></button>
       <button class="icon-btn appbar-wide" type="button" data-nav="settings" aria-haspopup="dialog" aria-controls="settingsSheet" aria-label="Settings" title="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
@@ -3246,7 +3246,7 @@ async function refreshRunningJobs(){
 function startJobMonitor(){if(jobMonitorTimer)clearInterval(jobMonitorTimer);refreshRunningJobs();jobMonitorTimer=setInterval(refreshRunningJobs,POLL_INTERVAL)}
 function stopJobMonitor(){if(jobMonitorTimer){clearInterval(jobMonitorTimer);jobMonitorTimer=null}}
 
-function syncPageTitle(){const t=$("pageTitle");if(t)t.textContent=editorOpen()?"Editor":currentTab==="queue"?"Review":currentTab==="publish"?"Publish":currentTab==="schedule"?"Schedule":currentTab==="campaign"?"Campaign":currentTab==="track"?"Track":currentTab==="import"?"Auto-import":"Analyze";syncPageContext()}
+function syncPageTitle(){const t=$("pageTitle");if(t)t.textContent=editorOpen()?"Editor":currentTab==="queue"?"Review":currentTab==="publish"?"Publish":currentTab==="schedule"?"Schedule":currentTab==="campaign"?"Campaign":currentTab==="track"?"Track":currentTab==="import"?"Auto-import":"Analyze"}
 
 // Switching views while scrolled keeps the large title collapsed and puts the new section's top right
 // under the toolbar (instead of leaving it wherever the old view was scrolled to).
@@ -4373,25 +4373,15 @@ const TITLE_RANGE=48;
   apply();
 })();
 
-// 168: page context in the top bar = what the open page is about (campaign / job title), read from what's on screen
-// so lane-b's pages need no hook. rAF-throttled observer on <main>; text only changes when it differs.
-function pageContextText(){
-  const vis=id=>{const el=$(id);return el&&!el.hidden&&!el.classList.contains("hidden")?el:null};
-  const ed=vis("editorSection");if(ed){const t=ed.querySelector(".ed-eyebrow")?.textContent||"";return t.replace(/^Editor\s*·\s*/,"").trim()}
-  const rv=vis("reviewSection");if(rv)return rv.querySelector(".rv-title")?.textContent.trim()||"";
-  if(currentTab==="campaign")return campaignNew?"New campaign":campaignOpen?(campaignDetail?.name||""):"";
-  return "";
-}
-function syncPageContext(){const el=$("pageContext");if(!el)return;const t=pageContextText()||$("pageTitle")?.textContent||"";if(el.textContent!==t){el.textContent=t;el.title=t}}
-(function(){let q=false;const m=document.querySelector("main");if(!m||!window.MutationObserver)return;
-  new MutationObserver(()=>{if(q)return;q=true;requestAnimationFrame(()=>{q=false;syncPageContext()})}).observe(m,{childList:true,subtree:true,attributes:true,attributeFilter:["hidden","class"]})})();
+// UI phase 1 item 4: one title per page = the page's own heading; the top bar no longer repeats it (#pageContext
+// stays hidden in the markup, #pageTitle is the sr-only h1).
 // ---- Sidebar navigation + sheets (068) ----
 let openSheetId=null,sheetOpener=null;
 function selectedNav(){return openSheetId==="settingsSheet"||openSheetId==="sfxSheet"?"settings":openSheetId==="watermarkSheet"?"watermarks":currentTab}
 function syncNav(){
   const sel=selectedNav();
   document.querySelectorAll("[data-nav]").forEach(b=>{if(b.dataset.nav===sel)b.setAttribute("aria-current",b.dataset.nav==="current"||b.dataset.nav==="queue"||b.dataset.nav==="publish"||b.dataset.nav==="schedule"||b.dataset.nav==="campaign"||b.dataset.nav==="track"||b.dataset.nav==="import"?"page":"true");else b.removeAttribute("aria-current")});
-  renderFlow();syncPageTitle();syncPageContext();
+  renderFlow();syncPageTitle();
 }
 // UI shell (P1 task 0): the flow-preview stepper IS the top-level navigation. Analyze = the Import view,
 // Review = the job list/detail, Editor = the open clip's edit drawer; steps not built yet are disabled

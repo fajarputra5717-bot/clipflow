@@ -25,3 +25,15 @@ test.describe("UI shell stepper", () => {
     await expect(app.locator("#settingsSheet")).toHaveClass(/open/);
   });
 });
+
+// UI phase 1 item 4: one title per page. The top bar shows no page name; each page's own heading is the title.
+test("top bar repeats no page title; every page shows its own heading", async ({ app }) => {
+  for (const [go, heading] of [[() => window.showTab("schedule"), "#scheduleSection"], [() => window.showTab("campaign"), "#campaignSection"],
+                                 [() => { location.hash = "#track"; }, "#trackSection"], [() => window.showTab("current"), "#currentSection"]]) {
+    await app.evaluate(go);
+    await app.waitForTimeout(400);
+    await expect(app.locator("#pageContext")).toBeHidden();
+    expect(await app.evaluate(() => [...document.querySelectorAll("#toolbar *")].filter((e) => !e.closest(".sr-only") && e.checkVisibility({ visibilityProperty: true, opacityProperty: true }) && !e.children.length).map((e) => e.textContent.trim()).join(" "))).not.toMatch(/Schedule|Campaign|Track|Analyze/);   // sr-only #pageTitle stays
+    await expect(app.locator(`${heading} :is(h1,h2,h3)`).first()).toBeVisible();
+  }
+});
