@@ -74,6 +74,24 @@ def stopwords_for(code):
     return STOPWORDS.get(code, STOPWORDS[DEFAULT])
 
 
+# Keyword highlighting (owner 2026-10-14): clips mix Indonesian and English, so suggestions and the AI auto-pick skip
+# BOTH stoplists plus these spoken fillers/particles, whatever the clip's language. Lower-case tokens.
+KEYWORD_FILLERS = frozenset("""
+    si ah eh ih uh oh em emm hmm hm ehm eee aa aaa nah tuh tu ni kek kayaknya gini gimana emang udah udh
+    nggak enggak ngga ngak gk tak trus abis habis mo biar bikin bilang kalian gw gwe loe elo ane ente
+    bang bro sis mas mbak bapak ibu pak bu dek om tante cuy coy bray gan sob guys gaes
+    yaudah yaa yah yeh yup yep nope hey hi hello um uhm er erm
+""".split())
+
+
+def keyword_stopwords() -> frozenset:
+    """Words never suggested or auto-highlighted as caption keywords: id + en stoplists + KEYWORD_FILLERS."""
+    out = KEYWORD_FILLERS
+    for words in STOPWORDS.values():
+        out = out | words
+    return out
+
+
 # ---- filler words (P4 task 5b, lane B): SUGGESTIONS in the editor timeline, never auto-cut.
 # Each filler is a sequence of token patterns (regex, full match on the lower-cased word with
 # punctuation stripped), so stretched forms ("emmm", "eeeh") and multi-word fillers match.

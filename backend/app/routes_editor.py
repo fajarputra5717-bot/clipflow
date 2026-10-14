@@ -158,6 +158,7 @@ def _captions_state(c: dict, spec: dict) -> dict:
         "style": style, "animation": o_anim or job_anim,
         "caption_y": spec.get("caption_y"), "auto_caption_y": c.get("auto_caption_y", 78.0),
         "keywords": list(spec.get("keywords") or []), "keyword_color": spec.get("keyword_color"),
+        "stopwords": sorted(languages.keyword_stopwords()),   # never offered as keyword chips (owner 2026-10-14)
         "auto_keyword_color": caption_options.auto_keyword_color(style),
         "transcript": c.get("subtitle_text") or "", "override": override,
         "text": override or (c.get("subtitle_text") or ""),

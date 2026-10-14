@@ -19,3 +19,8 @@
    includes the staging banner.
 6. Review bug found on the way: a clip load that failed after the user left Review wrote to the removed `#rvBody`
    (page error "Cannot set properties of null"). It now writes only while Review is open. No visual change.
+7. Keyword highlight: `shared/languages.keyword_stopwords()` = id + en stoplists + `KEYWORD_FILLERS` (spoken
+   particles: si, ah, eh, nggak, udah, bang, guys…), whatever the clip's language. The worker's AI auto-pick
+   (`pick_keywords`) skips it; the Editor state sends it (`captions.stopwords`) and the chips never offer those words
+   (a highlighted one still shows, to remove it). Chips are ranked: highlighted, then numbers, repeated words and longer
+   words, ties in reading order; the order holds until the caption text changes (no jumping while you tap).

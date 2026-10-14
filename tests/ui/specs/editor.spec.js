@@ -558,6 +558,18 @@ test.describe("Editor Captions tab", () => {
     }
   });
 
+  test("keyword chips: filler/stopwords never offered; ranked highlighted → numbers → repeated/longer → reading order", async ({ app, api }) => {
+    await mockEditor(app, api);
+    Object.assign(api.editor.captions, { text: "YANG SI KEKUATAN HITAM 2026 ITU KEKUATAN polisi ya", transcript: "YANG SI KEKUATAN HITAM 2026 ITU KEKUATAN polisi ya",
+      keywords: ["kekuatan"], stopwords: ["itu", "si", "ya", "yang"] });
+    await app.evaluate(() => { location.hash = "#editor/job-done/cand-a"; });
+    await expect(app.locator("[data-ed-kw]").first()).toBeVisible();
+    await expect(app.locator("[data-ed-kw]")).toHaveText(["KEKUATAN", "2026", "HITAM", "POLISI"]);
+    await app.locator('[data-ed-kw="hitam"]').click();                   // toggling never reorders
+    await app.locator('[data-ed-kw-color]').nth(1).click();              // nor does a repaint
+    await expect(app.locator("[data-ed-kw]")).toHaveText(["KEKUATAN", "2026", "HITAM", "POLISI"]);
+  });
+
   test("preset is this clip's own; equal to the job's clears it; untouched keywords aren't sent", async ({ app, api }) => {
     await openEd(app, api);
     await expect(app.locator('[data-ed-preset="karaoke"]')).toHaveAttribute("aria-pressed", "true");

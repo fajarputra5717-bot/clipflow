@@ -5933,7 +5933,7 @@ def pick_keywords(candidate_id, job, candidate, clip_segments):
     if not text:
         return
     lang = languages.job_language(job.get("effective_language"), job.get("language"))
-    stop = set(languages.stopwords_for(lang))
+    stop = set(languages.keyword_stopwords())        # owner 2026-10-14: id + en + spoken fillers, whatever the language
     # 119: never highlight a word the content-safety check quoted.
     safety = candidate.get("safety_check") if isinstance(candidate.get("safety_check"), dict) else {}
     for f in safety.get("flags") or []:
