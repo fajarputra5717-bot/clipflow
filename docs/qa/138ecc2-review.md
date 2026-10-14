@@ -26,3 +26,11 @@ Git-served 138ecc2, specs dock, scale, shell, account, touch, island, review (de
 Before/after screenshots (Lane A has the "before"; mine are after-only, in my scratchpad), real-hardware frame rates, the no-`backdrop-filter` browser path, Safari, and the Auto-import switch in its real on state.
 
 Merge: OK for 138ecc2 and 4b78963 (Lows only; the 0-dropped-frames target is unmet on desktop page switches in software rendering).
+
+## Addendum: 440d373 + 0d6dc45 (live on staging) — closed
+- **0d6dc45 intros:** at 390 every page intro is one line (Campaign, Import, Analyze, Review, Schedule, Publish, Track all 1.0–1.1 lines). Low left: at 360 px Campaign, Analyze and Publish still wrap to 2 lines (Import, Review, Schedule, Track are one line).
+- **0d6dc45 info text:** Esc closes an open info text (aria-expanded true → false) and focus returns to the info button, at 1280 and 390; no sheet closed by the same Esc. Analyze keeps no info button on purpose.
+- **0d6dc45 dock fallback:** Lane A's explanation (my git-served copy had no /ui mount) is plausible; live staging always measured 24 px.
+- **440d373:** at 900–1279 px wide the Render preview button sits in the inspector column (x ≥ inspector x), the video keeps its height: 1024×768 video 184×327 (was 129×230), 900×800 202×359, 1100×800 and 1279×800 221×392; at 1280×800, 1440×900 and 1280×700 the bar stays under the video as before (221×392, 256×455, 194×344). No page scroll and no horizontal overflow at any of the 7 sizes, 0 page errors.
+
+Merge: OK for 440d373 and 0d6dc45; phase 1 (c59929e..0d6dc45) is Merge OK from me.
