@@ -23,3 +23,10 @@ Fresh e2e (tests/qa/e2e) 10/10 PASS on this build (docs/qa/e2e-run-2026-10-14-b.
 Posted/planned labels on a real single-platform Facebook/Threads/X post (unit-checked: all names OK); the issues list for a campaign other than ime-roleplay; keyword ranking beyond highlighted-first (my "MIK" word, 11 uses, ranks below "TURUN" (5): I could not tell if that is the "repeated/longer" rule).
 
 Merge: OK for 5a58a03..411d4cf.
+
+## Addendum: 377eb22 (both Lows) — closed
+- Overdue: the clip with a posted + a PAST planned post now reads "Posted on 3 platforms · next Wed 7 Oct 19:00 (overdue)".
+- Issues in full: clips with 1 or 2 issues show every issue unclamped (no cut text); a clip with 3 issues shows 2 and a "+1 more" button (`data-rv-issues-more`: 56×24 px on desktop, 56×44 on phone); tapping it reveals the third in full (3 shown, button gone, no clipped text, no horizontal overflow) at 1280×900 light and 390×844 dark; 0 page errors.
+- Low (new, minor): after the "+N more" button removes itself, keyboard focus falls to `<body>` (the button is deleted): move focus to the first revealed issue or keep the button as a "show fewer" toggle.
+
+Merge: OK for 377eb22; the whole Phase 2 Lane B set (5a58a03..377eb22) is Merge OK.
