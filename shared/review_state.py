@@ -55,7 +55,8 @@ def earn_state(rules, model, posts, now: datetime):
 
 
 # Review (owner 2026-10-14): a finished clip shows where it stands instead of a disabled Approve button.
-PLATFORM_NAMES = {"tiktok": "TikTok", "instagram": "Instagram", "youtube": "YouTube", "facebook": "Facebook"}
+PLATFORM_NAMES = {"tiktok": "TikTok", "instagram": "Instagram", "youtube": "YouTube", "facebook": "Facebook",
+                  "threads": "Threads", "x": "X"}   # every posts.PLATFORM_HOSTS key
 APPROVED = ("render_queued", "rendering", "completed")
 
 
