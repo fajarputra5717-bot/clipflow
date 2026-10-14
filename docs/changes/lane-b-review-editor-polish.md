@@ -24,3 +24,8 @@
    (`pick_keywords`) skips it; the Editor state sends it (`captions.stopwords`) and the chips never offer those words
    (a highlighted one still shows, to remove it). Chips are ranked: highlighted, then numbers, repeated words and longer
    words, ties in reading order; the order holds until the caption text changes (no jumping while you tap).
+8. Sound effects sheet (Lane A's 217 code in index.html, agreed with Lane A): every sound shows its licence
+   (`sfxLicence()`: Freesound CC0 deed → "CC0", uploads → "Your upload · your own rights", built-in defaults "· CC0");
+   the "Use for …" select is no longer capped at 150 px ("Use for Record scratch" was cut); on phones the row's
+   buttons wrap instead of widening the sheet. index.html hunks: `.sfx-row select` CSS (+1 phone rule), new
+   `sfxLicence()` before `renderSfx()`, two lines inside `renderSfx()`.
