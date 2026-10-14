@@ -113,3 +113,45 @@ def build(posts: list[dict], rules_for: Callable[[str], Optional[dict]], **rate)
         } for r in top],
         "skipped_currencies": skipped,
     }
+
+
+# --------------------------------------------------------------------------- views per day (UI phase 2, owner 2026-10-14)
+# Track's 30-day line chart. Input = the caller's own clip_post_views snapshots [(post_id, at (aware datetime), views)].
+# Per post: the highest count recorded by the end of each WIB day, carried forward; the day's new views = that minus
+# the previous day's (never negative: a lower manual correction doesn't count as "lost" views). Summed per day.
+
+from datetime import date as _date, datetime as _datetime, timedelta as _timedelta, timezone as _timezone
+
+WIB = _timezone(_timedelta(hours=7))
+DAILY_DAYS = 30
+
+
+def daily_views(history, today: Optional[_date] = None, days: int = DAILY_DAYS) -> dict:
+    """{days: [{date, views, views_fmt}] oldest first, total, total_fmt, max} for the last `days` WIB days."""
+    today = today or _datetime.now(WIB).date()
+    first = today - _timedelta(days=days - 1)
+    by_post: dict = {}
+    for post_id, at, views in history or []:
+        if at is None or views is None:
+            continue
+        day = at.astimezone(WIB).date()
+        d = by_post.setdefault(post_id, {})
+        d[day] = max(d.get(day, 0), int(views))
+    totals = [0] * days
+    for snaps in by_post.values():
+        best, prev = 0, None
+        for day in sorted(k for k in snaps if k < first):       # the baseline before the window
+            best = max(best, snaps[day])
+        prev = best if any(k < first for k in snaps) else None
+        for i in range(days):
+            day = first + _timedelta(days=i)
+            if day in snaps:
+                best = max(best, snaps[day])
+            if prev is not None:
+                totals[i] += max(0, best - prev)
+            elif day in snaps:
+                totals[i] += best                                   # the post's first count = its views so far
+            prev = best if (prev is not None or day in snaps) else None
+    out = [{"date": (first + _timedelta(days=i)).isoformat(), "views": v, "views_fmt": fmt_views(v)} for i, v in enumerate(totals)]
+    total = sum(totals)
+    return {"days": out, "total": total, "total_fmt": fmt_views(total), "max": max(totals) if totals else 0}

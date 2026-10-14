@@ -1667,9 +1667,18 @@ body:has(#editorSection:not(.hidden)) .ed-foot{bottom:calc(var(--dock-h) + var(-
 .tr-k{font-size:var(--fs-small);color:var(--muted);font-weight:600}
 .tr-v{font:700 var(--fs-h1)/1.2 var(--font-display);margin-top:2px;overflow-wrap:anywhere}
 .tr-s{font-size:var(--fs-small);color:var(--muted)}
-.tr-table{display:grid;font-size:var(--fs-base)}
-.tr-row{display:grid;grid-template-columns:minmax(0,2fr) repeat(4,minmax(0,1fr));gap:var(--s-2);padding:6px 0;border-top:1px solid var(--line);align-items:center}
-.tr-row span:not(.tr-name){text-align:right;font-variant-numeric:tabular-nums}
+/* phase 2: one set of columns for header + rows (subgrid), names left, numbers right, amounts never wrap */
+.tr-table{display:grid;grid-template-columns:minmax(0,1fr) repeat(4,max-content);column-gap:var(--s-3);font-size:var(--fs-base)}
+.tr-row{display:grid;grid-template-columns:subgrid;grid-column:1/-1;padding:6px 0;border-top:1px solid var(--line);align-items:center}
+.tr-row span:not(.tr-name){text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.tr-chart{margin-top:var(--s-3)}
+.tr-chart svg{display:block;width:100%;height:170px;overflow:visible}
+.tr-chart .tc-line{fill:none;stroke:var(--accent);stroke-width:2.5;stroke-linejoin:round;stroke-linecap:round;vector-effect:non-scaling-stroke}
+.tr-chart .tc-area{fill:var(--accent);opacity:.12}
+.tr-chart .tc-grid{stroke:var(--line);stroke-width:1;vector-effect:non-scaling-stroke}
+.tr-chart .tc-axis{display:flex;justify-content:space-between;font-size:var(--fs-small);color:var(--muted);margin-top:6px;font-variant-numeric:tabular-nums}
+.tr-chart .tc-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.tr-chart .tc-head b{font-size:var(--fs-h2);font-variant-numeric:tabular-nums}
 .tr-head{border-top:0;font-size:var(--fs-small);color:var(--muted);font-weight:600}
 .tr-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tr-top{list-style:none;margin:0;padding:0;display:grid}
@@ -1681,7 +1690,10 @@ body:has(#editorSection:not(.hidden)) .ed-foot{bottom:calc(var(--dock-h) + var(-
 .tr-amt{grid-column:2;grid-row:2;text-align:right;font-size:var(--fs-small)}
 .tr-amt small{color:var(--muted)}
 @media(max-width:900px){.tr-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media(max-width:600px){.tr-row{grid-template-columns:minmax(0,1.4fr) repeat(4,minmax(0,1fr));font-size:var(--fs-small)}}
+@media(max-width:600px){   /* phones: the name gets its own line, the four numbers share the row under it */
+  .tr-table{grid-template-columns:repeat(4,minmax(0,max-content));justify-content:space-between;column-gap:var(--s-2);font-size:var(--fs-small)}
+  .tr-row .tr-name{grid-column:1/-1;text-align:left;font-weight:600;font-size:var(--fs-base);white-space:normal}
+  .tr-head .tr-name{display:none}}
 /* 183: Auto-import */
 .ai-camp+.ai-camp{margin-top:var(--s-3)}
 .ai-camp .row{display:flex;align-items:center;gap:var(--s-2);flex-wrap:wrap}
@@ -4624,8 +4636,22 @@ async function loadTrack(){
 function trackTable(title,rows,first){
   if(!rows.length)return "";
   return `<section class="cd-box tr-box"><h3>${esc(title)}</h3><div class="tr-table" role="table" aria-label="${esc(title)}">
-    <div class="tr-row tr-head" role="row"><span role="columnheader">${esc(first)}</span><span role="columnheader">Posts</span><span role="columnheader">Views</span><span role="columnheader">Expected</span><span role="columnheader">Paid</span></div>
+    <div class="tr-row tr-head" role="row"><span role="columnheader" class="tr-name">${esc(first)}</span><span role="columnheader">Posts</span><span role="columnheader">Views</span><span role="columnheader">Expected</span><span role="columnheader">Paid</span></div>
     ${rows.map(r=>`<div class="tr-row" role="row"><span role="cell" class="tr-name">${esc(r.name)}</span><span role="cell">${esc(r.posts)}</span><span role="cell">${esc(r.views_fmt)}</span><span role="cell">${esc(r.expected_fmt)}</span><span role="cell">${esc(r.paid_fmt)}</span></div>`).join("")}</div></section>`;
+}
+// phase 2 (owner 2026-10-14): views per day, last 30 days = GET /api/track .daily (shared/track.daily_views). Plain SVG
+// line + area (no chart library); role=img with a spoken summary; dates are WIB days from the server.
+function trackChartHtml(daily){
+  const days=daily?.days||[];if(!days.length)return "";
+  const W=600,H=160,max=Math.max(1,daily.max||0),n=days.length,x=i=>n<2?0:(i/(n-1))*W,y=v=>H-(v/max)*(H-8);
+  const pts=days.map((d,i)=>`${x(i).toFixed(1)},${y(d.views).toFixed(1)}`).join(" ");
+  const peak=days.reduce((a,d)=>d.views>a.views?d:a,days[0]),dm=s=>{const [Y,M,D]=s.split("-").map(Number);return new Date(Date.UTC(Y,M-1,D)).toLocaleDateString("en-GB",{day:"numeric",month:"short",timeZone:"UTC"})};
+  const label=`Views per day, last ${n} days: ${daily.total_fmt} in total${peak.views?`, most on ${dm(peak.date)} (${peak.views_fmt})`:""}.`;
+  return `<section class="cd-box tr-box tr-chart"><div class="tc-head"><h3>Views per day · last ${n} days</h3><b>${esc(daily.total_fmt)}</b></div>
+    <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="${esc(label)}"><title>${esc(label)}</title>
+      <line class="tc-grid" x1="0" y1="${H}" x2="${W}" y2="${H}"/><line class="tc-grid" x1="0" y1="${y(max).toFixed(1)}" x2="${W}" y2="${y(max).toFixed(1)}"/>
+      <polygon class="tc-area" points="0,${H} ${pts} ${W},${H}"/><polyline class="tc-line" points="${pts}"/></svg>
+    <div class="tc-axis" aria-hidden="true"><span>${esc(dm(days[0].date))}</span><span>peak ${esc(peak.views_fmt)}</span><span>${esc(dm(days[n-1].date))}</span></div></section>`;
 }
 function renderTrack(){
   const d=trackData||{},t=d.tiles||{};
@@ -4640,10 +4666,11 @@ function renderTrack(){
       ${tile("At cap",String(t.at_cap),"posts earning the max")}
     </div>
     ${(d.skipped_currencies||[]).length?`<p class="camp-detail">Not in the totals (no exchange rate): ${esc(d.skipped_currencies.join(", "))}</p>`:""}
+    ${trackChartHtml(d.daily)}
     <div class="cd-grid">${trackTable("By campaign",d.campaigns||[],"Campaign")}${trackTable("By platform",d.platforms||[],"Platform")}</div>
-    <section class="cd-box tr-box" style="margin-top:var(--s-3)"><h3>Top clips by views</h3><ol class="tr-top">
+    ${(d.top||[]).length?`<section class="cd-box tr-box" style="margin-top:var(--s-3)"><h3>Top clips by views</h3><ol class="tr-top">
       ${(d.top||[]).map(c=>`<li><span class="tr-title">${esc(c.title)}</span><span class="tr-meta"><span class="pchip">${PLATFORM_ICON[c.platform]||""}${esc(PLATFORM_SHORT[c.platform]||c.platform_name)}</span>${c.campaign_name?` · ${esc(c.campaign_name)}`:""}</span>
-        <span class="tr-num">${esc(c.views_fmt)} views</span><span class="tr-amt">${esc(c.amount_fmt)} <small>${esc(state[c.amount_state]||"")}</small>${c.at_cap?` <span class="badge completed">At cap</span>`:""}</span></li>`).join("")}</ol></section>`;
+        <span class="tr-num">${esc(c.views_fmt)} views</span><span class="tr-amt">${esc(c.amount_fmt)} <small>${esc(state[c.amount_state]||"")}</small>${c.at_cap?` <span class="badge completed">At cap</span>`:""}</span></li>`).join("")}</ol></section>`:""}`;
 }
 // ---- 183 (P3 part 7): Auto-import = GET /api/auto-import: per visible campaign its source channels with a watch
 // switch (PUT /api/auto-import/watch), + recent imports. Checks run in the worker and show in the island.
