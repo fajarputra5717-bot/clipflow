@@ -51,3 +51,42 @@ class TrackTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DailyViewsTest(unittest.TestCase):   # UI phase 2: Track's views-per-day chart
+    def at(self, day, hour=12):
+        from datetime import datetime, timedelta, timezone
+        return datetime(2026, 10, day, hour, tzinfo=timezone(timedelta(hours=7)))
+
+    def test_deltas_per_day_carried_forward(self):
+        from datetime import date
+        from shared import track
+        h = [("p1", self.at(10), 100), ("p1", self.at(10, 20), 150), ("p1", self.at(12), 400),   # first count = 150 on the 10th
+             ("p2", self.at(1), 50), ("p2", self.at(11), 80), ("p2", self.at(13), 70)]             # baseline before the window; a correction down
+        d = track.daily_views(h, today=date(2026, 10, 14), days=5)
+        self.assertEqual([x["date"] for x in d["days"]], ["2026-10-10", "2026-10-11", "2026-10-12", "2026-10-13", "2026-10-14"])
+        self.assertEqual([x["views"] for x in d["days"]], [150, 30, 250, 0, 0])
+        self.assertEqual((d["total"], d["max"], d["total_fmt"]), (430, 250, "430"))
+
+    def test_empty(self):
+        from datetime import date
+        from shared import track
+        d = track.daily_views([], today=date(2026, 10, 14))
+        self.assertEqual((len(d["days"]), d["total"], d["max"]), (30, 0, 0))
+
+    def test_wib_day_boundary(self):
+        from datetime import date, datetime, timezone
+        from shared import track
+        late_utc = datetime(2026, 10, 13, 18, 30, tzinfo=timezone.utc)    # 01:30 WIB on the 14th
+        d = track.daily_views([("p", late_utc, 9)], today=date(2026, 10, 14), days=2)
+        self.assertEqual([x["views"] for x in d["days"]], [0, 9])
+
+
+class DailyViewsPostedTest(unittest.TestCase):   # QA c43afce Low: no lifetime spike on the first check's day
+    def test_first_count_goes_to_the_posted_day_or_is_history(self):
+        from datetime import date, datetime, timedelta, timezone
+        from shared import track
+        wib = timezone(timedelta(hours=7)); at = lambda d: datetime(2026, 10, d, 12, tzinfo=wib)
+        h = [("new", at(12), 500), ("new", at(13), 650), ("old", at(12), 9000), ("old", at(13), 9100)]
+        d = track.daily_views(h, today=date(2026, 10, 14), days=5, posted={"new": at(11), "old": datetime(2026, 9, 1, tzinfo=wib)})
+        self.assertEqual([x["views"] for x in d["days"]], [0, 500, 0, 250, 0])   # new: 500 on its posted day; old: only +100

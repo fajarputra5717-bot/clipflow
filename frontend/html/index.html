@@ -853,7 +853,23 @@ img.topbar-logo-icon{background:none;padding:0;object-fit:cover}
 .empty-title{font-weight:600;color:var(--text);font-size:17px}.empty-tip{margin:6px auto 0;max-width:46ch;color:var(--muted);font-size:14px;line-height:1.5}
 
 /* ===== 069: settings sheet — System Settings-style inset lists ===== */
-#settingsSheet .sheet{width:min(720px,100%);height:min(760px,calc(100dvh - 2*var(--sp-2)))}
+#settingsSheet .sheet{width:min(900px,100%);height:min(780px,calc(100dvh - 2*var(--sp-2)))}
+/* phase 2: side menu + one section at a time (searching shows every section) */
+.settings-body{display:grid;grid-template-columns:170px minmax(0,1fr);gap:var(--sp-2);align-items:start}
+.settings-nav{position:sticky;top:0;display:flex;flex-direction:column;gap:2px;padding-top:var(--sp-1)}
+.settings-nav .snav,[data-theme="dark"] .settings-nav .snav{display:flex;align-items:center;justify-content:flex-start;text-align:left;min-height:40px;padding:0 12px;border:0;border-radius:10px;background:transparent;color:var(--text);font-weight:500;box-shadow:none}
+.settings-nav .snav:hover{background:var(--fill2)}
+.settings-nav .snav[aria-current="true"],[data-theme="dark"] .settings-nav .snav[aria-current="true"]{background:var(--fill);color:var(--accent);font-weight:600}
+.settings-main{min-width:0}
+.settings-body[data-sec="posting"] [data-settings-sec]:not([data-settings-sec="posting"]),
+.settings-body[data-sec="sounds"] [data-settings-sec]:not([data-settings-sec="sounds"]),
+.settings-body[data-sec="watermarks"] [data-settings-sec]:not([data-settings-sec="watermarks"]),
+.settings-body[data-sec="system"] [data-settings-sec]:not([data-settings-sec="system"]){display:none}
+@media (max-width:700px){
+  .settings-body{grid-template-columns:minmax(0,1fr)}
+  .settings-nav{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:2px;z-index:2;background:var(--panel);padding:6px 0}   /* four equal tabs, no sideways scroll */
+  .settings-nav .snav,[data-theme="dark"] .settings-nav .snav{justify-content:center;text-align:center;min-height:var(--hit);padding:0 4px;font-size:var(--fs-small);min-width:0;white-space:nowrap}
+}
 .sheet-search{position:relative;margin:0 var(--sp-3) var(--sp-1)}
 .sheet-search svg{position:absolute;left:12px;top:50%;width:16px;height:16px;transform:translateY(-50%);color:var(--muted);pointer-events:none}
 .sheet-search input{min-height:36px;padding-left:36px;border-radius:10px;background:var(--line);border-color:transparent}
@@ -924,7 +940,7 @@ img.topbar-logo-icon{background:none;padding:0;object-fit:cover}
 :root{--checker-a:#ffffff;--checker-b:#e6e6ea}
 :root[data-theme="dark"]{--checker-a:#2c2c2e;--checker-b:#1f1f21}
 .sheet-lede{margin:0 0 var(--sp-2);color:var(--muted);font-size:16px}
-.wm-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+.wm-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px}
 .wm-tile{position:relative;transition:opacity var(--dur-2) var(--ease),transform var(--dur-2) var(--ease)}
 .wm-tile.removing{opacity:0;transform:scale(.9)}
 .wm-select{
@@ -938,6 +954,20 @@ img.topbar-logo-icon{background:none;padding:0;object-fit:cover}
 .wm-preview{position:relative;display:block;aspect-ratio:16/10;
   background:repeating-conic-gradient(var(--checker-a) 0% 25%,var(--checker-b) 0% 50%) 50%/14px 14px}
 .wm-preview img{position:absolute;inset:12px;width:calc(100% - 24px);height:calc(100% - 24px);object-fit:contain}
+/* phase 2: a sample 9:16 frame (CSS only: sky, ground, a figure) with the cropped mark at the real width / height */
+.wm-preview.wm-frame{aspect-ratio:9/16;background:
+  radial-gradient(circle at 70% 22%,rgba(255,214,120,.9) 0 7%,transparent 8%),
+  radial-gradient(ellipse at 50% 112%,#3c5a2e 0 38%,transparent 39%),
+  radial-gradient(ellipse 18% 26% at 34% 70%,#2a2f3a 0 60%,transparent 62%),
+  linear-gradient(180deg,#5c7fae 0%,#9db6d6 52%,#6d8a54 53%,#3f5733 100%)}
+.wm-frame img{inset:auto;left:50%;height:auto;max-height:40%;object-fit:contain;transform:translate(-50%,-50%);filter:drop-shadow(0 1px 2px rgba(0,0,0,.35))}
+.wm-tools{position:absolute;top:4px;right:4px;display:flex;gap:4px}
+.wm-tools .wm-delete{position:static}
+.wm-rename{width:36px;height:36px;min-height:36px;border-radius:50%;background:var(--material)!important;backdrop-filter:var(--material-blur);-webkit-backdrop-filter:var(--material-blur);color:var(--text);opacity:0;transition:opacity var(--dur-2) var(--ease)}
+.wm-rename svg{width:18px;height:18px}
+.wm-tile:hover .wm-rename,.wm-rename:focus-visible{opacity:1}
+@media(hover:none){.wm-rename{opacity:1}}
+.wm-rename-input{display:block;width:100%;margin:0;border-radius:0 0 14px 14px;font-size:14px}
 .wm-name{display:block;padding:10px 12px;font-size:14px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:var(--hit);line-height:24px}
 .wm-check{position:absolute;top:8px;left:8px;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;
   background:var(--accent);color:#fff;box-shadow:0 2px 6px rgba(0,0,0,.25);opacity:0;transform:scale(.4);
@@ -1197,7 +1227,10 @@ select::-ms-expand{display:none}
 .seg button[aria-pressed="true"]:hover:not(:disabled),[data-theme="dark"] .seg button[aria-pressed="true"]:hover:not(:disabled){background:var(--seg-on);color:#fff;box-shadow:0 1px 3px rgba(0,0,0,.12);font-weight:600}
 .seg-note{margin:6px 0 0;min-height:1.4em;min-height:1lh}   /* audit M4: filled after the API answers; keep the line so nothing below jumps */
 .from-campaign{display:inline-block;margin-left:6px;padding:0 7px;border-radius:999px;background:var(--badge-run-bg);color:var(--accent);font-size:13px;font-weight:600;letter-spacing:0;text-transform:none;vertical-align:1px}
-.layouts{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}
+.layouts{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(150px,.7fr);gap:12px}
+/* phase 2: the three "Coming soon" layouts are one small tile, not three big disabled cards */
+.layout-soon{display:flex;flex-direction:column;justify-content:center;gap:4px;padding:12px 14px;border:1px dashed var(--line2);border-radius:16px;color:var(--muted);font-size:var(--fs-small)}
+.layout-soon b{color:var(--text);font-weight:600}
 .layout-opt,[data-theme="dark"] .layout-opt{display:flex;flex-direction:column;align-items:stretch;background:var(--panel2);color:var(--text);border:1px solid var(--line2)!important;border-radius:16px;padding:12px;gap:10px;font-weight:600;font-size:16px;min-height:0;text-align:center;box-shadow:none}
 .layout-opt[aria-pressed="true"],[data-theme="dark"] .layout-opt[aria-pressed="true"]{border-color:var(--accent)!important;box-shadow:inset 0 0 0 1px var(--accent);background:var(--badge-run-bg)}
 .layout-opt:disabled{opacity:.5;cursor:not-allowed}
@@ -1207,12 +1240,17 @@ select::-ms-expand{display:none}
 .facecam-opts{display:flex;gap:var(--sp-3);flex-wrap:wrap;margin-top:var(--sp-2)}
 .subtitle-defaults .plain,[data-theme="dark"] .subtitle-defaults .plain{background:none;border:0!important;padding:0;min-height:0;color:var(--accent);font:inherit;font-weight:600;box-shadow:none;cursor:pointer}
 .analyze-actions{display:flex;align-items:center;gap:var(--sp-2);flex-wrap:wrap}
+/* phase 2: Start analysis stays in reach: a sticky bar above the dock while the form scrolls */
+.analyze-panel .analyze-actions{position:sticky;bottom:calc(var(--dock-h,58px) + var(--dock-bottom,14px) + 12px + env(safe-area-inset-bottom));z-index:6;
+  margin-inline:calc(-1 * var(--s-3,14px));padding:10px var(--s-3,14px);border-radius:18px;background:color-mix(in srgb,var(--panel) 88%,transparent);
+  -webkit-backdrop-filter:blur(18px) saturate(170%);backdrop-filter:blur(18px) saturate(170%);border:1px solid var(--glass-line,var(--hairline));box-shadow:0 8px 24px rgba(0,0,0,.08)}
+@media (prefers-reduced-transparency:reduce){.analyze-panel .analyze-actions{background:var(--panel);-webkit-backdrop-filter:none;backdrop-filter:none}}
 .analyze-actions #analyzeButton{border-radius:999px;min-height:var(--hit);padding:0 22px}
-@media (max-width:760px){.layouts{grid-template-columns:repeat(2,minmax(0,1fr))}.grid-2{grid-template-columns:1fr}}
+@media (max-width:760px){.layouts{grid-template-columns:repeat(2,minmax(0,1fr))}.layout-soon{grid-column:1/-1}.grid-2{grid-template-columns:1fr}}
 @media (max-width:600px){.analyze-actions #analyzeButton{width:100%}.seg{display:flex}.seg button{flex:1 1 auto;padding:0 10px}}
 /* Posting accounts (P2 part 1, 128) */
 .accounts-admin .inset-list{margin-bottom:var(--sp-2)}
-.account-create{display:grid;grid-template-columns:.9fr 1.2fr 1.2fr auto;gap:var(--sp-1);align-items:end}
+.account-create{display:grid;grid-template-columns:max-content minmax(0,1fr) minmax(0,1fr) auto;gap:var(--sp-1);align-items:end}   /* phase 2: the platform select never cuts "Instagram Reels" */
 .account-create .field{margin-top:0}
 .account-create button.primary{min-height:var(--hit);border-radius:999px;white-space:nowrap}
 .acct-row{display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:10px 12px 10px 14px;border-top:1px solid var(--hairline)}
@@ -1245,6 +1283,33 @@ select::-ms-expand{display:none}
 .edit-moved a{color:inherit;font-weight:600}
 /* 166: New campaign (brief → rules, confirm before saving) */
 .cn-bar{display:flex;justify-content:flex-end;margin-top:var(--sp-1)}
+.section-actions{margin-left:auto;display:flex;gap:8px;align-items:center}
+.section-actions:empty{display:none}
+.section-actions .primary{border-radius:999px;min-height:var(--control-h);padding:0 18px}
+.section-head:has(.section-actions:not(:empty)){flex-wrap:nowrap;align-items:flex-start}
+.section-head:has(.section-actions:not(:empty))>div:first-child{flex:1;min-width:0}
+.sa-btn{display:inline-flex;align-items:center;gap:6px}.sa-btn svg{width:18px;height:18px;flex:none}
+@media (max-width:600px){.sa-btn{width:var(--hit);padding:0!important;justify-content:center}.sa-long{display:none}}
+.camp-card{position:relative}
+.camp-link{color:inherit;text-decoration:none}
+.camp-link::after{content:"";position:absolute;inset:0;border-radius:16px}   /* the whole card is the link */
+.camp-card:focus-within{border-color:var(--accent);box-shadow:var(--ring)}
+.camp-link:focus-visible{outline:none}
+.camp-card .camp-setpay,.camp-card .badge{position:relative;z-index:1}
+.camp-setpay{align-self:flex-start;min-height:36px;padding:0 14px;border-radius:999px}
+.camp-card.is-due{border-color:var(--badge-warn-line);background:linear-gradient(var(--badge-warn-bg),var(--badge-warn-bg)),var(--panel2)}
+.camp-due{color:var(--badge-warn-fg);font-weight:600}
+.camp-meter.is-empty i{display:none}
+.ai-imports .ai-li{flex-wrap:wrap}
+.ai-anyway{min-height:36px;padding:0 14px;border-radius:999px}
+.ai-seeall{margin-top:8px;color:var(--accent);font-weight:600;background:transparent;border:0;padding:8px 0;min-height:36px}
+.cd-paybox .row{display:flex;align-items:center;gap:8px}.cd-paybox h3{flex:1}
+.cd-payedit{min-height:36px;padding:0 14px;border-radius:999px}
+.cd-payform{display:grid;gap:12px;margin-top:8px}
+.cd-payrow{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}
+.cd-payrow .field{display:grid;gap:4px;margin:0}
+.cd-payactions{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.cd-payactions button{border-radius:999px}
 .cn-brief{width:100%;min-height:280px;font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace}
 .cn-actions{display:flex;align-items:center;gap:var(--sp-2);margin-top:var(--sp-2);flex-wrap:wrap}
 .cn-field{margin-top:var(--sp-2);padding:2px 0;border-radius:12px}
@@ -1372,6 +1437,16 @@ select::-ms-expand{display:none}
 .qitem{border-top:1px solid var(--line);padding:10px 0}
 .qrow{display:grid;grid-template-columns:40px minmax(0,1fr) 140px 190px 110px;align-items:center;gap:var(--sp-2)}
 .qthumb{width:40px;height:56px;border-radius:8px;object-fit:cover;background:linear-gradient(160deg,#3a3a3c,#1d1d1f);display:block}
+/* phase 2 Schedule: bigger 9:16 thumbnails, neutral week arrows, quiet Drop, past empty days on one line */
+.srow .qthumb{width:72px;height:128px;border-radius:12px;flex:none}
+@media (max-width:600px){.srow .qthumb{width:56px;height:100px}}
+.week-nav{display:inline-flex;align-items:center;gap:2px;padding:3px;border-radius:999px;background:var(--fill)}
+.week-nav button,[data-theme="dark"] .week-nav button{min-height:var(--control-h);padding:0 14px;border:0;border-radius:999px;background:transparent;color:var(--text);box-shadow:none}
+.week-nav button:hover{background:var(--fill2)}
+.week-nav button[data-sched-week="-1"],.week-nav button[data-sched-week="1"]{min-width:var(--control-h);padding:0;font-size:20px}
+button.quiet,[data-theme="dark"] button.quiet{background:transparent;border:0;box-shadow:none;color:var(--muted);padding:0 12px}
+button.quiet:hover{color:var(--text);background:var(--fill)}
+.sday-past{padding:10px 0;color:var(--muted);font-size:var(--fs-small);border-top:1px solid var(--line)}
 .qn{min-width:0}
 .qn .qt{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .qn .qc{font-size:14px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -1440,7 +1515,7 @@ select::-ms-expand{display:none}
 .pcard-body{min-width:0;display:flex;flex-direction:column;gap:2px}
 .pcard-body .qt{font-weight:600;font-size:18px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pcard-src{font-size:14px;color:var(--muted2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.pcard-cap{font-size:16px;color:var(--muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.pcard-cap{font-size:16px;color:var(--muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;max-width:70ch}   /* phase 2: readable lines */
 .pcard-sum{font-size:16px;font-weight:600;margin-top:2px}
 .pcard .qactions,.pcard .qnote{margin-left:calc(56px + var(--sp-2))}
 .pstrip{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 0 calc(56px + var(--sp-2))}
@@ -1454,6 +1529,11 @@ select::-ms-expand{display:none}
 .pstat.is-static{cursor:default;min-height:0;padding:2px 10px;font-size:14px}
 .pstat.is-static .pstat-st::before{display:none}
 .pstat[aria-expanded="true"]{outline:2px solid var(--accent);outline-offset:1px}
+/* phase 2: a chip still to post is the primary action (accent; --seg-on keeps white text ≥ 4.5:1 in both themes) */
+.pstat.is-ready,[data-theme="dark"] .pstat.is-ready{background:var(--seg-on,var(--accent));border-color:var(--seg-on,var(--accent));color:#fff}
+.pstat.is-ready .pstat-name{color:#fff}
+.pstat.is-ready:hover{filter:brightness(1.08)}
+.pub-camp select{min-width:200px}
 .pstat.is-posted,.pstat.is-paid{background:var(--badge-good-bg);border-color:var(--badge-good-line);color:var(--badge-good-fg)}
 .pstat.is-claimed{background:var(--badge-run-bg);border-color:var(--badge-run-line);color:var(--badge-run-fg)}
 .pstat.is-warn{background:var(--badge-warn-bg);border-color:var(--badge-warn-line);color:var(--badge-warn-fg)}
@@ -1617,9 +1697,18 @@ body:has(#editorSection:not(.hidden)) .ed-foot{bottom:calc(var(--dock-h) + var(-
 .tr-k{font-size:var(--fs-small);color:var(--muted);font-weight:600}
 .tr-v{font:700 var(--fs-h1)/1.2 var(--font-display);margin-top:2px;overflow-wrap:anywhere}
 .tr-s{font-size:var(--fs-small);color:var(--muted)}
-.tr-table{display:grid;font-size:var(--fs-base)}
-.tr-row{display:grid;grid-template-columns:minmax(0,2fr) repeat(4,minmax(0,1fr));gap:var(--s-2);padding:6px 0;border-top:1px solid var(--line);align-items:center}
-.tr-row span:not(.tr-name){text-align:right;font-variant-numeric:tabular-nums}
+/* phase 2: one set of columns for header + rows (subgrid), names left, numbers right, amounts never wrap */
+.tr-table{display:grid;grid-template-columns:minmax(0,1fr) repeat(4,max-content);column-gap:var(--s-3);font-size:var(--fs-base)}
+.tr-row{display:grid;grid-template-columns:subgrid;grid-column:1/-1;padding:6px 0;border-top:1px solid var(--line);align-items:center}
+.tr-row span:not(.tr-name){text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.tr-chart{margin-top:var(--s-3)}
+.tr-chart svg{display:block;width:100%;height:170px;overflow:visible}
+.tr-chart .tc-line{fill:none;stroke:var(--accent);stroke-width:2.5;stroke-linejoin:round;stroke-linecap:round;vector-effect:non-scaling-stroke}
+.tr-chart .tc-area{fill:var(--accent);opacity:.12}
+.tr-chart .tc-grid{stroke:var(--line);stroke-width:1;vector-effect:non-scaling-stroke}
+.tr-chart .tc-axis{display:flex;justify-content:space-between;font-size:var(--fs-small);color:var(--muted);margin-top:6px;font-variant-numeric:tabular-nums}
+.tr-chart .tc-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.tr-chart .tc-head b{font-size:var(--fs-h2);font-variant-numeric:tabular-nums}
 .tr-head{border-top:0;font-size:var(--fs-small);color:var(--muted);font-weight:600}
 .tr-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tr-top{list-style:none;margin:0;padding:0;display:grid}
@@ -1631,7 +1720,10 @@ body:has(#editorSection:not(.hidden)) .ed-foot{bottom:calc(var(--dock-h) + var(-
 .tr-amt{grid-column:2;grid-row:2;text-align:right;font-size:var(--fs-small)}
 .tr-amt small{color:var(--muted)}
 @media(max-width:900px){.tr-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media(max-width:600px){.tr-row{grid-template-columns:minmax(0,1.4fr) repeat(4,minmax(0,1fr));font-size:var(--fs-small)}}
+@media(max-width:600px){   /* phones: the name gets its own line, the four numbers share the row under it */
+  .tr-table{grid-template-columns:repeat(4,minmax(0,max-content));justify-content:space-between;column-gap:var(--s-2);font-size:var(--fs-small)}
+  .tr-row .tr-name{grid-column:1/-1;text-align:left;font-weight:600;font-size:var(--fs-base);white-space:normal}
+  .tr-head .tr-name{display:none}}
 /* 183: Auto-import */
 .ai-camp+.ai-camp{margin-top:var(--s-3)}
 .ai-camp .row{display:flex;align-items:center;gap:var(--s-2);flex-wrap:wrap}
@@ -1764,13 +1856,13 @@ input[type=checkbox],input[type=radio]{accent-color:var(--accent)}
     <main>
       <section id="campaignSection" class="view-section hidden" aria-labelledby="campaignTitle">
         <div class="panel publish-panel">
-          <div class="section-head"><div><h2 id="campaignTitle">Campaigns</h2><p class="muted small page-intro">The brand rules every clip is checked against. <button class="info-btn" type="button" data-info aria-expanded="false" aria-controls="infoCampaign" aria-label="More about campaigns"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg></button></p><p class="info-more small" id="infoCampaign" hidden>A campaign holds the brand's rules (payout, hashtags, watermark, length, content). Every clip is checked against them before it can be scheduled.</p></div></div>
+          <div class="section-head"><div><h2 id="campaignTitle">Campaigns</h2><p class="muted small page-intro">Brand rules every clip must pass. <button class="info-btn" type="button" data-info aria-expanded="false" aria-controls="infoCampaign" aria-label="More about campaigns"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg></button></p><p class="info-more small" id="infoCampaign" hidden>A campaign holds the brand's rules (payout, hashtags, watermark, length, content). Every clip is checked against them before it can be scheduled.</p></div><div class="section-actions" id="campaignActions"></div></div>
           <div id="campaignList" aria-live="polite"></div>
         </div>
       </section>
       <section id="currentSection" class="view-section">
         <div class="panel analyze-panel">
-          <div class="section-head"><div><h2>New job options</h2><p class="muted small page-intro">Paste a YouTube link to make vertical clips.</p></div></div>
+          <div class="section-head"><div><h2>New job options</h2><p class="muted small page-intro">Paste a YouTube link to make clips.</p></div></div>
 
           <label class="field" for="youtubeUrl">Video</label>
           <input id="youtubeUrl" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://www.youtube.com/watch?v=…" aria-describedby="youtubeUrlHint">
@@ -1802,9 +1894,7 @@ input[type=checkbox],input[type=radio]{accent-color:var(--accent)}
             <div class="layouts" role="group" aria-labelledby="layoutLbl">
               <button class="layout-opt" type="button" data-layout-card="facecam" aria-pressed="false"><svg class="mini" viewBox="0 0 45 80" aria-hidden="true" preserveAspectRatio="xMidYMid slice"><rect class="bg" width="45" height="80"/><rect class="f" x="0" y="0" width="45" height="56"/><path class="a" d="M8 44l8-14 8 14z" opacity=".8"/><rect class="bg" x="26" y="24" width="12" height="20" rx="2"/><rect class="bg" x="0" y="56" width="45" height="24"/><circle class="p" cx="22.5" cy="63" r="4"/><path class="p" d="M14.9 75.8q7.6-10.4 15.2 0z"/><line class="ln" x1="0" y1="56" x2="45" y2="56"/></svg><span>Gameplay + facecam<small>Cam panel at the bottom</small></span></button>
               <button class="layout-opt" type="button" data-layout-card="full" aria-pressed="false"><svg class="mini" viewBox="0 0 45 80" aria-hidden="true" preserveAspectRatio="xMidYMid slice"><rect class="bg" width="45" height="80"/><rect class="f" x="0" y="0" width="45" height="80"/><path class="a" d="M7 58l11-20 11 20z" opacity=".8"/><rect class="bg" x="27" y="34" width="12" height="24" rx="2"/></svg><span>Full frame<small>No facecam · fills 9:16</small></span></button>
-              <button class="layout-opt" type="button" disabled aria-disabled="true"><svg class="mini" viewBox="0 0 45 80" aria-hidden="true" preserveAspectRatio="xMidYMid slice"><rect class="bg" width="45" height="80"/><circle class="p" cx="22.5" cy="34" r="7.5"/><path class="p" d="M8.25 58q14.25-19.5 28.5 0z"/><path class="ln" d="M6 14v-6h6M39 14v-6h-6M6 60v6h6M39 60v6h-6" stroke-width="1.5"/></svg><span>Speaker follow<small>Coming soon</small></span></button>
-              <button class="layout-opt" type="button" disabled aria-disabled="true"><svg class="mini" viewBox="0 0 45 80" aria-hidden="true" preserveAspectRatio="xMidYMid slice"><rect class="bg" width="45" height="80"/><rect class="f" x="0" y="0" width="45" height="40"/><circle class="p" cx="22.5" cy="14" r="5.5"/><path class="p" d="M12.05 31.6q10.45-14.3 20.9 0z"/><circle class="p" cx="22.5" cy="54" r="5.5"/><path class="p" d="M12.05 71.6q10.45-14.3 20.9 0z"/><line class="ln" x1="0" y1="40" x2="45" y2="40"/></svg><span>Two-speaker stacked<small>Coming soon</small></span></button>
-              <button class="layout-opt" type="button" disabled aria-disabled="true"><svg class="mini" viewBox="0 0 45 80" aria-hidden="true" preserveAspectRatio="xMidYMid slice"><rect class="bg" width="45" height="80"/><rect class="f" x="-6" y="0" width="57" height="80" opacity=".6"/><circle class="p" cx="10" cy="14" r="9" opacity=".18"/><circle class="p" cx="36" cy="66" r="10" opacity=".18"/><rect class="bg" x="0" y="27" width="45" height="26"/><circle class="p" cx="14" cy="36" r="3.2"/><path class="p" d="M7.92 46.24q6.08-8.32 12.16 0z"/><circle class="p" cx="31" cy="36" r="3.2"/><path class="p" d="M24.92 46.24q6.08-8.32 12.16 0z"/></svg><span>Wide + blur<small>Coming soon</small></span></button>
+              <div class="layout-soon" role="note"><b>More layouts soon</b><small>Speaker follow · Two-speaker stacked · Wide + blur</small></div>
             </div>
             <div class="facecam-opts" id="facecamOpts">
               <div><span class="field" id="splitLbl">Game : cam</span>
@@ -1844,8 +1934,8 @@ input[type=checkbox],input[type=radio]{accent-color:var(--accent)}
       </section>
       <section id="scheduleSection" class="view-section hidden" aria-labelledby="scheduleTitle">
         <div class="panel publish-panel">
-          <div class="section-head"><div><h2 id="scheduleTitle">Schedule</h2><p class="muted small page-intro">Planned posts by day, in WIB. <button class="info-btn" type="button" data-info aria-expanded="false" aria-controls="infoSchedule" aria-label="More about the schedule"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg></button></p><p class="info-more small" id="infoSchedule" hidden>ClipFlow reminds you on Telegram at the planned time; you post them yourself and mark them posted.</p></div><span class="spacer"></span>
-            <div class="publish-filters"><div class="seg" role="group" aria-label="Week"><button type="button" data-sched-week="-1" aria-label="Previous week">‹</button><button type="button" data-sched-week="0" id="schedWeekLabel">This week</button><button type="button" data-sched-week="1" aria-label="Next week">›</button></div>
+          <div class="section-head"><div><h2 id="scheduleTitle">Schedule</h2><p class="muted small page-intro">Planned posts by day, in WIB. <button class="info-btn" type="button" data-info aria-expanded="false" aria-controls="infoSchedule" aria-label="More about the schedule"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg></button></p><p class="info-more small" id="infoSchedule" hidden>You post them yourself, then mark them posted here.</p></div><span class="spacer"></span>
+            <div class="publish-filters"><div class="week-nav" role="group" aria-label="Week"><button class="wk" type="button" data-sched-week="-1" aria-label="Previous week">‹</button><button class="wk" type="button" data-sched-week="0" id="schedWeekLabel">This week</button><button class="wk" type="button" data-sched-week="1" aria-label="Next week">›</button></div>
               <div class="seg sched-viewseg" role="group" aria-label="View"><button type="button" data-sched-view="list" aria-pressed="true">List</button><button type="button" data-sched-view="week" aria-pressed="false">Week</button></div></div></div>
           <div id="scheduleList" aria-live="polite"></div>
         </div>
@@ -1871,7 +1961,7 @@ input[type=checkbox],input[type=radio]{accent-color:var(--accent)}
       </section>
       <section id="publishSection" class="view-section hidden" aria-labelledby="publishTitle">
         <div class="panel publish-panel">
-          <div class="section-head"><div><h2 id="publishTitle">Publish queue</h2><p class="muted small page-intro">One card per clip; each platform chip is one post. <button class="info-btn" type="button" data-info aria-expanded="false" aria-controls="infoPublish" aria-label="More about publishing"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg></button></p><p class="info-more small" id="infoPublish" hidden>Tap a chip to copy its caption, download the video, mark it posted and track its views.</p></div><span class="spacer"></span>
+          <div class="section-head"><div><h2 id="publishTitle">Publish queue</h2><p class="muted small page-intro">One card per clip, one chip per post. <button class="info-btn" type="button" data-info aria-expanded="false" aria-controls="infoPublish" aria-label="More about publishing"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg></button></p><p class="info-more small" id="infoPublish" hidden>Tap a chip to copy its caption, download the video, mark it posted and track its views.</p></div><span class="spacer"></span>
             <div class="publish-filters" id="publishFilter"></div></div>
           <div id="publishList" aria-live="polite"></div>
         </div>
@@ -1964,13 +2054,15 @@ input[type=checkbox],input[type=radio]{accent-color:var(--accent)}
   <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="settingsSheetTitle">
     <header class="sheet-head"><h2 id="settingsSheetTitle">Settings</h2><button class="sheet-close" type="button" data-sheet-close aria-label="Close settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></header>
     <div class="sheet-search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg><input type="search" id="settingsSearch" placeholder="Search settings" autocomplete="off" aria-label="Search settings" aria-controls="settingsPanel"></div>
-    <div class="sheet-body settings-body">
-      <div class="disk-meter" id="diskMeter" aria-live="polite"></div>
-      <section class="inset-group sfx-entry" aria-labelledby="sfxEntryTitle">
+    <div class="sheet-body settings-body" data-sec="posting">
+      <nav class="settings-nav" aria-label="Settings sections"><button class="snav" type="button" data-settings-nav="posting">Posting</button><button class="snav" type="button" data-settings-nav="sounds">Sounds</button><button class="snav" type="button" data-settings-nav="watermarks">Watermarks</button><button class="snav" type="button" data-settings-nav="system">System</button></nav>
+      <div class="settings-main">
+      <div class="disk-meter" id="diskMeter" aria-live="polite" data-settings-sec="system"></div>
+      <section class="inset-group sfx-entry" aria-labelledby="sfxEntryTitle" data-settings-sec="sounds">
         <h3 class="inset-title" id="sfxEntryTitle">Sound effects</h3>
         <div class="inset-list"><button class="inset-row sfx-open" type="button" data-open-sfx aria-haspopup="dialog" aria-controls="sfxSheet"><span class="row-label">Sound effects<small id="sfxEntrySummary">Your own laugh, hit and whoosh sounds</small></span><span class="sfx-chev" aria-hidden="true">›</span></button></div>
       </section>
-      <section class="inset-group accounts-admin" id="accountsAdmin" aria-labelledby="accountsTitle">
+      <section class="inset-group accounts-admin" id="accountsAdmin" aria-labelledby="accountsTitle" data-settings-sec="posting">
         <h3 class="inset-title" id="accountsTitle">Posting accounts</h3>
         <div class="inset-list" id="accountsList"></div>
         <form class="account-create" id="accountCreateForm" novalidate>
@@ -1982,7 +2074,7 @@ input[type=checkbox],input[type=radio]{accent-color:var(--accent)}
         <p class="hint users-hint">Your own accounts, used when you mark a clip as posted and for per-account monthly caps. Paused accounts aren't offered.</p>
         <div class="account-msg" id="accountsMsg" role="status" aria-live="polite"></div>
       </section>
-      <section class="inset-group posting-times" id="postingTimes" aria-labelledby="postingTimesTitle">
+      <section class="inset-group posting-times" id="postingTimes" aria-labelledby="postingTimesTitle" data-settings-sec="posting">
         <h3 class="inset-title" id="postingTimesTitle">Posting times</h3>
         <div class="inset-list" id="postingTimesList"></div>
         <div class="ptime-row ptime-lead"><label class="ptime-name" for="reminderLead">Telegram reminder</label><span class="ptime-add"><input id="reminderLead" type="number" min="0" max="120" step="5" inputmode="numeric"><span class="ptime-none">min before each planned post</span></span></div>
@@ -1990,7 +2082,7 @@ input[type=checkbox],input[type=radio]{accent-color:var(--accent)}
         <p class="hint users-hint" id="postingTimesHint">Suggested times to post on each platform, in WIB (Asia/Jakarta). ClipFlow suggests the next free one when you plan a post.</p>
         <div class="account-msg" id="postingTimesMsg" role="status" aria-live="polite"></div>
       </section>
-      <section class="inset-group users-admin" id="usersAdmin" hidden aria-labelledby="usersTitle">
+      <section class="inset-group users-admin" id="usersAdmin" hidden aria-labelledby="usersTitle" data-settings-sec="system">
         <h3 class="inset-title" id="usersTitle">Users</h3>
         <div class="inset-list" id="usersList"></div>
         <form class="user-create" id="userCreateForm" novalidate>
@@ -2002,13 +2094,18 @@ input[type=checkbox],input[type=radio]{accent-color:var(--accent)}
         <p class="hint users-hint">New and reset accounts must choose their own password at their next sign-in. Disabling signs the user out everywhere and deletes their API tokens.</p>
         <div class="account-msg" id="usersMsg" role="status" aria-live="polite"></div>
       </section>
+      <section class="inset-group wm-entry" aria-labelledby="wmEntryTitle" data-settings-sec="watermarks">
+        <h3 class="inset-title" id="wmEntryTitle">Watermarks</h3>
+        <div class="inset-list"><button class="inset-row sfx-open" type="button" data-nav="watermarks" aria-haspopup="dialog" aria-controls="watermarkSheet"><span class="row-label">Your watermarks<small>Upload, pick the one in use, rename, delete</small></span><span class="sfx-chev" aria-hidden="true">›</span></button></div>
+      </section>
       <div id="settingsPanel"></div>
       <div id="settingsNoMatch" class="settings-nomatch" hidden>No settings match “<span></span>”.</div>
-      <p class="hint settings-hint">Secrets are masked. Leaving a masked value unchanged keeps the saved secret.</p>
+      <p class="hint settings-hint" data-settings-sec="system">Secrets are masked. Leaving a masked value unchanged keeps the saved secret.</p>
+      </div>
     </div>
     <footer class="sheet-foot">
       <span class="sheet-foot-status" id="settingsDirty" aria-live="polite"></span>
-      <button class="secondary" id="reloadSettings" type="button">Reload</button>
+      <button class="secondary" id="reloadSettings" type="button" disabled>Discard changes</button>
       <button class="primary" id="saveSettings" type="button" disabled>Save</button>
     </footer>
   </section>
@@ -2446,7 +2543,9 @@ function updateCampaignHint(){
   if(!clipsTouched){clipsFromCampaign=!!c?.default_clip_count;selectClips(c?.default_clip_count||defaultClips(),true)} // 136
   if(!c){h.hidden=true;h.textContent="";return}
   const src=c.sources.length?`Source: ${c.sources.join(", ")}`:(c.source_note?`Source: ${c.source_note}`:"Source: any");
-  h.textContent=`${src} · ${c.platforms.length} platforms${c.brief_pending?" · brief pending":""}`;h.hidden=false;
+  // phase 2: say what the campaign fills in (the fields themselves carry a "from campaign" tag)
+  const from=[layoutFromCampaign&&"layout",languageFromCampaign&&"language",clipsFromCampaign&&"clip count",(c.hashtags||[]).length&&"hashtags","rule checks"].filter(Boolean);
+  h.textContent=`${src} · ${c.platforms.length} platforms${c.brief_pending?" · brief pending":""} · from the campaign: ${from.join(", ")}`;h.hidden=false;
 }
 
 // 079: Auto (default) lets Whisper detect the language; the last EXPLICIT choice is remembered and sent as
@@ -3332,15 +3431,44 @@ function renderWatermarks(){
   const list=wmAssets.filter(a=>!wmPendingDelete.has(a.id)),active=list.find(a=>a.active)?.id||null;
   const popId=active&&active!==wmLastActive&&wmLastActive!==null?active:null;wmLastActive=active;
   if(!list.length){$("watermarkPanel").innerHTML=`<div class="wm-empty">No watermarks yet: renders use the built-in default.</div>`;return}
+  // phase 2 (owner 2026-10-14): the preview is the mark's visible pixels (alpha-cropped in a canvas, like the render's
+  // get_watermark_rect) on a sample 9:16 frame, at your Watermark width / height settings; rename + delete per tile.
+  const st=k=>parseFloat((settingsCache[k]||{}).value),wmW=Math.min(100,Math.max(4,(st("WATERMARK_WIDTH")||300)/1080*100)),wmY=Math.min(90,Math.max(10,st("WATERMARK_POSITION_Y")||50));
   $("watermarkPanel").innerHTML=`<div class="wm-grid">${list.map(a=>`
     <div class="wm-tile${a.active?" is-active":""}${a.id===popId?" pop":""}" data-wm-id="${esc(a.id)}">
       <button type="button" class="wm-select" ${a.active?"":`data-watermark-activate="${esc(a.id)}"`} aria-pressed="${a.active?"true":"false"}" aria-label="${a.active?"In use":"Use"}: ${esc(a.filename)}">
-        <span class="wm-preview"><img src="${esc(mediaUrl(`${API}/api/assets/watermarks/${a.id}/file`))}" alt="" loading="lazy"></span>
+        <span class="wm-preview wm-frame" aria-hidden="true"><img data-wm-crop="${esc(a.id)}" style="width:${wmW.toFixed(1)}%;top:${wmY.toFixed(1)}%" src="${esc(wmCropped[a.id]||mediaUrl(`${API}/api/assets/watermarks/${a.id}/file`))}" alt=""></span>
         <span class="wm-name">${esc(a.filename)}</span>
         <span class="wm-check">${CHECK}</span>
       </button>
-      <button type="button" class="icon-btn wm-delete" data-watermark-delete="${esc(a.id)}" aria-label="Delete ${esc(a.filename)}">${TRASH}</button>
+      <span class="wm-tools"><button type="button" class="icon-btn wm-rename" data-watermark-rename="${esc(a.id)}" aria-label="Rename ${esc(a.filename)}">${PEN_ICON}</button><button type="button" class="icon-btn wm-delete" data-watermark-delete="${esc(a.id)}" aria-label="Delete ${esc(a.filename)}">${TRASH}</button></span>
     </div>`).join("")}</div>`;
+  $("watermarkPanel").querySelectorAll("img[data-wm-crop]").forEach(img=>{if(img.complete&&img.naturalWidth)wmCrop(img);else img.addEventListener("load",()=>wmCrop(img),{once:true})});
+}
+// Alpha-crop a watermark to its visible pixels (same idea as the worker's get_watermark_rect); cached per asset.
+const wmCropped={};
+function wmCrop(img){
+  const id=img.dataset.wmCrop;if(!id||wmCropped[id])return;
+  try{
+    const w=img.naturalWidth,h=img.naturalHeight,c=document.createElement("canvas");c.width=w;c.height=h;
+    const x=c.getContext("2d",{willReadFrequently:true});x.drawImage(img,0,0);const d=x.getImageData(0,0,w,h).data;
+    let t=h,l=w,b=-1,r=-1;
+    for(let yy=0;yy<h;yy++)for(let xx=0;xx<w;xx++)if(d[(yy*w+xx)*4+3]>8){if(yy<t)t=yy;if(yy>b)b=yy;if(xx<l)l=xx;if(xx>r)r=xx}
+    if(b<0)return;
+    const o=document.createElement("canvas");o.width=r-l+1;o.height=b-t+1;o.getContext("2d").drawImage(c,l,t,o.width,o.height,0,0,o.width,o.height);
+    wmCropped[id]=o.toDataURL("image/png");img.src=wmCropped[id];
+  }catch{}   // a tainted canvas or a decode error keeps the plain image
+}
+function renameWatermark(id){
+  const a=wmAssets.find(x=>x.id===id),tile=document.querySelector(`.wm-tile[data-wm-id="${CSS.escape(id)}"]`);if(!a||!tile)return;
+  const name=tile.querySelector(".wm-name");
+  name.outerHTML=`<input class="wm-name wm-rename-input" data-esc-local maxlength="80" aria-label="New name for ${esc(a.filename)}" value="${esc(a.filename)}">`;
+  const inp=tile.querySelector(".wm-rename-input");inp.focus();inp.select();let done=false;
+  const finish=async save=>{if(done)return;done=true;const v=inp.value.trim();
+    if(save&&v&&v!==a.filename){try{await api(`/api/assets/watermarks/${id}`,{method:"PATCH",body:JSON.stringify({filename:v})});a.filename=v}catch(e){showToast("Couldn't rename: "+e.message)}}
+    renderWatermarks();document.querySelector(`[data-watermark-rename="${CSS.escape(id)}"]`)?.focus()};
+  inp.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();finish(true)}else if(e.key==="Escape"){e.preventDefault();finish(false)}});
+  inp.addEventListener("blur",()=>finish(true));
 }
 async function uploadWatermarkAsset(file){
   const input=$("watermarkUploadInput"),label=input?.closest("label");
@@ -3535,7 +3663,8 @@ document.addEventListener("change",e=>{
 const SETTINGS_GROUPS=[
   ["AI & transcription",["CLIP_ANALYSIS_PROVIDER","TEXT_UTILITY_PROVIDER","GEMINI_API_KEY","GEMINI_ANALYSIS_MODEL","GEMINI_MAX_ATTEMPTS","GROQ_MODEL_ANALYSIS","GROQ_MODEL_UTILITY","CLAUDE_MODEL_ANALYSIS","CLAUDE_MODEL_UTILITY","WHISPER_MODEL","WHISPER_LANGUAGE","RUNWAY_API_KEY","RUNWAY_MODEL"]],
   ["Face detection",["FACE_DETECTION_SAMPLE_COUNT","FACE_CONFIDENCE_THRESHOLD","FACE_ZOOM_RATIO"]],
-  ["Clips & rendering",["CLIPS_PER_JOB","CLIP_TARGET_DURATION","CLIP_MIN_DURATION","CLIP_MAX_DURATION","PREVIEW_WIDTH","WATERMARK_WIDTH","WATERMARK_OPACITY","WATERMARK_POSITION_Y","SUBTITLE_SEAM_GAP","FULLFRAME_CAPTION_Y"]],
+  ["Clips & rendering",["CLIPS_PER_JOB","CLIP_TARGET_DURATION","CLIP_MIN_DURATION","CLIP_MAX_DURATION","PREVIEW_WIDTH","SUBTITLE_SEAM_GAP","FULLFRAME_CAPTION_Y"]],
+  ["Watermark",["WATERMARK_WIDTH","WATERMARK_OPACITY","WATERMARK_POSITION_Y"]],
   ["YouTube",["YOUTUBE_API_KEY","VIEW_PULL_DAILY_UNITS","YOUTUBE_CLIENT_ID","YOUTUBE_CLIENT_SECRET","YOUTUBE_REFRESH_TOKEN"]],
   ["TikTok",["TIKTOK_CLIENT_KEY","TIKTOK_CLIENT_SECRET","TIKTOK_ACCESS_TOKEN"]],
   ["Instagram & Facebook",["META_ACCESS_TOKEN","INSTAGRAM_ACCESS_TOKEN","INSTAGRAM_BUSINESS_ACCOUNT_ID"]],
@@ -3545,6 +3674,17 @@ const SETTINGS_GROUPS=[
   ["Storage",["DISK_SPACE_MIN_MB","RETENTION_DAYS_INTERMEDIATE","ORPHAN_SWEEP_DRY_RUN"]],
   ["Auto-import",["AUTO_IMPORT_INTERVAL_MIN"]]
 ];
+// UI phase 2: Settings = four sections with a side menu (tabs on phones); each settings group belongs to one.
+const SETTINGS_SECTION={"Watermark":"watermarks","Publishing":"posting","YouTube":"posting","TikTok":"posting","Instagram & Facebook":"posting"};   // others: system
+let settingsSec="posting";
+function showSettingsSection(sec){settingsSec=sec;lsSet("settings_sec",sec);const q=$("settingsSearch");if(q&&q.value){q.value="";filterSettings()}syncSettingsSection()}
+function syncSettingsSection(){
+  const body=document.querySelector(".settings-body");if(!body)return;
+  const q=($("settingsSearch")?.value||"").trim();body.dataset.sec=q?"":settingsSec;   // searching = every section
+  document.querySelectorAll("[data-settings-nav]").forEach(b=>{if(!q&&b.dataset.settingsNav===settingsSec)b.setAttribute("aria-current","true");else b.removeAttribute("aria-current")});
+}
+document.addEventListener("click",e=>{const b=e.target.closest("[data-settings-nav]");if(!b)return;showSettingsSection(b.dataset.settingsNav);
+  document.querySelector(".settings-main")?.scrollTo?.({top:0});b.focus()});
 const SETTING_LABELS={CLIP_ANALYSIS_PROVIDER:"Clip analysis provider (auto | gemini | groq | claude)",TEXT_UTILITY_PROVIDER:"Utility tasks provider (auto | gemini | groq | claude)",GROQ_MODEL_ANALYSIS:"Groq model, clip analysis",GROQ_MODEL_UTILITY:"Groq model, utility tasks",CLAUDE_MODEL_ANALYSIS:"Claude model, clip analysis",CLAUDE_MODEL_UTILITY:"Claude model, utility tasks",WATERMARK_POSITION_Y:"Watermark height (% from top, new jobs)",SUBTITLE_SEAM_GAP:"Caption gap above facecam (%, new jobs)",FULLFRAME_CAPTION_Y:"Caption height, no-facecam clips (% from top)",DISK_SPACE_MIN_MB:"Disk reserve (MB)",AUTO_IMPORT_INTERVAL_MIN:"Check channels every (min)",YOUTUBE_API_KEY:"YouTube API key (view counts)",META_ACCESS_TOKEN:"Your Meta token (Instagram + Facebook view counts)",VIEW_PULL_DAILY_UNITS:"View pulls: max quota units a day",RETENTION_DAYS_INTERMEDIATE:"Keep downloads (days)",ORPHAN_SWEEP_DRY_RUN:"Orphan sweep dry run",GEMINI_API_KEY:"Gemini API key",GEMINI_ANALYSIS_MODEL:"Gemini model",GEMINI_MAX_ATTEMPTS:"Gemini attempts",WHISPER_MODEL:"Whisper model",WHISPER_LANGUAGE:"Fallback language",RUNWAY_API_KEY:"Runway API key",RUNWAY_MODEL:"Runway model",
   FACE_DETECTION_SAMPLE_COUNT:"Frames sampled",FACE_CONFIDENCE_THRESHOLD:"Confidence threshold",FACE_ZOOM_RATIO:"Facecam zoom",
   CLIPS_PER_JOB:"Clips per video (1–8, new jobs)",CLIP_TARGET_DURATION:"Target length (s)",CLIP_MIN_DURATION:"Minimum length (s)",CLIP_MAX_DURATION:"Maximum length (s)",PREVIEW_WIDTH:"Preview width (px)",WATERMARK_WIDTH:"Watermark width (px)",WATERMARK_OPACITY:"Watermark opacity",
@@ -3761,6 +3901,7 @@ function publishCardHtml(c,rows){
 function markWarnings(r,accountId){return (r.checks||[]).filter(c=>c.level==="warn"&&(!c.account_id||c.account_id===accountId))}
 function markWarnText(r,accountId){const w=markWarnings(r,accountId);return w.length?(r.campaign?"Will be recorded as not eligible: ":"Heads-up: ")+w.map(c=>c.message).join("; "):""}
 document.addEventListener("change",e=>{
+  const pc=e.target.closest?.("[data-publish-campaign-select]");if(pc){publishCampaign=pc.value;return renderPublish()}
   const sel=e.target.closest?.("[data-mark-account]");if(!sel)return;
   const r=publishRow(sel.dataset.markAccount),p=sel.closest("form").querySelector("[data-mark-warn]");
   p.textContent=markWarnText(r,sel.value);p.hidden=!p.textContent;
@@ -3772,7 +3913,8 @@ function cardLeft(rows){return rows.some(r=>rowStatus(r)==="ready")}
 function renderPublish(){
   const camps=publishGroups.map(g=>[g.campaign||"",g.campaign_name]);
   if(publishCampaign!=="all"&&!camps.some(([id])=>id===publishCampaign))publishCampaign="all";
-  $("publishFilter").innerHTML=(camps.length>1?`<div class="seg" role="group" aria-label="Filter campaign">${[["all","All campaigns"],...camps].map(([id,n])=>`<button type="button" data-publish-campaign="${esc(id)}" aria-pressed="${publishCampaign===id}">${esc(n)}</button>`).join("")}</div>`:"")
+  // phase 2: the campaign filter is a dropdown like Review's (a segment row overflowed with several campaigns)
+  $("publishFilter").innerHTML=(camps.length>1?`<label class="rv-f pub-camp"><span>Campaign</span><select data-publish-campaign-select>${[["all","All campaigns"],...camps].map(([id,n])=>`<option value="${esc(id)}" ${publishCampaign===id?"selected":""}>${esc(n)}</option>`).join("")}</select></label>`:"")
     +`<div class="seg" role="group" aria-label="Filter clips">${[["left","Left to post"],["all","All"]].map(([id,n])=>`<button type="button" data-publish-filter="${id}" aria-pressed="${publishFilter===id}">${n}</button>`).join("")}</div>`;
   let total=0;
   const shown=publishGroups.filter(g=>publishCampaign==="all"||(g.campaign||"")===publishCampaign);
@@ -3842,21 +3984,35 @@ async function loadCampaignStep(){
   try{campaignStep=await api("/api/campaigns")||[];renderCampaignStep()}
   catch(err){$("campaignList").innerHTML=`<div class="error-box">${esc(err.message)}</div>`}
 }
+// Phase 2 (owner 2026-10-14): the whole card opens the campaign (the title link is stretched over it: mouse, touch,
+// keyboard); a campaign or posting week ending within 2 days is highlighted; "Payout not set yet" is a Set payout
+// action for admins; the budget / cap bar is on every card (empty track + "No cap set" when there is none).
+const PAYOUT_UNSET="Payout not set yet";   // shared/payouts.describe()
+function campaignDue(c){
+  const st=c.status||{};if(st.code==="ended")return null;
+  if(st.days_left!=null&&st.days_left<=2)return st.days_left<=1?"Last day":`Ends in ${st.days_left} days`;
+  if(c.week&&c.week.days_left!=null&&c.week.days_left<=2)return `${esc(c.week.id)} closes ${c.week.days_left<=1?"today":`in ${c.week.days_left} days`}`;
+  return null;
+}
 function campaignCardHtml(c){
-  const st=c.status||{},m=c.mine||{},cm=c.cap_meter;
-  return `<article class="camp-card${st.code==="ended"?" is-ended":""}" data-campaign-card="${esc(c.slug)}">
-    <div class="row"><h3>${esc(c.name)}</h3><span class="badge ${CAMP_BADGE[st.code]||"idle"}">${esc(st.label||"")}</span></div>
-    <div class="camp-detail">${esc(st.detail||"")}${c.visibility==="private"?" · private":""}</div>
-    <div class="camp-pay">${esc(c.payout_text||"")}</div>
+  const st=c.status||{},m=c.mine||{},cm=c.cap_meter,due=campaignDue(c),unset=(c.payout_text||"")===PAYOUT_UNSET;
+  const pay=unset?(c.can_edit?`<button type="button" class="secondary camp-setpay" data-campaign-payout="${esc(c.slug)}">Set payout</button>`:`<div class="camp-detail">${PAYOUT_UNSET}</div>`)
+    :`<div class="camp-pay">${esc(c.payout_text||"")}</div>`;
+  const frac=cm?Math.max(0,Math.min(1,cm.fraction||0)):0;
+  const meterLabel=cm?cm.label:(c.budget_text?`Budget ${c.budget_text} · no cap set`:"No cap set");
+  return `<article class="camp-card${st.code==="ended"?" is-ended":""}${due?" is-due":""}" data-campaign-card="${esc(c.slug)}">
+    <div class="row"><h3><a class="camp-link stretched-link" href="#campaign/${encodeURIComponent(c.slug)}">${esc(c.name)}</a></h3><span class="badge ${CAMP_BADGE[st.code]||"idle"}">${esc(st.label||"")}</span></div>
+    <div class="camp-detail">${due?`<span class="camp-due">${due}</span> · `:""}${esc(st.detail||"")}${c.visibility==="private"?" · private":""}</div>
+    ${pay}
     <div class="camp-plats">${(c.platforms||[]).map(p=>`<span class="pchip">${PLATFORM_ICON[p]||""}${esc(PLATFORM_SHORT[p]||p)}</span>`).join("")}</div>
     <div class="camp-kv"><span><b>${m.posted||0}</b> posted</span><span><b>${m.claimed||0}</b> claimed</span><span><b>${esc(m.paid_fmt||"Rp 0")}</b> paid</span>${m.planned?`<span><b>${m.planned}</b> planned</span>`:""}</div>
-    ${c.budget_text?`<div class="camp-meter-label">Budget ${esc(c.budget_text)}</div>`:""}
-    <button class="secondary camp-open" type="button" data-campaign-open="${esc(c.slug)}">Details</button>
-    ${cm?`<div class="camp-meter" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(cm.fraction*100)}" aria-label="${esc(cm.label)}"><i style="transform:scaleX(${cm.fraction})"></i></div><div class="camp-meter-label">${esc(cm.label)}</div>`:""}
+    <div class="camp-meter${cm?"":" is-empty"}" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(frac*100)}" aria-label="${esc(meterLabel)}"><i style="transform:scaleX(${frac})"></i></div>
+    <div class="camp-meter-label">${esc(meterLabel)}${cm&&c.budget_text?` · budget ${esc(c.budget_text)}`:""}</div>
   </article>`;
 }
 let campaignOpen=null,campaignDetail=null; // 161: slug of the open detail page + its GET /api/campaigns/{slug}
 async function openCampaign(slug){
+  if($("campaignActions"))$("campaignActions").innerHTML="";   // New campaign only on the list
   campaignOpen=slug;campaignDetail=null;$("campaignList").innerHTML=`<p class="publish-empty">Loading…</p>`;
   try{campaignDetail=await api("/api/campaigns/"+encodeURIComponent(slug));if(campaignOpen===slug){renderCampaignDetail();loadCdAutoImport(slug)}}
   catch(err){$("campaignList").innerHTML=`<div class="error-box">${esc(err.message)} <button class="plain" type="button" data-campaign-back>Back</button></div>`}
@@ -3864,6 +4020,46 @@ async function openCampaign(slug){
 }
 function cdBox(title,body){return body?`<section class="cd-box"><h3>${esc(title)}</h3>${body}</section>`:""}
 function cdList(items){return items&&items.length?`<ul>${items.map(t=>`<li>${esc(t)}</li>`).join("")}</ul>`:""}
+// Phase 2 (owner 2026-10-14): "Set payout" (card) / Edit (detail) opens a small payout form; Save = PUT the campaign's
+// rules with the new payout section (the server's payouts.model_from_rules reads it; wording stays server-side).
+let cdPayoutOpen=null;
+const PAYOUT_FORMS={fixed:"Per post",block:"Per block",cpm:"CPM"};   // short: one row at 390
+function cdPayoutKind(p){return p?.model==="cpm"?"cpm":p?.model==="fixed_threshold"||(p?.per_video&&p?.min_views)?"fixed":p?.per_block||p?.model==="per_block"?"block":"fixed"}
+function cdPayoutBox(c,v){
+  const lines=`<ul class="cd-pay">${(v.payout||[]).map(t=>`<li>${esc(t)}</li>`).join("")}</ul>`;
+  const unset=(c.payout_text||"")===PAYOUT_UNSET||!(v.payout||[]).length;
+  if(!c.can_edit)return cdBox("Payout",unset?`<p class="camp-detail">${PAYOUT_UNSET}</p>`:lines);
+  const open=cdPayoutOpen===c.slug,p=(c.rules||{}).payout||{},kind=cdPayoutForm?.kind||cdPayoutKind(p),cur=(p.currency||"IDR").toUpperCase();
+  const num=(x)=>x==null||x===""?"":esc(x);
+  const amount=kind==="cpm"?p.rate_per_1000??p.rate:kind==="block"?p.per_block:p.amount??p.per_video;
+  const views=kind==="block"?p.block_views:kind==="fixed"?p.min_views:"";
+  const max=kind==="block"?p.max_paid_views_per_video:kind==="cpm"?p.max_payout_per_video:"";
+  const form=open?`<form class="cd-payform" data-cd-payout="${esc(c.slug)}" novalidate>
+      <div class="seg" role="group" aria-label="How it pays">${Object.entries(PAYOUT_FORMS).map(([k,l])=>`<button type="button" aria-pressed="${k===kind}" data-cd-paykind="${k}">${l}</button>`).join("")}</div>
+      <div class="cd-payrow"><label class="field">Currency<select name="currency">${["IDR","USD"].map(x=>`<option ${x===cur?"selected":""}>${x}</option>`).join("")}</select></label>
+        <label class="field">${kind==="cpm"?"Amount per 1.000 views":kind==="block"?"Amount per block":"Amount per post"}<input name="amount" inputmode="decimal" value="${num(amount)}" required></label></div>
+      ${kind==="cpm"?"":`<div class="cd-payrow"><label class="field">${kind==="block"?"Views per block":"Views needed"}<input name="views" inputmode="numeric" value="${num(views)}" required></label>
+        ${kind==="block"?`<label class="field">Max paid views per post <span class="field-opt">· optional</span><input name="max" inputmode="numeric" value="${num(max)}"></label>`:""}</div>`}
+      ${kind==="cpm"?`<div class="cd-payrow"><label class="field">Max payout per post <span class="field-opt">· optional</span><input name="max" inputmode="decimal" value="${num(max)}"></label></div>`:""}
+      <div class="cd-payactions"><button type="submit" class="primary">Save payout</button><button type="button" class="secondary" data-cd-paycancel>Cancel</button><span class="account-msg" role="status" aria-live="polite"></span></div>
+    </form>`:"";
+  const head=`<div class="row"><h3>Payout</h3>${open?"":`<button type="button" class="secondary cd-payedit" data-cd-payedit="${esc(c.slug)}">${unset?"Set payout":"Edit"}</button>`}</div>`;
+  return `<section class="cd-box cd-paybox">${head}${unset&&!open?`<p class="camp-detail">${PAYOUT_UNSET}</p>`:open?"":lines}${form}</section>`;
+}
+let cdPayoutForm=null;   // {kind} while the form is open and the user switched the model
+function cdPayoutBody(form,kind,old){
+  const n=(v)=>{const x=String(v||"").trim().replace(/\./g,"").replace(",",".");return x===""?null:Number(x)};
+  const amount=n(form.amount.value),views=form.views?n(form.views.value):null,max=form.max?n(form.max.value):null,currency=form.currency.value;
+  if(!(amount>0))return {error:"Enter an amount above 0."};
+  if(kind!=="cpm"&&!(Number.isInteger(views)&&views>0))return {error:"Enter the number of views (a whole number)."};
+  if(max!=null&&!(max>0))return {error:"The maximum must be above 0, or leave it empty."};
+  const keep=cdPayoutKind(old)===kind?{...old}:{};
+  ["model","stated_as","amount","per_video","min_views","per_block","block_views","rate","rate_per_1000","max_paid_views_per_video","max_payout_per_video","max_counted_views"].forEach(k=>delete keep[k]);
+  const pay=kind==="cpm"?{model:"cpm",rate_per_1000:amount,...(max?{max_payout_per_video:max}:{})}
+    :kind==="block"?{model:"per_block",per_block:amount,block_views:views,...(max?{max_paid_views_per_video:max}:{})}
+    :{model:"fixed_threshold",amount,min_views:views};
+  return {payout:{...keep,currency,...pay}};
+}
 function renderCampaignDetail(){
   const c=campaignDetail,v=c.view||{},st=c.status||{},m=c.mine||{},cm=c.cap_meter,q=v.questions||{open:[],answered:[]};
   const mine=`<div class="camp-kv"><span><b>${m.posted||0}</b> posted</span><span><b>${m.claimed||0}</b> claimed</span><span><b>${esc(m.paid_fmt||"Rp 0")}</b> paid</span><span><b>${esc(m.expected_fmt||"Rp 0")}</b> expected (claimed)</span>${m.planned?`<span><b>${m.planned}</b> planned</span>`:""}</div>`
@@ -3878,7 +4074,7 @@ function renderCampaignDetail(){
       ${c.can_edit?`<button class="secondary" type="button" data-campaign-pause="${c.paused?"false":"true"}">${c.paused?"Resume":"Pause"}</button>`:""}</div>
     <p class="cd-sub">${esc(st.detail||"")}${v.period?` · ${esc(v.period)}`:""}${c.visibility==="private"?" · private":""}</p>
     <div class="cd-grid">
-      <div class="cd-col">${cdBox("Payout",`<ul class="cd-pay">${(v.payout||[]).map(t=>`<li>${esc(t)}</li>`).join("")}</ul>`)}
+      <div class="cd-col">${cdPayoutBox(c,v)}
         ${cdBox("Your numbers",mine)}${cdBox("Posting weeks",weeks)}${cdBox("Budget",cdList(v.budget))}${cdBox("Claim",claim)}</div>
       <div class="cd-col">${cdBox("Platforms",`<div class="cd-chips">${(v.platforms||[]).map(p=>`<span class="cd-chip">${PLATFORM_ICON[p.slug]||""}${esc(p.name)}</span>`).join("")}</div>`)}
         ${cdBox("Hashtags, in this order (at the end of the caption)",(v.hashtags||[]).length?`<div class="cd-chips">${v.hashtags.map((h,i)=>`<span class="cd-chip"><small>${i+1}</small>${esc(h)}</span>`).join("")}</div>`:"")}
@@ -3889,19 +4085,39 @@ function renderCampaignDetail(){
   </div>`;
 }
 document.addEventListener("click",async e=>{
+  const pe=e.target.closest("[data-cd-payedit]");
+  if(pe){cdPayoutOpen=pe.dataset.cdPayedit;cdPayoutForm=null;renderCampaignDetail();document.querySelector(".cd-payform input[name=amount]")?.focus();return}
+  if(e.target.closest("[data-cd-paycancel]")){cdPayoutOpen=null;cdPayoutForm=null;renderCampaignDetail();document.querySelector("[data-cd-payedit]")?.focus();return}
+  const pk=e.target.closest("[data-cd-paykind]");
+  if(pk&&campaignDetail){cdPayoutForm={kind:pk.dataset.cdPaykind};renderCampaignDetail();document.querySelector(`[data-cd-paykind="${pk.dataset.cdPaykind}"]`)?.focus();return}
+  const sp=e.target.closest("[data-campaign-payout]");
+  if(sp){cdPayoutOpen=sp.dataset.campaignPayout;return go("#campaign/"+encodeURIComponent(sp.dataset.campaignPayout))}
   const o=e.target.closest("[data-campaign-open],[data-campaign-card]");
-  if(o&&!e.target.closest("a")){const slug=o.dataset.campaignOpen||o.dataset.campaignCard;return go("#campaign/"+encodeURIComponent(slug))}
+  if(o&&!e.target.closest("a,button,input,select,form")){const slug=o.dataset.campaignOpen||o.dataset.campaignCard;return go("#campaign/"+encodeURIComponent(slug))}
   if(e.target.closest("[data-campaign-back]"))return go("#campaign");
   const pz=e.target.closest("[data-campaign-pause]");
   if(pz&&campaignDetail){setBusy(pz,true);try{campaignDetail={...campaignDetail,...await api("/api/campaigns/"+encodeURIComponent(campaignDetail.slug),{method:"PUT",body:JSON.stringify({paused:pz.dataset.campaignPause==="true"})})};renderCampaignDetail();loadCampaigns()}catch(err){setBusy(pz,false);alert(err.message)}}
 });
+document.addEventListener("submit",async e=>{
+  const f=e.target.closest?.("[data-cd-payout]");if(!f||!campaignDetail)return;e.preventDefault();
+  const msg=f.querySelector(".account-msg"),kind=cdPayoutForm?.kind||cdPayoutKind((campaignDetail.rules||{}).payout);
+  const body=cdPayoutBody(f,kind,(campaignDetail.rules||{}).payout||{});
+  if(body.error){msg.textContent=body.error;msg.classList.add("is-error");return}
+  const btn=f.querySelector("button[type=submit]");setBusy(btn,true,"Saving…");
+  try{
+    const slug=campaignDetail.slug;
+    await api("/api/campaigns/"+encodeURIComponent(slug),{method:"PUT",body:JSON.stringify({rules:{...(campaignDetail.rules||{}),...body}})});
+    cdPayoutOpen=null;cdPayoutForm=null;await openCampaign(slug);loadCampaigns();showToast("Payout saved.");
+  }catch(err){setBusy(btn,false);msg.textContent=err.message;msg.classList.add("is-error")}
+});
 function renderCampaignStep(){
+  $("campaignActions").innerHTML="";
   if(campaignNew)return renderCampaignNew();
   if(campaignOpen)return openCampaign(campaignOpen);
   const order={active:0,ending_soon:0,paused:1,ended:2};
   const list=[...campaignStep].sort((a,b)=>(order[a.status?.code]??1)-(order[b.status?.code]??1));
-  const add=currentUser?.role==="admin"?`<div class="cn-bar"><button type="button" data-campaign-new>New campaign</button></div>`:"";
-  $("campaignList").innerHTML=add+(list.length?`<div class="camp-grid">${list.map(campaignCardHtml).join("")}</div>`
+  $("campaignActions").innerHTML=currentUser?.role==="admin"?`<button type="button" class="primary sa-btn" data-campaign-new aria-label="New campaign"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span class="sa-long" aria-hidden="true">New campaign</span></button>`:"";   // phase 2: in the title row; phones: the + alone
+  $("campaignList").innerHTML=(list.length?`<div class="camp-grid">${list.map(campaignCardHtml).join("")}</div>`
     :`<p class="publish-empty">No campaigns yet.</p>`);
 }
 
@@ -3918,6 +4134,7 @@ function cnPreviewHtml(p){
     ${(v.content_rules||[]).length?`<h4>Content rules</h4>${cdList(v.content_rules)}`:""}${(v.budget||[]).length?`<h4>Budget</h4>${cdList(v.budget)}`:""}`;
 }
 function renderCampaignNew(){
+  if($("campaignActions"))$("campaignActions").innerHTML="";
   const n=campaignNew,box=$("campaignList");
   if(!n.parsed){
     box.innerHTML=`<div class="cd cn">
@@ -4040,8 +4257,8 @@ function schedRowHtml(p){
     <div class="qactions">
       <button class="secondary" type="button" data-sched-replan="${esc(p.id)}">Reschedule</button>
       <button class="secondary" type="button" data-sched-send="${esc(p.id)}" ${rs.state==="ready"?"":"disabled title=\"The final isn't rendered yet\""}>Send to phone</button>
-      <button class="secondary" type="button" data-sched-mark="${esc(p.id)}" aria-expanded="${open?"true":"false"}">Mark posted</button>
-      <button class="secondary" type="button" data-sched-drop="${esc(p.id)}">Drop</button>
+      <button class="primary" type="button" data-sched-mark="${esc(p.id)}" aria-expanded="${open?"true":"false"}">Mark posted</button>
+      <button class="quiet" type="button" data-sched-drop="${esc(p.id)}">Drop</button>
     </div>
     ${open?`<form class="qmark" data-sched-mark-form="${esc(p.id)}" novalidate><div class="field"><label for="surl-${esc(p.id)}">Link to the post${p.account_handle?" on @"+esc(p.account_handle):""}</label><input id="surl-${esc(p.id)}" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://…"></div>
       <button class="primary" type="submit">Save</button><button class="secondary" type="button" data-sched-mark="${esc(p.id)}">Cancel</button><div class="account-msg" role="status" aria-live="polite"></div></form>`:""}
@@ -4058,20 +4275,36 @@ function renderScheduleView(){
   const d=scheduleData,today=wibDateKey(new Date()),wide=SCHED_WIDE.matches,view=wide?scheduleView:"list",free=freeSlotsText();
   $("schedWeekLabel").textContent=scheduleWeek===0?"This week":scheduleWeek===1?"Next week":scheduleWeek===-1?"Last week":wibDay(d.from)+" –";
   document.querySelectorAll("[data-sched-view]").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.schedView===view)));
-  const over=d.overdue.length?`<div class="sday is-overdue"><h3>Overdue · ${d.overdue.length}</h3>${d.overdue.map(schedRowHtml).join("")}</div>`:"";
+  const live=(list)=>list.filter(p=>!schedDropping.has(p.id));
+  const over=live(d.overdue).length?`<div class="sday is-overdue"><h3>Overdue · ${live(d.overdue).length}</h3>${live(d.overdue).map(schedRowHtml).join("")}</div>`:"";
   const total=d.overdue.length+d.days.reduce((a,x)=>a+x.posts.length,0);
   let body;
   if(view==="week"){
     body=`<div class="sweek">${d.days.map(day=>`<div class="sweek-day${day.date===today?" is-today":""}"><h4>${esc(wibDay(day.date+"T12:00:00+07:00"))}</h4>
-      ${day.posts.map(p=>`<button type="button" class="sweek-post${p.eligible===false?" is-warn":""}" data-sched-open="${esc(p.id)}"><b>${PLATFORM_ICON[p.platform]||""}${esc(fmtWib(p.scheduled_for,false).replace(" WIB",""))}</b><span>${esc(p.title||"")}</span></button>`).join("")||(day.date>=today&&free?`<span class="sweek-free">Free</span>`:"")}</div>`).join("")}</div>`;
+      ${live(day.posts).map(p=>`<button type="button" class="sweek-post${p.eligible===false?" is-warn":""}" data-sched-open="${esc(p.id)}"><b>${PLATFORM_ICON[p.platform]||""}${esc(fmtWib(p.scheduled_for,false).replace(" WIB",""))}</b><span>${esc(p.title||"")}</span></button>`).join("")||(day.date>=today&&free?`<span class="sweek-free">Free</span>`:"")}</div>`).join("")}</div>`;
   }else{
-    body=d.days.map(day=>`<div class="sday"><h3>${esc(wibDay(day.date+"T12:00:00+07:00"))}${day.date===today?` <span class="is-today">Today</span>`:""}</h3>
-      ${day.posts.length?day.posts.map(schedRowHtml).join(""):`<div class="sfree">${day.date<today?"Nothing planned":free?`Free: ${esc(free)} WIB`:"Nothing planned. Add times in Settings → Posting times."}</div>`}</div>`).join("");
+    const pastEmpty=d.days.filter(day=>day.date<today&&!live(day.posts).length);
+    body=(pastEmpty.length?`<div class="sday sday-past" data-sched-past>${pastEmpty.length===1?esc(wibDay(pastEmpty[0].date+"T12:00:00+07:00")):`${esc(wibDay(pastEmpty[0].date+"T12:00:00+07:00"))} – ${esc(wibDay(pastEmpty.at(-1).date+"T12:00:00+07:00"))}`}: nothing planned</div>`:"")
+      +d.days.filter(day=>!pastEmpty.includes(day)).map(day=>`<div class="sday"><h3>${esc(wibDay(day.date+"T12:00:00+07:00"))}${day.date===today?` <span class="is-today">Today</span>`:""}</h3>
+      ${live(day.posts).length?live(day.posts).map(schedRowHtml).join(""):`<div class="sfree">${free?`Free: ${esc(free)} WIB`:"Nothing planned. Add times in Settings → Posting times."}</div>`}</div>`).join("");
   }
   const tgNote=total&&d.telegram_ready===false?`<p class="plan-block sched-tg">Reminders go to your own Telegram chat, which isn't set up yet. <button class="plain" type="button" data-account>Add it in Account → Telegram</button></p>`
     :total&&d.reminder_lead_min!=null?`<p class="plan-intro sched-lead">Telegram reminder ${d.reminder_lead_min?d.reminder_lead_min+" min before":"at"} each post (Settings → Posting times).</p>`:"";
   $("scheduleList").innerHTML=tgNote+over+(total?"":`<p class="publish-empty">Nothing planned this week. Use <b>Approve &amp; schedule</b> on a clip in <button class="plain" type="button" data-nav="queue">Review</button>.</p>`)+body;
 }
+// phase 2: Drop = gone at once with Undo (5 s); the PATCH goes out when the toast expires or the page closes.
+const schedDropping=new Map();
+function dropPlanned(id){
+  const p=schedPost(id);if(!p||schedDropping.has(id))return;
+  schedDropping.set(id,setTimeout(()=>commitDrop(id),5000));renderScheduleView();
+  showToast(`Dropped “${p.title||"clip"}” from the schedule.`,"Undo",()=>{clearTimeout(schedDropping.get(id));schedDropping.delete(id);renderScheduleView()},5000);
+}
+async function commitDrop(id,keepalive=false){
+  if(!schedDropping.has(id))return;schedDropping.delete(id);
+  try{await api("/api/posts/"+encodeURIComponent(id),{method:"PATCH",body:JSON.stringify({status:"dropped"}),keepalive});if(!keepalive)await loadSchedule()}
+  catch(err){if(!keepalive){showToast("Couldn't drop it: "+err.message);await loadSchedule()}}
+}
+window.addEventListener("pagehide",()=>{[...schedDropping.keys()].forEach(id=>{clearTimeout(schedDropping.get(id));commitDrop(id,true)})});
 function schedPost(id){if(!scheduleData)return null;for(const p of scheduleData.overdue)if(p.id===id)return p;for(const d of scheduleData.days)for(const p of d.posts)if(p.id===id)return p;return null}
 document.addEventListener("click",async e=>{
   const w=e.target.closest("[data-sched-week]");if(w){const n=+w.dataset.schedWeek;scheduleWeek=n===0?0:scheduleWeek+n;return loadSchedule()}
@@ -4086,8 +4319,7 @@ document.addEventListener("click",async e=>{
     try{await api("/api/publish/send-to-phone",{method:"POST",body:JSON.stringify({candidate_id:p.candidate_id,platform:p.platform})});schedSent[p.id]=true;renderScheduleView();refreshRunningJobs()}
     catch(err){setBusy(sd,false);alert(err.message)}return}
   const dr=e.target.closest("[data-sched-drop]");
-  if(dr){if(!dr.classList.contains("is-confirm")){dr.classList.add("is-confirm");dr.textContent="Confirm drop";setTimeout(()=>{if(document.contains(dr)){dr.classList.remove("is-confirm");dr.textContent="Drop"}},4000);return}
-    setBusy(dr,true);try{await api("/api/posts/"+encodeURIComponent(dr.dataset.schedDrop),{method:"PATCH",body:JSON.stringify({status:"dropped"})});await loadSchedule()}catch(err){setBusy(dr,false);alert(err.message)}}
+  if(dr)return dropPlanned(dr.dataset.schedDrop);
 });
 document.addEventListener("submit",async e=>{
   const f=e.target.closest?.("[data-sched-mark-form]");if(!f)return;e.preventDefault();
@@ -4176,7 +4408,7 @@ async function loadSettings(){
   try{
     settingsCache=await api("/api/settings");
     $("settingsPanel").innerHTML=SETTINGS_GROUPS.map(([g,all])=>[g,all.filter(k=>settingsCache[k])]).filter(([,keys])=>keys.length).map(([g,keys])=>`
-      <section class="inset-group" data-settings-group>
+      <section class="inset-group" data-settings-group data-settings-sec="${SETTINGS_SECTION[g]||"system"}">
         <h3 class="inset-title">${esc(g)}</h3>
         <div class="inset-list">${keys.map(k=>{const s=settingsCache[k],sec=isSecretKey(k),id="set-"+k;
           return `<div class="inset-row" data-setting-row data-search="${esc((SETTING_LABELS[k]||k)+" "+k+" "+g).toLowerCase()}">
@@ -4185,6 +4417,7 @@ async function loadSettings(){
           </div>`}).join("")}</div>
       </section>`).join("");
     loadAiStatus();
+    if(lsGet("settings_sec"))settingsSec=lsGet("settings_sec");
     filterSettings();updateSettingsDirty();updateSubtitleDefaultsLine();if(!clipsTouched)updateCampaignHint();
     postingTimesDraft=null;renderPostingTimes();
   }catch(e){$("settingsPanel").innerHTML=`<div class="error-box">${esc(e.message)}</div>`}
@@ -4208,10 +4441,11 @@ function updateSettingsDirty(){
   const n=Object.keys(changedSettings()).length,b=$("saveSettings");
   document.querySelectorAll("[data-setting]").forEach(i=>i.closest("[data-setting-row]")?.classList.toggle("is-changed",Object.prototype.hasOwnProperty.call(changedSettings(),i.dataset.setting)));
   if(!b.classList.contains("is-busy")&&!b.classList.contains("is-saved"))b.disabled=!n;
+  const rl=$("reloadSettings");if(rl)rl.disabled=!n;   // phase 2: "Discard changes" only when there are some
   $("settingsDirty").textContent=n?`${n} unsaved change${n===1?"":"s"}`:"";
 }
 function filterSettings(){
-  const q=($("settingsSearch")?.value||"").trim().toLowerCase();let any=false;
+  const q=($("settingsSearch")?.value||"").trim().toLowerCase();let any=false;syncSettingsSection();
   document.querySelectorAll("[data-settings-group]").forEach(g=>{let shown=0;g.querySelectorAll("[data-setting-row]").forEach(r=>{const ok=!q||r.dataset.search.includes(q);r.hidden=!ok;if(ok)shown++});g.hidden=!shown;if(shown)any=true});
   const pa=$("accountsAdmin");if(pa){const hit=!q||"posting accounts handles platforms tiktok instagram youtube facebook".includes(q);pa.hidden=!hit;if(hit&&q)any=true}
   const ua=$("usersAdmin");if(ua&&currentUser?.role==="admin"){const hit=!q||"users accounts members admins password".includes(q);ua.hidden=!hit;if(hit&&q)any=true}
@@ -4268,6 +4502,7 @@ document.addEventListener("click",e=>{
   if(e.target.closest("#reloadSettings")){loadSettings();return loadWatermarkAssets();}
   const wa=e.target.closest("[data-watermark-activate]");if(wa)return activateWatermarkAsset(wa.dataset.watermarkActivate);
   const wd=e.target.closest("[data-watermark-delete]");if(wd)return deleteWatermarkAsset(wd.dataset.watermarkDelete);
+  const wr=e.target.closest("[data-watermark-rename]");if(wr)return renameWatermark(wr.dataset.watermarkRename);
   if(e.target.closest("#saveSettings"))return saveSettings();
   const ri=e.target.closest("[data-running-job]");
   if(ri){
@@ -4482,8 +4717,22 @@ async function loadTrack(){
 function trackTable(title,rows,first){
   if(!rows.length)return "";
   return `<section class="cd-box tr-box"><h3>${esc(title)}</h3><div class="tr-table" role="table" aria-label="${esc(title)}">
-    <div class="tr-row tr-head" role="row"><span role="columnheader">${esc(first)}</span><span role="columnheader">Posts</span><span role="columnheader">Views</span><span role="columnheader">Expected</span><span role="columnheader">Paid</span></div>
+    <div class="tr-row tr-head" role="row"><span role="columnheader" class="tr-name">${esc(first)}</span><span role="columnheader">Posts</span><span role="columnheader">Views</span><span role="columnheader">Expected</span><span role="columnheader">Paid</span></div>
     ${rows.map(r=>`<div class="tr-row" role="row"><span role="cell" class="tr-name">${esc(r.name)}</span><span role="cell">${esc(r.posts)}</span><span role="cell">${esc(r.views_fmt)}</span><span role="cell">${esc(r.expected_fmt)}</span><span role="cell">${esc(r.paid_fmt)}</span></div>`).join("")}</div></section>`;
+}
+// phase 2 (owner 2026-10-14): views per day, last 30 days = GET /api/track .daily (shared/track.daily_views). Plain SVG
+// line + area (no chart library); role=img with a spoken summary; dates are WIB days from the server.
+function trackChartHtml(daily){
+  const days=daily?.days||[];if(!days.length)return "";
+  const W=600,H=160,max=Math.max(1,daily.max||0),n=days.length,x=i=>n<2?0:(i/(n-1))*W,y=v=>H-(v/max)*(H-8);
+  const pts=days.map((d,i)=>`${x(i).toFixed(1)},${y(d.views).toFixed(1)}`).join(" ");
+  const peak=days.reduce((a,d)=>d.views>a.views?d:a,days[0]),dm=s=>{const [Y,M,D]=s.split("-").map(Number);return new Date(Date.UTC(Y,M-1,D)).toLocaleDateString("en-GB",{day:"numeric",month:"short",timeZone:"UTC"})};
+  const label=`Views per day, last ${n} days: ${daily.total_fmt} in total${peak.views?`, most on ${dm(peak.date)} (${peak.views_fmt})`:""}.`;
+  return `<section class="cd-box tr-box tr-chart"><div class="tc-head"><h3>Views per day · last ${n} days</h3><b>${esc(daily.total_fmt)}</b></div>
+    <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="${esc(label)}"><title>${esc(label)}</title>
+      <line class="tc-grid" x1="0" y1="${H}" x2="${W}" y2="${H}"/><line class="tc-grid" x1="0" y1="${y(max).toFixed(1)}" x2="${W}" y2="${y(max).toFixed(1)}"/>
+      <polygon class="tc-area" points="0,${H} ${pts} ${W},${H}"/><polyline class="tc-line" points="${pts}"/></svg>
+    <div class="tc-axis" aria-hidden="true"><span>${esc(dm(days[0].date))}</span><span>peak ${esc(peak.views_fmt)}</span><span>${esc(dm(days[n-1].date))}</span></div></section>`;
 }
 function renderTrack(){
   const d=trackData||{},t=d.tiles||{};
@@ -4498,14 +4747,16 @@ function renderTrack(){
       ${tile("At cap",String(t.at_cap),"posts earning the max")}
     </div>
     ${(d.skipped_currencies||[]).length?`<p class="camp-detail">Not in the totals (no exchange rate): ${esc(d.skipped_currencies.join(", "))}</p>`:""}
+    ${trackChartHtml(d.daily)}
     <div class="cd-grid">${trackTable("By campaign",d.campaigns||[],"Campaign")}${trackTable("By platform",d.platforms||[],"Platform")}</div>
-    <section class="cd-box tr-box" style="margin-top:var(--s-3)"><h3>Top clips by views</h3><ol class="tr-top">
+    ${(d.top||[]).length?`<section class="cd-box tr-box" style="margin-top:var(--s-3)"><h3>Top clips by views</h3><ol class="tr-top">
       ${(d.top||[]).map(c=>`<li><span class="tr-title">${esc(c.title)}</span><span class="tr-meta"><span class="pchip">${PLATFORM_ICON[c.platform]||""}${esc(PLATFORM_SHORT[c.platform]||c.platform_name)}</span>${c.campaign_name?` · ${esc(c.campaign_name)}`:""}</span>
-        <span class="tr-num">${esc(c.views_fmt)} views</span><span class="tr-amt">${esc(c.amount_fmt)} <small>${esc(state[c.amount_state]||"")}</small>${c.at_cap?` <span class="badge completed">At cap</span>`:""}</span></li>`).join("")}</ol></section>`;
+        <span class="tr-num">${esc(c.views_fmt)} views</span><span class="tr-amt">${esc(c.amount_fmt)} <small>${esc(state[c.amount_state]||"")}</small>${c.at_cap?` <span class="badge completed">At cap</span>`:""}</span></li>`).join("")}</ol></section>`:""}`;
 }
 // ---- 183 (P3 part 7): Auto-import = GET /api/auto-import: per visible campaign its source channels with a watch
 // switch (PUT /api/auto-import/watch), + recent imports. Checks run in the worker and show in the island.
-let importData=null;
+let importData=null,importsAll=false;
+const IMPORTS_SHOWN=5;   // phase 2: the latest 5, "See all" shows the rest (the API sends up to 30)
 async function loadImport(){
   try{importData=await api("/api/auto-import");renderImport()}
   catch(err){$("importBody").innerHTML=`<div class="error-box">${esc(err.message)}</div>`}
@@ -4524,10 +4775,13 @@ function renderImport(){
     <div class="cd-col">${camps.map(c=>`<section class="cd-box ai-camp"><div class="row"><h3>${esc(c.name)}</h3><span class="badge ${CAMP_BADGE[c.status_code]||"idle"}">${esc(c.status)}</span></div>
       <ul class="ai-list">${c.channels.map(ch=>chan(c,ch)).join("")}</ul></section>`).join("")}
       <p class="ai-note page-intro">Checked every ${esc(d.interval_min)} min. ${infoBtn("aiNoteMore","what gets imported")}</p><p class="info-more small" id="aiNoteMore" hidden>Only videos uploaded after you switch a channel on are imported, within each channel's limits (set them on the campaign page); nothing before the campaign start or after it ends. Layout, language and clip count come from the campaign.</p></div>
-    <div class="cd-col"><section class="cd-box ai-imports"><h3>Recent imports</h3>${imports.length?`<ul class="ai-list">${imports.map(v=>`<li class="ai-li">
+    <div class="cd-col"><section class="cd-box ai-imports"><h3>Recent imports</h3>${imports.length?`<ul class="ai-list" id="aiRecent">${imports.map((v,i)=>`<li class="ai-li"${i>=IMPORTS_SHOWN&&!importsAll?" hidden":""}>
       <div class="ai-grow">${v.job_id&&v.status==="imported"?`<a class="ai-title" href="#review/${encodeURIComponent(v.job_id)}">${esc(v.title)}</a>`:`<div class="ai-title">${esc(v.title)}</div>`}
         <div class="ai-sub">${[v.channel,v.duration_fmt,v.when_fmt].filter(Boolean).map(esc).join(" · ")}</div></div>
-      <span class="badge ${esc(v.badge)}" title="${esc(v.label)}">${esc(v.label)}</span></li>`).join("")}</ul>`:`<p class="camp-detail">Nothing imported yet. Switch a channel on: its next upload shows up here.</p>`}</section></div>
+      <span class="badge ${esc(v.badge)}" title="${esc(v.label)}">${esc(v.label)}</span>
+      ${v.confirmable?`<button class="secondary ai-anyway" type="button" data-ai-confirm="${esc(v.id)}">Import anyway</button>`:""}</li>`).join("")}</ul>
+      ${imports.length>IMPORTS_SHOWN?`<button class="plain ai-seeall" type="button" data-ai-seeall aria-expanded="${importsAll}" aria-controls="aiRecent">${importsAll?"Show fewer":`See all (${imports.length})`}</button>`:""}`
+      :`<p class="camp-detail">Nothing imported yet. Switch a channel on: its next upload shows up here.</p>`}</section></div>
   </div>`;
 }
 document.addEventListener("click",async e=>{
@@ -4570,11 +4824,15 @@ function confirmListHtml(rows){
       <div class="ai-sub">${[v.channel,v.duration_fmt,v.when_fmt,v.label.replace(/^Skipped · /,"")].filter(Boolean).map(esc).join(" · ")}</div></div>
       <button class="secondary" type="button" data-ai-confirm="${esc(v.id)}">Import anyway</button></li>`).join("")}</ul></div>`;
 }
+document.addEventListener("click",e=>{
+  const s=e.target.closest("[data-ai-seeall]");if(!s)return;
+  importsAll=!importsAll;renderImport();document.querySelector("[data-ai-seeall]")?.focus();
+});
 document.addEventListener("click",async e=>{
   const b=e.target.closest("[data-ai-confirm]");if(!b)return;
   setBusy(b,true,"Importing…");
   try{await api(`/api/auto-import/imports/${encodeURIComponent(b.dataset.aiConfirm)}/import`,{method:"POST"});
-    showToast("Importing: it shows in Analyze in a moment");if(campaignOpen)loadCdAutoImport(campaignOpen)}
+    showToast("Importing: it shows in Analyze in a moment");if(campaignOpen)loadCdAutoImport(campaignOpen);if(currentTab==="import")loadImport()}
   catch(err){setBusy(b,false);showToast("Couldn't import: "+err.message)}
 });
 document.addEventListener("submit",async e=>{

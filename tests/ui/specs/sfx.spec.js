@@ -1,6 +1,6 @@
 // 217: Settings → Sound effects. Categories with the sound in use (mine or built-in) + Find sounds (Freesound, CC0,
 // nothing assigned unless "Use for …" is clicked), My sounds (play, rename, category, delete + Undo), upload.
-const { test, expect, nav } = require("../fixtures");
+const { test, expect, nav, settingsSection } = require("../fixtures");
 const SHOTS = process.env.SFX_SHOTS;
 const SIZES = { desktop: [1440, 900], mobile: [390, 844] };
 
@@ -78,6 +78,7 @@ async function openSfx(app, st) {
   await mockSfx(app, st);
   await nav(app, "settings");
   await expect(app.locator("#settingsSheet")).toHaveClass(/open/);
+  await settingsSection(app, "sounds");                                       // phase 2: Settings → Sounds
   await expect(app.locator("#sfxEntrySummary")).toHaveText("2 sounds · 1 in use");
   await app.click("[data-open-sfx]");
   await expect(app.locator("#sfxSheet")).toHaveClass(/open/);

@@ -1,11 +1,12 @@
 // P1.5 part 5: admin Users section in Settings (create with a temporary password, two-step disable, role,
 // reset password, last-admin refusal shown inline) + forced password change after an admin-set password.
 const base = require("@playwright/test");
-const { test, expect, mockApi, newState } = require("../fixtures");
+const { test, expect, mockApi, newState, settingsSection } = require("../fixtures");
 
 const openSettings = async (app) => {
   await app.locator('[data-nav="settings"] >> visible=true').first().click();
   await expect(app.locator("#settingsSheet")).toHaveClass(/open/);
+  await settingsSection(app, "system");                                       // phase 2: Users live under System
 };
 
 test("admin manages users", async ({ app, api }) => {

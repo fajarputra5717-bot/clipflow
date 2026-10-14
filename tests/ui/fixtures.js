@@ -253,6 +253,8 @@ async function nav(page, name) {
   if (!(await page.locator("#accountMenu.open").count())) await page.click("#accountMenuBtn");
   await page.locator(`#accountMenu.open [data-nav="${name}"]`).click();
 }
+// UI phase 2: Settings shows one section at a time (side menu / phone tabs): posting | sounds | watermarks | system.
+async function settingsSection(page, sec) { await page.locator(`[data-settings-nav="${sec}"]`).click(); }
 async function openAccount(page) { await page.click("#accountMenuBtn"); await page.click("#accountMenu [data-account]"); }
 async function menuItem(page, sel) { await page.click("#accountMenuBtn"); await page.click(`#accountMenu ${sel}`); }
 
@@ -317,4 +319,4 @@ function publishCards(rows, api) {
   return out;
 }
 
-module.exports = { test, expect: base.expect, job, candidate, nav, openAccount, menuItem, blockingProblems, mockApi, newState, mockReviewClips, reviewClip };
+module.exports = { test, expect: base.expect, job, candidate, nav, settingsSection, openAccount, menuItem, blockingProblems, mockApi, newState, mockReviewClips, reviewClip };

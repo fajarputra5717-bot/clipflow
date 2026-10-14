@@ -29,10 +29,11 @@ test("campaign cards: status, payout line, my totals, budget + cap meter, ended 
   const ime = app.locator('[data-campaign-card="ime-roleplay"]');
   await expect(ime.locator(".badge")).toHaveText("Active");
   await expect(ime.locator(".badge")).toHaveClass(/completed/);
-  await expect(ime.locator(".camp-detail")).toHaveText("Week 1 · 1 day left");
+  await expect(ime.locator(".camp-detail")).toHaveText("W1 closes today · Week 1 · 1 day left");   // phase 2: ≤ 2 days = highlighted
+  await expect(ime).toHaveClass(/is-due/);
   await expect(ime.locator(".camp-pay")).toHaveText("Rp 200.000 per post at 40.000 views, max 2 per platform account/month");
   await expect(ime.locator(".camp-kv")).toHaveText(/3 posted\s*2 claimed\s*Rp 200.000 paid\s*1 planned/);
-  await expect(ime.locator(".camp-meter-label").last()).toHaveText("Your month: Rp 400.000 of Rp 2.400.000 cap");
+  await expect(ime.locator(".camp-meter-label")).toHaveText("Your month: Rp 400.000 of Rp 2.400.000 cap · budget Rp 20.000.000/month (4 refills of Rp 5.000.000)");
   await expect(ime.locator('[role="meter"]')).toHaveAttribute("aria-valuenow", "17");
   await expect(app.locator('[data-campaign-card="fandra-octo"] .badge')).toHaveClass(/attention/);
   await expect(app.locator('[data-campaign-card="old"]')).toHaveClass(/is-ended/);
@@ -93,11 +94,11 @@ test("campaign detail: members see no Pause; unknown campaign shows the error wi
   api.campaignDetail = { "ime-roleplay": detail({ can_edit: false }) };
   await app.reload();
   await app.locator('#flow [data-nav="campaign"]').click();
-  await app.locator('[data-campaign-open="ime-roleplay"]').click();
+  await app.locator('[data-campaign-card="ime-roleplay"] .camp-link').click();   // phase 2: the whole card is the link
   await expect(app.locator(".cd-head h2")).toBeVisible();
   await expect(app.locator("[data-campaign-pause]")).toHaveCount(0);
   await app.locator('#flow [data-nav="campaign"]').click();          // stepper Campaign = back to the cards
   await expect(app.locator(".camp-card")).toHaveCount(2);
-  await app.locator('[data-campaign-open="gone"]').click();
+  await app.locator('[data-campaign-card="gone"] .camp-link').click();
   await expect(app.locator("#campaignList .error-box")).toContainText("Campaign not found");
 });

@@ -81,6 +81,7 @@ async function smallTargets(app) {
   return app.evaluate(() => {
     const hit = (e) => {   // [height, width] incl. absolutely positioned ::before/::after hit areas
       if (e.matches("input[type=checkbox],input[type=radio]") && e.closest("label")) e = e.closest("label");   // the label is the target
+      if (e.matches(".stretched-link")) e = e.offsetParent || e;   // phase 2: its ::after covers the whole card
       const r = e.getBoundingClientRect(); let h = r.height, w = r.width;
       for (const p of ["::before", "::after"]) {
         const cs = getComputedStyle(e, p);
@@ -127,9 +128,13 @@ test("phone: every control on every page has a ≥ 44 px touch target", async ({
     await app.locator("#accountMenuBtn").click();
     await app.locator(`#accountMenu [data-nav="${sheet}"]`).click();
     await app.waitForTimeout(700);
-    const st = await smallTargets(app); if (st.length) bad[`sheet-${sheet}`] = st;
+    if (sheet === "settings") for (const sec of ["posting", "sounds", "watermarks", "system"]) {   // phase 2: one section at a time
+      await app.locator(`[data-settings-nav="${sec}"]`).click(); await app.waitForTimeout(200);
+      const ss = await smallTargets(app); if (ss.length) bad[`sheet-settings-${sec}`] = ss;
+    } else { const st = await smallTargets(app); if (st.length) bad[`sheet-${sheet}`] = st; }
     if (sheet === "settings") {   // 217: Settings → Sound effects, with a Find sounds panel open
       api.sfx = SFX_FIXTURE; api.sfxResults = SFX_FIXTURE.results;
+      await app.locator('[data-settings-nav="sounds"]').click();
       await app.locator("[data-open-sfx]").click(); await app.waitForTimeout(500);
       await app.locator('[data-sfx-find="laugh"]').click(); await app.waitForTimeout(500);
       await expect(app.locator("#sfxRes-laugh .sfx-res")).toHaveCount(1);

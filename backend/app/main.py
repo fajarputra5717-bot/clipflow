@@ -4417,7 +4417,21 @@ def get_track(request: Request):
             keys = ("id", "candidate_id", "job_id", "campaign", "title", "platform", "status", "views", "paid_rp",
                     "expected_rp", "url")
             posts = [dict(zip(keys, r)) for r in cur.fetchall()]
-    return track.build(posts, campaigns.get)
+            # UI phase 2: views per day for the 30-day chart = the caller's own view snapshots in the window plus each
+            # post's last snapshot before it (its baseline); shared/track.daily_views does the maths.
+            cur.execute(
+                """
+                SELECT post_id, at, views FROM clip_post_views WHERE user_id = %s AND at >= NOW() - INTERVAL '31 days'
+                UNION ALL
+                SELECT * FROM (SELECT DISTINCT ON (post_id) post_id, at, views FROM clip_post_views
+                               WHERE user_id = %s AND at < NOW() - INTERVAL '31 days' ORDER BY post_id, at DESC) b
+                """,
+                (user["id"], user["id"]),
+            )
+            history = cur.fetchall()
+            cur.execute("SELECT id, posted_at FROM clip_posts WHERE user_id = %s AND posted_at IS NOT NULL", (user["id"],))
+            posted = dict(cur.fetchall())
+    return {**track.build(posts, campaigns.get), "daily": track.daily_views(history, posted=posted)}
 
 
 # ============================================================
@@ -5576,6 +5590,27 @@ def activate_watermark_asset(asset_id: str, request: Request):
 
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
+
+
+class WatermarkRename(BaseModel):
+    filename: str
+
+
+@app.patch("/api/assets/watermarks/{asset_id}")
+def rename_watermark_asset(asset_id: str, payload: WatermarkRename, request: Request):
+    """UI phase 2: rename a watermark (display name only; the file keeps its id path). Own rows only (guard + SQL)."""
+    user = current_user(request)
+    name = re.sub(r"\s+", " ", payload.filename or "").strip()[:80]
+    if not name:
+        raise HTTPException(status_code=400, detail="Give the watermark a name")
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("UPDATE watermark_assets SET filename = %s WHERE id = %s AND user_id = %s RETURNING id",
+                        (name, asset_id, user["id"]))
+            if not cur.fetchone():
+                raise HTTPException(status_code=404, detail="Watermark asset not found")
+        conn.commit()
+    return {"status": "ok", "id": asset_id, "filename": name}
 
 
 @app.delete("/api/assets/watermarks/{asset_id}")

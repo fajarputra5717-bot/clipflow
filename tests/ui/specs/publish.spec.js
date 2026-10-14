@@ -51,7 +51,7 @@ test("one card per clip: chips per platform, summary, filters, card download", a
   await app.click('[data-publish-filter="all"]');
   await expect(app.locator("[data-publish-card]")).toHaveCount(3);
   await expect(card(app, "cand-done").locator(".pcard-sum")).toHaveText("Posted on 1 of 1");
-  await app.click('[data-publish-campaign=""]');
+  await app.selectOption("[data-publish-campaign-select]", "");                // phase 2: a dropdown like Review's
   await expect(app.locator(".qgroup h3")).toHaveText(["No campaign"]);
   await expect(app.locator("[data-publish-card]")).toHaveCount(1);
 });
@@ -269,4 +269,24 @@ test("199: Instagram views pulled automatically name Instagram", async ({ app, a
   const r = app.locator('[data-publish-row="cand-a:instagram"]');
   await expect(r.locator(".qviews")).toContainText("from Instagram");
   await expect(r.locator(".qviews-hint")).toContainText("Updated from Instagram automatically");
+});
+
+// UI phase 2, Publish (owner 2026-10-14): captions ≤ ~70ch per line, the campaign filter is a dropdown, a chip still to
+// post is styled as the primary action (white on the accent, ≥ 4.5:1 in both themes).
+test("Publish phase 2: caption width, campaign dropdown, primary chips", async ({ app, api }) => {
+  seed(api);
+  await openPublish(app);
+  await expect(app.locator("[data-publish-campaign-select]")).toBeVisible();
+  await expect(app.locator(".seg[aria-label='Filter campaign']")).toHaveCount(0);
+  const cap = app.locator(".pcard-cap").first();
+  const [w, ch] = await cap.evaluate((e) => { const s = document.createElement("span"); s.textContent = "0".repeat(10); s.style.font = getComputedStyle(e).font; document.body.append(s); const c = s.getBoundingClientRect().width / 10; s.remove(); return [e.getBoundingClientRect().width, c]; });
+  expect(w / ch).toBeLessThanOrEqual(71);
+  for (const theme of ["light", "dark"]) {
+    await app.evaluate((t) => window.applyTheme(t), theme);
+    const ready = app.locator(".pstat.is-ready").first();
+    await expect(ready).toBeVisible();
+    const [fg, bg] = await ready.evaluate((e) => [getComputedStyle(e).color, getComputedStyle(e).backgroundColor]);
+    expect(fg).toBe("rgb(255, 255, 255)");
+    expect(bg).not.toMatch(/rgba\(0, 0, 0, 0\)/);
+  }
 });

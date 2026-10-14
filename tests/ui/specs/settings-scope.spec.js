@@ -1,6 +1,6 @@
 // P1.5 part 3: the Settings sheet renders only the keys the API returns (members: user-level keys only) and
 // labels where each value comes from; a member's save sends only the changed user key.
-const { test, expect } = require("../fixtures");
+const { test, expect, settingsSection } = require("../fixtures");
 
 test.use({});
 test("member sees only user-level settings, labelled Yours / House default", async ({ app, api }) => {
@@ -18,6 +18,7 @@ test("member sees only user-level settings, labelled Yours / House default", asy
   await expect(app.locator("#set-WHISPER_MODEL")).toHaveCount(0);
   await expect(app.locator('label[for="set-WATERMARK_WIDTH"] small')).toContainText("Yours");
   await expect(app.locator('label[for="set-FULLFRAME_CAPTION_Y"] small')).toContainText("House default");
+  await settingsSection(app, "watermarks");                                   // phase 2: the Watermark group
   await app.fill("#set-WATERMARK_WIDTH", "320");
   await app.click("#saveSettings");
   await expect.poll(() => api.calls.find((c) => c.method === "PUT" && c.path === "/api/settings")?.body).toEqual({ values: { WATERMARK_WIDTH: "320" } });

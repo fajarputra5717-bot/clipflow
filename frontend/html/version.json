@@ -1,8 +1,13 @@
 {
- "version": "v3.222",
- "number": 222,
+ "version": "v3.223",
+ "number": 223,
  "date": "2026-10-14",
  "entries": [
+  {
+   "number": 223,
+   "date": "2026-10-14",
+   "title": "UI phase 2 (Lane A pages): Campaigns (title-row New, whole-card link, due highlight, Set payout form, bar on every card), Auto-import (Import anyway, See all),…"
+  },
   {
    "number": 222,
    "date": "2026-10-14",
@@ -22,11 +27,6 @@
    "number": 219,
    "date": "2026-10-14",
    "title": "Editor sound picker uses the SFX library (names your own sound / the fallback, ▶ preview, Your sounds → Settings sheet, laugh) + 218 split timeline fits its ro…"
-  },
-  {
-   "number": 218,
-   "date": "2026-10-14",
-   "title": "Editor: draggable video/timeline split (455 px video default, arrow keys, remembered per user; no-scroll layout from 640 px tall) + timeline word chips one Tab…"
   }
  ]
 }
