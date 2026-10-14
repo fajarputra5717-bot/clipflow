@@ -145,3 +145,18 @@ for (const [w, h] of [[390, 844], [1280, 700]]) {
     expect(bad).toEqual({});
   });
 }
+
+// Lane B, measured on staging after the ×1.2 scale: preset samples were clipped and "Export" hid behind the tab fade
+// with a 380 px inspector; 470 px fits six 14 px tabs (462 px) and costs no video height (it's height-limited).
+test("Editor at 1280×800 / 1440×900: preset samples and inspector tabs fit", async ({ app, api }, info) => {
+  test.skip(info.project.name === "mobile", "desktop inspector");
+  await seed(app, api);
+  for (const [w, h] of [[1280, 800], [1440, 900]]) {
+    await app.setViewportSize({ width: w, height: h });
+    await app.evaluate(() => { location.hash = "#editor/job-done/cand-a"; }); await app.waitForTimeout(800);
+    const r = await app.evaluate(() => ({
+      tiles: [...document.querySelectorAll(".ed-ptile")].filter((t) => t.scrollWidth > t.clientWidth + 1).length,
+      tabs: (() => { const t = document.querySelector('[role=tablist][aria-label="Editor tools"]'); return t ? t.scrollWidth - t.clientWidth : -1; })() }));
+    expect(r, `${w}×${h}`).toEqual({ tiles: 0, tabs: 0 });
+  }
+});
