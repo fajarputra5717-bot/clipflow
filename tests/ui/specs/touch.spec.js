@@ -81,6 +81,7 @@ async function smallTargets(app) {
   return app.evaluate(() => {
     const hit = (e) => {   // [height, width] incl. absolutely positioned ::before/::after hit areas
       if (e.matches("input[type=checkbox],input[type=radio]") && e.closest("label")) e = e.closest("label");   // the label is the target
+      if (e.matches(".stretched-link")) e = e.offsetParent || e;   // phase 2: its ::after covers the whole card
       const r = e.getBoundingClientRect(); let h = r.height, w = r.width;
       for (const p of ["::before", "::after"]) {
         const cs = getComputedStyle(e, p);
