@@ -47,3 +47,42 @@ class Earn(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FinishedLabel(unittest.TestCase):
+    """Review shows a status instead of a disabled Approve on approved clips (owner 2026-10-14)."""
+    def setUp(self):
+        from datetime import timezone
+        from shared.review_state import finished_label
+        self.f, self.utc = finished_label, timezone.utc
+        self.now = datetime(2026, 10, 14, 3, 0, tzinfo=self.utc)          # Wed 10:00 WIB
+
+    def at(self, d, h):
+        return datetime(2026, 10, d, h, 0, tzinfo=self.utc)
+
+    def test_review_and_unapproved_have_none(self):
+        self.assertIsNone(self.f("review", [], self.now))
+        self.assertIsNone(self.f("preview_rendering", [], self.now))
+
+    def test_states(self):
+        self.assertEqual(self.f("rendering", [], self.now), "Approved · Rendering final")
+        self.assertEqual(self.f("completed", [], self.now), "Approved · Not scheduled yet")
+        planned = [{"platform": "tiktok", "status": "planned", "scheduled_for": self.at(15, 10)},   # Thu 17:00 WIB
+                   {"platform": "youtube", "status": "planned", "scheduled_for": self.at(14, 10)}]  # Wed 17:00 WIB
+        self.assertEqual(self.f("completed", planned, self.now), "Approved · Scheduled Wed 17:00")
+        far = [{"platform": "tiktok", "status": "planned", "scheduled_for": self.at(28, 10)}]
+        self.assertEqual(self.f("completed", far, self.now), "Approved · Scheduled Wed 28 Oct 17:00")
+        late = [{"platform": "tiktok", "status": "planned", "scheduled_for": self.at(13, 10)}]
+        self.assertEqual(self.f("completed", late, self.now), "Approved · Scheduled Tue 13 Oct 17:00 (overdue)")
+        dropped = [{"platform": "tiktok", "status": "dropped", "scheduled_for": self.at(15, 10)}]
+        self.assertEqual(self.f("completed", dropped, self.now), "Approved · Not scheduled yet")
+
+    def test_posted(self):
+        posts = [{"platform": "tiktok", "status": "posted"}, {"platform": "youtube", "status": "planned", "scheduled_for": self.at(15, 10)}]
+        self.assertEqual(self.f("completed", posts, self.now), "Posted on TikTok · next Thu 17:00")
+        two = [{"platform": "tiktok", "status": "posted"}, {"platform": "instagram", "status": "claimed"}]
+        self.assertEqual(self.f("completed", two, self.now), "Posted on 2 platforms")
+        late = [{"platform": "tiktok", "status": "posted"}, {"platform": "facebook", "status": "planned", "scheduled_for": self.at(7, 12)}]
+        self.assertEqual(self.f("completed", late, self.now), "Posted on TikTok · next Wed 7 Oct 19:00 (overdue)")   # QA Low 1
+        fb = [{"platform": "facebook", "status": "posted"}]
+        self.assertEqual(self.f("completed", fb, self.now), "Posted on Facebook")   # QA Low 1

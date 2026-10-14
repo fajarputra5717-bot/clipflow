@@ -731,10 +731,31 @@
     return `<span class="ed-capsample${st.box ? " is-box" : ""}${st.shadow ? " has-shadow" : ""}" style="--rest:${st.resting};--hi:${st.highlight};--kw:${kw};--ol:${st.outline}px;letter-spacing:${st.letterSpacing}">${
       words.map((w, i) => `<span class="${i === 1 ? "kw" : i === 0 ? "hi" : ""}">${esc(w)}</span>`).join(" ")}</span>`;
   }
+  // Keyword chips (owner 2026-10-14): filler/stopwords (id + en + spoken particles, from the backend so the worker's
+  // auto-pick and the chips agree) are never offered; the rest are ranked by importance: highlighted first, then
+  // numbers, repeated words and longer words, ties in reading order. A highlighted stopword still shows (to remove it).
+  function keywordChoices(C) {          // order is kept until the caption text changes: chips never jump while you work
+    if (E.kwOrder && E.kwOrder.text === C.text && E.kwOrder.cid === E.cid) return E.kwOrder.list;
+    const stop = E.kwStop && E.kwStop.src === E.state.captions.stopwords ? E.kwStop.set
+      : (E.kwStop = { src: E.state.captions.stopwords, set: new Set(E.state.captions.stopwords || []) }).set;
+    const seen = new Map();
+    C.text.split(/\s+/).forEach((w, i) => {
+      const t = kwToken(w); if (!t) return;
+      const e = seen.get(t); if (e) { e.n++; return; }
+      seen.set(t, { t, w: w.replace(/[^\p{L}\p{N}'-]+/gu, ""), n: 1, i });
+    });
+    const score = (e) => (C.keywords.has(e.t) ? 1000 : 0) + (/\d/.test(e.t) ? 6 : 0) + Math.min(e.n - 1, 3) * 2
+      + (e.t.length >= 7 ? 3 : e.t.length >= 5 ? 2 : e.t.length >= 4 ? 1 : 0);
+    const out = [...seen.values()]
+      .filter((e) => C.keywords.has(e.t) || (!stop.has(e.t) && (e.t.length >= 3 || /\d/.test(e.t))))
+      .sort((a, b) => score(b) - score(a) || a.i - b.i)
+      .map((e) => [e.t, e.w]);
+    E.kwOrder = { text: C.text, cid: E.cid, list: out };
+    return out;
+  }
   function captionsPanel() {
     const C = E.cap, o = capOpt(), cs = E.state.captions, kw = kwColor();
-    const words = [], seen = new Set();
-    for (const w of C.text.split(/\s+/)) { const t = kwToken(w); if (t && !seen.has(t)) { seen.add(t); words.push([t, w.replace(/[^\p{L}\p{N}'-]+/gu, "")]); } }
+    const words = keywordChoices(C);
     const presetOn = (p) => p.style === C.style && p.animation === C.animation;
     const yOn = C.caption_y != null, yVal = yOn ? C.caption_y : cs.auto_caption_y;
     return `
