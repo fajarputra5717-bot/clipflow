@@ -470,3 +470,10 @@ a.rv-frame:focus-visible{outline:none;box-shadow:var(--ring)}
 .rv-issues li{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .rv-issues b{font-weight:600}
 .rv-issues-more{color:var(--muted)}
+/* Phone / narrow (owner 2026-10-14, "Hook title card cut off"): the sticky player sits just under the top bar instead
+   of sliding beneath it, and anything scrolled or focused into view stops below the player, not behind it. */
+@media (max-width:899px){
+  .ed-page{--ed-top:var(--appbar-h,48px)}
+  body.is-staging .ed-page{--ed-top:calc(var(--appbar-h,48px) + 22px)}
+  .ed-page .ed-insp,.ed-page .ed-group,.ed-page .ed-tlwrap{scroll-margin-top:calc(var(--ed-top) + max(40vh,220px) + 8px)}
+}

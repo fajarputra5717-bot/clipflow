@@ -314,6 +314,18 @@ test.describe("Editor page", () => {
     expect(await app.evaluate(() => !!document.activeElement.closest(".ed-tl-words"))).toBe(false);
   });
 
+  test("phone: a section scrolled into view stops below the sticky player (Hook title card not hidden)", async ({ app, api }, info) => {
+    test.skip(info.project.name !== "mobile", "phone layout");
+    await mockEditor(app, api);
+    await app.evaluate(() => { location.hash = "#editor/job-done/cand-a"; });
+    await expect(app.locator("#edHookText")).toBeAttached();
+    const r = await app.evaluate(() => { const g = document.querySelector("#edHookText").closest(".ed-group"); g.scrollIntoView({ block: "start", behavior: "instant" });
+      const p = document.querySelector(".ed-player").getBoundingClientRect(), b = document.querySelector("#toolbar").getBoundingClientRect();
+      return { group: g.getBoundingClientRect().top, player: p.bottom, playerTop: p.top, bar: b.bottom }; });
+    expect(r.group).toBeGreaterThanOrEqual(r.player - 1);
+    expect(r.playerTop).toBeGreaterThanOrEqual(r.bar - 1);            // the player sits under the top bar, not beneath it
+  });
+
   test("Tab order: player controls → timeline → inspector (owner 2026-10-14)", async ({ app, api }) => {
     await mockEditor(app, api);
     await app.evaluate(() => { location.hash = "#editor/job-done/cand-a"; });
