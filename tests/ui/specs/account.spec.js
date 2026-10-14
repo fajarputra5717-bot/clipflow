@@ -52,3 +52,23 @@ test("169: top bar stays at the top and the stepper pill at the bottom when scro
     await expect.poll(() => tip.evaluate((e) => getComputedStyle(e).opacity)).toBe("1");
   }
 });
+
+// UI phase 1 item 5: the menu has no Watermarks / Settings (top-bar icons) in either theme, no Refresh, and the version is
+// a plain label beside "What's new". Phones (no room for those icons beside the island) get the two items in the menu.
+test("account menu: no duplicates of the top-bar icons, no Refresh, version as a label", async ({ app }) => {
+  const phone = test.info().project.name === "mobile";
+  for (const theme of ["light", "dark"]) {
+    await app.evaluate((t) => window.applyTheme(t), theme);
+    await app.click("#accountMenuBtn");
+    await expect(app.locator("#accountMenu")).toHaveClass(/open/);
+    await expect(app.locator('#accountMenu [data-nav="watermarks"]')).toHaveCount(phone ? 1 : 0);
+    await expect(app.locator('#accountMenu [data-nav="settings"]')).toHaveCount(phone ? 1 : 0);
+    if (!phone) await expect(app.locator('#toolbar .icon-btn[data-nav="settings"]')).toBeVisible();
+    await expect(app.locator("#refreshView")).toHaveCount(0);
+    await expect(app.locator("#accountMenu .acct-new summary")).toContainText("What's new");
+    const ver = app.locator("#versionBadge");
+    await expect(ver).toHaveClass(/acct-ver/);
+    expect(await ver.evaluate((e) => getComputedStyle(e).borderTopWidth + getComputedStyle(e).backgroundColor)).toMatch(/^0px(rgba\(0, 0, 0, 0\)|transparent)/);
+    await app.keyboard.press("Escape");
+  }
+});
