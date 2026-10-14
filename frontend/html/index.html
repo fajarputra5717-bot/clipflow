@@ -1262,6 +1262,9 @@ select::-ms-expand{display:none}
 .camp-card.is-due{border-color:var(--badge-warn-line);background:linear-gradient(var(--badge-warn-bg),var(--badge-warn-bg)),var(--panel2)}
 .camp-due{color:var(--badge-warn-fg);font-weight:600}
 .camp-meter.is-empty i{display:none}
+.ai-imports .ai-li{flex-wrap:wrap}
+.ai-anyway{min-height:36px;padding:0 14px;border-radius:999px}
+.ai-seeall{margin-top:8px;color:var(--accent);font-weight:600;background:transparent;border:0;padding:8px 0;min-height:36px}
 .cd-paybox .row{display:flex;align-items:center;gap:8px}.cd-paybox h3{flex:1}
 .cd-payedit{min-height:36px;padding:0 14px;border-radius:999px}
 .cd-payform{display:grid;gap:12px;margin-top:8px}
@@ -4604,7 +4607,8 @@ function renderTrack(){
 }
 // ---- 183 (P3 part 7): Auto-import = GET /api/auto-import: per visible campaign its source channels with a watch
 // switch (PUT /api/auto-import/watch), + recent imports. Checks run in the worker and show in the island.
-let importData=null;
+let importData=null,importsAll=false;
+const IMPORTS_SHOWN=5;   // phase 2: the latest 5, "See all" shows the rest (the API sends up to 30)
 async function loadImport(){
   try{importData=await api("/api/auto-import");renderImport()}
   catch(err){$("importBody").innerHTML=`<div class="error-box">${esc(err.message)}</div>`}
@@ -4623,10 +4627,13 @@ function renderImport(){
     <div class="cd-col">${camps.map(c=>`<section class="cd-box ai-camp"><div class="row"><h3>${esc(c.name)}</h3><span class="badge ${CAMP_BADGE[c.status_code]||"idle"}">${esc(c.status)}</span></div>
       <ul class="ai-list">${c.channels.map(ch=>chan(c,ch)).join("")}</ul></section>`).join("")}
       <p class="ai-note page-intro">Checked every ${esc(d.interval_min)} min. ${infoBtn("aiNoteMore","what gets imported")}</p><p class="info-more small" id="aiNoteMore" hidden>Only videos uploaded after you switch a channel on are imported, within each channel's limits (set them on the campaign page); nothing before the campaign start or after it ends. Layout, language and clip count come from the campaign.</p></div>
-    <div class="cd-col"><section class="cd-box ai-imports"><h3>Recent imports</h3>${imports.length?`<ul class="ai-list">${imports.map(v=>`<li class="ai-li">
+    <div class="cd-col"><section class="cd-box ai-imports"><h3>Recent imports</h3>${imports.length?`<ul class="ai-list" id="aiRecent">${imports.map((v,i)=>`<li class="ai-li"${i>=IMPORTS_SHOWN&&!importsAll?" hidden":""}>
       <div class="ai-grow">${v.job_id&&v.status==="imported"?`<a class="ai-title" href="#review/${encodeURIComponent(v.job_id)}">${esc(v.title)}</a>`:`<div class="ai-title">${esc(v.title)}</div>`}
         <div class="ai-sub">${[v.channel,v.duration_fmt,v.when_fmt].filter(Boolean).map(esc).join(" · ")}</div></div>
-      <span class="badge ${esc(v.badge)}" title="${esc(v.label)}">${esc(v.label)}</span></li>`).join("")}</ul>`:`<p class="camp-detail">Nothing imported yet. Switch a channel on: its next upload shows up here.</p>`}</section></div>
+      <span class="badge ${esc(v.badge)}" title="${esc(v.label)}">${esc(v.label)}</span>
+      ${v.confirmable?`<button class="secondary ai-anyway" type="button" data-ai-confirm="${esc(v.id)}">Import anyway</button>`:""}</li>`).join("")}</ul>
+      ${imports.length>IMPORTS_SHOWN?`<button class="plain ai-seeall" type="button" data-ai-seeall aria-expanded="${importsAll}" aria-controls="aiRecent">${importsAll?"Show fewer":`See all (${imports.length})`}</button>`:""}`
+      :`<p class="camp-detail">Nothing imported yet. Switch a channel on: its next upload shows up here.</p>`}</section></div>
   </div>`;
 }
 document.addEventListener("click",async e=>{
@@ -4669,11 +4676,15 @@ function confirmListHtml(rows){
       <div class="ai-sub">${[v.channel,v.duration_fmt,v.when_fmt,v.label.replace(/^Skipped · /,"")].filter(Boolean).map(esc).join(" · ")}</div></div>
       <button class="secondary" type="button" data-ai-confirm="${esc(v.id)}">Import anyway</button></li>`).join("")}</ul></div>`;
 }
+document.addEventListener("click",e=>{
+  const s=e.target.closest("[data-ai-seeall]");if(!s)return;
+  importsAll=!importsAll;renderImport();document.querySelector("[data-ai-seeall]")?.focus();
+});
 document.addEventListener("click",async e=>{
   const b=e.target.closest("[data-ai-confirm]");if(!b)return;
   setBusy(b,true,"Importing…");
   try{await api(`/api/auto-import/imports/${encodeURIComponent(b.dataset.aiConfirm)}/import`,{method:"POST"});
-    showToast("Importing: it shows in Analyze in a moment");if(campaignOpen)loadCdAutoImport(campaignOpen)}
+    showToast("Importing: it shows in Analyze in a moment");if(campaignOpen)loadCdAutoImport(campaignOpen);if(currentTab==="import")loadImport()}
   catch(err){setBusy(b,false);showToast("Couldn't import: "+err.message)}
 });
 document.addEventListener("submit",async e=>{

@@ -87,3 +87,30 @@ test("Campaign page: 'Found, not imported: confirm?' imports a video on request 
   await expect.poll(() => api.calls.filter((c) => c.method === "POST" && c.path === "/api/auto-import/imports/i3/import").length).toBe(1);
   await expect(app.locator("#cdAutoImport .ai-confirm")).toHaveCount(0);
 });
+
+// UI phase 2 (owner 2026-10-14): "Import anyway" on skipped items the rules couldn't vouch for, right in Recent
+// imports; the list shows the latest 5 and "See all" opens the rest.
+test("Auto-import page: Import anyway on skipped items; See all for recent imports", async ({ app, api }) => {
+  seed(api);
+  const base = api.autoImport.imports[1];
+  api.autoImport.imports = [
+    { ...base, id: "c1", title: "No upload time", status: "skipped", label: "Skipped · No upload time", confirmable: true },
+    ...Array.from({ length: 7 }, (_, i) => ({ ...base, id: "s" + i, title: "Short " + i })),
+  ];
+  await app.locator('#flow [data-nav="import"]').click();
+  const rows = app.locator("#aiRecent > li");
+  await expect(rows).toHaveCount(8);
+  await expect(app.locator("#aiRecent > li:visible")).toHaveCount(5);
+  const all = app.locator("[data-ai-seeall]");
+  await expect(all).toHaveText("See all (8)");
+  await expect(all).toHaveAttribute("aria-expanded", "false");
+  await all.click();
+  await expect(app.locator("#aiRecent > li:visible")).toHaveCount(8);
+  await expect(app.locator("[data-ai-seeall]")).toHaveText("Show fewer");
+  await expect(app.locator("[data-ai-seeall]")).toBeFocused();
+  const anyway = app.locator('#aiRecent [data-ai-confirm="c1"]');
+  await expect(anyway).toHaveText("Import anyway");
+  await expect(app.locator("#aiRecent [data-ai-confirm]")).toHaveCount(1);       // only the confirmable one
+  await anyway.click();
+  await expect.poll(() => api.calls.some((c) => c.method === "POST" && c.path === "/api/auto-import/imports/c1/import")).toBe(true);
+});
