@@ -254,6 +254,17 @@ test.describe("Editor page", () => {
     }
   });
 
+  test("Tab order: player controls → timeline → inspector (owner 2026-10-14)", async ({ app, api }) => {
+    await mockEditor(app, api);
+    await app.evaluate(() => { location.hash = "#editor/job-done/cand-a"; });
+    await expect(app.locator("#edTlInner")).toBeVisible();
+    const order = await app.evaluate(() => {
+      const after = (a, b) => !!(document.querySelector(a).compareDocumentPosition(document.querySelector(b)) & Node.DOCUMENT_POSITION_FOLLOWING);
+      return [after(".ed-pctrl", ".ed-tlwrap"), after(".ed-tlwrap", ".ed-insp"), after(".ed-insp", ".ed-foot")];
+    });
+    expect(order).toEqual([true, true, true]);
+  });
+
   test("hook title card: toggle, text, duration are saved", async ({ app, api }) => {
     await mockEditor(app, api);
     await app.evaluate(() => { location.hash = "#editor/job-done/cand-a"; });

@@ -132,6 +132,8 @@
             <span class="ed-note" id="edNote"></span>
           </div>
         </div>
+        <!-- owner 2026-10-14: Tab order = player → timeline → inspector (layout places it via CSS) -->
+        <details class="ed-tlwrap" open><summary>Timeline</summary><div class="ed-tl" id="edTl" aria-label="Timeline"><div class="ed-hint">Loading the timeline…</div></div></details>
         <div class="ed-insp">
           <div class="ed-seg" role="tablist" aria-label="Editor tools">
             <span class="ed-seg-ind" aria-hidden="true"></span>
@@ -142,7 +144,6 @@
           <div class="ed-panel" role="tabpanel" aria-labelledby="edtab-${E.tab}">${panelHtml(E.tab)}</div>
         </div>
       </div>
-      <details class="ed-tlwrap" open><summary>Timeline</summary><div class="ed-tl" id="edTl" aria-label="Timeline"><div class="ed-hint">Loading the timeline…</div></div></details>
       <div class="ed-foot">
         <span class="ed-state" id="edState"></span>
         <span class="ed-spacer"></span>
