@@ -364,10 +364,10 @@ a.rv-frame:focus-visible{outline:none;box-shadow:var(--ring)}
    scroll. Video left (fits the height), player controls + action bar under it, inspector right (scrolls inside),
    timeline docked full width at the bottom. --ed-fit-h = window space between the page top and the stepper pill
    (fitPage() in editor.js). .ed-grid/.ed-player become display:contents so their children sit in the page grid. */
-@media (min-width:900px) and (min-height:768px){
+@media (min-width:900px) and (min-height:640px){   /* 640 since the split (was 768): short windows fit too */
   .ed-page.ed-fit{display:grid;height:var(--ed-fit-h,calc(100dvh - 180px));padding-bottom:0;overflow:hidden;
-    grid-template-columns:minmax(0,1fr) auto 380px;grid-template-rows:auto minmax(0,1fr) auto auto;column-gap:20px;row-gap:10px;
-    grid-template-areas:"head head head" "frame frame insp" "pctrl foot insp" "tl tl tl"}
+    grid-template-columns:minmax(0,1fr) auto 380px;grid-template-rows:auto minmax(0,1fr) auto auto auto;column-gap:20px;row-gap:8px;
+    grid-template-areas:"head head head" "frame frame insp" "pctrl foot insp" "split split split" "tl tl tl"}
   .ed-fit .ed-grid,.ed-fit .ed-player{display:contents}
   .ed-fit .ed-head{grid-area:head;margin:0}
   .ed-fit .ed-frame{grid-area:frame;justify-self:center;height:100%;width:auto;max-width:100%;min-height:0}
@@ -376,8 +376,9 @@ a.rv-frame:focus-visible{outline:none;box-shadow:var(--ring)}
   .ed-fit .ed-foot{grid-area:foot;position:static;margin:0;box-shadow:none;align-self:center}
   .ed-fit .ed-insp{grid-area:insp;display:flex;flex-direction:column;min-height:0}
   .ed-fit .ed-panel{flex:1 1 0;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding-right:4px;scrollbar-gutter:stable}
-  .ed-fit .ed-tlwrap{grid-area:tl;min-width:0}
-  .ed-fit .ed-tlwrap .ed-tl{margin:0;padding:8px 10px}
+  .ed-fit .ed-tlwrap{grid-area:tl;min-width:0;height:var(--ed-tl-h,96px)}
+  .ed-fit .ed-tlwrap .ed-tl{margin:0;padding:8px 10px;height:100%;box-sizing:border-box;overflow-y:auto;overscroll-behavior:contain}
+  .ed-fit .ed-split{display:flex}
   .ed-fit .ed-tl-head{margin-bottom:6px}
   .ed-fit .ed-foot{padding:4px 4px 4px 14px}
   body.editor-open{padding-bottom:0;min-height:0}   /* the shell's pill reserve: --ed-fit-h already leaves it */
@@ -427,8 +428,28 @@ a.rv-frame:focus-visible{outline:none;box-shadow:var(--ring)}
 .ed-tl-inner:focus-visible{box-shadow:inset 0 0 0 2px var(--accent)}
 /* Tab order (owner 2026-10-14): the timeline sits between the player and the inspector in the DOM (.ed-grid).
    Scrolling desktop layout (short windows; the fit layout places it by grid area): a full-width row under both. */
-@media (min-width:900px) and (max-height:767px){
+@media (min-width:900px) and (max-height:639px){
   .ed-grid>.ed-player{grid-row:1;grid-column:1}
   .ed-grid>.ed-insp{grid-row:1;grid-column:2}
   .ed-grid>.ed-tlwrap{grid-row:2;grid-column:1/-1}
+}
+/* Split (owner 2026-10-14): drag / arrow keys move the line between video and timeline (fit layout only).
+   --ed-tl-h = timeline height, set by setSplit() in editor.js and remembered per user. */
+.ed-split{display:none;grid-area:split;align-items:center;justify-content:center;height:12px;margin:-4px 0;cursor:row-resize;touch-action:none;outline:none;border-radius:6px}
+.ed-split::before{content:"";width:48px;height:5px;border-radius:3px;background:var(--muted2,#8e8e93);transition:background var(--dur-1) var(--ease),width var(--dur-2) var(--ease)}
+.ed-split:hover::before,.ed-split.is-drag::before{background:var(--accent);width:72px}
+.ed-split:focus-visible{box-shadow:var(--ring)}
+.ed-split::after{content:"";position:absolute;left:0;right:0;top:-6px;height:24px}
+.ed-split{position:relative}
+@media (min-width:900px) and (min-height:640px){
+  .ed-fit .ed-tlwrap{container-type:size}
+  @container (max-height:140px){ .ed-fit #edTlHint{display:none} .ed-fit .ed-tl-head{margin-bottom:4px} }
+}
+/* Short windows (640–767 tall): the title row moves above the inspector so the video starts at the top (+~40 px). */
+@media (min-width:900px) and (min-height:640px) and (max-height:767px){
+  .ed-page.ed-fit{grid-template-areas:"frame frame head" "frame frame insp" "pctrl foot insp" "split split split" "tl tl tl"}
+  .ed-fit .ed-head{min-width:0}
+  .ed-fit .ed-headrow{flex-wrap:nowrap;min-width:0}
+  .ed-fit .ed-title{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:var(--fs-base)}
+  .ed-fit .ed-jobname{display:none}
 }

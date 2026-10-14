@@ -133,6 +133,8 @@
           </div>
         </div>
         <!-- owner 2026-10-14: Tab order = player → timeline → inspector (layout places it via CSS) -->
+        <div class="ed-split" data-ed-split role="separator" aria-orientation="horizontal" tabindex="0"
+          aria-label="Resize video and timeline: arrow keys, Shift for bigger steps" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50"></div>
         <details class="ed-tlwrap" open><summary>Timeline</summary><div class="ed-tl" id="edTl" aria-label="Timeline"><div class="ed-hint">Loading the timeline…</div></div></details>
         <div class="ed-insp">
           <div class="ed-seg" role="tablist" aria-label="Editor tools">
@@ -1128,6 +1130,40 @@
     const top = s.getBoundingClientRect().top + window.scrollY;
     const bottom = window.innerHeight - reserve - 12;
     s.style.setProperty("--ed-fit-h", `${Math.max(420, Math.floor(bottom - top))}px`);
+    applySplit();
+  }
+  // Split (owner 2026-10-14): the line between video and timeline. The two rows share a fixed height, so the timeline
+  // height alone sets both. Default: a 455 px tall video when it fits; remembered per user (lsGet/lsSet, this browser).
+  const SPLIT = { minTl: 72, minVideo: 200, video: 455, step: 16 };   // 72: timeline buttons + ruler + a waveform strip
+  const FIT_MQ = window.matchMedia("(min-width:900px) and (min-height:640px)");
+  function splitSpace() {
+    const f = document.querySelector(".ed-fit .ed-frame"), w = document.querySelector(".ed-fit .ed-tlwrap");
+    return f && w ? f.getBoundingClientRect().height + w.getBoundingClientRect().height : 0;
+  }
+  function setSplit(tl, save) {
+    const s = $("editorSection"), d = document.querySelector("[data-ed-split]"), total = E.splitTotal;
+    if (!s || !d || !total) return;
+    const max = Math.max(SPLIT.minTl, total - SPLIT.minVideo);
+    E.splitTl = Math.round(Math.min(max, Math.max(SPLIT.minTl, tl)));
+    s.style.setProperty("--ed-tl-h", `${E.splitTl}px`);
+    const video = total - E.splitTl;
+    d.setAttribute("aria-valuenow", String(Math.round((video / total) * 100)));
+    d.setAttribute("aria-valuetext", `Video ${Math.round(video)} px tall, timeline ${E.splitTl} px`);
+    if (save) { try { window.lsSet ? window.lsSet("editor_split", String(E.splitTl)) : localStorage.setItem("clipflow_editor_split", String(E.splitTl)); } catch {} }
+  }
+  function applySplit() {
+    if (!FIT_MQ.matches || !document.querySelector("[data-ed-split]")) return;
+    E.splitTotal = splitSpace(); if (!E.splitTotal) return;
+    let saved = NaN;
+    try { saved = Number(window.lsGet ? window.lsGet("editor_split") : localStorage.getItem("clipflow_editor_split")); } catch {}
+    setSplit(saved > 0 ? saved : E.splitTotal - SPLIT.video, false);
+  }
+  function splitKey(e) {
+    const k = e.key, big = e.shiftKey ? 4 : 1;
+    const to = k === "ArrowUp" ? E.splitTl + SPLIT.step * big : k === "ArrowDown" ? E.splitTl - SPLIT.step * big
+      : k === "Home" ? Infinity : k === "End" ? 0 : null;      // Home = line at the top (biggest timeline), End = smallest
+    if (to === null) return false;
+    setSplit(to, true); return true;
   }
   function setPlay(on) { const b = document.querySelector("[data-ed-play]"); if (b) { b.textContent = on ? "❚❚" : "▶"; b.setAttribute("aria-label", on ? "Pause" : "Play"); } }
   const fmt = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
@@ -1346,6 +1382,21 @@
     if (!E.scrubbing) return;
     cancelAnimationFrame(E.scrubRaf); const x = e.clientX; E.scrubRaf = requestAnimationFrame(() => scrubTo(x, E.scrubRect));
   });
+  document.addEventListener("pointerdown", (e) => {
+    const d = E.state && e.button === 0 && e.target.closest && e.target.closest("[data-ed-split]");
+    if (!d || !E.splitTotal) return;
+    try { d.setPointerCapture(e.pointerId); } catch {}
+    E.splitDrag = { y: e.clientY, tl: E.splitTl }; d.classList.add("is-drag"); e.preventDefault();
+  });
+  document.addEventListener("pointermove", (e) => {
+    if (!E.splitDrag) return;
+    const y = e.clientY; cancelAnimationFrame(E.splitRaf);
+    E.splitRaf = requestAnimationFrame(() => { if (E.splitDrag) setSplit(E.splitDrag.tl - (y - E.splitDrag.y), false); });
+  });
+  ["pointerup", "pointercancel"].forEach((n) => document.addEventListener(n, () => {
+    if (!E.splitDrag) return;
+    E.splitDrag = null; document.querySelector("[data-ed-split]")?.classList.remove("is-drag"); setSplit(E.splitTl, true);
+  }));
   // 4: drag on the timeline's ruler/waveform (seek mode, not on a chip/handle/marker) scrubs, once per frame.
   document.addEventListener("pointerdown", (e) => {
     const area = E.state && E.mode === "seek" && e.button === 0 && e.target.closest && e.target.closest("[data-ed-seekarea]");
@@ -1366,6 +1417,7 @@
       const [lo, hi] = trimWin(), step = (e.shiftKey ? 1 : 0.1) * (e.key === "ArrowRight" ? 1 : -1);
       setTrim(h.dataset.edTrim, (h.dataset.edTrim === "a" ? lo : hi) + step); cutsChanged(); e.preventDefault(); return;
     }
+    if (e.target.closest && e.target.closest("[data-ed-split]")) { if (splitKey(e)) e.preventDefault(); return; }
     if (playerKey(e)) { e.preventDefault(); return; }
     if ((e.key === "c" || e.key === "C") && !e.target.closest("input,textarea,select,[contenteditable]") && !e.metaKey && !e.ctrlKey) {
       setMode(E.mode === "cut" ? "seek" : "cut");

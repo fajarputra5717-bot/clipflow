@@ -254,6 +254,38 @@ test.describe("Editor page", () => {
     }
   });
 
+  test("Split: line between video and timeline — default video 455 px when it fits, arrow keys + drag, remembered per user", async ({ app, api }, info) => {
+    test.skip(info.project.name !== "desktop", "desktop fit layout only (the phone layout has no split)");
+    await app.setViewportSize({ width: 1280, height: 900 });
+    await app.evaluate(() => { try { Object.keys(localStorage).filter((k) => k.includes("editor_split")).forEach((k) => localStorage.removeItem(k)); } catch {} });
+    await mockEditor(app, api);
+    await app.evaluate(() => { location.hash = "#editor/job-done/cand-a"; });
+    const split = app.locator("[data-ed-split]"), frameH = () => app.locator(".ed-frame").evaluate((e) => Math.round(e.getBoundingClientRect().height));
+    const tlH = () => app.locator(".ed-tlwrap").evaluate((e) => Math.round(e.getBoundingClientRect().height));
+    await expect(split).toBeVisible();
+    await expect.poll(frameH).toBe(455);
+    const v0 = Number(await split.getAttribute("aria-valuenow")), t0 = await tlH();
+    await split.focus();
+    await app.keyboard.press("ArrowUp");                               // line up: timeline +16, video −16
+    await expect.poll(tlH).toBe(t0 + 16);
+    expect(Number(await split.getAttribute("aria-valuenow"))).toBeLessThan(v0);
+    await app.keyboard.press("Shift+ArrowDown");                       // −64
+    await expect.poll(tlH).toBe(t0 - 48 < 72 ? 72 : t0 - 48);
+    await app.keyboard.press("End");
+    await expect.poll(tlH).toBe(72);                                   // never collapses
+    await app.keyboard.press("Home");
+    await expect.poll(frameH).toBe(200);                               // video keeps its minimum
+    const box = await split.boundingBox();
+    await app.mouse.move(box.x + box.width / 2, box.y + 6); await app.mouse.down();
+    await app.mouse.move(box.x + box.width / 2, box.y + 106, { steps: 5 }); await app.mouse.up();
+    const after = await tlH();
+    expect(after).toBeLessThan(await app.evaluate(() => innerHeight));
+    await app.evaluate(() => { location.hash = "#review/job-done"; });
+    await app.evaluate(() => { location.hash = "#editor/job-done/cand-a"; });
+    await expect.poll(tlH).toBe(after);                                // remembered
+    expect(await app.evaluate(() => document.documentElement.scrollHeight - innerHeight)).toBeLessThanOrEqual(0);
+  });
+
   test("Tab order: player controls → timeline → inspector (owner 2026-10-14)", async ({ app, api }) => {
     await mockEditor(app, api);
     await app.evaluate(() => { location.hash = "#editor/job-done/cand-a"; });
