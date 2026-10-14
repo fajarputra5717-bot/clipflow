@@ -126,8 +126,11 @@ WIB = _timezone(_timedelta(hours=7))
 DAILY_DAYS = 30
 
 
-def daily_views(history, today: Optional[_date] = None, days: int = DAILY_DAYS) -> dict:
-    """{days: [{date, views, views_fmt}] oldest first, total, total_fmt, max} for the last `days` WIB days."""
+def daily_views(history, today: Optional[_date] = None, days: int = DAILY_DAYS, posted: Optional[dict] = None) -> dict:
+    """{days: [{date, views, views_fmt}] oldest first, total, total_fmt, max} for the last `days` WIB days.
+    posted = {post_id: posted_at}: a post's first count (no snapshot before the window) goes to the day it was posted
+    when that's inside the window, and counts as its baseline when it was posted before (QA c43afce Low: the whole
+    lifetime used to land on the first check's day as one spike)."""
     today = today or _datetime.now(WIB).date()
     first = today - _timedelta(days=days - 1)
     by_post: dict = {}
@@ -138,11 +141,15 @@ def daily_views(history, today: Optional[_date] = None, days: int = DAILY_DAYS) 
         d = by_post.setdefault(post_id, {})
         d[day] = max(d.get(day, 0), int(views))
     totals = [0] * days
-    for snaps in by_post.values():
+    for post_id, snaps in by_post.items():
         best, prev = 0, None
         for day in sorted(k for k in snaps if k < first):       # the baseline before the window
             best = max(best, snaps[day])
         prev = best if any(k < first for k in snaps) else None
+        pat = (posted or {}).get(post_id)
+        pday = pat.astimezone(WIB).date() if hasattr(pat, "astimezone") else pat
+        if prev is None and pday is not None and pday < first:
+            best = prev = snaps[min(snaps)]   # posted before the window, first checked inside it: that count is history
         for i in range(days):
             day = first + _timedelta(days=i)
             if day in snaps:
@@ -150,7 +157,8 @@ def daily_views(history, today: Optional[_date] = None, days: int = DAILY_DAYS) 
             if prev is not None:
                 totals[i] += max(0, best - prev)
             elif day in snaps:
-                totals[i] += best                                   # the post's first count = its views so far
+                j = (pday - first).days if pday is not None and first <= pday <= day else i
+                totals[j] += best                                   # the first count = views since it was posted
             prev = best if (prev is not None or day in snaps) else None
     out = [{"date": (first + _timedelta(days=i)).isoformat(), "views": v, "views_fmt": fmt_views(v)} for i, v in enumerate(totals)]
     total = sum(totals)

@@ -4429,7 +4429,9 @@ def get_track(request: Request):
                 (user["id"], user["id"]),
             )
             history = cur.fetchall()
-    return {**track.build(posts, campaigns.get), "daily": track.daily_views(history)}
+            cur.execute("SELECT id, posted_at FROM clip_posts WHERE user_id = %s AND posted_at IS NOT NULL", (user["id"],))
+            posted = dict(cur.fetchall())
+    return {**track.build(posts, campaigns.get), "daily": track.daily_views(history, posted=posted)}
 
 
 # ============================================================
