@@ -82,3 +82,5 @@ class FinishedLabel(unittest.TestCase):
         self.assertEqual(self.f("completed", posts, self.now), "Posted on TikTok · next Thu 17:00")
         two = [{"platform": "tiktok", "status": "posted"}, {"platform": "instagram", "status": "claimed"}]
         self.assertEqual(self.f("completed", two, self.now), "Posted on 2 platforms")
+        fb = [{"platform": "facebook", "status": "posted"}]
+        self.assertEqual(self.f("completed", fb, self.now), "Posted on Facebook")   # QA Low 1
