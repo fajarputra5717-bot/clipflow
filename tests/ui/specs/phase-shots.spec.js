@@ -43,7 +43,7 @@ const row = (o) => ({ candidate_id: "cand-a", job_id: "job-done", job_title: "Mo
   filename: "x.mp4", post: null, campaign: "ime-roleplay", ...o });
 
 async function seed(app, api) {
-  api.campaigns = [camp];
+  api.campaigns = [camp, { ...camp, slug: "fandra", name: "Fandra Octo", status: { code: "ending_soon", label: "Ending soon", detail: "2 days left", days_left: 2 }, payout_text: "Payout not set yet", cap_meter: null }];
   api.current = [job({ id: "job-run", status: "transcribing", progress: 40, source_title: "Live stream part 2", campaign: "ime-roleplay" }), job({ id: "job-done", status: "review", source_title: "Citer Molotov Ketemu KDM", campaign: "ime-roleplay" })];
   api.jobs = { ...api.jobs, "job-run": api.current[0] };   // the running job is polled
   api.publishGroups = [{ campaign: "ime-roleplay", campaign_name: "IME Roleplay", rows: [row({}), row({ platform: "youtube", platform_name: "YouTube Shorts" })] }];
@@ -92,6 +92,10 @@ test("phase screenshot tour", async ({ app, api }, info) => {
       if (!(await app.locator('#toolbar .icon-btn[data-nav="settings"]').isVisible())) { await app.click("#accountMenuBtn"); await app.waitForTimeout(300); }
       await app.locator('[data-nav="settings"] >> visible=true').first().click(); await app.waitForTimeout(700);
       await app.screenshot({ path: `${DIR}/${w}x${h}-${theme}-10-settings.png` });
+      await app.keyboard.press("Escape"); await app.waitForTimeout(400);
+      if (!(await app.locator('#toolbar .icon-btn[data-nav="watermarks"]').isVisible())) { await app.click("#accountMenuBtn"); await app.waitForTimeout(300); }
+      await app.locator('[data-nav="watermarks"] >> visible=true').first().click(); await app.waitForTimeout(700);
+      await app.screenshot({ path: `${DIR}/${w}x${h}-${theme}-11-watermarks.png` });
       await app.keyboard.press("Escape"); await app.waitForTimeout(400);
     }
   }
