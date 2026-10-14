@@ -104,13 +104,21 @@ class RouterTest(unittest.TestCase):
         with self.assertRaises(AINotConfiguredError):
             self.gen()
 
-    def test_skip_with_no_provider_left(self):
+    def test_forced_groq_skip_falls_back_to_the_auto_chain(self):   # live: 413 on a 1 h transcript before the limit was learned
         self.settings["CLIP_ANALYSIS_PROVIDER"] = "groq"
-        self.use(Fake("gemini"), Fake("groq", [AIProviderSkip("429", status=429, retry_after=5)]), Fake("claude"))
+        self.use(Fake("gemini", [T(), T()]), Fake("groq", [AIProviderSkip("413", status=413, final_transient=False)]), Fake("claude"))
+        meta = self.gen()[1]
+        self.assertEqual(meta["provider"], "claude")
+        self.assertEqual(len(self.p["groq"].calls), 1)
+        self.assertTrue(any("forced groq can't take task=hooks" in l for l in self.logs))
+
+    def test_skip_with_no_provider_left(self):
+        self.use(Fake("gemini", configured=False), Fake("groq", [AIProviderSkip("429", status=429, retry_after=5)]), Fake("claude", configured=False))
         with self.assertRaises(AITransientError) as e:
             self.gen()
         self.assertNotIsInstance(e.exception, AIProviderSkip)
-        self.use(Fake("gemini"), Fake("groq", [AIProviderSkip("413", status=413, final_transient=False)]), Fake("claude"))
+        router.breaker = router._Breaker()
+        self.use(Fake("gemini", configured=False), Fake("groq", [AIProviderSkip("413", status=413, final_transient=False)]), Fake("claude", configured=False))
         with self.assertRaises(AIPermanentError):
             self.gen()
 

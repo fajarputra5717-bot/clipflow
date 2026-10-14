@@ -201,6 +201,26 @@ def _backoff(attempt):
 
 def ai_generate_json(prompt, schema, *, task, max_tokens, attempts=None,
                      with_meta=False, images=None):
+    """See _generate. A FORCED provider that answers AIProviderSkip (Groq 429/413: rate limit, too large; the
+    up-front check can't know the account limit before the first reply) falls back to the auto chain without it,
+    like an up-front skip (220)."""
+    try:
+        return _generate(prompt, schema, task=task, max_tokens=max_tokens, attempts=attempts,
+                         with_meta=with_meta, images=images)
+    except _ForcedSkip as skip:
+        _log(f"AI: forced {skip.name} can't take task={task} ({str(skip.error)[:140]}); using the auto chain without it")
+        return _generate(prompt, schema, task=task, max_tokens=max_tokens, attempts=attempts,
+                         with_meta=with_meta, images=images, exclude=skip.name)
+
+
+class _ForcedSkip(Exception):
+    def __init__(self, name, error):
+        super().__init__(str(error))
+        self.name, self.error = name, error
+
+
+def _generate(prompt, schema, *, task, max_tokens, attempts=None,
+              with_meta=False, images=None, exclude=None):
     """Parsed JSON; with_meta=True returns (data, meta) where meta =
     {"provider", "model", "failed_over", "usage"}. `attempts` overrides the
     per-provider attempt count (backend handlers pass 1 so a request
@@ -210,7 +230,12 @@ def ai_generate_json(prompt, schema, *, task, max_tokens, attempts=None,
         raise RuntimeError("shared.ai.router.configure() was not called")
 
     policy = _policy(task)
+    forced = policy != "auto" and not exclude
+    if exclude:
+        policy = "auto"
     candidates = _candidates(policy, {"prompt": prompt, "task": task, "max_tokens": max_tokens, "images": images})
+    if exclude:
+        candidates = [n for n in candidates if n != exclude] or [n for n in AUTO_ORDER if n != exclude][:1]
     per_provider = attempts or (
         AUTO_ATTEMPTS_PER_PROVIDER if policy == "auto"
         else _int_setting("GEMINI_MAX_ATTEMPTS", 4)
@@ -242,6 +267,8 @@ def ai_generate_json(prompt, schema, *, task, max_tokens, attempts=None,
                 last_error = exc
                 if exc.retry_after:
                     breaker.pause(name, exc.retry_after)
+                if is_last_provider and forced and len(candidates) == 1:
+                    raise _ForcedSkip(name, exc) from exc
                 if is_last_provider:
                     _log(f"AI: {name} can't take task={task} and no provider is left: {str(exc)[:160]}")
                     cls = AITransientError if exc.final_transient else AIPermanentError
