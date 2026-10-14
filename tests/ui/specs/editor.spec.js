@@ -19,7 +19,7 @@ function editorState(over = {}) {
     export: { burn: true, description: "", submagic: { status: null, preview_url: null, error: null } },
     director: { items: [], rendered: ["emoji", "flash", "freeze", "punch", "push", "shake", "slowmo", "whip", "zoom_out"], arrives_in: {}, min_gap: 3, frames_ready: false, vision_on: true,
       effects: ["punch", "push", "zoom_out", "shake", "flash", "whip", "freeze", "slowmo", "emoji"], defaults: { emoji: { emoji: "😂" }, freeze: { hold: 0.6 }, slowmo: { dur: 1.2, factor: 0.5 } },
-      sfx: ["whoosh", "boom", "bass_hit", "ding", "record_scratch"], emoji: ["😂", "😭", "💀"] },
+      sfx: ["whoosh", "boom", "bass_hit", "ding", "record_scratch", "laugh"], emoji: ["😂", "😭", "💀"] },
     look: { preset: "none", vignette: false, grain: false, presets: ["none", "vivid_gaming", "warm", "moody"] },
     pack: { id: "podcast_clean", name: "Podcast Clean", from_campaign: true, options: [{ id: "gaming_hype", name: "Gaming Hype", min_gap: 3 },
       { id: "funny_meme", name: "Funny / Meme", min_gap: 3 }, { id: "drama_tension", name: "Drama / Tension", min_gap: 5 }, { id: "podcast_clean", name: "Podcast Clean", min_gap: 6 }] },
@@ -728,6 +728,28 @@ test.describe("Editor Auto edit E2 effects", () => {
 // Auto Edit E3: a sound per item and an emoji per emoji item (params.sfx / params.emoji).
 test.describe("Editor Auto edit E3 sound + emoji", () => {
   test.use({ reducedMotion: "reduce" });
+  test("217 SFX library: picker names your sound or the fallback, ▶ plays that file, 'Your sounds' opens Settings → Sound effects", async ({ app, api }) => {
+    await app.route(/\/api\/sfx$/, (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
+      categories: [{ key: "laugh", label: "Laugh", used_by: ["Funny / Meme"], assigned: null, default: "Built-in ding" },
+                   { key: "boom", label: "Boom", used_by: ["Gaming Hype"], assigned: { id: "s-1", name: "My boom" }, default: null }],
+      sounds: [], freesound: false, limits: {} }) }));
+    await mockEditor(app, api);
+    await app.evaluate(() => { location.hash = "#editor/job-done/cand-a"; });
+    await app.locator('[data-ed-tab="effects"]').click();
+    await app.locator("[data-ed-plan-gen]").click();
+    const sel = app.locator('[data-ed-plan-sfx="punch-50"]');
+    await expect(sel.locator('option[value="laugh"]')).toHaveText("Laugh (Ding until you add yours)");
+    await expect(sel.locator('option[value="boom"]')).toHaveText("Boom · My boom");
+    await app.evaluate(() => { window.__played = []; HTMLMediaElement.prototype.play = function () { window.__played.push(this.src); return Promise.resolve(); }; });
+    await sel.selectOption("boom");
+    await app.locator('[data-ed-sfx-play="boom"]').click();
+    await sel.selectOption("laugh");
+    await app.locator('[data-ed-sfx-play="laugh"]').click();
+    const played = await app.evaluate(() => window.__played);
+    expect(played[0]).toMatch(/\/api\/sfx\/s-1\/file/);
+    expect(played[1]).toMatch(/\/sfx\/ding\.wav$/);
+    await expect(app.locator("#editorSection [data-open-sfx]")).toBeVisible();
+  });
   test("pick a sound, switch to emoji and pick 💀: PUT carries the params", async ({ app, api }) => {
     await mockEditor(app, api);
     await app.evaluate(() => { location.hash = "#editor/job-done/cand-a"; });

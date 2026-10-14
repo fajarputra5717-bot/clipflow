@@ -51,6 +51,7 @@
     const s = section();
     if (!s) return;
     if (!E.cid) Object.assign(E, loadSound());   // 2b: the remembered sound, fresh per open (another tab may have changed it)
+    loadSfxLib();                                // 217: which sound each category plays for this user
     if (!E.cid) {                         // remember which views were showing, to restore on close
       E.hidden = [...s.parentElement.querySelectorAll(":scope > .view-section")]
         .filter((v) => v !== s).map((v) => [v, v.classList.contains("hidden"), v.hidden]);
@@ -356,7 +357,27 @@
   const FX = { punch: ["◆", "Punch zoom"], push: ["↗", "Slow push-in"], zoom_out: ["↙", "Zoom out"], shake: ["≈", "Camera shake"],
     flash: ["✦", "Flash"], whip: ["»", "Whip transition"], freeze: ["❚❚", "Freeze frame"], slowmo: ["½", "Slow-mo"], emoji: ["☺", "Emoji pop"] };
   const fxName = (e) => (FX[e] || [null, e])[1];
-  const SFX_NAME = { whoosh: "Whoosh", boom: "Boom", bass_hit: "Bass hit", ding: "Ding", record_scratch: "Record scratch" };
+  const SFX_NAME = { whoosh: "Whoosh", boom: "Boom", bass_hit: "Bass hit", ding: "Ding", record_scratch: "Record scratch", laugh: "Laugh" };
+  // 217 (Lane A's SFX library, GET /api/sfx): a category the user gave their own sound renders with it; laugh without
+  // one renders the bundled ding. The picker names what will play and ▶ previews exactly that file.
+  const SFX_FALLBACK = { laugh: "ding" };
+  async function loadSfxLib() {
+    try { const r = await api("/api/sfx"); E.sfxCats = Object.fromEntries((r.categories || []).map((c) => [c.key, c])); }
+    catch { E.sfxCats = E.sfxCats || {}; }
+    if (E.tab === "effects" && E.state) repaintPanel();
+  }
+  function sfxLabel(x) {
+    const own = E.sfxCats && E.sfxCats[x] && E.sfxCats[x].assigned;
+    return (SFX_NAME[x] || x) + (own ? ` · ${own.name}` : SFX_FALLBACK[x] ? ` (${SFX_NAME[SFX_FALLBACK[x]]} until you add yours)` : "");
+  }
+  function sfxSrc(x) {
+    const own = E.sfxCats && E.sfxCats[x] && E.sfxCats[x].assigned;
+    return own ? mediaUrl(`/api/sfx/${encodeURIComponent(own.id)}/file`) : `/sfx/${encodeURIComponent(SFX_FALLBACK[x] || x)}.wav`;
+  }
+  function previewSfx(x) {
+    if (!x) return;
+    try { (E.sfxAudio ||= new Audio()).pause(); E.sfxAudio.src = sfxSrc(x); E.sfxAudio.volume = E.volume ?? 1; E.sfxAudio.play().catch(() => {}); } catch {}
+  }
   const fxGlyph = (i) => (i.effect === "emoji" && i.params && i.params.emoji) || (FX[i.effect] || ["•"])[0];
   function paintPlan() {
     const lane = $("edPlanLane"); if (!lane || !E.tl) return;
@@ -372,7 +393,8 @@
         <div class="ed-row"><div><div class="ed-label">Auto edit</div>
           <div class="ed-hint">${items.length ? `${on} of ${items.length} effects on · at most one per ${d.min_gap} s, never under the title card${d.vision ? " · frames checked"
               : d.vision_on === false ? "" : d.frames_ready ? " · frames weren't checked: Regenerate to include them" : " · frames are checked after the next Render preview"}`
-            : "AI picks the strongest moments (hook, punchline, shock, laugh) and plans a few effects. You keep the final say."}</div></div>
+            : "AI picks the strongest moments (hook, punchline, shock, laugh) and plans a few effects. You keep the final say."}
+            <button type="button" class="ed-link" data-open-sfx>Your sounds</button></div></div>
           <button type="button" class="sm" data-ed-plan-gen>${items.length ? "Regenerate plan" : "Generate plan"}</button></div>
         ${items.length ? `<div class="ed-plan-list">${items.map((i) => `
           <div class="ed-plan-row ${i.on ? "" : "is-off"}"><span class="ed-plan-t">${i.t.toFixed(1)} s</span>
@@ -381,7 +403,8 @@
               `<option value="${esc(x)}" ${x === i.effect ? "selected" : ""}>${esc(fxName(x))}</option>`).join("")}</select><span class="ed-plan-opts">${i.effect === "emoji" ? `<select class="ed-plan-sel" data-ed-plan-emoji="${esc(i.id)}" aria-label="Emoji">${(d.emoji || ["😂"]).map((x) =>
                 `<option ${x === ((i.params || {}).emoji || "😂") ? "selected" : ""}>${x}</option>`).join("")}</select>` : ""}
               <select class="ed-plan-sel" data-ed-plan-sfx="${esc(i.id)}" aria-label="Sound at ${i.t.toFixed(1)} s"><option value="">No sound</option>${(d.sfx || []).map((x) =>
-                `<option value="${esc(x)}" ${x === (i.params || {}).sfx ? "selected" : ""}>${esc(SFX_NAME[x] || x)}</option>`).join("")}</select></span>
+                `<option value="${esc(x)}" ${x === (i.params || {}).sfx ? "selected" : ""}>${esc(sfxLabel(x))}</option>`).join("")}</select>${(i.params || {}).sfx
+                ? `<button type="button" class="ed-chip ed-sfx-play" data-ed-sfx-play="${esc(i.params.sfx)}" aria-label="Play the ${esc(SFX_NAME[i.params.sfx] || i.params.sfx)} sound" title="Play this sound">▶</button>` : ""}</span>
               <span class="ed-hint">${esc(i.reason)}${esc(later(i))}${i.effect === "flash" ? " · also lightens the watermark for 0.2 s" : ""}</span></span>
             ${sw(`data-ed-plan-item="${esc(i.id)}"`, i.on, `${fxName(i.effect)} at ${i.t.toFixed(1)} s`)}</div>`).join("")}</div>` : ""}
       </div>`;
@@ -1271,7 +1294,7 @@
 
   // ------------------------------------------------------------------ events (delegated, data-*)
   document.addEventListener("click", (e) => {
-    const t = e.target.closest("[data-ed-back],[data-ed-hook-on],[data-ed-hook-dur],[data-ed-render],[data-ed-play],[data-ed-mute],[data-ed-tab],[data-ed-zoom-on],[data-ed-progress-on],[data-ed-progress-color],[data-ed-compress],[data-ed-silence],[data-ed-word],[data-ed-pause],[data-ed-mode],[data-ed-suggest],[data-ed-fillers],[data-ed-cuts-reset],[data-ed-zoom-add],[data-ed-zoom-mark],[data-ed-trim],[data-ed-seekarea],[data-ed-preset],[data-ed-cap-all],[data-ed-kw],[data-ed-kw-color],[data-ed-fix-typos],[data-ed-cap-reset],[data-ed-capy-on],[data-ed-new-hook],[data-ed-thumb-pick],[data-ed-thumb-gen],[data-ed-burn],[data-ed-gen-desc],[data-ed-sm],[data-ed-versions],[data-ed-restore],[data-ed-approve],[data-ed-plan-gen],[data-ed-plan-item],[data-ed-loud],[data-ed-look-preset],[data-ed-look-vignette],[data-ed-look-grain],[data-ed-pack]");
+    const t = e.target.closest("[data-ed-back],[data-ed-hook-on],[data-ed-hook-dur],[data-ed-render],[data-ed-play],[data-ed-mute],[data-ed-sfx-play],[data-ed-tab],[data-ed-zoom-on],[data-ed-progress-on],[data-ed-progress-color],[data-ed-compress],[data-ed-silence],[data-ed-word],[data-ed-pause],[data-ed-mode],[data-ed-suggest],[data-ed-fillers],[data-ed-cuts-reset],[data-ed-zoom-add],[data-ed-zoom-mark],[data-ed-trim],[data-ed-seekarea],[data-ed-preset],[data-ed-cap-all],[data-ed-kw],[data-ed-kw-color],[data-ed-fix-typos],[data-ed-cap-reset],[data-ed-capy-on],[data-ed-new-hook],[data-ed-thumb-pick],[data-ed-thumb-gen],[data-ed-burn],[data-ed-gen-desc],[data-ed-sm],[data-ed-versions],[data-ed-restore],[data-ed-approve],[data-ed-plan-gen],[data-ed-plan-item],[data-ed-loud],[data-ed-look-preset],[data-ed-look-vignette],[data-ed-look-grain],[data-ed-pack]");
     if (!t || !E.state && !t.matches("[data-ed-back]")) return;
     if (t.matches("[data-ed-back]")) {                       // back to the Review page (step 4) for this job
       e.preventDefault(); const jid = E.jid; close(false); location.hash = `#review/${encodeURIComponent(jid || "")}`;
@@ -1337,6 +1360,7 @@
     if (t.matches("[data-ed-render]")) return renderPreview(t);
     if (t.matches("[data-ed-play]")) { const v = $("edVideo"); if (v) v.paused ? v.play() : v.pause(); return; }
     if (t.matches("[data-ed-mute]")) { setMuted(!E.muted); return; }
+    if (t.matches("[data-ed-sfx-play]")) { previewSfx(t.dataset.edSfxPlay); return; }
     if (t.matches("[data-ed-tab]") && t.getAttribute("aria-disabled") !== "true") {
       const order = TABS.map(([id]) => id), from = order.indexOf(E.tab);
       E.tab = t.dataset.edTab;
@@ -1347,6 +1371,7 @@
       panel.classList.remove("in-l", "in-r"); void panel.offsetWidth;
       if (!reduced()) panel.classList.add(order.indexOf(E.tab) > from ? "in-r" : "in-l");
       moveSeg();
+      if (E.tab === "effects") loadSfxLib();
       return;
     }
     if (t.matches("[data-ed-plan-gen]")) return generatePlan(t);
@@ -1510,6 +1535,12 @@
     const t = e.target; if (t && t.classList && (t.classList.contains("ed-seg") || t.classList.contains("ed-kw"))) fadeEdges(t);
   }, { capture: true, passive: true });
   document.addEventListener("click", () => { if (E.state) requestAnimationFrame(fadeAll); });   // after panel repaints
+  document.addEventListener("click", (e) => {                 // the shell opens the Sound effects sheet; refresh after
+    if (E.state && e.target.closest && e.target.closest("#editorSection [data-open-sfx]")) E.sfxStale = true;
+  }, true);
+  document.addEventListener("focusin", (e) => {
+    if (E.sfxStale && e.target.closest && e.target.closest("#editorSection")) { E.sfxStale = false; loadSfxLib(); }
+  });
   document.addEventListener("focusin", (e) => {               // a clicked/focused chip becomes the timeline's Tab stop
     if (E.state && e.target.matches && e.target.matches(".ed-tl-words > button") && e.target.tabIndex !== 0) setRoving(e.target);
   });
