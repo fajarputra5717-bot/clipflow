@@ -110,6 +110,10 @@ class GroqTest(unittest.TestCase):
             with self.subTest(resp=getattr(resp, "status_code", resp)), self.assertRaises(cls) as e:
                 self.call(resp)
             self.assertNotIn(KEY, str(e.exception))
+        with self.assertRaises(AIProviderSkip) as e:                              # QA 72c7025 Low: an echoed key is redacted
+            self.call(err(400, f"bad request for key {KEY}"))
+        self.assertNotIn(KEY, str(e.exception))
+        self.assertIn("***", str(e.exception))
         with self.assertRaises(AIPermanentError):
             self.call(ok({"clips": []}, finish="length"))
         with self.assertRaises(AITransientError):

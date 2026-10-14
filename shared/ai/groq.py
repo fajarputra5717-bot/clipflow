@@ -229,6 +229,7 @@ def generate_json(prompt, schema, *, task, max_tokens, setting, images=None):
     status = resp.status_code
     if status != 200:
         message, code = _error_message(resp)
+        message = message.replace(api_key, "***")   # QA 72c7025 Low: never pass an echoed key on to logs / job errors
         text = f"Groq {status}{f' {code}' if code else ''}: {message}"
         if status == 429:
             raise AIProviderSkip(text, provider=NAME, status=status, retry_after=_retry_after(resp), final_transient=True)
