@@ -40,11 +40,39 @@ test("169: top bar stays at the top and the stepper pill at the bottom when scro
   await app.evaluate(() => scrollTo({ top: 200, behavior: "instant" }));
   const bar = await app.locator("#toolbar").boundingBox(), pill = await app.locator("#flowNav").boundingBox();
   expect(Math.round(bar.y)).toBe(0);
-  expect(bar.height).toBeLessThanOrEqual(48);
+  expect(bar.height).toBeLessThanOrEqual(56);   // UI task phase 1: --appbar-h 48 → 56 (×1.2)
   expect(pill.y + pill.height).toBeLessThanOrEqual(480);
   expect(pill.y).toBeGreaterThan(400);
-  if (app.viewportSize().width > 440) await expect(app.locator("#flow li.active .flow-label")).toBeVisible();
-  else await expect(app.locator("#flow li.active .flow-label")).toBeHidden();   // 183: 8 live steps; icon-only on narrow phones
   await expect(app.locator("#flow li.active button")).toHaveAccessibleName(/Analyze/);
-  await expect(app.locator("#flow li:not(.active) .flow-label").first()).toBeHidden();
+  // UI phase 1 item 2: icon dock; the name is a tooltip on hover/focus (desktop), hidden at rest
+  const tip = app.locator("#flow li.active .flow-label");
+  expect(await tip.evaluate((e) => getComputedStyle(e).opacity)).toBe("0");
+  if (app.viewportSize().width > 600) {
+    await app.locator("#flow li.active button").hover();
+    await expect.poll(() => tip.evaluate((e) => getComputedStyle(e).opacity)).toBe("1");
+  }
+});
+
+// UI phase 1 item 5: the menu has no Watermarks / Settings (top-bar icons) in either theme, no Refresh, and the version is
+// a plain label beside "What's new". Phones (no room for those icons beside the island) get the two items in the menu.
+test("account menu: no duplicates of the top-bar icons, no Refresh, version as a label", async ({ app }) => {
+  const phone = test.info().project.name === "mobile";
+  for (const theme of ["light", "dark"]) {
+    await app.evaluate((t) => window.applyTheme(t), theme);
+    await app.click("#accountMenuBtn");
+    await expect(app.locator("#accountMenu")).toHaveClass(/open/);
+    await expect(app.locator('#accountMenu [data-nav="watermarks"]')).toHaveCount(phone ? 1 : 0);
+    await expect(app.locator('#accountMenu [data-nav="settings"]')).toHaveCount(phone ? 1 : 0);
+    if (!phone) await expect(app.locator('#toolbar .icon-btn[data-nav="settings"]')).toBeVisible();
+    await expect(app.locator("#refreshView")).toHaveCount(0);
+    await expect(app.locator("#accountMenu .acct-new summary")).toContainText("What's new");
+    const ver = app.locator("#versionBadge");
+    await expect(ver).toHaveClass(/acct-ver/);
+    await expect(ver).toHaveText(/^v3\.\d{3,}$/);                                     // item 6: v3.<highest change number>
+    await app.locator("#accountMenu .acct-new summary").click();
+    await expect(app.locator("#whatsNewList li")).toHaveCount(5);
+    await expect(app.locator("#whatsNewList li").first()).toContainText((await ver.textContent()).replace("v3.", ""));
+    expect(await ver.evaluate((e) => getComputedStyle(e).borderTopWidth + getComputedStyle(e).backgroundColor)).toMatch(/^0px(rgba\(0, 0, 0, 0\)|transparent)/);
+    await app.keyboard.press("Escape");
+  }
 });

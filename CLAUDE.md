@@ -37,6 +37,10 @@ Logs: `docker compose logs -f --tail=200 worker`; across redeploys (209, journal
 Deploy gap (209): nginx answers /api 502/504 as JSON 503 + Retry-After; the frontend retries GETs (1/2.5/5 s), never writes.
 DB shell: `docker compose exec postgres psql -U clipflow -d clipflow`.
 
+**Version (UI phase 1 item 6):** v3.<highest change number>. Every merge to main runs `python3 scripts/write_version.py`
+and commits `frontend/html/version.json` (menu label + "What's new" = the latest 5 INDEX entries); tests/test_version.py
+fails when it is stale.
+
 **Change history lives in `docs/changes/`, not here.** Read
 `docs/changes/INDEX.md` (one line per change) and open a detail file
 only when you need the reasoning behind something you're about to
@@ -433,7 +437,7 @@ payouts, pre-formatted), step `#track`. Reminders (148): service `sender` (`rift
 `queue_due_reminders()` (worker has `TELEGRAM_SENDER=separate`; without it the worker does both). One reminder per
 planned post: `reminded_at` set in the queueing transaction; > 1 h late = `missed`; re-plan clears it. Own chat only.
 
-## Frontend shell (R-11/R-12/R-13, lane B 067-073; badge v2.1117)
+## Frontend shell (R-11/R-12/R-13, lane B 067-073)
 
 - **Review + Editor pages (149; drawer gone since 179):** Review → `#review[/<job>]` (`editor/review.js`,
   `window.clipflowReview.open/close`), Editor → `#editor/<job>/<clip>` (`editor/editor.js`: captions, effects, audio,
