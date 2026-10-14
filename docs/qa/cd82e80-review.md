@@ -30,3 +30,10 @@ Settings → "Sound effects · 5 sounds · 0 in use" opens `#sfxSheet` at 1440×
 Real Freesound responses/licence re-check; real laugh recordings through the uploader; admin 404 on another user's sound (doc says admins too); the 50-sounds cap and Freesound per-user rate limits; backend image 1.04 GB on prod disk/deploy time; Funny/Meme end to end with a real laugh moment from the AI (I used a manual plan item).
 
 Merge: OK, with the Medium (false "silent" rejection) to fix before the owner relies on Freesound/real uploads: one-word change (`detection=peak`).
+
+## Re-check on staging 13df828 (includes the Medium fix 6d2a92a) — all closed
+- **Medium closed:** steady white noise now saves (1.0 s, mean −14.0 / peak −9.3), the loud burst with a quiet tail (mean −20.6 / peak −3.0) and the spiky sound (−19.8 / −3.0) save too; pink noise, tone+noise, tone, bundled whoosh still save. Regression of the rejects: silence "This sound is silent", 0.2 s "Too short", 11 s "Too long", text-as-.mp3 "Not an mp3, wav or ogg file" unchanged. My sounds deleted afterwards (0 left).
+- **Low closed (wrap):** at 390 (light and dark) and 360 the "Used by …" text wraps onto two lines, nothing truncated ("Built-in · Used by Gaming Hype, Drama / Tension" fully visible), no horizontal overflow; 1440 unchanged.
+- **Low closed (log):** preview renders log "SFX: 1 mixed under the speech (laugh (own sound))" with an assigned laugh and "(laugh→ding)" for the fallback; none without an sfx item; the laugh is still +17 dB in the 3 kHz band (−10.3 vs −26.8 dB).
+
+Merge: OK
