@@ -853,7 +853,23 @@ img.topbar-logo-icon{background:none;padding:0;object-fit:cover}
 .empty-title{font-weight:600;color:var(--text);font-size:17px}.empty-tip{margin:6px auto 0;max-width:46ch;color:var(--muted);font-size:14px;line-height:1.5}
 
 /* ===== 069: settings sheet — System Settings-style inset lists ===== */
-#settingsSheet .sheet{width:min(720px,100%);height:min(760px,calc(100dvh - 2*var(--sp-2)))}
+#settingsSheet .sheet{width:min(900px,100%);height:min(780px,calc(100dvh - 2*var(--sp-2)))}
+/* phase 2: side menu + one section at a time (searching shows every section) */
+.settings-body{display:grid;grid-template-columns:170px minmax(0,1fr);gap:var(--sp-2);align-items:start}
+.settings-nav{position:sticky;top:0;display:flex;flex-direction:column;gap:2px;padding-top:var(--sp-1)}
+.settings-nav .snav,[data-theme="dark"] .settings-nav .snav{display:flex;align-items:center;justify-content:flex-start;text-align:left;min-height:40px;padding:0 12px;border:0;border-radius:10px;background:transparent;color:var(--text);font-weight:500;box-shadow:none}
+.settings-nav .snav:hover{background:var(--fill2)}
+.settings-nav .snav[aria-current="true"],[data-theme="dark"] .settings-nav .snav[aria-current="true"]{background:var(--fill);color:var(--accent);font-weight:600}
+.settings-main{min-width:0}
+.settings-body[data-sec="posting"] [data-settings-sec]:not([data-settings-sec="posting"]),
+.settings-body[data-sec="sounds"] [data-settings-sec]:not([data-settings-sec="sounds"]),
+.settings-body[data-sec="watermarks"] [data-settings-sec]:not([data-settings-sec="watermarks"]),
+.settings-body[data-sec="system"] [data-settings-sec]:not([data-settings-sec="system"]){display:none}
+@media (max-width:700px){
+  .settings-body{grid-template-columns:minmax(0,1fr)}
+  .settings-nav{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:2px;z-index:2;background:var(--panel);padding:6px 0}   /* four equal tabs, no sideways scroll */
+  .settings-nav .snav,[data-theme="dark"] .settings-nav .snav{justify-content:center;text-align:center;min-height:var(--hit);padding:0 4px;font-size:var(--fs-small);min-width:0;white-space:nowrap}
+}
 .sheet-search{position:relative;margin:0 var(--sp-3) var(--sp-1)}
 .sheet-search svg{position:absolute;left:12px;top:50%;width:16px;height:16px;transform:translateY(-50%);color:var(--muted);pointer-events:none}
 .sheet-search input{min-height:36px;padding-left:36px;border-radius:10px;background:var(--line);border-color:transparent}
@@ -1234,7 +1250,7 @@ select::-ms-expand{display:none}
 @media (max-width:600px){.analyze-actions #analyzeButton{width:100%}.seg{display:flex}.seg button{flex:1 1 auto;padding:0 10px}}
 /* Posting accounts (P2 part 1, 128) */
 .accounts-admin .inset-list{margin-bottom:var(--sp-2)}
-.account-create{display:grid;grid-template-columns:.9fr 1.2fr 1.2fr auto;gap:var(--sp-1);align-items:end}
+.account-create{display:grid;grid-template-columns:max-content minmax(0,1fr) minmax(0,1fr) auto;gap:var(--sp-1);align-items:end}   /* phase 2: the platform select never cuts "Instagram Reels" */
 .account-create .field{margin-top:0}
 .account-create button.primary{min-height:var(--hit);border-radius:999px;white-space:nowrap}
 .acct-row{display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:10px 12px 10px 14px;border-top:1px solid var(--hairline)}
@@ -2038,13 +2054,15 @@ input[type=checkbox],input[type=radio]{accent-color:var(--accent)}
   <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="settingsSheetTitle">
     <header class="sheet-head"><h2 id="settingsSheetTitle">Settings</h2><button class="sheet-close" type="button" data-sheet-close aria-label="Close settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></header>
     <div class="sheet-search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg><input type="search" id="settingsSearch" placeholder="Search settings" autocomplete="off" aria-label="Search settings" aria-controls="settingsPanel"></div>
-    <div class="sheet-body settings-body">
-      <div class="disk-meter" id="diskMeter" aria-live="polite"></div>
-      <section class="inset-group sfx-entry" aria-labelledby="sfxEntryTitle">
+    <div class="sheet-body settings-body" data-sec="posting">
+      <nav class="settings-nav" aria-label="Settings sections"><button class="snav" type="button" data-settings-nav="posting">Posting</button><button class="snav" type="button" data-settings-nav="sounds">Sounds</button><button class="snav" type="button" data-settings-nav="watermarks">Watermarks</button><button class="snav" type="button" data-settings-nav="system">System</button></nav>
+      <div class="settings-main">
+      <div class="disk-meter" id="diskMeter" aria-live="polite" data-settings-sec="system"></div>
+      <section class="inset-group sfx-entry" aria-labelledby="sfxEntryTitle" data-settings-sec="sounds">
         <h3 class="inset-title" id="sfxEntryTitle">Sound effects</h3>
         <div class="inset-list"><button class="inset-row sfx-open" type="button" data-open-sfx aria-haspopup="dialog" aria-controls="sfxSheet"><span class="row-label">Sound effects<small id="sfxEntrySummary">Your own laugh, hit and whoosh sounds</small></span><span class="sfx-chev" aria-hidden="true">›</span></button></div>
       </section>
-      <section class="inset-group accounts-admin" id="accountsAdmin" aria-labelledby="accountsTitle">
+      <section class="inset-group accounts-admin" id="accountsAdmin" aria-labelledby="accountsTitle" data-settings-sec="posting">
         <h3 class="inset-title" id="accountsTitle">Posting accounts</h3>
         <div class="inset-list" id="accountsList"></div>
         <form class="account-create" id="accountCreateForm" novalidate>
@@ -2056,7 +2074,7 @@ input[type=checkbox],input[type=radio]{accent-color:var(--accent)}
         <p class="hint users-hint">Your own accounts, used when you mark a clip as posted and for per-account monthly caps. Paused accounts aren't offered.</p>
         <div class="account-msg" id="accountsMsg" role="status" aria-live="polite"></div>
       </section>
-      <section class="inset-group posting-times" id="postingTimes" aria-labelledby="postingTimesTitle">
+      <section class="inset-group posting-times" id="postingTimes" aria-labelledby="postingTimesTitle" data-settings-sec="posting">
         <h3 class="inset-title" id="postingTimesTitle">Posting times</h3>
         <div class="inset-list" id="postingTimesList"></div>
         <div class="ptime-row ptime-lead"><label class="ptime-name" for="reminderLead">Telegram reminder</label><span class="ptime-add"><input id="reminderLead" type="number" min="0" max="120" step="5" inputmode="numeric"><span class="ptime-none">min before each planned post</span></span></div>
@@ -2064,7 +2082,7 @@ input[type=checkbox],input[type=radio]{accent-color:var(--accent)}
         <p class="hint users-hint" id="postingTimesHint">Suggested times to post on each platform, in WIB (Asia/Jakarta). ClipFlow suggests the next free one when you plan a post.</p>
         <div class="account-msg" id="postingTimesMsg" role="status" aria-live="polite"></div>
       </section>
-      <section class="inset-group users-admin" id="usersAdmin" hidden aria-labelledby="usersTitle">
+      <section class="inset-group users-admin" id="usersAdmin" hidden aria-labelledby="usersTitle" data-settings-sec="system">
         <h3 class="inset-title" id="usersTitle">Users</h3>
         <div class="inset-list" id="usersList"></div>
         <form class="user-create" id="userCreateForm" novalidate>
@@ -2076,13 +2094,18 @@ input[type=checkbox],input[type=radio]{accent-color:var(--accent)}
         <p class="hint users-hint">New and reset accounts must choose their own password at their next sign-in. Disabling signs the user out everywhere and deletes their API tokens.</p>
         <div class="account-msg" id="usersMsg" role="status" aria-live="polite"></div>
       </section>
+      <section class="inset-group wm-entry" aria-labelledby="wmEntryTitle" data-settings-sec="watermarks">
+        <h3 class="inset-title" id="wmEntryTitle">Watermarks</h3>
+        <div class="inset-list"><button class="inset-row sfx-open" type="button" data-nav="watermarks" aria-haspopup="dialog" aria-controls="watermarkSheet"><span class="row-label">Your watermarks<small>Upload, pick the one in use, rename, delete</small></span><span class="sfx-chev" aria-hidden="true">›</span></button></div>
+      </section>
       <div id="settingsPanel"></div>
       <div id="settingsNoMatch" class="settings-nomatch" hidden>No settings match “<span></span>”.</div>
-      <p class="hint settings-hint">Secrets are masked. Leaving a masked value unchanged keeps the saved secret.</p>
+      <p class="hint settings-hint" data-settings-sec="system">Secrets are masked. Leaving a masked value unchanged keeps the saved secret.</p>
+      </div>
     </div>
     <footer class="sheet-foot">
       <span class="sheet-foot-status" id="settingsDirty" aria-live="polite"></span>
-      <button class="secondary" id="reloadSettings" type="button">Reload</button>
+      <button class="secondary" id="reloadSettings" type="button" disabled>Discard changes</button>
       <button class="primary" id="saveSettings" type="button" disabled>Save</button>
     </footer>
   </section>
@@ -3640,7 +3663,8 @@ document.addEventListener("change",e=>{
 const SETTINGS_GROUPS=[
   ["AI & transcription",["CLIP_ANALYSIS_PROVIDER","TEXT_UTILITY_PROVIDER","GEMINI_API_KEY","GEMINI_ANALYSIS_MODEL","GEMINI_MAX_ATTEMPTS","GROQ_MODEL_ANALYSIS","GROQ_MODEL_UTILITY","CLAUDE_MODEL_ANALYSIS","CLAUDE_MODEL_UTILITY","WHISPER_MODEL","WHISPER_LANGUAGE","RUNWAY_API_KEY","RUNWAY_MODEL"]],
   ["Face detection",["FACE_DETECTION_SAMPLE_COUNT","FACE_CONFIDENCE_THRESHOLD","FACE_ZOOM_RATIO"]],
-  ["Clips & rendering",["CLIPS_PER_JOB","CLIP_TARGET_DURATION","CLIP_MIN_DURATION","CLIP_MAX_DURATION","PREVIEW_WIDTH","WATERMARK_WIDTH","WATERMARK_OPACITY","WATERMARK_POSITION_Y","SUBTITLE_SEAM_GAP","FULLFRAME_CAPTION_Y"]],
+  ["Clips & rendering",["CLIPS_PER_JOB","CLIP_TARGET_DURATION","CLIP_MIN_DURATION","CLIP_MAX_DURATION","PREVIEW_WIDTH","SUBTITLE_SEAM_GAP","FULLFRAME_CAPTION_Y"]],
+  ["Watermark",["WATERMARK_WIDTH","WATERMARK_OPACITY","WATERMARK_POSITION_Y"]],
   ["YouTube",["YOUTUBE_API_KEY","VIEW_PULL_DAILY_UNITS","YOUTUBE_CLIENT_ID","YOUTUBE_CLIENT_SECRET","YOUTUBE_REFRESH_TOKEN"]],
   ["TikTok",["TIKTOK_CLIENT_KEY","TIKTOK_CLIENT_SECRET","TIKTOK_ACCESS_TOKEN"]],
   ["Instagram & Facebook",["META_ACCESS_TOKEN","INSTAGRAM_ACCESS_TOKEN","INSTAGRAM_BUSINESS_ACCOUNT_ID"]],
@@ -3650,6 +3674,17 @@ const SETTINGS_GROUPS=[
   ["Storage",["DISK_SPACE_MIN_MB","RETENTION_DAYS_INTERMEDIATE","ORPHAN_SWEEP_DRY_RUN"]],
   ["Auto-import",["AUTO_IMPORT_INTERVAL_MIN"]]
 ];
+// UI phase 2: Settings = four sections with a side menu (tabs on phones); each settings group belongs to one.
+const SETTINGS_SECTION={"Watermark":"watermarks","Publishing":"posting","YouTube":"posting","TikTok":"posting","Instagram & Facebook":"posting"};   // others: system
+let settingsSec="posting";
+function showSettingsSection(sec){settingsSec=sec;lsSet("settings_sec",sec);const q=$("settingsSearch");if(q&&q.value){q.value="";filterSettings()}syncSettingsSection()}
+function syncSettingsSection(){
+  const body=document.querySelector(".settings-body");if(!body)return;
+  const q=($("settingsSearch")?.value||"").trim();body.dataset.sec=q?"":settingsSec;   // searching = every section
+  document.querySelectorAll("[data-settings-nav]").forEach(b=>{if(!q&&b.dataset.settingsNav===settingsSec)b.setAttribute("aria-current","true");else b.removeAttribute("aria-current")});
+}
+document.addEventListener("click",e=>{const b=e.target.closest("[data-settings-nav]");if(!b)return;showSettingsSection(b.dataset.settingsNav);
+  document.querySelector(".settings-main")?.scrollTo?.({top:0});b.focus()});
 const SETTING_LABELS={CLIP_ANALYSIS_PROVIDER:"Clip analysis provider (auto | gemini | groq | claude)",TEXT_UTILITY_PROVIDER:"Utility tasks provider (auto | gemini | groq | claude)",GROQ_MODEL_ANALYSIS:"Groq model, clip analysis",GROQ_MODEL_UTILITY:"Groq model, utility tasks",CLAUDE_MODEL_ANALYSIS:"Claude model, clip analysis",CLAUDE_MODEL_UTILITY:"Claude model, utility tasks",WATERMARK_POSITION_Y:"Watermark height (% from top, new jobs)",SUBTITLE_SEAM_GAP:"Caption gap above facecam (%, new jobs)",FULLFRAME_CAPTION_Y:"Caption height, no-facecam clips (% from top)",DISK_SPACE_MIN_MB:"Disk reserve (MB)",AUTO_IMPORT_INTERVAL_MIN:"Check channels every (min)",YOUTUBE_API_KEY:"YouTube API key (view counts)",META_ACCESS_TOKEN:"Your Meta token (Instagram + Facebook view counts)",VIEW_PULL_DAILY_UNITS:"View pulls: max quota units a day",RETENTION_DAYS_INTERMEDIATE:"Keep downloads (days)",ORPHAN_SWEEP_DRY_RUN:"Orphan sweep dry run",GEMINI_API_KEY:"Gemini API key",GEMINI_ANALYSIS_MODEL:"Gemini model",GEMINI_MAX_ATTEMPTS:"Gemini attempts",WHISPER_MODEL:"Whisper model",WHISPER_LANGUAGE:"Fallback language",RUNWAY_API_KEY:"Runway API key",RUNWAY_MODEL:"Runway model",
   FACE_DETECTION_SAMPLE_COUNT:"Frames sampled",FACE_CONFIDENCE_THRESHOLD:"Confidence threshold",FACE_ZOOM_RATIO:"Facecam zoom",
   CLIPS_PER_JOB:"Clips per video (1–8, new jobs)",CLIP_TARGET_DURATION:"Target length (s)",CLIP_MIN_DURATION:"Minimum length (s)",CLIP_MAX_DURATION:"Maximum length (s)",PREVIEW_WIDTH:"Preview width (px)",WATERMARK_WIDTH:"Watermark width (px)",WATERMARK_OPACITY:"Watermark opacity",
@@ -4373,7 +4408,7 @@ async function loadSettings(){
   try{
     settingsCache=await api("/api/settings");
     $("settingsPanel").innerHTML=SETTINGS_GROUPS.map(([g,all])=>[g,all.filter(k=>settingsCache[k])]).filter(([,keys])=>keys.length).map(([g,keys])=>`
-      <section class="inset-group" data-settings-group>
+      <section class="inset-group" data-settings-group data-settings-sec="${SETTINGS_SECTION[g]||"system"}">
         <h3 class="inset-title">${esc(g)}</h3>
         <div class="inset-list">${keys.map(k=>{const s=settingsCache[k],sec=isSecretKey(k),id="set-"+k;
           return `<div class="inset-row" data-setting-row data-search="${esc((SETTING_LABELS[k]||k)+" "+k+" "+g).toLowerCase()}">
@@ -4382,6 +4417,7 @@ async function loadSettings(){
           </div>`}).join("")}</div>
       </section>`).join("");
     loadAiStatus();
+    if(lsGet("settings_sec"))settingsSec=lsGet("settings_sec");
     filterSettings();updateSettingsDirty();updateSubtitleDefaultsLine();if(!clipsTouched)updateCampaignHint();
     postingTimesDraft=null;renderPostingTimes();
   }catch(e){$("settingsPanel").innerHTML=`<div class="error-box">${esc(e.message)}</div>`}
@@ -4405,10 +4441,11 @@ function updateSettingsDirty(){
   const n=Object.keys(changedSettings()).length,b=$("saveSettings");
   document.querySelectorAll("[data-setting]").forEach(i=>i.closest("[data-setting-row]")?.classList.toggle("is-changed",Object.prototype.hasOwnProperty.call(changedSettings(),i.dataset.setting)));
   if(!b.classList.contains("is-busy")&&!b.classList.contains("is-saved"))b.disabled=!n;
+  const rl=$("reloadSettings");if(rl)rl.disabled=!n;   // phase 2: "Discard changes" only when there are some
   $("settingsDirty").textContent=n?`${n} unsaved change${n===1?"":"s"}`:"";
 }
 function filterSettings(){
-  const q=($("settingsSearch")?.value||"").trim().toLowerCase();let any=false;
+  const q=($("settingsSearch")?.value||"").trim().toLowerCase();let any=false;syncSettingsSection();
   document.querySelectorAll("[data-settings-group]").forEach(g=>{let shown=0;g.querySelectorAll("[data-setting-row]").forEach(r=>{const ok=!q||r.dataset.search.includes(q);r.hidden=!ok;if(ok)shown++});g.hidden=!shown;if(shown)any=true});
   const pa=$("accountsAdmin");if(pa){const hit=!q||"posting accounts handles platforms tiktok instagram youtube facebook".includes(q);pa.hidden=!hit;if(hit&&q)any=true}
   const ua=$("usersAdmin");if(ua&&currentUser?.role==="admin"){const hit=!q||"users accounts members admins password".includes(q);ua.hidden=!hit;if(hit&&q)any=true}
