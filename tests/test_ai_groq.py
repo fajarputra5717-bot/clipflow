@@ -68,6 +68,7 @@ class GroqTest(unittest.TestCase):
         self.assertEqual(body["model"], "openai/gpt-oss-120b")
         self.assertEqual(body["reasoning_effort"], "medium")
         self.assertEqual(body["max_completion_tokens"], 16000 + 4096)
+        self.assertIn('one JSON object {"clips": [...]}', body["messages"][0]["content"])   # live: bare arrays failed validation
 
     def test_utility_uses_the_fast_model(self):
         self.call(ok({"fixed": "ok"}, model="openai/gpt-oss-20b"), schema={"type": "object", "properties": {"fixed": {"type": "string"}},

@@ -196,6 +196,9 @@ def body_for(prompt, schema, *, model, task, max_tokens):
     if model in STRICT_MODELS:
         body["response_format"] = {"type": "json_schema", "json_schema": {
             "name": f"{task}_result", "strict": True, "schema": _strict(wrapped_schema)}}
+        if wrapped:   # the prompt asks for a JSON array; Groq validates AFTER generating, so say where the array goes
+            body["messages"][0]["content"] = (prompt.rstrip() + '\n\nOutput format: one JSON object {"clips": [...]} whose '
+                                              '"clips" value is exactly the JSON array described above. No bare array.')
     else:   # best effort: JSON mode + the schema in the prompt
         body["response_format"] = {"type": "json_object"}
         body["messages"][0]["content"] = (prompt.rstrip() + "\n\nAnswer with one JSON object matching this JSON Schema:\n"
