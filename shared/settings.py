@@ -90,6 +90,10 @@ DEFAULT_SETTINGS = {
     "TEXT_UTILITY_PROVIDER": "auto",
     "CLAUDE_MODEL_ANALYSIS": "claude-sonnet-5-5",
     "CLAUDE_MODEL_UTILITY": "claude-haiku-4-5",
+    # Groq (220): OpenAI-compatible, strict JSON schema output. Model IDs checked against
+    # console.groq.com/docs/models (2026-10-14, production). GROQ_API_KEY is env-only (.env).
+    "GROQ_MODEL_ANALYSIS": "openai/gpt-oss-120b",
+    "GROQ_MODEL_UTILITY": "openai/gpt-oss-20b",
     "RUNWAY_API_KEY": "",
     "RUNWAY_MODEL": "gen4_image_turbo",
     "YOUTUBE_CLIENT_ID": "",
@@ -148,6 +152,7 @@ SECRET_SETTING_KEYS = {
 }
 
 ENV_ONLY_KEYS = {
+    "GROQ_API_KEY",   # 220: .env only, never the DB or the settings UI
     "CLIPFLOW_ADMIN_USER",
     "CLIPFLOW_ADMIN_PASSWORD",
     "CLIPFLOW_ENV",
