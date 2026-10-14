@@ -298,7 +298,11 @@
     if (!t || !R.open) return;
     if (t.matches("[data-rv-status]")) return setFilter({ status: t.dataset.rvStatus });
     if (t.matches("[data-rv-fix]")) return fix(t);
-    if (t.matches("[data-rv-issues-more]")) { const ul = t.closest(".rv-issues"); ul.classList.add("is-open"); t.closest("li").remove(); return; }
+    if (t.matches("[data-rv-issues-more]")) {                    // focus moves to the first revealed issue (QA 377eb22 Low)
+      const ul = t.closest(".rv-issues"); ul.classList.add("is-open"); t.closest("li").remove();
+      const first = ul.children[2]; if (first) { first.tabIndex = -1; first.focus(); }
+      return;
+    }
     if (t.matches("[data-rv-approve]")) return approve(t);
     if (t.matches("[data-rv-analyze]")) { e.preventDefault(); hide(); history.replaceState(null, "", location.pathname); document.querySelector('[data-nav="current"]')?.click(); }
   }, true);

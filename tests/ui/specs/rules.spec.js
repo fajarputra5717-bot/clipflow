@@ -34,6 +34,7 @@ test.describe("Campaign rule chips on Review", () => {
     await expect(items).toHaveCount(3);
     await expect(items.nth(2)).toContainText("Rule 3");
     await expect(app.locator("#rv-cand-a [data-rv-issues-more]")).toHaveCount(0);
+    await expect(items.nth(2)).toBeFocused();                            // focus lands on the first revealed issue
   });
 
   test("every check passes: one 'All rules pass' chip (its title lists the rules), no hint line", async ({ app, api }) => {
