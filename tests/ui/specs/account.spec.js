@@ -40,7 +40,7 @@ test("169: top bar stays at the top and the stepper pill at the bottom when scro
   await app.evaluate(() => scrollTo({ top: 200, behavior: "instant" }));
   const bar = await app.locator("#toolbar").boundingBox(), pill = await app.locator("#flowNav").boundingBox();
   expect(Math.round(bar.y)).toBe(0);
-  expect(bar.height).toBeLessThanOrEqual(48);
+  expect(bar.height).toBeLessThanOrEqual(56);   // UI task phase 1: --appbar-h 48 → 56 (×1.2)
   expect(pill.y + pill.height).toBeLessThanOrEqual(480);
   expect(pill.y).toBeGreaterThan(400);
   if (app.viewportSize().width > 440) await expect(app.locator("#flow li.active .flow-label")).toBeVisible();
