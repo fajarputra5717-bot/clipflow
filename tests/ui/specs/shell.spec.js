@@ -38,9 +38,8 @@ test("top bar repeats no page title; every page shows its own heading", async ({
   }
 });
 
-// UI phase 1 item 8: every page intro is one line (desktop); the longer explanation opens from an info button.
+// UI phase 1 item 8: every page intro is one line (desktop and 390 phones); the longer explanation opens from an info button.
 test("page intros are one line; the info button shows the rest", async ({ app }) => {
-  test.skip(test.info().project.name === "mobile", "one line = desktop width; phones wrap");
   for (const go of [() => window.showTab("campaign"), () => window.showTab("current"), () => window.showTab("schedule"), () => { location.hash = "#import"; },
                     () => { location.hash = "#track"; }, () => window.showTab("publish"), () => { location.hash = "#editor"; }]) {
     await app.evaluate(go); await app.waitForTimeout(500);
@@ -56,6 +55,9 @@ test("page intros are one line; the info button shows the rest", async ({ app })
       await expect(panel).toBeVisible(); await expect(btn).toHaveAttribute("aria-expanded", "true");
       await btn.click();
       await expect(panel).toBeHidden(); await expect(btn).toHaveAttribute("aria-expanded", "false");
+      await btn.click(); await expect(panel).toBeVisible();
+      await app.keyboard.press("Escape");                                       // QA Low: Esc closes it
+      await expect(panel).toBeHidden(); await expect(btn).toBeFocused();
     }
   }
 });

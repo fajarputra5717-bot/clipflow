@@ -1541,7 +1541,7 @@ body{font-size:var(--fs-base)}
 .flow-pill .flow-node,.flow-pill .flow-node:hover:not(:disabled),[data-theme="dark"] .flow-pill .flow-node{position:relative;z-index:1;display:grid;place-items:center;
   width:var(--dock-btn);min-width:var(--dock-btn);height:var(--dock-btn);min-height:var(--dock-btn);padding:0;border-radius:var(--r-pill);background:transparent;border:0!important;box-shadow:none;color:var(--text)}
 .flow-pill .flow-dot{display:grid;place-items:center;width:var(--dock-btn);height:var(--dock-btn);border-radius:var(--r-pill);background:transparent;color:inherit;transform:none!important;transition:color var(--dur-2) var(--ease-out)}
-.flow-pill .flow-dot svg{width:var(--pill-icon);height:var(--pill-icon);stroke-width:1.8}
+.flow-pill .flow-dot svg{width:var(--pill-icon,24px);height:var(--pill-icon,24px);stroke-width:1.8}   /* fallback: works without /ui/tokens.css (QA) */
 .flow-pill .flow-node:hover:not(:disabled) .flow-dot{background:var(--fill)}
 .flow-pill .flow li.active .flow-node:hover .flow-dot,.flow-pill .flow li.active .flow-dot{background:transparent;color:#fff}
 .flow-pill .flow li.done .flow-dot{background:transparent;color:var(--text)}
@@ -1770,7 +1770,7 @@ input[type=checkbox],input[type=radio]{accent-color:var(--accent)}
       </section>
       <section id="currentSection" class="view-section">
         <div class="panel analyze-panel">
-          <div class="section-head"><div><h2>New job options</h2><p class="muted small page-intro">Paste a YouTube link: AI cuts its best hooks into vertical clips.</p></div></div>
+          <div class="section-head"><div><h2>New job options</h2><p class="muted small page-intro">Paste a YouTube link to make vertical clips.</p></div></div>
 
           <label class="field" for="youtubeUrl">Video</label>
           <input id="youtubeUrl" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://www.youtube.com/watch?v=…" aria-describedby="youtubeUrlHint">
@@ -1852,7 +1852,7 @@ input[type=checkbox],input[type=radio]{accent-color:var(--accent)}
       </section>
       <section id="importSection" class="view-section hidden" aria-labelledby="importTitle">
         <div class="panel publish-panel">
-          <div class="section-head"><div><h2 id="importTitle">Watch source channels</h2><p class="muted small page-intro">New videos on watched channels are analysed for you. <button class="info-btn" type="button" data-info aria-expanded="false" aria-controls="infoImport" aria-label="More about auto-import"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg></button></p><p class="info-more small" id="infoImport" hidden>New uploads and finished livestreams on a campaign's source channels are imported and analysed without you pasting links.</p></div></div>
+          <div class="section-head"><div><h2 id="importTitle">Watch source channels</h2><p class="muted small page-intro">Watched channels are analysed for you. <button class="info-btn" type="button" data-info aria-expanded="false" aria-controls="infoImport" aria-label="More about auto-import"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg></button></p><p class="info-more small" id="infoImport" hidden>New uploads and finished livestreams on a campaign's source channels are imported and analysed without you pasting links.</p></div></div>
           <div id="importBody" aria-live="polite"></div>
         </div>
       </section>
@@ -4696,6 +4696,9 @@ const INFO_ICON='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stro
 function infoBtn(id,label){return `<button class="info-btn" type="button" data-info aria-expanded="false" aria-controls="${esc(id)}" aria-label="More about ${esc(label)}">${INFO_ICON}</button>`}
 document.addEventListener("click",e=>{const b=e.target.closest("[data-info]");if(!b)return;const el=document.getElementById(b.getAttribute("aria-controls"));if(!el)return;
   const open=el.hidden;el.hidden=!open;b.setAttribute("aria-expanded",String(open))});
+// Esc closes an open info text (QA 138ecc2 Low) and gives focus back to its button; sheets keep their own Esc.
+document.addEventListener("keydown",e=>{if(e.key!=="Escape"||openSheetId)return;const b=document.activeElement?.closest?.('[data-info][aria-expanded="true"]')||[...document.querySelectorAll('[data-info][aria-expanded="true"]')].pop();
+  if(!b)return;const el=document.getElementById(b.getAttribute("aria-controls"));if(el)el.hidden=true;b.setAttribute("aria-expanded","false");b.focus({preventScroll:true})});
 // UI phase 1 item 6: version = v3.<highest change number>, written with the latest 5 change-log entries to
 // version.json by scripts/write_version.py at every merge; the menu label and "What's new" read it.
 async function loadVersion(){
