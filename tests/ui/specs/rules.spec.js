@@ -8,7 +8,8 @@ test.describe("Campaign rule chips on Review", () => {
     await mockReviewClips(app, api, [{ id: "cand-a", rule_checks: [
       { id: "length", ok: true, blocking: true, label: "Length 34 s", detail: "", fix: null },
       { id: "hashtags", ok: false, blocking: true, label: "Hashtags missing or out of order", detail: "Ends with: #a #b", fix: "hashtags" },
-      { id: "safety", ok: false, blocking: false, label: "Content check: 1 possible issue", detail: "[no_sara] “x”: y", fix: "dismiss" },
+      { id: "safety", ok: false, blocking: false, label: "Content check: 1 possible issue", detail: "[no_sara] “x”: y", fix: "dismiss",
+        issues: [{ rule: "No SARA or insults", quote: "orang itu", reason: "could read as a jab at a group" }] },
     ] }]);
     const card = app.locator("#rv-cand-a");
     await expect(card.locator(".rv-checks .badge")).toHaveCount(2);                 // owner 2026-10-14: failing checks only
@@ -17,6 +18,7 @@ test.describe("Campaign rule chips on Review", () => {
     await expect(card.locator(".badge.attention")).toContainText("Content check");
     await expect(card.locator("[data-rv-approve]")).toBeDisabled();
     await expect(card.locator('[data-rv-fix="dismiss"]')).toBeVisible();
+    await expect(card.locator(".rv-issues li")).toHaveText(["No SARA or insults: “orang itu” · could read as a jab at a group"]);   // says what
     await card.locator('[data-rv-fix="hashtags"]').click();
     await expect.poll(() => api.calls.some((c) => c.method === "POST" && c.path === "/api/jobs/job-done/candidates/cand-a/fix-rule" && c.body?.rule === "hashtags")).toBe(true);
   });

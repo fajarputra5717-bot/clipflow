@@ -10,3 +10,6 @@
 3. Review across jobs (`job = all`): clips are grouped by source video (`byJob()`): one heading "title · date · N clips"
    per group instead of the source title on every card. Groups keep the server order (best clip first), clips inside
    keep it too (hook score, earn last). The intro says "Grouped by video, best hook first."
+4. Review content check: the safety chip from `shared/rule_checks.check()` gains `issues: [{rule, quote, reason}]` (rule
+   = the campaign's rule text, else its id; additive key, nothing else changes). The card lists up to 2 under the chips
+   ("No SARA or insults: “orang itu” · could read as a jab…", "+N more").

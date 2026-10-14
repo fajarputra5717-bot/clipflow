@@ -465,3 +465,8 @@ a.rv-frame:focus-visible{outline:none;box-shadow:var(--ring)}
 .rv-group+.rv-group{margin-top:var(--sp-3)}
 .rv-group-title{display:flex;align-items:baseline;gap:8px;margin:0 0 8px;font:600 var(--fs-base)/1.3 var(--font-text);min-width:0}
 .rv-group-title span{flex:none;font-weight:500;font-size:var(--fs-small);color:var(--muted)}
+/* Review: what a content-check warning is about */
+.rv-issues{margin:6px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:2px;font-size:var(--fs-small);color:var(--badge-warn-fg)}
+.rv-issues li{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.rv-issues b{font-weight:600}
+.rv-issues-more{color:var(--muted)}

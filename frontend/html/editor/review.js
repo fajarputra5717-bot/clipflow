@@ -224,6 +224,14 @@
     return `<span class="badge completed" title="${esc(chips.map((ch) => "✓ " + ch.label).join("\n"))}">✓ All rules pass</span>`;
   }
 
+  // Owner 2026-10-14: a content-check warning says what the issue is (rule, quote, reason from rule_checks "issues").
+  function issuesHtml(chips) {
+    const list = chips.filter((ch) => !ch.ok).flatMap((ch) => ch.issues || []);
+    if (!list.length) return "";
+    const li = (i) => `<li><b>${esc(i.rule)}</b>${i.quote ? `: “${esc(i.quote)}”` : ""}${i.reason ? ` · ${esc(i.reason)}` : ""}</li>`;
+    return `<ul class="rv-issues">${list.slice(0, 2).map(li).join("")}${list.length > 2 ? `<li class="rv-issues-more">+${list.length - 2} more (hover the chip)</li>` : ""}</ul>`;
+  }
+
   function card(c) {
     const title = c.manual_title || c.title || c.ai_title || "Untitled clip";
     const chips = c.rule_checks || [];
@@ -241,7 +249,7 @@
         <div class="rv-row">${c.score != null ? `<span class="rv-score" title="AI estimate of the hook strength">Hook ${Math.round(c.score)}</span><span class="rv-est">AI estimate</span>` : ""}<span class="rv-spacer"></span>${earn}${state}</div>
         <h3 class="rv-ctitle">${esc(title)}</h3>
         ${c.reason ? `<p class="rv-reason">${reasonHtml(c.reason)}</p>` : ""}
-        ${chips.length ? `<div class="rv-checks">${checksHtml(c, chips)}</div>` : ""}
+        ${chips.length ? `<div class="rv-checks">${checksHtml(c, chips)}</div>${issuesHtml(chips)}` : ""}
         ${(c.render_warnings || []).length ? `<div class="render-warnings" role="status">${c.render_warnings.map((w) => `<span class="render-warn" title="${esc(w.message || "")}">⚠ ${esc(w.message || w.code)}</span>`).join("")}</div>` : ""}
         <div class="rv-actions">
           ${c.finished ? `<span class="rv-done" role="status">${esc(c.finished)}</span>`      /* approved: where it stands, no dead button */
