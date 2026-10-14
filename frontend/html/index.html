@@ -1500,7 +1500,7 @@ body{font-size:var(--fs-base)}
 .acct-item,[data-theme="dark"] .acct-item{display:flex;align-items:center;gap:10px;width:100%;min-height:40px;padding:0 10px;border-radius:10px;border:0!important;background:transparent;box-shadow:none;color:var(--text);font-size:var(--fs-base);font-weight:500;text-align:left;cursor:pointer}
 .acct-item:hover:not(:disabled),.acct-item:focus-visible{background:var(--fill);box-shadow:none;filter:none}
 .acct-new>summary{list-style:none}.acct-new>summary::-webkit-details-marker{display:none}
-.page-intro{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.page-intro .info-btn{margin-left:2px;vertical-align:-6px}   /* inline: the icon follows the last word */
 .info-btn{position:relative;display:inline-grid;place-items:center;flex:none;width:24px;height:24px;min-height:0;padding:0;border:0;border-radius:50%;background:transparent;color:var(--muted);cursor:pointer;vertical-align:middle}
 .info-btn svg{width:18px;height:18px}
 .info-btn:hover,.info-btn[aria-expanded="true"]{color:var(--accent);background:var(--fill2)}
@@ -1674,7 +1674,7 @@ input[type=checkbox],input[type=radio]{accent-color:var(--accent)}
    live in this document; `body …:not()` outranks editor.css's compact rules). Controls drawn at a fixed size keep
    their look and get an invisible 44 px hit area instead. Desktop stays compact (36 px per the shell v2 spec). */
 @media (max-width:600px){
-  body button:not(.flow-node):not(.ed-switch):not(.ed-sw):not(.ai-switch):not(.rename-btn):not(.isl-cancel):not(.toast-action):not(.job-overlay-close):not(.ed-preset):not(.island-main),
+  body button:not(.flow-node):not(.ed-switch):not(.ed-sw):not(.ai-switch):not(.rename-btn):not(.isl-cancel):not(.toast-action):not(.job-overlay-close):not(.ed-preset):not(.island-main):not(.info-btn),
   body summary,body select,body a.rv-open,body a.btn-sm,body .ed-back,body .ed-headrow .ed-back{min-height:var(--hit);min-width:var(--hit)}
   body .ed-tlwrap>summary,body .rv-more>summary{min-width:var(--hit)}
   .ed-trim-h::after{content:"";position:absolute;inset:0 -13px}   /* 18 px handle → 44 px wide hit area */
