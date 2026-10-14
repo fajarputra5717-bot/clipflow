@@ -385,6 +385,11 @@ a.rv-frame:focus-visible{outline:none;box-shadow:var(--ring)}
   body.editor-open .container{margin-bottom:0}
   body.editor-open .app-shell{min-height:0}
 }
+/* 900–1279 wide (after the ×1.2 scale + the 470 px inspector, measured by Lane B): the Render preview bar moves
+   under the inspector, so the play controls get the whole left width and the video keeps its height. */
+@media (min-width:900px) and (max-width:1279px) and (min-height:640px){
+  .ed-page.ed-fit{grid-template-areas:"head head head" "frame frame insp" "pctrl pctrl foot" "split split split" "tl tl tl"}
+}
 /* Phone / narrow (≤ 899): video on top (sticky), the timeline directly under it, inspector tabs below. */
 @media (max-width:899px){
   .ed-page{display:flex;flex-direction:column}

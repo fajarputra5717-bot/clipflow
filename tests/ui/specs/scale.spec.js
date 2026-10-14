@@ -160,3 +160,20 @@ test("Editor at 1280×800 / 1440×900: preset samples and inspector tabs fit", a
     expect(r, `${w}×${h}`).toEqual({ tiles: 0, tabs: 0 });
   }
 });
+
+// Lane B: below 1280 the 470 px inspector squeezed the player row (video 129×230 at 1024×768); the Render preview bar
+// now sits under the inspector there. Video ≥ 300 px tall at 1024×768 and 900×800, presets + tabs fit.
+test("Editor at 1024×768 / 900×800: video ≥ 300 px tall, nothing clipped", async ({ app, api }, info) => {
+  test.skip(info.project.name === "mobile", "desktop fit layout");
+  await seed(app, api);
+  for (const [w, h] of [[1024, 768], [900, 800]]) {
+    await app.setViewportSize({ width: w, height: h });
+    await app.evaluate(() => { location.hash = "#editor/job-done/cand-a"; }); await app.waitForTimeout(800);
+    const r = await app.evaluate(() => ({
+      video: Math.round(document.querySelector(".ed-frame").getBoundingClientRect().height) >= 300,
+      tiles: [...document.querySelectorAll(".ed-ptile")].filter((t) => t.scrollWidth > t.clientWidth + 1).length,
+      tabs: (() => { const t = document.querySelector('[role=tablist][aria-label="Editor tools"]'); return t ? Math.max(0, t.scrollWidth - t.clientWidth) : -1; })(),
+      page: document.documentElement.scrollWidth <= innerWidth }));
+    expect(r, `${w}×${h}`).toEqual({ video: true, tiles: 0, tabs: 0, page: true });
+  }
+});
