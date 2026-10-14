@@ -246,6 +246,8 @@ test.describe("Editor page", () => {
         expect(tl.y + tl.height).toBeLessThanOrEqual(pill.y);                 // docked above the stepper, fully visible
         expect(foot.y).toBeGreaterThanOrEqual(frame.y + frame.height);        // action bar under the video, not over it
         expect(await app.locator(".ed-panel").evaluate((e) => getComputedStyle(e).overflowY)).toBe("auto");
+        await app.evaluate(() => document.querySelector(".ed-tl-inner").scrollIntoView({ block: "start" }));   // script/find
+        expect(await app.evaluate(() => document.getElementById("editorSection").scrollTop)).toBe(0);           // can't shift the page
       }
     } else {
       const player = await box(".ed-player"), tl = await box(".ed-tlwrap"), insp = await box(".ed-insp");
@@ -264,6 +266,9 @@ test.describe("Editor page", () => {
     const tlH = () => app.locator(".ed-tlwrap").evaluate((e) => Math.round(e.getBoundingClientRect().height));
     await expect(split).toBeVisible();
     await expect.poll(frameH).toBe(455);
+    const tlBox = await app.evaluate(() => { const w = document.querySelector(".ed-tlwrap").getBoundingClientRect(), t = document.querySelector(".ed-tl");
+      return [Math.round(t.getBoundingClientRect().height - w.height), t.scrollHeight > t.clientHeight]; });
+    expect(tlBox).toEqual([0, true]);                                  // the timeline box fits its row and scrolls inside
     const v0 = Number(await split.getAttribute("aria-valuenow")), t0 = await tlH();
     await split.focus();
     await app.keyboard.press("ArrowUp");                               // line up: timeline +16, video −16
