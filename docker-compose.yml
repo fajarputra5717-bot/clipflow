@@ -133,6 +133,7 @@ services:
       # created there); served by `location /fonts/` in default.conf.
       - ./worker/fonts:/usr/share/nginx/fonts:ro
       - ./shared/ui:/usr/share/nginx/ui:ro   # 168: /ui/tokens.css
+      - ./worker/assets/sfx:/usr/share/nginx/sfx:ro   # 217: built-in sound effects at /sfx/
     depends_on:
       - backend
     logging: *logging

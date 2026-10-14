@@ -7,4 +7,5 @@
 | `sfx/whoosh.wav`, `sfx/boom.wav`, `sfx/bass_hit.wav`, `sfx/ding.wav`, `sfx/record_scratch.wav` | Generated in-house by `scripts/make_sfx.sh` (ffmpeg synthesis, no samples) | Original work, released **CC0 1.0** (public domain) |
 
 New SFX: CC0 sources only (owner rule), one row here per file with source URL, author and licence.
-A laugh SFX is not bundled yet: it needs a CC0 recording.
+A laugh SFX is not bundled: "laugh" plays the user's own sound (217, Settings → Sound effects: uploads or CC0
+Freesound picks, source URL + author + licence stored per sound in `sfx_assets`), else `ding.wav`.

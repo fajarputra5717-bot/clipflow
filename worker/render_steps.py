@@ -396,9 +396,10 @@ def apply_cuts(path, candidate: dict, clip_duration: float, *, preset, crf, run,
 ASSETS = Path(__file__).resolve().parent / "assets"     # /app/assets in the image (emoji/, sfx/, LICENSES.md)
 
 
-def mix_sfx(path, candidate: dict, clip_duration: float, *, run, timeout=None, log=print) -> int:
+def mix_sfx(path, candidate: dict, clip_duration: float, *, run, timeout=None, log=print, sfx_paths=None) -> int:
     """After apply_cuts, before loudness: mix the plan's SFX (items with params.sfx) at their OUTPUT times, ducked
-    under the speech; video copied. Returns how many were mixed (0 = untouched)."""
+    under the speech; video copied. Returns how many were mixed (0 = untouched). sfx_paths = the owner's
+    {name: file} (217, worker owner_sfx_paths()); None = bundled only (laugh → ding)."""
     from shared import edit_director, retention
     director = edit_specs.director_of(candidate.get("edit_spec"))
     if not director:
@@ -407,12 +408,17 @@ def mix_sfx(path, candidate: dict, clip_duration: float, *, run, timeout=None, l
     w = edit_director.warps(director)
     pieces = retention.warp_pieces(keep or [(0.0, float(clip_duration))], w) if w else None
     events = edit_director.sfx_events(director, keep, pieces)
-    argv = retention.sfx_mix_cmd(str(path), str(path) + ".sfx.mp4", events, str(ASSETS / "sfx"))
+    from shared import sfx_library
+    paths = sfx_paths or sfx_library.resolve_paths({}, str(ASSETS / "sfx"))
+    argv = retention.sfx_mix_cmd(str(path), str(path) + ".sfx.mp4", events, str(ASSETS / "sfx"), paths=paths)
     if not argv:
         return 0
     run(argv, timeout=timeout)
     Path(str(path) + ".sfx.mp4").replace(path)
-    log(f"SFX: {len(events)} mixed under the speech ({', '.join(n for _t, n in events)})")
+    def label(n):   # QA cd82e80 Low: say which file played (laugh→ding fallback, the user's own sound)
+        f = Path(paths.get(n) or "")
+        return n if f.stem == n else (f"{n}→{f.stem}" if f.parent == ASSETS / "sfx" else f"{n} (own sound)")
+    log(f"SFX: {len(events)} mixed under the speech ({', '.join(label(n) for _t, n in events)})")
     return len(events)
 
 

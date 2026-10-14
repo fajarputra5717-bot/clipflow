@@ -212,6 +212,8 @@ async function mockApi(page, api) {
       if (path === "/api/analysis-estimate") return json(api.estimate || { samples: 0 });
       if (path === "/api/activity") return json({ items: api.activity || [] }); // 090 island feed
       if (path === "/api/assets/watermarks") return json({ assets: [] });
+      if (path === "/api/sfx") return json(api.sfx || { categories: [], sounds: [], freesound: false, limits: {} });   // 217
+      if (path === "/api/sfx/freesound/search") return json({ query: url.searchParams.get("q"), results: api.sfxResults || [] });
       if (path === "/api/jobs") return json(url.searchParams.get("scope") === "queue" ? api.queue : api.current);
       const m = path.match(/^\/api\/jobs\/([^/]+)$/);
       if (m) return api.jobs[m[1]] ? json(api.jobs[m[1]]) : json({ detail: "Not found" }, 404);

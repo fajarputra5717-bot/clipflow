@@ -557,15 +557,17 @@ def emoji_filters(last: str, events: Sequence[tuple], asset_dir: str, *, width: 
     return chunks, cur
 
 
-def sfx_mix_cmd(src: str, dst: str, events: Sequence[tuple], asset_dir: str, *, audio_bitrate: str = "192k") -> Optional[list]:
+def sfx_mix_cmd(src: str, dst: str, events: Sequence[tuple], asset_dir: str, *, audio_bitrate: str = "192k",
+                paths: Optional[dict] = None) -> Optional[list]:
     """ffmpeg argv: video copied, SFX (events = [(output seconds, name)]) mixed UNDER the speech: the SFX bus is
     side-chain compressed by the speech (ducking), then added to it. Output length = the speech's. Loudnorm runs
-    after this (always the last audio step). None when there is nothing to mix."""
+    after this (always the last audio step). None when there is nothing to mix. paths = {name: file} (217: the
+    owner's library via sfx_library.resolve_paths); a name without one is `<asset_dir>/<name>.wav`."""
     if not events:
         return None
     argv = ["ffmpeg", "-hide_banner", "-nostats", "-y", "-i", src]
     for _t, name in events:
-        argv += ["-i", f"{asset_dir.rstrip('/')}/{name}.wav"]
+        argv += ["-i", (paths or {}).get(name) or f"{asset_dir.rstrip('/')}/{name}.wav"]
     parts = []
     for k, (t, _name) in enumerate(events, start=1):
         ms = int(round(max(0.0, float(t)) * 1000))

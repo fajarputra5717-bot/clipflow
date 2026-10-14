@@ -117,7 +117,7 @@ class Normalize(unittest.TestCase):
         self.assertIsNone(S.normalize_director(None))
         for bad in ("x", {"items": "x"}, {"items": [{"t": 1, "effect": "Bad Effect"}]},
                     {"items": [{"t": "a", "effect": "punch"}]}, {"items": [{"t": 1, "effect": "punch", "params": {"p": "x" * 400}}]},
-                    {"items": [{"t": 1, "effect": "punch", "params": {"sfx": "laugh"}}]},
+                    {"items": [{"t": 1, "effect": "punch", "params": {"sfx": "airhorn"}}]},
                     {"items": [{"t": 1, "effect": "emoji", "params": {"emoji": "<script>"}}]},
                     {"items": [{"t": 1, "effect": "freeze", "params": {"hold": 9}}]}):
             with self.assertRaises(ValueError):

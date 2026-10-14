@@ -42,7 +42,7 @@ RENDERED_EFFECTS = set(MOTION_EFFECTS) | set(TIME_EFFECTS) | {"emoji"}      # E3
 ARRIVES_IN: dict = {}
 # E3 assets (worker/assets, licences in worker/assets/LICENSES.md): Noto Emoji PNGs (Apache 2.0) + in-house SFX (CC0).
 EMOJI = {"😂": "1f602", "😭": "1f62d", "💀": "1f480", "🔥": "1f525", "😱": "1f631", "👀": "1f440", "🤯": "1f92f", "😎": "1f60e"}
-SFX = ("whoosh", "boom", "bass_hit", "ding", "record_scratch")   # "laugh" waits for a CC0 recording
+SFX = ("whoosh", "boom", "bass_hit", "ding", "record_scratch", "laugh")   # 217: laugh = the user's own sound, else ding
 EMOJI_DUR = 1.4           # s on screen (pop in, hold, fade)
 # Higher wins when two candidates are closer than MIN_GAP. A seam the user cut on purpose outranks a vision
 # guess and a loudness peak (QA 7fc6a5a Low: whips were never proposed next to another candidate).

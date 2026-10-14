@@ -260,7 +260,11 @@ Auto Edit render order (191–196): `render_vertical` layout → `zoom_stage` = 
 markers) → look → emoji pops, all BEFORE watermark + captions (text never zooms) → `apply_cuts` (freeze/slow-mo warps)
 → `mix_sfx` → `normalize_loudness` (per-clip `audio.loud` = "Loud & punchy"). Plan = `edit_spec.director`
 (`shared/edit_director.py`); packs = `shared/style_packs.py`. Bundled assets: `worker/assets/LICENSES.md` — SFX CC0 only;
-emoji are Google Noto Emoji, Apache 2.0 (no on-video credit; `scripts/make_emoji.sh`). Silence trim and
+emoji are Google Noto Emoji, Apache 2.0 (no on-video credit; `scripts/make_emoji.sh`). Sound library (217): users replace a
+bundled sound per category (`shared/sfx_library.py` CATEGORIES = `edit_director.SFX`, laugh → ding when unassigned);
+renders resolve the job owner's sounds fresh via worker `owner_sfx_paths()` → `mix_sfx(sfx_paths=)` (a new mix call
+site passes it too). Uploads/Freesound picks are sniffed + probed with a forced demuxer, levelled to the bundled set, CC0
+only from Freesound (key = env FREESOUND_API_KEY, header only); routes in `backend/app/routes_sfx.py`. Silence trim and
 zoom stay unwired (opt-in later via the Audio/Effects tabs). Cuts change the timeline: re-time
 words/markers with `retention.TimeMap` built from the same keep segments.
 
@@ -374,7 +378,7 @@ Owned tables carry `user_id` NOT NULL (`jobs`, `watermark_assets`, `platform_acc
 their job; **every new table from now on**). Rule: every SQL that reads or writes user data filters by the caller's id
 (`current_user(request)["id"]`); another user's row answers **404**, never 403/200. The middleware guard
 `_path_owned()` already enforces it for `/api/jobs/{id}[/candidates/{cid}]…`, `/api/assets/watermarks/{id}…` and
-`/api/accounts/{id}…`, `/api/posts/{id}…`, `/api/auto-import/imports/{id}…` (187);
+`/api/accounts/{id}…`, `/api/posts/{id}…`, `/api/auto-import/imports/{id}…` (187), `/api/sfx/{id}…` (217, `sfx_assets`);
 lists and inserts do it in the handler. A new route family keyed by an owned id → add its regex to the guard.
 Admin is scoped like everyone except `/api/activity` (sees all, `owner` set). Hot polls (212, `REQUEST_DB_PATHS`) reuse the middleware's auth
 connection via `request_db(request)` (one connection + one transaction); everything else uses `get_db()`. Campaigns are a shared catalogue

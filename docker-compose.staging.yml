@@ -86,6 +86,7 @@ services:
       - ./frontend/conf.d:/etc/nginx/conf.d:ro
       - ./worker/fonts:/usr/share/nginx/fonts:ro
       - ./shared/ui:/usr/share/nginx/ui:ro      # 168: /ui/tokens.css (same mount as production)
+      - ./worker/assets/sfx:/usr/share/nginx/sfx:ro   # 217: built-in sound effects at /sfx/
     depends_on: [backend]
     logging: *logging
 
