@@ -184,3 +184,6 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 212 · 2026-10-14 · user_sessions expires_at index; /api/activity polls on one connection + one transaction (was 2 + 2) (deep audit L11) · auth.py, main.py
 213 · 2026-10-14 · Shimmer/glow keyframes move to transform/opacity; 4 unused keyframes deleted (deep audit L8) · index.html
 214 · 2026-10-14 · Desktop sheets drop the backdrop blurs: open animation 6–9 slow frames → 0–1 (deep audit L9) · index.html
+215 · 2026-10-14 · Editor usability (Lane B): preview mute toggle, desktop no-scroll layout, player sound/volume/scrub/keys, inspector tab fade + keyword chips, 60 fps playhead, timeline keys (audit High + owner's four fixes + audit Low) · editor/*
+216 · 2026-10-14 · Editor Tab order player → timeline → inspector (DOM order only, layout unchanged; owner's decision on Lane C's Low) · editor/*
+218 · 2026-10-14 · Editor: draggable video/timeline split (455 px video default, arrow keys, remembered per user; no-scroll layout from 640 px tall) + timeline word chips one Tab stop (roving tabindex) (owner option b; 217 = SFX library, on branch sfx-library) · editor/*
