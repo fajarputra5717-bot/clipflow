@@ -415,7 +415,10 @@ def mix_sfx(path, candidate: dict, clip_duration: float, *, run, timeout=None, l
         return 0
     run(argv, timeout=timeout)
     Path(str(path) + ".sfx.mp4").replace(path)
-    log(f"SFX: {len(events)} mixed under the speech ({', '.join(n for _t, n in events)})")
+    def label(n):   # QA cd82e80 Low: say which file played (laugh→ding fallback, the user's own sound)
+        f = Path(paths.get(n) or "")
+        return n if f.stem == n else (f"{n}→{f.stem}" if f.parent == ASSETS / "sfx" else f"{n} (own sound)")
+    log(f"SFX: {len(events)} mixed under the speech ({', '.join(label(n) for _t, n in events)})")
     return len(events)
 
 
