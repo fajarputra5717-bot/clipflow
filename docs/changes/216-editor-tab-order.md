@@ -1,4 +1,4 @@
-# lane-b: Editor Tab order (owner 2026-10-14, after 215)
+# 216 — Editor Tab order (owner 2026-10-14, after 215)
 
 The timeline (`.ed-tlwrap`) moved in the DOM from after the inspector to between the player and the inspector
 (`.ed-grid`: player → timeline → inspector), so Tab goes play controls → timeline → inspector → action bar. Visual

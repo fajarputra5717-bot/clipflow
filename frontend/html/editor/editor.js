@@ -133,6 +133,8 @@
           </div>
         </div>
         <!-- owner 2026-10-14: Tab order = player → timeline → inspector (layout places it via CSS) -->
+        <div class="ed-split" data-ed-split role="separator" aria-orientation="horizontal" tabindex="0"
+          aria-label="Resize video and timeline: arrow keys, Shift for bigger steps" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50"></div>
         <details class="ed-tlwrap" open><summary>Timeline</summary><div class="ed-tl" id="edTl" aria-label="Timeline"><div class="ed-hint">Loading the timeline…</div></div></details>
         <div class="ed-insp">
           <div class="ed-seg" role="tablist" aria-label="Editor tools">
@@ -204,7 +206,7 @@
           <div id="edBands" aria-hidden="true"></div>
           <div class="ed-zoom-lane" id="edZoomLane" aria-label="Zoom punch-ins"></div>
           <div class="ed-plan-lane" id="edPlanLane" role="group" aria-label="Auto edit plan"></div>
-          <div class="ed-tl-words" role="group" aria-label="Words and pauses">${pauses}${words}</div>
+          <div class="ed-tl-words" role="group" aria-label="Words and pauses: one Tab stop, arrow keys move, Home and End jump">${pauses}${words}</div>
           <div class="ed-trim-shade l" id="edShadeL" aria-hidden="true"></div><div class="ed-trim-shade r" id="edShadeR" aria-hidden="true"></div>
           <div class="ed-trim-h" id="edTrimA" role="slider" tabindex="0" aria-label="Clip start" data-ed-trim="a"></div>
           <div class="ed-trim-h" id="edTrimB" role="slider" tabindex="0" aria-label="Clip end" data-ed-trim="b"></div>
@@ -215,6 +217,31 @@
     drawWave();
     paintCuts();
     paintPlayhead();
+    setRoving();
+  }
+
+  // Word + pause chips = ONE Tab stop (owner 2026-10-14): roving tabindex in time order; ←/→ move, Home/End jump,
+  // Enter/Space act on the chip as before. E.rove = the chip that keeps the stop across repaints.
+  function chipList() {
+    return [...document.querySelectorAll(".ed-tl-words > button")]
+      .sort((a, b) => parseFloat(a.style.left) - parseFloat(b.style.left));
+  }
+  const chipId = (b) => b.dataset.edWord != null ? "w" + b.dataset.edWord : "p" + b.dataset.edPause;
+  function setRoving(target) {
+    const list = chipList(); if (!list.length) return;
+    const on = target || list.find((b) => chipId(b) === E.rove) || list[0];
+    list.forEach((b) => { b.tabIndex = b === on ? 0 : -1; });
+    E.rove = chipId(on);
+    return on;
+  }
+  function chipKey(e) {
+    const k = e.key, list = chipList(), i = list.indexOf(e.target);
+    if (i < 0 || e.metaKey || e.ctrlKey || e.altKey) return false;
+    const j = k === "ArrowRight" ? Math.min(list.length - 1, i + 1) : k === "ArrowLeft" ? Math.max(0, i - 1)
+      : k === "Home" ? 0 : k === "End" ? list.length - 1 : null;
+    if (j === null) return false;
+    setRoving(list[j]).focus();
+    return true;
   }
 
   // ---- cuts (task 3): source-time ranges; the rendered preview's keep maps video ↔ timeline
@@ -1128,6 +1155,40 @@
     const top = s.getBoundingClientRect().top + window.scrollY;
     const bottom = window.innerHeight - reserve - 12;
     s.style.setProperty("--ed-fit-h", `${Math.max(420, Math.floor(bottom - top))}px`);
+    applySplit();
+  }
+  // Split (owner 2026-10-14): the line between video and timeline. The two rows share a fixed height, so the timeline
+  // height alone sets both. Default: a 455 px tall video when it fits; remembered per user (lsGet/lsSet, this browser).
+  const SPLIT = { minTl: 72, minVideo: 200, video: 455, step: 16 };   // 72: timeline buttons + ruler + a waveform strip
+  const FIT_MQ = window.matchMedia("(min-width:900px) and (min-height:640px)");
+  function splitSpace() {
+    const f = document.querySelector(".ed-fit .ed-frame"), w = document.querySelector(".ed-fit .ed-tlwrap");
+    return f && w ? f.getBoundingClientRect().height + w.getBoundingClientRect().height : 0;
+  }
+  function setSplit(tl, save) {
+    const s = $("editorSection"), d = document.querySelector("[data-ed-split]"), total = E.splitTotal;
+    if (!s || !d || !total) return;
+    const max = Math.max(SPLIT.minTl, total - SPLIT.minVideo);
+    E.splitTl = Math.round(Math.min(max, Math.max(SPLIT.minTl, tl)));
+    s.style.setProperty("--ed-tl-h", `${E.splitTl}px`);
+    const video = total - E.splitTl;
+    d.setAttribute("aria-valuenow", String(Math.round((video / total) * 100)));
+    d.setAttribute("aria-valuetext", `Video ${Math.round(video)} px tall, timeline ${E.splitTl} px`);
+    if (save) { try { window.lsSet ? window.lsSet("editor_split", String(E.splitTl)) : localStorage.setItem("clipflow_editor_split", String(E.splitTl)); } catch {} }
+  }
+  function applySplit() {
+    if (!FIT_MQ.matches || !document.querySelector("[data-ed-split]")) return;
+    E.splitTotal = splitSpace(); if (!E.splitTotal) return;
+    let saved = NaN;
+    try { saved = Number(window.lsGet ? window.lsGet("editor_split") : localStorage.getItem("clipflow_editor_split")); } catch {}
+    setSplit(saved > 0 ? saved : E.splitTotal - SPLIT.video, false);
+  }
+  function splitKey(e) {
+    const k = e.key, big = e.shiftKey ? 4 : 1;
+    const to = k === "ArrowUp" ? E.splitTl + SPLIT.step * big : k === "ArrowDown" ? E.splitTl - SPLIT.step * big
+      : k === "Home" ? Infinity : k === "End" ? 0 : null;      // Home = line at the top (biggest timeline), End = smallest
+    if (to === null) return false;
+    setSplit(to, true); return true;
   }
   function setPlay(on) { const b = document.querySelector("[data-ed-play]"); if (b) { b.textContent = on ? "❚❚" : "▶"; b.setAttribute("aria-label", on ? "Pause" : "Play"); } }
   const fmt = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
@@ -1346,6 +1407,21 @@
     if (!E.scrubbing) return;
     cancelAnimationFrame(E.scrubRaf); const x = e.clientX; E.scrubRaf = requestAnimationFrame(() => scrubTo(x, E.scrubRect));
   });
+  document.addEventListener("pointerdown", (e) => {
+    const d = E.state && e.button === 0 && e.target.closest && e.target.closest("[data-ed-split]");
+    if (!d || !E.splitTotal) return;
+    try { d.setPointerCapture(e.pointerId); } catch {}
+    E.splitDrag = { y: e.clientY, tl: E.splitTl }; d.classList.add("is-drag"); e.preventDefault();
+  });
+  document.addEventListener("pointermove", (e) => {
+    if (!E.splitDrag) return;
+    const y = e.clientY; cancelAnimationFrame(E.splitRaf);
+    E.splitRaf = requestAnimationFrame(() => { if (E.splitDrag) setSplit(E.splitDrag.tl - (y - E.splitDrag.y), false); });
+  });
+  ["pointerup", "pointercancel"].forEach((n) => document.addEventListener(n, () => {
+    if (!E.splitDrag) return;
+    E.splitDrag = null; document.querySelector("[data-ed-split]")?.classList.remove("is-drag"); setSplit(E.splitTl, true);
+  }));
   // 4: drag on the timeline's ruler/waveform (seek mode, not on a chip/handle/marker) scrubs, once per frame.
   document.addEventListener("pointerdown", (e) => {
     const area = E.state && E.mode === "seek" && e.button === 0 && e.target.closest && e.target.closest("[data-ed-seekarea]");
@@ -1366,6 +1442,8 @@
       const [lo, hi] = trimWin(), step = (e.shiftKey ? 1 : 0.1) * (e.key === "ArrowRight" ? 1 : -1);
       setTrim(h.dataset.edTrim, (h.dataset.edTrim === "a" ? lo : hi) + step); cutsChanged(); e.preventDefault(); return;
     }
+    if (e.target.closest && e.target.closest("[data-ed-split]")) { if (splitKey(e)) e.preventDefault(); return; }
+    if (e.target.closest && e.target.closest(".ed-tl-words > button")) { if (chipKey(e)) { e.preventDefault(); return; } }
     if (playerKey(e)) { e.preventDefault(); return; }
     if ((e.key === "c" || e.key === "C") && !e.target.closest("input,textarea,select,[contenteditable]") && !e.metaKey && !e.ctrlKey) {
       setMode(E.mode === "cut" ? "seek" : "cut");
@@ -1432,6 +1510,9 @@
     const t = e.target; if (t && t.classList && (t.classList.contains("ed-seg") || t.classList.contains("ed-kw"))) fadeEdges(t);
   }, { capture: true, passive: true });
   document.addEventListener("click", () => { if (E.state) requestAnimationFrame(fadeAll); });   // after panel repaints
+  document.addEventListener("focusin", (e) => {               // a clicked/focused chip becomes the timeline's Tab stop
+    if (E.state && e.target.matches && e.target.matches(".ed-tl-words > button") && e.target.tabIndex !== 0) setRoving(e.target);
+  });
   window.addEventListener("hashchange", route);
   window.addEventListener("resize", () => { if (E.cid) { E.tlW = 0; fitPage(); moveSeg(); } }, { passive: true });
   window.addEventListener("load", () => setTimeout(route, 0));

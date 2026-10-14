@@ -1,4 +1,4 @@
-# lane-b: Editor usability (audit High + owner's four fixes, 2026-10-14)
+# 215 — Editor usability (audit High + owner's four fixes, 2026-10-14)
 
 1. Preview sound (audit High): speaker button under the video (`data-ed-mute`, `setMuted()`); muted by default
    because the preview autoplays, the choice holds while the page is open. Audio edits are baked into the preview
