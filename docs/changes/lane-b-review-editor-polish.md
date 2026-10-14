@@ -29,3 +29,5 @@
    the "Use for …" select is no longer capped at 150 px ("Use for Record scratch" was cut); on phones the row's
    buttons wrap instead of widening the sheet. index.html hunks: `.sfx-row select` CSS (+1 phone rule), new
    `sfxLicence()` before `renderSfx()`, two lines inside `renderSfx()`.
+9. QA 411d4cf Lows: a past planned post next to posted ones also says "(overdue)"; content issues show their full
+   text (no 2-line clamp) and the 3rd+ sit behind a tappable "+N more" (touch has no hover).

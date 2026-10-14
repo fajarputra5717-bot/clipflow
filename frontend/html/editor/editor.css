@@ -467,7 +467,9 @@ a.rv-frame:focus-visible{outline:none;box-shadow:var(--ring)}
 .rv-group-title span{flex:none;font-weight:500;font-size:var(--fs-small);color:var(--muted)}
 /* Review: what a content-check warning is about */
 .rv-issues{margin:6px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:2px;font-size:var(--fs-small);color:var(--badge-warn-fg)}
-.rv-issues li{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.rv-issues li:nth-child(n+3):not(.rv-issues-more){display:none}      /* first two; "+N more" opens the rest (QA Low 2) */
+.rv-issues.is-open li:nth-child(n+3){display:list-item}
+.rv-issues li{overflow-wrap:anywhere}
 .rv-issues b{font-weight:600}
 .rv-issues-more{color:var(--muted)}
 /* Phone / narrow (owner 2026-10-14, "Hook title card cut off"): the sticky player sits just under the top bar instead

@@ -82,5 +82,7 @@ class FinishedLabel(unittest.TestCase):
         self.assertEqual(self.f("completed", posts, self.now), "Posted on TikTok · next Thu 17:00")
         two = [{"platform": "tiktok", "status": "posted"}, {"platform": "instagram", "status": "claimed"}]
         self.assertEqual(self.f("completed", two, self.now), "Posted on 2 platforms")
+        late = [{"platform": "tiktok", "status": "posted"}, {"platform": "facebook", "status": "planned", "scheduled_for": self.at(7, 12)}]
+        self.assertEqual(self.f("completed", late, self.now), "Posted on TikTok · next Wed 7 Oct 19:00 (overdue)")   # QA Low 1
         fb = [{"platform": "facebook", "status": "posted"}]
         self.assertEqual(self.f("completed", fb, self.now), "Posted on Facebook")   # QA Low 1

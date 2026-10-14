@@ -79,7 +79,8 @@ def finished_label(status: str, posts, now: datetime):
     if posted:
         names = sorted({PLATFORM_NAMES.get(p.get("platform"), p.get("platform") or "?") for p in posted})
         out = "Posted on " + (names[0] if len(names) == 1 else f"{len(names)} platforms")
-        return out + (f" · next {_when(planned[0]['scheduled_for'], now)}" if planned else "")
+        nxt = planned[0]["scheduled_for"] if planned else None
+        return out + (f" · next {_when(nxt, now)}" + (" (overdue)" if nxt < now else "") if nxt else "")   # QA Low 1
     if planned:
         nxt = planned[0]["scheduled_for"]
         return f"Approved · Scheduled {_when(nxt, now)}" + (" (overdue)" if nxt < now else "")

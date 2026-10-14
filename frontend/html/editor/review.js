@@ -233,7 +233,9 @@
     const list = chips.filter((ch) => !ch.ok).flatMap((ch) => ch.issues || []);
     if (!list.length) return "";
     const li = (i) => `<li><b>${esc(i.rule)}</b>${i.quote ? `: “${esc(i.quote)}”` : ""}${i.reason ? ` · ${esc(i.reason)}` : ""}</li>`;
-    return `<ul class="rv-issues">${list.slice(0, 2).map(li).join("")}${list.length > 2 ? `<li class="rv-issues-more">+${list.length - 2} more (hover the chip)</li>` : ""}</ul>`;
+    // QA Low 2: full text (no clamp), extra issues behind a tappable "+N more" (touch has no hover)
+    return `<ul class="rv-issues">${list.map(li).join("")}${list.length > 2
+      ? `<li class="rv-issues-more"><button type="button" class="rv-fix" data-rv-issues-more>+${list.length - 2} more</button></li>` : ""}</ul>`;
   }
 
   function card(c) {
@@ -292,10 +294,11 @@
   document.addEventListener("click", (e) => {
     if (R.open && e.target.closest("[data-nav],[data-flow-editor]")) { hide(); return; }
     if (R.open) document.querySelectorAll(".rv-more[open]").forEach((d) => { if (!d.contains(e.target) || e.target.closest(".rv-menu > *")) d.open = false; });
-    const t = e.target.closest("[data-rv-status],[data-rv-fix],[data-rv-approve],[data-rv-analyze]");
+    const t = e.target.closest("[data-rv-status],[data-rv-fix],[data-rv-approve],[data-rv-analyze],[data-rv-issues-more]");
     if (!t || !R.open) return;
     if (t.matches("[data-rv-status]")) return setFilter({ status: t.dataset.rvStatus });
     if (t.matches("[data-rv-fix]")) return fix(t);
+    if (t.matches("[data-rv-issues-more]")) { const ul = t.closest(".rv-issues"); ul.classList.add("is-open"); t.closest("li").remove(); return; }
     if (t.matches("[data-rv-approve]")) return approve(t);
     if (t.matches("[data-rv-analyze]")) { e.preventDefault(); hide(); history.replaceState(null, "", location.pathname); document.querySelector('[data-nav="current"]')?.click(); }
   }, true);

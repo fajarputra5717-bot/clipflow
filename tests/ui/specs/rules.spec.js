@@ -23,6 +23,19 @@ test.describe("Campaign rule chips on Review", () => {
     await expect.poll(() => api.calls.some((c) => c.method === "POST" && c.path === "/api/jobs/job-done/candidates/cand-a/fix-rule" && c.body?.rule === "hashtags")).toBe(true);
   });
 
+  test("more than two content issues: full text, '+1 more' button opens the rest (touch, no hover)", async ({ app, api }) => {
+    const iss = (n) => ({ rule: "Rule " + n, quote: "q" + n, reason: "a fairly long reason number " + n + " that is not cut off by a two-line clamp anymore" });
+    await mockReviewClips(app, api, [{ id: "cand-a", rule_checks: [
+      { id: "safety", ok: false, blocking: false, label: "Content check: 3 possible issues", detail: "", fix: "dismiss", issues: [iss(1), iss(2), iss(3)] }] }]);
+    const items = app.locator("#rv-cand-a .rv-issues li:visible");
+    await expect(items).toHaveCount(3);                                   // two issues + the button row
+    await expect(items.nth(1)).toContainText("not cut off by a two-line clamp anymore");
+    await app.locator("#rv-cand-a [data-rv-issues-more]").click();
+    await expect(items).toHaveCount(3);
+    await expect(items.nth(2)).toContainText("Rule 3");
+    await expect(app.locator("#rv-cand-a [data-rv-issues-more]")).toHaveCount(0);
+  });
+
   test("every check passes: one 'All rules pass' chip (its title lists the rules), no hint line", async ({ app, api }) => {
     await mockReviewClips(app, api, [{ id: "cand-a", rule_checks: [
       { id: "length", ok: true, blocking: true, label: "Length 34 s", detail: "", fix: null },
