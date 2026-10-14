@@ -1500,6 +1500,7 @@ body{font-size:var(--fs-base)}
 .acct-item,[data-theme="dark"] .acct-item{display:flex;align-items:center;gap:10px;width:100%;min-height:40px;padding:0 10px;border-radius:10px;border:0!important;background:transparent;box-shadow:none;color:var(--text);font-size:var(--fs-base);font-weight:500;text-align:left;cursor:pointer}
 .acct-item:hover:not(:disabled),.acct-item:focus-visible{background:var(--fill);box-shadow:none;filter:none}
 .acct-new>summary{list-style:none}.acct-new>summary::-webkit-details-marker{display:none}
+.acct-new-n{color:var(--text);font-weight:600;font-variant-numeric:tabular-nums}
 .acct-ver{margin-left:auto;color:var(--muted);font-size:var(--fs-small);font-weight:500;font-variant-numeric:tabular-nums}   /* item 5: plain label */
 .acct-new ul{margin:2px 0 6px;padding:0 10px 0 26px;display:grid;gap:4px;font-size:var(--fs-small);color:var(--muted);line-height:1.4}
 /* the dock (UI phase 1 item 2): equal icon buttons, a glider that slides under the active one (transform only),
@@ -1744,16 +1745,7 @@ body:has(#editorSection:not(.hidden)) .ed-foot{bottom:calc(var(--dock-h) + var(-
           <div class="acct-menu-who" id="accountMenuWho"></div>
           <button class="acct-item" type="button" role="menuitem" data-account aria-haspopup="dialog" aria-controls="accountSheet"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg><span>Account</span></button>
           <button class="acct-item theme-toggle" id="themeToggleSide" type="button" role="menuitem" aria-label="Switch appearance"><span class="nav-icon-stack"><svg class="theme-icon-sun nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2.2M12 19.3v2.2M4.9 4.9l1.6 1.6M17.5 17.5l1.6 1.6M2.5 12h2.2M19.3 12h2.2M4.9 19.1l1.6-1.6M17.5 6.5l1.6-1.6"/></svg><svg class="theme-icon-moon nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg></span><span>Appearance</span><span class="nav-value" id="themeValue">Light</span></button>
-          <details class="acct-new"><summary class="acct-item"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/></svg><span>What's new</span><span class="acct-ver" id="versionBadge">v2.1117</span></summary><ul>
-          <li>Campaigns: pick one on Import; its watermark, hashtags (exact order, at the end) and title rules apply to every clip</li>
-          <li>Language: Auto, English or Indonesian per job; Auto detects it from the audio</li>
-          <li>Karaoke captions now reach the final video; editing one line keeps the word timing on the others</li>
-          <li>Loudness: previews and finals play at a consistent −14 LUFS; a clip that couldn't be normalised shows a warning</li>
-          <li>No facecam: choose "No facecam" (or let Auto decide per job) for full-frame gameplay with captions placed lower</li>
-          <li>Edit panel in tabs: Captions, Effects, Audio, Watermark, Export</li>
-          <li>All progress lives in the Dynamic Island and small capsules on the cards, including renders started elsewhere</li>
-          <li>A missing campaign watermark is never replaced by another one: the clip shows a warning instead</li>
-        </ul></details>
+          <details class="acct-new"><summary class="acct-item"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/></svg><span>What's new</span><span class="acct-ver" id="versionBadge">v3</span></summary><ul id="whatsNewList"></ul></details>
           <button class="acct-item" type="button" role="menuitem" data-signout><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 17l5-5-5-5M15 12H4"/></svg><span>Sign out</span></button>
         </div>
       </div>
@@ -4690,6 +4682,17 @@ document.addEventListener("click",e=>{
     showTab(v);
   }
 });
+// UI phase 1 item 6: version = v3.<highest change number>, written with the latest 5 change-log entries to
+// version.json by scripts/write_version.py at every merge; the menu label and "What's new" read it.
+async function loadVersion(){
+  try{
+    const r=await authFetch("version.json",{cache:"no-store"});if(!r.ok)return;
+    const d=await r.json();
+    $("versionBadge").textContent=d.version;
+    $("whatsNewList").innerHTML=(d.entries||[]).map(e=>`<li><span class="acct-new-n">${esc(e.number)}</span> ${esc(e.title)}</li>`).join("");
+  }catch{}
+}
+loadVersion();
 // UI phase 1 item 5: Watermarks + Settings live in the top bar; on phones (≤ 600 px) those icons don't fit beside the
 // island, so only there the two items are put into the account menu (not in the markup: CSS can't bring them back).
 const NARROW_MENU=[`<button class="acct-item acct-narrow" type="button" role="menuitem" data-nav="watermarks" aria-haspopup="dialog" aria-controls="watermarkSheet"><svg class="nav-icon" class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="3"/><path d="m3.5 15.5 4.5-4.5 4 4"/><path d="M14.5 16h3"/></svg><span>Watermarks</span></button>`,`<button class="acct-item acct-narrow" type="button" role="menuitem" data-nav="settings" aria-haspopup="dialog" aria-controls="settingsSheet"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg><span>Settings</span></button>`];

@@ -1,0 +1,32 @@
+{
+ "version": "v3.221",
+ "number": 221,
+ "date": "2026-10-14",
+ "entries": [
+  {
+   "number": 221,
+   "date": "2026-10-14",
+   "title": "UI task phase 2 (Lane B): Review (only failing rule chips / All rules pass, grouped by source video, approved clips show their status, content-check issue show…"
+  },
+  {
+   "number": 220,
+   "date": "2026-10-14",
+   "title": "Groq as second AI provider: auto chain Gemini → Groq → Claude, strict JSON schema (gpt-oss-120b analysis / gpt-oss-20b utility), 429/413 skip to the next provi…"
+  },
+  {
+   "number": 219,
+   "date": "2026-10-14",
+   "title": "Editor sound picker uses the SFX library (names your own sound / the fallback, ▶ preview, Your sounds → Settings sheet, laugh) + 218 split timeline fits its ro…"
+  },
+  {
+   "number": 218,
+   "date": "2026-10-14",
+   "title": "Editor: draggable video/timeline split (455 px video default, arrow keys, remembered per user; no-scroll layout from 640 px tall) + timeline word chips one Tab…"
+  },
+  {
+   "number": 217,
+   "date": "2026-10-14",
+   "title": "Sound effects library: per-user sound per category (laugh new, falls back to ding), uploads checked + levelled with ffmpeg in the backend, Freesound CC0 search…"
+  }
+ ]
+}

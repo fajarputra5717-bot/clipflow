@@ -68,6 +68,10 @@ test("account menu: no duplicates of the top-bar icons, no Refresh, version as a
     await expect(app.locator("#accountMenu .acct-new summary")).toContainText("What's new");
     const ver = app.locator("#versionBadge");
     await expect(ver).toHaveClass(/acct-ver/);
+    await expect(ver).toHaveText(/^v3\.\d{3,}$/);                                     // item 6: v3.<highest change number>
+    await app.locator("#accountMenu .acct-new summary").click();
+    await expect(app.locator("#whatsNewList li")).toHaveCount(5);
+    await expect(app.locator("#whatsNewList li").first()).toContainText((await ver.textContent()).replace("v3.", ""));
     expect(await ver.evaluate((e) => getComputedStyle(e).borderTopWidth + getComputedStyle(e).backgroundColor)).toMatch(/^0px(rgba\(0, 0, 0, 0\)|transparent)/);
     await app.keyboard.press("Escape");
   }
