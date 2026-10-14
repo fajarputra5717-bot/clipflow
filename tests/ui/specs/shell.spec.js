@@ -37,3 +37,25 @@ test("top bar repeats no page title; every page shows its own heading", async ({
     await expect(app.locator(`${heading} :is(h1,h2,h3)`).first()).toBeVisible();
   }
 });
+
+// UI phase 1 item 8: every page intro is one line (desktop); the longer explanation opens from an info button.
+test("page intros are one line; the info button shows the rest", async ({ app }) => {
+  test.skip(test.info().project.name === "mobile", "one line = desktop width; phones wrap");
+  for (const go of [() => window.showTab("campaign"), () => window.showTab("current"), () => window.showTab("schedule"), () => { location.hash = "#import"; },
+                    () => { location.hash = "#track"; }, () => window.showTab("publish"), () => { location.hash = "#editor"; }]) {
+    await app.evaluate(go); await app.waitForTimeout(500);
+    const intro = app.locator(".view-section:not(.hidden) .section-head .page-intro, #pickSection:not(.hidden) .page-intro").first();
+    await expect(intro).toBeVisible();
+    const [h, lh] = await intro.evaluate((e) => [e.getBoundingClientRect().height, parseFloat(getComputedStyle(e).lineHeight) || 20]);
+    expect(h, await intro.textContent()).toBeLessThanOrEqual(Math.max(lh * 1.5, 30));
+    const btn = intro.locator("[data-info]");
+    if (await btn.count()) {
+      const panel = app.locator(`#${await btn.getAttribute("aria-controls")}`);
+      await expect(panel).toBeHidden();
+      await btn.click();
+      await expect(panel).toBeVisible(); await expect(btn).toHaveAttribute("aria-expanded", "true");
+      await btn.click();
+      await expect(panel).toBeHidden(); await expect(btn).toHaveAttribute("aria-expanded", "false");
+    }
+  }
+});

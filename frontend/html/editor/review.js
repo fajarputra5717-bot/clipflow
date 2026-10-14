@@ -156,7 +156,8 @@
           <div>
             <h2 class="rv-title">${esc(h.title || (h.kind === "job" ? "Untitled video" : "Clips"))}</h2>
             ${statusLine}
-            <p class="rv-desc">${R.filter.job === "all" ? "Grouped by video, best hook first." : "Sorted by hook score."} A clip can be scheduled only when every campaign rule passes.</p></div>
+            <p class="rv-desc page-intro">${R.filter.job === "all" ? "Grouped by video, best hook first." : "Sorted by hook score."} ${typeof infoBtn === "function" ? infoBtn("rvDescMore", "scheduling rules") : ""}</p>
+            <p class="info-more small" id="rvDescMore" hidden>A clip can be scheduled only when every campaign rule passes.</p></div>
           <span class="badge attention rv-count" id="rvCount"></span>
         </div>
         ${active.length ? (R.filter.job === "all" ? `<div id="rvGrid">${byJob(active).map((g) => `

@@ -51,7 +51,8 @@ test.describe("Review page", () => {
     await open(app, api);
     await expect(app.locator(".rv-title")).toHaveText("IME Roleplay X Motion Klip");
     await expect(app.locator(".rv-camp-status")).toHaveText("IME Roleplay · Week 2 · 6 days left");
-    await expect(app.locator(".rv-desc").first()).toHaveText("Grouped by video, best hook first. A clip can be scheduled only when every campaign rule passes.");
+    await expect(app.locator(".rv-desc").first()).toHaveText("Grouped by video, best hook first.");   // UI phase 1 item 8: one line
+    await expect(app.locator("#rvDescMore")).toHaveText("A clip can be scheduled only when every campaign rule passes.");   // behind the info button
     await expect(app.locator("#rvCount")).toHaveText("4 to review");
     await expect(app.locator(".rv-group-title")).toHaveText([/^Citer Molotov Ketemu KDM.*3 clips$/, /^Second stream.*1 clip$/]);
     await expect(app.locator(".rv-score")).toHaveText(["Hook 94", "Hook 63", "Hook 71", "Hook 88"]);   // groups in server order
