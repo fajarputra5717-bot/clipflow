@@ -100,6 +100,13 @@ async function smallTargets(app) {
       .map((e) => `${e.tagName.toLowerCase()}.${[...e.classList].join(".")} ${Math.round(e.getBoundingClientRect().width)}x${Math.round(e.getBoundingClientRect().height)} "${(e.textContent || e.getAttribute("aria-label") || "").trim().slice(0, 20)}"`);
   });
 }
+const SFX_FIXTURE = {   // 217
+  freesound: true, limits: { max_bytes: 2097152 },
+  categories: [{ key: "laugh", label: "Laugh", query: "laugh", used_by: ["Funny / Meme"], assigned: null, default: "Built-in ding" },
+    { key: "boom", label: "Boom", query: "boom", used_by: ["Gaming Hype"], assigned: { id: "11111111-1111-4111-8111-111111111111", name: "My boom" }, default: null }],
+  sounds: [{ id: "11111111-1111-4111-8111-111111111111", name: "My boom", duration: 1.4, category: "boom", source: "upload" }],
+  results: [{ id: 101, name: "Crowd laugh", author: "a", duration: 2.1, license: "CC0", url: "https://freesound.org/s/101/", rating: 4.6, ratings: 20, downloads: 100 }],
+};
 test("phone: every control on every page has a ≥ 44 px touch target", async ({ app, api }) => {
   test.skip(test.info().project.name !== "mobile", "phone rule");
   test.setTimeout(90_000);
@@ -121,6 +128,13 @@ test("phone: every control on every page has a ≥ 44 px touch target", async ({
     await app.locator(`#accountMenu [data-nav="${sheet}"]`).click();
     await app.waitForTimeout(700);
     const st = await smallTargets(app); if (st.length) bad[`sheet-${sheet}`] = st;
+    if (sheet === "settings") {   // 217: Settings → Sound effects, with a Find sounds panel open
+      api.sfx = SFX_FIXTURE; api.sfxResults = SFX_FIXTURE.results;
+      await app.locator("[data-open-sfx]").click(); await app.waitForTimeout(500);
+      await app.locator('[data-sfx-find="laugh"]').click(); await app.waitForTimeout(500);
+      await expect(app.locator("#sfxRes-laugh .sfx-res")).toHaveCount(1);
+      const sx = await smallTargets(app); if (sx.length) bad["sheet-sfx"] = sx;
+    }
     await app.keyboard.press("Escape"); await app.waitForTimeout(400);
   }
   expect(bad).toEqual({});

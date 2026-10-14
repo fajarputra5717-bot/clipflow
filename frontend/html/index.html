@@ -963,6 +963,32 @@ img.topbar-logo-icon{background:none;padding:0;object-fit:cover}
 .wm-drop.is-busy-zone{opacity:.7}
 .wm-choose{color:var(--accent);font-weight:600;cursor:pointer;display:inline-block;padding:10px 0;margin:-10px 0}
 .wm-choose.is-busy{cursor:progress}
+/* 217: Sound effects sheet (rows = inset-row; find panel per category) */
+.sfx-open{width:100%;border:0;background:none;text-align:left;color:var(--text);cursor:pointer;border-radius:0;font:inherit}
+.sfx-open:hover{background:var(--fill2)}
+.sfx-chev{color:var(--muted);font-size:20px;line-height:1;padding-right:6px}
+.sfx-play{width:32px;height:32px;border-radius:50%;background:var(--fill);color:var(--text);border:0;flex:none}
+.sfx-play svg{width:14px;height:14px}
+.sfx-play.is-playing{background:var(--accent);color:#fff}
+.sfx-cat+.sfx-cat{border-top:1px solid var(--line)}
+.sfx-cat .inset-row,.sfx-row{flex-wrap:wrap;padding-top:8px;padding-bottom:8px}
+.sfx-find{min-height:32px;padding:0 12px;border-radius:999px;font-size:12px;white-space:nowrap}
+.sfx-find-panel{padding:0 12px 12px 14px}
+.sfx-search{display:flex;gap:8px}
+.sfx-search input{flex:1;min-width:0}
+.sfx-search button{border-radius:999px;white-space:nowrap}
+.sfx-results{margin-top:8px;display:flex;flex-direction:column;gap:2px}
+.sfx-results:empty{display:none}
+.sfx-res{display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:8px 6px;border-radius:10px;background:var(--fill2)}
+.sfx-res .row-label small{white-space:normal}
+.sfx-res-actions,.sfx-row-actions{display:flex;gap:6px;align-items:center;margin-left:auto}
+.sfx-res-actions button{min-height:32px;padding:0 12px;border-radius:999px;font-size:12px;white-space:nowrap}
+.sfx-row select{max-width:150px;min-height:32px;font-size:12px}
+.sfx-rename-input{width:100%;font-size:13px;min-height:30px}
+.sfx-note{padding:10px 2px 0;font-size:12px;color:var(--muted)}
+.sfx-empty{padding:12px 14px;color:var(--muted);font-size:13px}
+.sfx-src{color:var(--muted)}
+@media (max-width:600px){.sfx-res-actions,.sfx-row-actions{width:100%;justify-content:flex-end}.sfx-row select{max-width:none;flex:1;min-height:var(--hit)}}
 /* Toast: bottom centre, above sheets. */
 .toast{position:fixed;left:50%;bottom:calc(var(--sp-3) + env(safe-area-inset-bottom));z-index:300;display:flex;align-items:center;gap:12px;
   max-width:calc(100vw - 2*var(--sp-2));padding:6px 6px 6px 16px;min-height:var(--hit);border-radius:999px;color:#fff;font-size:13px;
@@ -1916,6 +1942,10 @@ body:has(#editorSection:not(.hidden)) .ed-foot{bottom:calc(var(--pill-btn) + 30p
     <div class="sheet-search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg><input type="search" id="settingsSearch" placeholder="Search settings" autocomplete="off" aria-label="Search settings" aria-controls="settingsPanel"></div>
     <div class="sheet-body settings-body">
       <div class="disk-meter" id="diskMeter" aria-live="polite"></div>
+      <section class="inset-group sfx-entry" aria-labelledby="sfxEntryTitle">
+        <h3 class="inset-title" id="sfxEntryTitle">Sound effects</h3>
+        <div class="inset-list"><button class="inset-row sfx-open" type="button" data-open-sfx aria-haspopup="dialog" aria-controls="sfxSheet"><span class="row-label">Sound effects<small id="sfxEntrySummary">Your own laugh, hit and whoosh sounds</small></span><span class="sfx-chev" aria-hidden="true">›</span></button></div>
+      </section>
       <section class="inset-group accounts-admin" id="accountsAdmin" aria-labelledby="accountsTitle">
         <h3 class="inset-title" id="accountsTitle">Posting accounts</h3>
         <div class="inset-list" id="accountsList"></div>
@@ -1970,6 +2000,23 @@ body:has(#editorSection:not(.hidden)) .ed-foot{bottom:calc(var(--pill-btn) + 30p
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V4.5M8 8.5l4-4 4 4"/><path d="M4.5 14.5v3A2.5 2.5 0 0 0 7 20h10a2.5 2.5 0 0 0 2.5-2.5v-3"/></svg>
         <div><strong>Drop a PNG or WebP here</strong><span>or <label class="wm-choose watermark-upload-btn" tabindex="0">choose a file<input type="file" accept="image/png,image/webp" id="watermarkUploadInput" hidden></label> · up to 5 MB</span></div>
       </div>
+    </div>
+  </section>
+</div>
+
+<div class="sheet-layer" id="sfxSheet" aria-hidden="true">
+  <div class="sheet-backdrop" data-sheet-close></div>
+  <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="sfxSheetTitle">
+    <header class="sheet-head"><h2 id="sfxSheetTitle">Sound effects</h2><button class="sheet-close" type="button" data-sheet-close aria-label="Close sound effects"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></header>
+    <div class="sheet-body">
+      <p class="sheet-lede">Your sound replaces the built-in one for its category in your renders, from the next preview or final render.</p>
+      <section class="inset-group" aria-labelledby="sfxCatsTitle"><h3 class="inset-title" id="sfxCatsTitle">Categories</h3><div class="inset-list" id="sfxCats"></div></section>
+      <section class="inset-group" aria-labelledby="sfxListTitle"><h3 class="inset-title" id="sfxListTitle">My sounds</h3><div class="inset-list" id="sfxList"></div>
+        <div class="wm-drop" id="sfxDrop">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V4.5M8 8.5l4-4 4 4"/><path d="M4.5 14.5v3A2.5 2.5 0 0 0 7 20h10a2.5 2.5 0 0 0 2.5-2.5v-3"/></svg>
+          <div><strong>Drop a sound here</strong><span>or <label class="wm-choose sfx-choose" tabindex="0">choose a file<input type="file" accept=".mp3,.wav,.ogg,audio/mpeg,audio/wav,audio/x-wav,audio/ogg" id="sfxUploadInput" hidden></label> · mp3, wav or ogg · up to 2 MB and 10 s</span></div>
+        </div>
+      </section>
     </div>
   </section>
 </div>
@@ -3309,7 +3356,140 @@ window.addEventListener("pagehide",()=>{[...wmPendingDelete.keys()].forEach(id=>
 ["dragenter","dragover"].forEach(t=>document.addEventListener(t,e=>{if(!openSheetId||openSheetId!=="watermarkSheet")return;e.preventDefault();$("wmDrop").classList.toggle("is-over",!!e.target.closest?.("#wmDrop"))}));
 document.addEventListener("dragleave",e=>{if(e.target.closest?.("#wmDrop")&&!e.relatedTarget?.closest?.("#wmDrop"))$("wmDrop").classList.remove("is-over")});
 document.addEventListener("drop",e=>{if(openSheetId!=="watermarkSheet")return;e.preventDefault();$("wmDrop").classList.remove("is-over");const f=e.dataTransfer?.files?.[0];if(f&&e.target.closest?.("#wmDrop"))uploadWatermarkAsset(f)});
-document.addEventListener("keydown",e=>{if((e.key==="Enter"||e.key===" ")&&e.target.classList?.contains("wm-choose")){e.preventDefault();$("watermarkUploadInput").click()}});
+document.addEventListener("keydown",e=>{if((e.key==="Enter"||e.key===" ")&&e.target.classList?.contains("wm-choose")){e.preventDefault();e.target.querySelector("input[type=file]")?.click()}});
+// 217: Sound effects (Settings → Sound effects). Library rows from GET /api/sfx; one shared <audio> plays a sound at a
+// time; Freesound results are CC0 only and nothing is assigned unless the user picks "Use for …".
+let sfxData=null,sfxResults={},sfxOpenCat=null;const sfxPendingDelete=new Map();
+const sfxAudio=new Audio();
+const PLAY_ICON='<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z"/></svg>';
+const STOP_ICON='<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6.5" y="6.5" width="11" height="11" rx="2"/></svg>';
+const PEN_ICON='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 19.5h4l10-10a2.1 2.1 0 0 0-3-3l-10 10z"/></svg>';
+function sfxBuiltinUrl(c){return `/sfx/${c.key==="laugh"?"ding":c.key}.wav`}
+function sfxSourceLink(url,name){return /^https:\/\/freesound\.org\//.test(url||"")?`<a class="icon-btn sfx-src" href="${esc(url)}" target="_blank" rel="noopener noreferrer" aria-label="${esc(name)} on Freesound (opens a new tab)" title="Open on Freesound"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 5h5v5M19 5l-8 8M17 14v4a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 5 18V8.5A1.5 1.5 0 0 1 6.5 7H10"/></svg></a>`:""}
+function sfxFileUrl(id){return mediaUrl(`${API}/api/sfx/${id}/file`)}
+function sfxPlayBtn(src,name){return `<button type="button" class="sfx-play" data-sfx-play="${esc(src)}" data-sfx-name="${esc(name)}" aria-label="Play ${esc(name)}">${PLAY_ICON}</button>`}
+function sfxStop(){sfxAudio.pause();document.querySelectorAll(".sfx-play.is-playing").forEach(b=>{b.classList.remove("is-playing");b.innerHTML=PLAY_ICON;b.setAttribute("aria-label","Play "+b.dataset.sfxName)})}
+sfxAudio.addEventListener("ended",sfxStop);sfxAudio.addEventListener("error",()=>{if(sfxAudio.src){sfxStop();showToast("Couldn't play that sound.")}});
+function sfxPlay(btn){
+  const was=btn.classList.contains("is-playing");sfxStop();if(was)return;
+  sfxAudio.src=btn.dataset.sfxPlay;btn.classList.add("is-playing");btn.innerHTML=STOP_ICON;btn.setAttribute("aria-label","Stop "+btn.dataset.sfxName);
+  sfxAudio.play().catch(()=>{sfxStop()});
+}
+async function loadSfx(){
+  try{sfxData=await api("/api/sfx");renderSfx()}
+  catch(e){sfxData=null;$("sfxCats").innerHTML=loadErrorHtml("sound effects","sfx",e);$("sfxList").innerHTML="";}
+}
+function sfxSummary(){
+  const el=$("sfxEntrySummary");if(!el||!sfxData)return;
+  const n=sfxData.sounds.length,used=sfxData.categories.filter(c=>c.assigned).length;
+  el.textContent=n?`${n} sound${n===1?"":"s"} · ${used} in use`:"Your own laugh, hit and whoosh sounds";
+}
+function renderSfx(){
+  if(!sfxData)return;sfxStop();sfxSummary();
+  const fs=sfxData.freesound;
+  $("sfxCats").innerHTML=sfxData.categories.map(c=>{
+    const mine=c.assigned,open=sfxOpenCat===c.key,src=mine?sfxFileUrl(mine.id):sfxBuiltinUrl(c);
+    const now=mine?`Yours: ${mine.name}`:c.default;
+    const by=c.used_by.length?` · Used by ${c.used_by.join(", ")}`:"";
+    return `<div class="sfx-cat" data-sfx-cat-row="${esc(c.key)}"><div class="inset-row">${sfxPlayBtn(src,`${c.label}: ${now}`)}
+      <span class="row-label">${esc(c.label)}<small>${esc(now+by)}</small></span>
+      <button type="button" class="secondary sfx-find" data-sfx-find="${esc(c.key)}" aria-expanded="${open}" aria-controls="sfxFind-${esc(c.key)}" ${fs?"":`disabled title="Freesound isn't set up yet"`}>Find sounds</button></div>
+      <div class="sfx-find-panel" id="sfxFind-${esc(c.key)}" ${open?"":"hidden"}>
+        <form class="sfx-search" data-sfx-search="${esc(c.key)}"><input type="search" name="q" value="${esc((sfxResults[c.key]||{}).query||c.query)}" aria-label="Search Freesound for ${esc(c.label.toLowerCase())} sounds" maxlength="60" autocomplete="off"><button class="primary" type="submit">Search</button></form>
+        <div class="sfx-results" id="sfxRes-${esc(c.key)}" aria-live="polite">${sfxResultsHtml(c)}</div>
+        <p class="sfx-note">CC0 sounds only (free to use, no credit needed), 0.5–4 s, from Freesound.org. Nothing is used until you pick it.</p>
+      </div></div>`}).join("")+(fs?"":`<p class="sfx-empty">Freesound search isn't set up yet (the admin adds FREESOUND_API_KEY). Uploads work.</p>`);
+  const list=sfxData.sounds.filter(s=>!sfxPendingDelete.has(s.id));
+  $("sfxList").innerHTML=list.length?list.map(s=>{
+    const src=s.source==="freesound"?`Freesound · by ${esc(s.author||"unknown")} · CC0`:"Uploaded";
+    return `<div class="inset-row sfx-row" data-sfx-row="${esc(s.id)}">${sfxPlayBtn(sfxFileUrl(s.id),s.name)}
+      <span class="row-label"><span class="sfx-name">${esc(s.name)}</span><small>${s.duration.toFixed(1)} s · ${src}</small></span>
+      <span class="sfx-row-actions"><select data-sfx-assign="${esc(s.id)}" aria-label="Category for ${esc(s.name)}"><option value="">Not used</option>${sfxData.categories.map(c=>`<option value="${esc(c.key)}" ${s.category===c.key?"selected":""}>Use for ${esc(c.label)}</option>`).join("")}</select>
+      ${s.source==="freesound"&&s.source_url?sfxSourceLink(s.source_url,s.name):""}
+      <button type="button" class="icon-btn" data-sfx-rename="${esc(s.id)}" aria-label="Rename ${esc(s.name)}">${PEN_ICON}</button>
+      <button type="button" class="icon-btn" data-sfx-delete="${esc(s.id)}" aria-label="Delete ${esc(s.name)}">${TRASH}</button></span></div>`}).join("")
+    :`<div class="sfx-empty">No sounds yet. Upload one below${fs?" or find one for a category above":""}.</div>`;
+}
+function sfxResultsHtml(c){
+  const r=sfxResults[c.key];if(!r)return "";
+  if(r.loading)return `<div class="sfx-empty">Searching Freesound…</div>`;
+  if(r.error)return `<div class="sfx-empty" role="alert">${esc(r.error)}</div>`;
+  if(!r.results.length)return `<div class="sfx-empty">No CC0 sounds of 0.5–4 s for “${esc(r.query)}”. Try another word.</div>`;
+  return r.results.map(x=>`<div class="sfx-res">${sfxPlayBtn(mediaUrl(`${API}/api/sfx/freesound/${x.id}/preview`),x.name)}
+    <span class="row-label">${esc(x.name)}<small>${x.duration.toFixed(1)} s · CC0 · by ${esc(x.author)} · ★ ${x.rating.toFixed(1)} (${x.ratings}) · ${x.downloads.toLocaleString("en-US")} downloads</small></span>
+    <span class="sfx-res-actions">${sfxSourceLink(x.url,x.name)}<button type="button" class="secondary" data-sfx-save="${x.id}" data-sfx-for="${esc(c.key)}">Save</button><button type="button" class="primary" data-sfx-save="${x.id}" data-sfx-for="${esc(c.key)}" data-sfx-use>Use for ${esc(c.label)}</button></span></div>`).join("");
+}
+async function searchSfx(cat,q){
+  sfxResults[cat]={loading:true,query:q};$("sfxRes-"+cat).innerHTML=sfxResultsHtml({key:cat});
+  try{const d=await api(`/api/sfx/freesound/search?category=${encodeURIComponent(cat)}&q=${encodeURIComponent(q)}`);sfxResults[cat]={query:d.query,results:d.results||[]}}
+  catch(e){sfxResults[cat]={query:q,error:e.message,results:[]}}
+  const c=sfxData.categories.find(x=>x.key===cat);const box=$("sfxRes-"+cat);if(box&&c)box.innerHTML=sfxResultsHtml(c);
+}
+async function saveFreesound(btn){
+  const cat=btn.dataset.sfxFor,use="sfxUse" in btn.dataset;
+  setBusy(btn,true,use?"Saving…":"Saving…");
+  try{await api(`/api/sfx/freesound/${btn.dataset.sfxSave}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(use?{category:cat}:{})});
+    const label=sfxData.categories.find(c=>c.key===cat)?.label||"";
+    await loadSfx();showToast(use?`Saved and used for ${label}.`:"Saved to My sounds.")}
+  catch(e){showToast("Couldn't save: "+e.message);setBusy(btn,false)}
+}
+async function uploadSfx(file){
+  const input=$("sfxUploadInput"),label=input?.closest("label"),lim=sfxData?.limits?.max_bytes||2097152;
+  if(file.size>lim){showToast("That file is over 2 MB.");input.value="";return}
+  setBusy(label,true,"Uploading…");$("sfxDrop").classList.add("is-busy-zone");
+  try{
+    const form=new FormData();form.append("file",file);
+    const r=await authFetch(`/api/sfx`,{method:"POST",body:form});
+    let d=null;try{d=await r.json()}catch{}
+    if(!r.ok)throw new Error(d?.detail||`HTTP ${r.status}`);
+    await loadSfx();showToast(`Added “${d.name}”.`);
+  }catch(e){showToast("Upload failed: "+e.message)}
+  finally{if(input)input.value="";setBusy(label,false);$("sfxDrop").classList.remove("is-busy-zone")}
+}
+async function assignSfx(id,cat,sel){
+  sel.disabled=true;
+  try{await api(`/api/sfx/${id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({category:cat})});await loadSfx();
+    showToast(cat?`Now used for ${sfxData.categories.find(c=>c.key===cat)?.label}.`:"No longer used.")}
+  catch(e){showToast("Couldn't change it: "+e.message);await loadSfx()}
+}
+function renameSfx(id){
+  const row=document.querySelector(`[data-sfx-row="${CSS.escape(id)}"]`),s=sfxData?.sounds.find(x=>x.id===id);if(!row||!s)return;
+  const name=row.querySelector(".sfx-name");
+  name.innerHTML=`<input class="sfx-rename-input" data-esc-local maxlength="60" aria-label="New name for ${esc(s.name)}" value="${esc(s.name)}">`;
+  const inp=name.querySelector("input");inp.focus();inp.select();let done=false;
+  const finish=async save=>{if(done)return;done=true;const v=inp.value.trim();
+    if(!save||!v||v===s.name){renderSfx();row.isConnected||document.querySelector(`[data-sfx-rename="${CSS.escape(id)}"]`)?.focus();return}
+    try{await api(`/api/sfx/${id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:v})});await loadSfx()}
+    catch(e){showToast("Couldn't rename: "+e.message);renderSfx()}
+    document.querySelector(`[data-sfx-rename="${CSS.escape(id)}"]`)?.focus()};
+  inp.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();finish(true)}else if(e.key==="Escape"){e.preventDefault();finish(false)}});
+  inp.addEventListener("blur",()=>finish(true));
+}
+function deleteSfx(id){
+  const s=sfxData?.sounds.find(x=>x.id===id);if(!s||sfxPendingDelete.has(id))return;
+  sfxPendingDelete.set(id,setTimeout(()=>commitSfxDelete(id),5000));renderSfx();
+  showToast(`Deleted “${s.name}”.`,"Undo",()=>{clearTimeout(sfxPendingDelete.get(id));sfxPendingDelete.delete(id);renderSfx()},5000);
+}
+async function commitSfxDelete(id,keepalive=false){
+  if(!sfxPendingDelete.has(id))return;sfxPendingDelete.delete(id);
+  try{await api(`/api/sfx/${id}`,{method:"DELETE",keepalive});if(!keepalive)await loadSfx()}
+  catch(e){if(!keepalive){showToast("Couldn't delete: "+e.message);await loadSfx()}}
+}
+window.addEventListener("pagehide",()=>{[...sfxPendingDelete.keys()].forEach(id=>{clearTimeout(sfxPendingDelete.get(id));commitSfxDelete(id,true)})});
+document.addEventListener("click",e=>{
+  if(e.target.closest("[data-open-sfx]")){const back=sheetOpener;openSheet("sfxSheet",back);loadSfx();return}
+  const pl=e.target.closest("[data-sfx-play]");if(pl)return sfxPlay(pl);
+  const f=e.target.closest("[data-sfx-find]");if(f){const k=f.dataset.sfxFind;sfxOpenCat=sfxOpenCat===k?null:k;renderSfx();
+    const btn=document.querySelector(`[data-sfx-find="${CSS.escape(k)}"]`);btn?.focus();
+    if(sfxOpenCat){const inp=document.querySelector(`#sfxFind-${CSS.escape(k)} input`);inp?.focus();if(!sfxResults[k])searchSfx(k,inp.value)}return}
+  const sv=e.target.closest("[data-sfx-save]");if(sv)return saveFreesound(sv);
+  const rn=e.target.closest("[data-sfx-rename]");if(rn)return renameSfx(rn.dataset.sfxRename);
+  const dl=e.target.closest("[data-sfx-delete]");if(dl)return deleteSfx(dl.dataset.sfxDelete);
+});
+document.addEventListener("submit",e=>{const f=e.target.closest?.("[data-sfx-search]");if(!f)return;e.preventDefault();const q=f.q.value.trim();if(q)searchSfx(f.dataset.sfxSearch,q)});
+["dragenter","dragover"].forEach(t=>document.addEventListener(t,e=>{if(openSheetId!=="sfxSheet")return;e.preventDefault();$("sfxDrop").classList.toggle("is-over",!!e.target.closest?.("#sfxDrop"))}));
+document.addEventListener("dragleave",e=>{if(e.target.closest?.("#sfxDrop")&&!e.relatedTarget?.closest?.("#sfxDrop"))$("sfxDrop").classList.remove("is-over")});
+document.addEventListener("drop",e=>{if(openSheetId!=="sfxSheet")return;e.preventDefault();$("sfxDrop").classList.remove("is-over");const f=e.dataTransfer?.files?.[0];if(f&&e.target.closest?.("#sfxDrop"))uploadSfx(f)});
 // Toast (071): one at a time, optional action, auto-hides.
 let toastTimer=null,toastFn=null;
 function showToast(text,actionLabel,onAction,ms=3200){
@@ -3322,6 +3502,8 @@ function hideToast(){const t=$("toast");t.classList.remove("show");t.setAttribut
 document.addEventListener("click",e=>{if(e.target.closest("#toastAction")){const fn=toastFn;hideToast();fn&&fn()}});
 document.addEventListener("change",e=>{
   if(e.target.id==="watermarkUploadInput"&&e.target.files&&e.target.files[0])uploadWatermarkAsset(e.target.files[0]);
+  if(e.target.id==="sfxUploadInput"&&e.target.files&&e.target.files[0])uploadSfx(e.target.files[0]);
+  if(e.target.matches?.("[data-sfx-assign]"))assignSfx(e.target.dataset.sfxAssign,e.target.value||null,e.target);
   if(e.target.id==="jobCampaign")updateCampaignHint();
 });
 const SETTINGS_GROUPS=[
@@ -3580,7 +3762,7 @@ function renderPublish(){
   $("publishList").innerHTML=html||`<div class="publish-empty">${total?`Every clip here is posted on all its platforms. <button class="plain" type="button" data-publish-filter="all">Show all</button>`:`No finished clips yet. Approve a clip in <button class="plain" type="button" data-nav="queue">Review</button>; it lands here once its final render is done.`}</div>`;
 }
 // audit M5: a page that can't load says so in words + Retry (like Review/Editor), the server's detail only as small print.
-const LOAD_RETRY={publish:()=>loadPublish(),schedule:()=>loadSchedule(),track:()=>loadTrack()};
+const LOAD_RETRY={publish:()=>loadPublish(),schedule:()=>loadSchedule(),track:()=>loadTrack(),sfx:()=>loadSfx()};
 function loadErrorHtml(what,key,err){
   const d=String(err&&err.message||"").trim();
   return `<div class="panel error-box load-error" role="alert"><p><b>Couldn't load ${esc(what)}.</b> Check your connection and try again.</p>${d?`<small class="load-error-detail">${esc(d)}</small>`:""}<button class="secondary" type="button" data-retry-load="${esc(key)}">Retry</button></div>`;
@@ -4157,7 +4339,7 @@ function syncPageContext(){const el=$("pageContext");if(!el)return;const t=pageC
   new MutationObserver(()=>{if(q)return;q=true;requestAnimationFrame(()=>{q=false;syncPageContext()})}).observe(m,{childList:true,subtree:true,attributes:true,attributeFilter:["hidden","class"]})})();
 // ---- Sidebar navigation + sheets (068) ----
 let openSheetId=null,sheetOpener=null;
-function selectedNav(){return openSheetId==="settingsSheet"?"settings":openSheetId==="watermarkSheet"?"watermarks":currentTab}
+function selectedNav(){return openSheetId==="settingsSheet"||openSheetId==="sfxSheet"?"settings":openSheetId==="watermarkSheet"?"watermarks":currentTab}
 function syncNav(){
   const sel=selectedNav();
   document.querySelectorAll("[data-nav]").forEach(b=>{if(b.dataset.nav===sel)b.setAttribute("aria-current",b.dataset.nav==="current"||b.dataset.nav==="queue"||b.dataset.nav==="publish"||b.dataset.nav==="schedule"||b.dataset.nav==="campaign"||b.dataset.nav==="track"||b.dataset.nav==="import"?"page":"true");else b.removeAttribute("aria-current")});
@@ -4421,6 +4603,7 @@ function openSheet(id,opener){
 function closeSheet(restoreFocus=true){
   if(!openSheetId)return false;
   const layer=$(openSheetId);openSheetId=null;
+  if(layer.id==="sfxSheet")sfxStop();
   layer.classList.remove("open");layer.setAttribute("aria-hidden","true");
   ["appShell","island"].forEach(id=>{const el=$(id);if(el)el.inert=false});
   syncNav();
@@ -4429,7 +4612,7 @@ function closeSheet(restoreFocus=true){
 }
 document.addEventListener("keydown",e=>{
   if(!openSheetId)return;
-  if(e.key==="Escape"){e.stopImmediatePropagation();closeSheet();return}
+  if(e.key==="Escape"){if(e.target.closest?.("[data-esc-local]"))return;e.stopImmediatePropagation();closeSheet();return}
   if(e.key==="Tab"){ // keep focus inside the open sheet
     const f=[...$(openSheetId).querySelectorAll('button,input,select,textarea,summary,label[tabindex],[tabindex]:not([tabindex="-1"])')].filter(el=>!el.disabled&&el.offsetParent!==null);
     if(!f.length)return;const first=f[0],last=f[f.length-1];
@@ -4453,7 +4636,7 @@ document.addEventListener("click",e=>{
   if(e.target.closest("[data-nav-home]")){e.preventDefault();document.querySelector('#flow [data-nav="current"]')?.click();return}
   const nav=e.target.closest("[data-nav]");if(nav){
     const v=nav.dataset.nav;
-    if(v==="settings"||v==="watermarks"){openSheet(v==="settings"?"settingsSheet":"watermarkSheet",nav.closest("#accountMenu")?$("accountMenuBtn"):nav);return}
+    if(v==="settings"||v==="watermarks"){openSheet(v==="settings"?"settingsSheet":"watermarkSheet",nav.closest("#accountMenu")?$("accountMenuBtn"):nav);if(v==="settings")loadSfx();return}
     closeSheet(false);
     if(v==="queue"&&window.clipflowReview){window.clipflowReview.open();return}   // 149: Review = the Review page
     if(TAB_HASH[v]){go(TAB_HASH[v]);return}   // 170: the URL is the view
