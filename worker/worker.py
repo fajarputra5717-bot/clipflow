@@ -2082,7 +2082,7 @@ def validate_ai():
 
         raise RuntimeError(
             "No AI provider configured "
-            "(set GEMINI_API_KEY and/or ANTHROPIC_API_KEY)"
+            "(set GEMINI_API_KEY, GROQ_API_KEY and/or ANTHROPIC_API_KEY)"
         )
 
     if "2.5" in GEMINI_MODEL.lower():

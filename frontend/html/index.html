@@ -989,6 +989,9 @@ img.topbar-logo-icon{background:none;padding:0;object-fit:cover}
 .sfx-note{padding:10px 2px 0;font-size:12px;color:var(--muted)}
 .sfx-empty{padding:12px 14px;color:var(--muted);font-size:13px}
 .sfx-src{color:var(--muted)}
+.ai-order .row-label small{white-space:normal}
+.ai-chain{color:var(--text)!important;font-weight:500}
+.ai-chain-step.is-off{color:var(--muted);font-weight:400}
 @media (max-width:600px){.sfx-res-actions,.sfx-row-actions{width:100%;justify-content:flex-end}.sfx-row select{max-width:none;flex:1;min-height:var(--hit)}}
 /* Toast: bottom centre, above sheets. */
 .toast{position:fixed;left:50%;bottom:calc(var(--sp-3) + env(safe-area-inset-bottom));z-index:300;display:flex;align-items:center;gap:12px;
@@ -3508,7 +3511,7 @@ document.addEventListener("change",e=>{
   if(e.target.id==="jobCampaign")updateCampaignHint();
 });
 const SETTINGS_GROUPS=[
-  ["AI & transcription",["GEMINI_API_KEY","GEMINI_ANALYSIS_MODEL","GEMINI_MAX_ATTEMPTS","WHISPER_MODEL","WHISPER_LANGUAGE","RUNWAY_API_KEY","RUNWAY_MODEL"]],
+  ["AI & transcription",["CLIP_ANALYSIS_PROVIDER","TEXT_UTILITY_PROVIDER","GEMINI_API_KEY","GEMINI_ANALYSIS_MODEL","GEMINI_MAX_ATTEMPTS","GROQ_MODEL_ANALYSIS","GROQ_MODEL_UTILITY","CLAUDE_MODEL_ANALYSIS","CLAUDE_MODEL_UTILITY","WHISPER_MODEL","WHISPER_LANGUAGE","RUNWAY_API_KEY","RUNWAY_MODEL"]],
   ["Face detection",["FACE_DETECTION_SAMPLE_COUNT","FACE_CONFIDENCE_THRESHOLD","FACE_ZOOM_RATIO"]],
   ["Clips & rendering",["CLIPS_PER_JOB","CLIP_TARGET_DURATION","CLIP_MIN_DURATION","CLIP_MAX_DURATION","PREVIEW_WIDTH","WATERMARK_WIDTH","WATERMARK_OPACITY","WATERMARK_POSITION_Y","SUBTITLE_SEAM_GAP","FULLFRAME_CAPTION_Y"]],
   ["YouTube",["YOUTUBE_API_KEY","VIEW_PULL_DAILY_UNITS","YOUTUBE_CLIENT_ID","YOUTUBE_CLIENT_SECRET","YOUTUBE_REFRESH_TOKEN"]],
@@ -3520,7 +3523,7 @@ const SETTINGS_GROUPS=[
   ["Storage",["DISK_SPACE_MIN_MB","RETENTION_DAYS_INTERMEDIATE","ORPHAN_SWEEP_DRY_RUN"]],
   ["Auto-import",["AUTO_IMPORT_INTERVAL_MIN"]]
 ];
-const SETTING_LABELS={WATERMARK_POSITION_Y:"Watermark height (% from top, new jobs)",SUBTITLE_SEAM_GAP:"Caption gap above facecam (%, new jobs)",FULLFRAME_CAPTION_Y:"Caption height, no-facecam clips (% from top)",DISK_SPACE_MIN_MB:"Disk reserve (MB)",AUTO_IMPORT_INTERVAL_MIN:"Check channels every (min)",YOUTUBE_API_KEY:"YouTube API key (view counts)",META_ACCESS_TOKEN:"Your Meta token (Instagram + Facebook view counts)",VIEW_PULL_DAILY_UNITS:"View pulls: max quota units a day",RETENTION_DAYS_INTERMEDIATE:"Keep downloads (days)",ORPHAN_SWEEP_DRY_RUN:"Orphan sweep dry run",GEMINI_API_KEY:"Gemini API key",GEMINI_ANALYSIS_MODEL:"Gemini model",GEMINI_MAX_ATTEMPTS:"Gemini attempts",WHISPER_MODEL:"Whisper model",WHISPER_LANGUAGE:"Fallback language",RUNWAY_API_KEY:"Runway API key",RUNWAY_MODEL:"Runway model",
+const SETTING_LABELS={CLIP_ANALYSIS_PROVIDER:"Clip analysis provider (auto | gemini | groq | claude)",TEXT_UTILITY_PROVIDER:"Utility tasks provider (auto | gemini | groq | claude)",GROQ_MODEL_ANALYSIS:"Groq model, clip analysis",GROQ_MODEL_UTILITY:"Groq model, utility tasks",CLAUDE_MODEL_ANALYSIS:"Claude model, clip analysis",CLAUDE_MODEL_UTILITY:"Claude model, utility tasks",WATERMARK_POSITION_Y:"Watermark height (% from top, new jobs)",SUBTITLE_SEAM_GAP:"Caption gap above facecam (%, new jobs)",FULLFRAME_CAPTION_Y:"Caption height, no-facecam clips (% from top)",DISK_SPACE_MIN_MB:"Disk reserve (MB)",AUTO_IMPORT_INTERVAL_MIN:"Check channels every (min)",YOUTUBE_API_KEY:"YouTube API key (view counts)",META_ACCESS_TOKEN:"Your Meta token (Instagram + Facebook view counts)",VIEW_PULL_DAILY_UNITS:"View pulls: max quota units a day",RETENTION_DAYS_INTERMEDIATE:"Keep downloads (days)",ORPHAN_SWEEP_DRY_RUN:"Orphan sweep dry run",GEMINI_API_KEY:"Gemini API key",GEMINI_ANALYSIS_MODEL:"Gemini model",GEMINI_MAX_ATTEMPTS:"Gemini attempts",WHISPER_MODEL:"Whisper model",WHISPER_LANGUAGE:"Fallback language",RUNWAY_API_KEY:"Runway API key",RUNWAY_MODEL:"Runway model",
   FACE_DETECTION_SAMPLE_COUNT:"Frames sampled",FACE_CONFIDENCE_THRESHOLD:"Confidence threshold",FACE_ZOOM_RATIO:"Facecam zoom",
   CLIPS_PER_JOB:"Clips per video (1–8, new jobs)",CLIP_TARGET_DURATION:"Target length (s)",CLIP_MIN_DURATION:"Minimum length (s)",CLIP_MAX_DURATION:"Maximum length (s)",PREVIEW_WIDTH:"Preview width (px)",WATERMARK_WIDTH:"Watermark width (px)",WATERMARK_OPACITY:"Watermark opacity",
   YOUTUBE_CLIENT_ID:"Client ID",YOUTUBE_CLIENT_SECRET:"Client secret",YOUTUBE_REFRESH_TOKEN:"Refresh token",TIKTOK_CLIENT_KEY:"Client key",TIKTOK_CLIENT_SECRET:"Client secret",TIKTOK_ACCESS_TOKEN:"Access token",
@@ -4159,9 +4162,22 @@ async function loadSettings(){
             <span class="row-control"><input id="${id}" data-setting="${esc(k)}" type="${sec?"password":"text"}" value="${esc(s.value||"")}" placeholder="${s.configured?"Configured / masked":"Not set"}" autocomplete="off" spellcheck="false">${sec?`<button class="icon-btn reveal-btn" type="button" data-reveal="${id}" aria-label="Show ${esc(SETTING_LABELS[k]||k)}" aria-pressed="false">${EYE}</button>`:""}</span>
           </div>`}).join("")}</div>
       </section>`).join("");
+    loadAiStatus();
     filterSettings();updateSettingsDirty();updateSubtitleDefaultsLine();if(!clipsTouched)updateCampaignHint();
     postingTimesDraft=null;renderPostingTimes();
   }catch(e){$("settingsPanel").innerHTML=`<div class="error-box">${esc(e.message)}</div>`}
+}
+// 220: the AI group's first row = the provider chain (auto order, which have a key) + who wrote your latest hooks.
+const AI_NAMES={gemini:"Gemini",groq:"Groq",claude:"Claude"};
+async function loadAiStatus(){
+  const group=[...document.querySelectorAll("#settingsPanel [data-settings-group]")].find(g=>g.querySelector(".inset-title")?.textContent==="AI & transcription");
+  if(!group)return;
+  let d;try{d=await api("/api/ai/status")}catch{return}
+  const chain=d.order.map(p=>`<span class="ai-chain-step${p.configured?"":" is-off"}">${esc(AI_NAMES[p.name]||p.name)}${p.configured?"":" (no key)"}</span>`).join('<span aria-hidden="true"> → </span>');
+  const forced=[["Clip analysis",d.analysis],["Utility tasks",d.utility]].filter(([,v])=>v!=="auto").map(([k,v])=>`${k}: forced to ${esc(AI_NAMES[v]||v)}`);
+  const last=d.last_hooks?`Your latest hooks: ${esc(AI_NAMES[d.last_hooks.provider]||d.last_hooks.provider)}${d.last_hooks.at?` · ${esc(new Date(d.last_hooks.at).toLocaleString("en-GB",{timeZone:"Asia/Jakarta",day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}))} WIB`:""}`:"No hooks yet";
+  group.querySelector("#aiOrderRow")?.remove();
+  group.querySelector(".inset-list").insertAdjacentHTML("afterbegin",`<div class="inset-row ai-order" id="aiOrderRow"><span class="row-label">Provider order (auto)<small class="ai-chain">${chain}</small><small>${forced.length?forced.join(" · ")+" · ":""}${last}</small></span></div>`);
 }
 // Send only fields the user changed: the form shows effective values (DB → env → default), and
 // echoing them back would pin env/default values into the DB, which wins over .env.
