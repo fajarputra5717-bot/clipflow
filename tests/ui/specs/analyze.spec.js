@@ -41,10 +41,23 @@ test("Full frame sends layout none and hides the facecam options; facecam card r
   await expect(app.locator('[data-layout="right"]')).toHaveAttribute("aria-pressed", "true");
 });
 
-test("unbuilt layouts are disabled Coming soon cards", async ({ app }) => {
-  const off = app.locator(".layout-opt:disabled");
-  await expect(off).toHaveCount(3);
-  for (const n of ["Speaker follow", "Two-speaker stacked", "Wide + blur"]) await expect(off.filter({ hasText: n })).toContainText("Coming soon");
+test("unbuilt layouts are one small 'More layouts soon' tile (phase 2)", async ({ app }) => {
+  await expect(app.locator(".layout-opt:disabled")).toHaveCount(0);
+  await expect(app.locator(".layout-opt")).toHaveCount(2);
+  const soon = app.locator(".layout-soon");
+  await expect(soon).toHaveText(/More layouts soon\s*Speaker follow · Two-speaker stacked · Wide \+ blur/);
+  const [t, c] = [await soon.boundingBox(), await app.locator('[data-layout-card="facecam"]').boundingBox()];
+  if (test.info().project.name === "desktop") expect(t.width).toBeLessThan(c.width);   // smaller than a real layout card
+});
+
+test("Start analysis stays in reach: sticky bar above the dock (phase 2)", async ({ app }) => {
+  await app.setViewportSize({ width: app.viewportSize().width, height: 560 });
+  await app.evaluate(() => scrollTo(0, 0));
+  const bar = app.locator(".analyze-actions"), dock = app.locator("#flowNav");
+  await expect(bar).toBeInViewport();
+  const [b, d] = [await bar.boundingBox(), await dock.boundingBox()];
+  expect(b.y + b.height).toBeLessThanOrEqual(d.y);                         // above the dock, never under it
+  expect(await bar.evaluate((e) => getComputedStyle(e).position)).toBe("sticky");
 });
 
 test("estimate hidden without history, shown with it", async ({ app, api }) => {
@@ -73,6 +86,8 @@ test("clips: default from your setting, campaign default tagged, explicit pick w
   await app.locator("#jobCampaign").selectOption("six");
   await expect(app.locator('[data-clips="6"]')).toHaveAttribute("aria-pressed", "true");
   await expect(app.locator("#clipsFromCampaign")).toBeVisible();
+  await expect(app.locator("#campaignHint")).toContainText("from the campaign:");   // phase 2: what the campaign fills in
+  await expect(app.locator("#campaignHint")).toContainText("clip count");
   await app.click('[data-clips="4"]');
   await app.locator("#jobCampaign").selectOption("");
   await expect(app.locator('[data-clips="4"]')).toHaveAttribute("aria-pressed", "true");

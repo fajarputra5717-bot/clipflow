@@ -1197,7 +1197,10 @@ select::-ms-expand{display:none}
 .seg button[aria-pressed="true"]:hover:not(:disabled),[data-theme="dark"] .seg button[aria-pressed="true"]:hover:not(:disabled){background:var(--seg-on);color:#fff;box-shadow:0 1px 3px rgba(0,0,0,.12);font-weight:600}
 .seg-note{margin:6px 0 0;min-height:1.4em;min-height:1lh}   /* audit M4: filled after the API answers; keep the line so nothing below jumps */
 .from-campaign{display:inline-block;margin-left:6px;padding:0 7px;border-radius:999px;background:var(--badge-run-bg);color:var(--accent);font-size:13px;font-weight:600;letter-spacing:0;text-transform:none;vertical-align:1px}
-.layouts{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}
+.layouts{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(150px,.7fr);gap:12px}
+/* phase 2: the three "Coming soon" layouts are one small tile, not three big disabled cards */
+.layout-soon{display:flex;flex-direction:column;justify-content:center;gap:4px;padding:12px 14px;border:1px dashed var(--line2);border-radius:16px;color:var(--muted);font-size:var(--fs-small)}
+.layout-soon b{color:var(--text);font-weight:600}
 .layout-opt,[data-theme="dark"] .layout-opt{display:flex;flex-direction:column;align-items:stretch;background:var(--panel2);color:var(--text);border:1px solid var(--line2)!important;border-radius:16px;padding:12px;gap:10px;font-weight:600;font-size:16px;min-height:0;text-align:center;box-shadow:none}
 .layout-opt[aria-pressed="true"],[data-theme="dark"] .layout-opt[aria-pressed="true"]{border-color:var(--accent)!important;box-shadow:inset 0 0 0 1px var(--accent);background:var(--badge-run-bg)}
 .layout-opt:disabled{opacity:.5;cursor:not-allowed}
@@ -1207,8 +1210,13 @@ select::-ms-expand{display:none}
 .facecam-opts{display:flex;gap:var(--sp-3);flex-wrap:wrap;margin-top:var(--sp-2)}
 .subtitle-defaults .plain,[data-theme="dark"] .subtitle-defaults .plain{background:none;border:0!important;padding:0;min-height:0;color:var(--accent);font:inherit;font-weight:600;box-shadow:none;cursor:pointer}
 .analyze-actions{display:flex;align-items:center;gap:var(--sp-2);flex-wrap:wrap}
+/* phase 2: Start analysis stays in reach: a sticky bar above the dock while the form scrolls */
+.analyze-panel .analyze-actions{position:sticky;bottom:calc(var(--dock-h,58px) + var(--dock-bottom,14px) + 12px + env(safe-area-inset-bottom));z-index:6;
+  margin-inline:calc(-1 * var(--s-3,14px));padding:10px var(--s-3,14px);border-radius:18px;background:color-mix(in srgb,var(--panel) 88%,transparent);
+  -webkit-backdrop-filter:blur(18px) saturate(170%);backdrop-filter:blur(18px) saturate(170%);border:1px solid var(--glass-line,var(--hairline));box-shadow:0 8px 24px rgba(0,0,0,.08)}
+@media (prefers-reduced-transparency:reduce){.analyze-panel .analyze-actions{background:var(--panel);-webkit-backdrop-filter:none;backdrop-filter:none}}
 .analyze-actions #analyzeButton{border-radius:999px;min-height:var(--hit);padding:0 22px}
-@media (max-width:760px){.layouts{grid-template-columns:repeat(2,minmax(0,1fr))}.grid-2{grid-template-columns:1fr}}
+@media (max-width:760px){.layouts{grid-template-columns:repeat(2,minmax(0,1fr))}.layout-soon{grid-column:1/-1}.grid-2{grid-template-columns:1fr}}
 @media (max-width:600px){.analyze-actions #analyzeButton{width:100%}.seg{display:flex}.seg button{flex:1 1 auto;padding:0 10px}}
 /* Posting accounts (P2 part 1, 128) */
 .accounts-admin .inset-list{margin-bottom:var(--sp-2)}
@@ -1829,9 +1837,7 @@ input[type=checkbox],input[type=radio]{accent-color:var(--accent)}
             <div class="layouts" role="group" aria-labelledby="layoutLbl">
               <button class="layout-opt" type="button" data-layout-card="facecam" aria-pressed="false"><svg class="mini" viewBox="0 0 45 80" aria-hidden="true" preserveAspectRatio="xMidYMid slice"><rect class="bg" width="45" height="80"/><rect class="f" x="0" y="0" width="45" height="56"/><path class="a" d="M8 44l8-14 8 14z" opacity=".8"/><rect class="bg" x="26" y="24" width="12" height="20" rx="2"/><rect class="bg" x="0" y="56" width="45" height="24"/><circle class="p" cx="22.5" cy="63" r="4"/><path class="p" d="M14.9 75.8q7.6-10.4 15.2 0z"/><line class="ln" x1="0" y1="56" x2="45" y2="56"/></svg><span>Gameplay + facecam<small>Cam panel at the bottom</small></span></button>
               <button class="layout-opt" type="button" data-layout-card="full" aria-pressed="false"><svg class="mini" viewBox="0 0 45 80" aria-hidden="true" preserveAspectRatio="xMidYMid slice"><rect class="bg" width="45" height="80"/><rect class="f" x="0" y="0" width="45" height="80"/><path class="a" d="M7 58l11-20 11 20z" opacity=".8"/><rect class="bg" x="27" y="34" width="12" height="24" rx="2"/></svg><span>Full frame<small>No facecam · fills 9:16</small></span></button>
-              <button class="layout-opt" type="button" disabled aria-disabled="true"><svg class="mini" viewBox="0 0 45 80" aria-hidden="true" preserveAspectRatio="xMidYMid slice"><rect class="bg" width="45" height="80"/><circle class="p" cx="22.5" cy="34" r="7.5"/><path class="p" d="M8.25 58q14.25-19.5 28.5 0z"/><path class="ln" d="M6 14v-6h6M39 14v-6h-6M6 60v6h6M39 60v6h-6" stroke-width="1.5"/></svg><span>Speaker follow<small>Coming soon</small></span></button>
-              <button class="layout-opt" type="button" disabled aria-disabled="true"><svg class="mini" viewBox="0 0 45 80" aria-hidden="true" preserveAspectRatio="xMidYMid slice"><rect class="bg" width="45" height="80"/><rect class="f" x="0" y="0" width="45" height="40"/><circle class="p" cx="22.5" cy="14" r="5.5"/><path class="p" d="M12.05 31.6q10.45-14.3 20.9 0z"/><circle class="p" cx="22.5" cy="54" r="5.5"/><path class="p" d="M12.05 71.6q10.45-14.3 20.9 0z"/><line class="ln" x1="0" y1="40" x2="45" y2="40"/></svg><span>Two-speaker stacked<small>Coming soon</small></span></button>
-              <button class="layout-opt" type="button" disabled aria-disabled="true"><svg class="mini" viewBox="0 0 45 80" aria-hidden="true" preserveAspectRatio="xMidYMid slice"><rect class="bg" width="45" height="80"/><rect class="f" x="-6" y="0" width="57" height="80" opacity=".6"/><circle class="p" cx="10" cy="14" r="9" opacity=".18"/><circle class="p" cx="36" cy="66" r="10" opacity=".18"/><rect class="bg" x="0" y="27" width="45" height="26"/><circle class="p" cx="14" cy="36" r="3.2"/><path class="p" d="M7.92 46.24q6.08-8.32 12.16 0z"/><circle class="p" cx="31" cy="36" r="3.2"/><path class="p" d="M24.92 46.24q6.08-8.32 12.16 0z"/></svg><span>Wide + blur<small>Coming soon</small></span></button>
+              <div class="layout-soon" role="note"><b>More layouts soon</b><small>Speaker follow · Two-speaker stacked · Wide + blur</small></div>
             </div>
             <div class="facecam-opts" id="facecamOpts">
               <div><span class="field" id="splitLbl">Game : cam</span>
@@ -2473,7 +2479,9 @@ function updateCampaignHint(){
   if(!clipsTouched){clipsFromCampaign=!!c?.default_clip_count;selectClips(c?.default_clip_count||defaultClips(),true)} // 136
   if(!c){h.hidden=true;h.textContent="";return}
   const src=c.sources.length?`Source: ${c.sources.join(", ")}`:(c.source_note?`Source: ${c.source_note}`:"Source: any");
-  h.textContent=`${src} · ${c.platforms.length} platforms${c.brief_pending?" · brief pending":""}`;h.hidden=false;
+  // phase 2: say what the campaign fills in (the fields themselves carry a "from campaign" tag)
+  const from=[layoutFromCampaign&&"layout",languageFromCampaign&&"language",clipsFromCampaign&&"clip count",(c.hashtags||[]).length&&"hashtags","rule checks"].filter(Boolean);
+  h.textContent=`${src} · ${c.platforms.length} platforms${c.brief_pending?" · brief pending":""} · from the campaign: ${from.join(", ")}`;h.hidden=false;
 }
 
 // 079: Auto (default) lets Whisper detect the language; the last EXPLICIT choice is remembered and sent as
