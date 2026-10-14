@@ -7,3 +7,6 @@
    status badge or hint line it repeated.
 2. Review rule chips: only failing checks get a chip (`checksHtml()`); when all pass, one "✓ All rules pass" whose
    title lists the passed rules. The "All campaign rules pass." hint line is gone (the chip says it).
+3. Review across jobs (`job = all`): clips are grouped by source video (`byJob()`): one heading "title · date · N clips"
+   per group instead of the source title on every card. Groups keep the server order (best clip first), clips inside
+   keep it too (hook score, earn last). The intro says "Grouped by video, best hook first."

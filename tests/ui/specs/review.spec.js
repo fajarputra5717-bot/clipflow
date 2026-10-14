@@ -47,20 +47,21 @@ async function open(app, api, opts) {
 test.describe("Review page", () => {
   // QA 649ae25 Low 1: html{scroll-behavior:smooth} made clicks "not stable" on mobile; reduced motion = instant scroll
   test.use({ reducedMotion: "reduce" });
-  test("campaign + all jobs: one grid across jobs, campaign header, source labels, earn last", async ({ app, api }) => {
+  test("campaign + all jobs: grouped by source video (title once per group), campaign header, earn last", async ({ app, api }) => {
     await open(app, api);
     await expect(app.locator(".rv-title")).toHaveText("IME Roleplay X Motion Klip");
     await expect(app.locator(".rv-camp-status")).toHaveText("IME Roleplay · Week 2 · 6 days left");
-    await expect(app.locator(".rv-desc").first()).toHaveText("Clips are sorted by hook score. A clip can be scheduled only when every campaign rule passes.");
+    await expect(app.locator(".rv-desc").first()).toHaveText("Grouped by video, best hook first. A clip can be scheduled only when every campaign rule passes.");
     await expect(app.locator("#rvCount")).toHaveText("4 to review");
-    await expect(app.locator(".rv-score")).toHaveText(["Hook 94", "Hook 88", "Hook 63", "Hook 71"]);   // server order, earn last
-    await expect(app.locator(".rv-src").nth(1)).toContainText("Second stream ·");
-    await expect(app.locator(".rv-clip").nth(3)).toHaveClass(/no-earn/);
-    await expect(app.locator(".rv-clip").nth(3).locator(".rv-earn")).toHaveText("Week closed");
+    await expect(app.locator(".rv-group-title")).toHaveText([/^Citer Molotov Ketemu KDM.*3 clips$/, /^Second stream.*1 clip$/]);
+    await expect(app.locator(".rv-score")).toHaveText(["Hook 94", "Hook 63", "Hook 71", "Hook 88"]);   // groups in server order
+    await expect(app.locator(".rv-src")).toHaveCount(0);                                     // no per-card source title
+    await expect(app.locator(".rv-clip").nth(2)).toHaveClass(/no-earn/);
+    await expect(app.locator(".rv-clip").nth(2).locator(".rv-earn")).toHaveText("Week closed");
     await expect(app.locator(".rv-reason b").first()).toHaveText("Reaksi panik lalu tawa");
-    await expect(app.locator(".rv-fix")).toHaveText(["Trim to 88 s", "Add tags"]);
-    expect(await app.locator("[data-rv-approve]").evaluateAll((b) => b.map((x) => !x.disabled))).toEqual([true, false, false, true]);
-    await expect(app.locator(".rv-open").nth(1)).toHaveAttribute("href", "#editor/job-b/c88");
+    await expect(app.locator(".rv-fix")).toHaveText(["Add tags", "Trim to 88 s"]);
+    expect(await app.locator("[data-rv-approve]").evaluateAll((b) => b.map((x) => !x.disabled))).toEqual([true, false, true, false]);
+    await expect(app.locator(".rv-open").nth(3)).toHaveAttribute("href", "#editor/job-b/c88");
   });
 
   test("filters change the query and are saved per user; job filter shows the job header", async ({ app, api }) => {
@@ -97,7 +98,7 @@ test.describe("Review page", () => {
 
   test("2 columns on desktop, 1 on mobile; no horizontal scroll", async ({ app, api }, info) => {
     await open(app, api);
-    const cols = await app.locator("#rvGrid").evaluate((g) => getComputedStyle(g).gridTemplateColumns.split(" ").length);
+    const cols = await app.locator("#rvGrid .rv-grid").first().evaluate((g) => getComputedStyle(g).gridTemplateColumns.split(" ").length);
     expect(cols).toBe(info.project.name === "mobile" ? 1 : 2);
     expect(await app.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(0);
   });

@@ -461,3 +461,7 @@ a.rv-frame:focus-visible{outline:none;box-shadow:var(--ring)}
 .rv-done{flex:1;min-width:0;min-height:36px;display:inline-flex;align-items:center;padding:0 12px;border-radius:var(--r-pill,999px);
   background:var(--badge-good-bg);color:var(--badge-good-fg);box-shadow:inset 0 0 0 1px var(--badge-good-line);font:600 var(--fs-small) var(--font-text);
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* Review across jobs: one heading per source video (owner 2026-10-14) */
+.rv-group+.rv-group{margin-top:var(--sp-3)}
+.rv-group-title{display:flex;align-items:baseline;gap:8px;margin:0 0 8px;font:600 var(--fs-base)/1.3 var(--font-text);min-width:0}
+.rv-group-title span{flex:none;font-weight:500;font-size:var(--fs-small);color:var(--muted)}

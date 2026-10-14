@@ -152,10 +152,13 @@
           <div>
             <h2 class="rv-title">${esc(h.title || (h.kind === "job" ? "Untitled video" : "Clips"))}</h2>
             ${statusLine}
-            <p class="rv-desc">Clips are sorted by hook score. A clip can be scheduled only when every campaign rule passes.</p></div>
+            <p class="rv-desc">${R.filter.job === "all" ? "Grouped by video, best hook first." : "Sorted by hook score."} A clip can be scheduled only when every campaign rule passes.</p></div>
           <span class="badge attention rv-count" id="rvCount"></span>
         </div>
-        ${active.length ? `<div class="rv-grid" id="rvGrid">${active.map(slot).join("")}</div>` : expired.length ? "" : emptyState()}
+        ${active.length ? (R.filter.job === "all" ? `<div id="rvGrid">${byJob(active).map((g) => `
+          <section class="rv-group" aria-label="${esc(g.title)}"><h3 class="rv-group-title">${esc(g.title)}<span>${esc(g.date)} · ${g.clips.length} clip${g.clips.length === 1 ? "" : "s"}</span></h3>
+            <div class="rv-grid">${g.clips.map(slot).join("")}</div></section>`).join("")}</div>`
+          : `<div class="rv-grid" id="rvGrid">${active.map(slot).join("")}</div>`) : expired.length ? "" : emptyState()}
         ${expired.length ? `<details class="rv-expired" ${R.expiredOpen ? "open" : ""}><summary>Expired · ${expired.length} clip${expired.length === 1 ? "" : "s"} (campaign ended)</summary>
           <div class="rv-grid">${expired.map(slot).join("")}</div></details>` : ""}
       </section>`;
@@ -163,6 +166,17 @@
     if (ex) ex.addEventListener("toggle", () => { R.expiredOpen = ex.open; });
     patch(d);
     R.pollT = setInterval(poll, window.POLL_INTERVAL || 2200);
+  }
+
+  // Owner 2026-10-14: across jobs, clips are grouped by their source video (title once per group, not on every card).
+  // Groups keep the server's order (best clip first); inside a group the clips keep it too (hook score, earn last).
+  function byJob(clips) {
+    const out = new Map();
+    clips.forEach((c) => {
+      if (!out.has(c.job_id)) out.set(c.job_id, { title: c.job_title || "Untitled video", date: day(c.job_date), clips: [] });
+      out.get(c.job_id).clips.push(c);
+    });
+    return [...out.values()];
   }
 
   function emptyState() {
@@ -220,12 +234,10 @@
     const canApprove = c.status === "review" && !blocking;
     const hint = c.status !== "review" ? (c.status === "completed" ? "Final rendered." : RUNNING.includes(c.status) ? "Rendering… (progress in the island)" : "")
       : chips.length ? (blocking ? `Fix ${blocking} rule${blocking === 1 ? "" : "s"} to approve.` : "") : "No campaign rules for this job.";
-    const src = R.filter.job === "all" ? `<div class="rv-src">${esc(c.job_title)} · ${esc(day(c.job_date))}</div>` : "";
     return `
       <a class="rv-frame" href="#editor/${esc(c.job_id)}/${esc(c.id)}" aria-label="Open ${esc(title)} in the editor">${thumb ? `<img src="${thumb}" alt="" loading="lazy" onerror="this.remove()">` : ""}
         <span class="rv-time">${fmtLen(outputSeconds(c))}</span></a>
       <div class="rv-info">
-        ${src}
         <div class="rv-row">${c.score != null ? `<span class="rv-score" title="AI estimate of the hook strength">Hook ${Math.round(c.score)}</span><span class="rv-est">AI estimate</span>` : ""}<span class="rv-spacer"></span>${earn}${state}</div>
         <h3 class="rv-ctitle">${esc(title)}</h3>
         ${c.reason ? `<p class="rv-reason">${reasonHtml(c.reason)}</p>` : ""}
