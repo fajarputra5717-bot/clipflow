@@ -12,8 +12,8 @@ from pathlib import Path
 HAVE_FFMPEG = bool(shutil.which("ffmpeg") and shutil.which("ffprobe"))
 
 
-def make(path, seconds, *, fmt="mp3", vol="0.1", lead_silence=0.0, video=False):
-    src = f"sine=frequency=660:duration={seconds}"
+def make(path, seconds, *, fmt="mp3", vol="0.1", lead_silence=0.0, video=False, src=None):
+    src = src or f"sine=frequency=660:duration={seconds}"
     af = f"volume={vol}" + (f",adelay={int(lead_silence * 1000)}:all=1" if lead_silence else "")
     argv = ["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", src]
     if video:
@@ -87,6 +87,12 @@ class UploadPipelineTest(unittest.TestCase):
     def test_lead_silence_is_trimmed(self):
         dur = self.process(make(self.tmp / "gap.wav", 1.0, fmt="wav", lead_silence=0.8))
         self.assertAlmostEqual(dur, 1.0, delta=0.15)
+
+    def test_noise_like_sounds_are_not_silent(self):   # QA cd82e80 Medium: white noise + a burst with a quiet tail
+        dur = self.process(make(self.tmp / "white.wav", 1.5, fmt="wav", vol="0.5", src="anoisesrc=color=white:amplitude=0.5:duration=1.5"))
+        self.assertAlmostEqual(dur, 1.5, delta=0.1)
+        clap = "anoisesrc=color=white:amplitude=0.9:duration=1.2,afade=t=out:st=0.05:d=1.1:curve=exp"
+        self.assertGreater(self.process(make(self.tmp / "clap.wav", 1.2, fmt="wav", vol="1", src=clap)), 0.3)
 
     def test_silent_file(self):
         with self.assertRaises(self.rs.HTTPException) as e:

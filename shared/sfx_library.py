@@ -117,7 +117,7 @@ def check_probe(data: dict) -> tuple[Optional[float], Optional[str]]:
     return dur, None
 
 
-TRIM = "silenceremove=start_periods=1:start_threshold=-50dB:start_silence=0.02"
+TRIM = "silenceremove=start_periods=1:start_threshold=-50dB:start_silence=0.02:detection=peak"   # QA cd82e80 Medium: rms ate noise-like sounds
 
 
 def measure_cmd(path: str, fmt: str) -> list:
