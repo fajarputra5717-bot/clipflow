@@ -20,6 +20,16 @@ function sfxState(freesound = true) {
   ], calls: [] };
 }
 
+// A real, silent 10 s WAV (8 kHz mono 8-bit): 64 junk bytes made <audio> fire "error" and reset the play button before
+// the check (flaky under parallel load, reported by Lane B).
+function silentWav(seconds = 10, rate = 8000) {
+  const n = seconds * rate, b = Buffer.alloc(44 + n, 128);
+  b.write("RIFF", 0); b.writeUInt32LE(36 + n, 4); b.write("WAVEfmt ", 8); b.writeUInt32LE(16, 16); b.writeUInt16LE(1, 20); b.writeUInt16LE(1, 22);
+  b.writeUInt32LE(rate, 24); b.writeUInt32LE(rate, 28); b.writeUInt16LE(1, 32); b.writeUInt16LE(8, 34); b.write("data", 36); b.writeUInt32LE(n, 40);
+  return b;
+}
+const WAV = silentWav();
+
 async function mockSfx(app, st) {
   const view = () => ({
     freesound: st.freesound, limits: { max_bytes: 2097152, max_seconds: 10, min_seconds: 0.3, max_sounds: 50 },
@@ -29,14 +39,14 @@ async function mockSfx(app, st) {
       return { key, label, query, used_by, assigned: mine ? { id: mine.id, name: mine.name } : null, default: mine ? null : key === "laugh" ? "Built-in ding" : "Built-in" };
     }),
   });
-  await app.route(/\/sfx\/[a-z_]+\.wav$/, (r) => r.fulfill({ status: 200, contentType: "audio/wav", body: Buffer.alloc(64) }));
+  await app.route(/\/sfx\/[a-z_]+\.wav$/, (r) => r.fulfill({ status: 200, contentType: "audio/wav", body: WAV }));
   await app.route(/\/api\/sfx(\/|\?|$)/, async (route) => {
     const req = route.request(), url = new URL(req.url()), path = url.pathname, method = req.method();
     const json = (b, status = 200) => route.fulfill({ status, contentType: "application/json", body: JSON.stringify(b) });
     st.calls.push(`${method} ${path}${url.search}`);
     if (method === "GET" && path === "/api/sfx") return json(view());
     if (method === "GET" && path === "/api/sfx/freesound/search") return json({ query: url.searchParams.get("q"), results: url.searchParams.get("q") === "nothing" ? [] : RESULTS });
-    if (method === "GET") return route.fulfill({ status: 200, contentType: "audio/mpeg", body: Buffer.alloc(64) });
+    if (method === "GET") return route.fulfill({ status: 200, contentType: "audio/wav", body: WAV });
     const fs = path.match(/^\/api\/sfx\/freesound\/(\d+)$/);
     if (method === "POST" && fs) {
       const body = req.postDataJSON() || {}, r = RESULTS.find((x) => x.id === +fs[1]);
