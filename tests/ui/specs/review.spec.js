@@ -133,6 +133,18 @@ test.describe("Review/Editor navigation (149)", () => {
 
 test.describe("Expired group (162)", () => {
   test.use({ reducedMotion: "reduce" });
+  test("an approved clip shows where it stands instead of a disabled Approve (owner 2026-10-14)", async ({ app, api }) => {
+    IME.push(clip({ id: "c99", score: 99, ai_title: "Done", status: "completed", finished: "Approved · Scheduled Wed 17:00", rule_checks: [ok("length", "Length 40 s")] }));
+    try {
+      await open(app, api);
+      const card = app.locator("#rv-c99");
+      await expect(card.locator(".rv-done")).toHaveText("Approved · Scheduled Wed 17:00");
+      await expect(card.locator("[data-rv-approve]")).toHaveCount(0);
+      await expect(card.locator(".rv-hint")).toHaveCount(0);
+      await expect(app.locator("#rv-c94 [data-rv-approve]")).toBeEnabled();       // clips to review keep the button
+    } finally { IME.pop(); }
+  });
+
   test("clips of an ended campaign leave the grid for a collapsed Expired group", async ({ app, api }) => {
     IME.push(EXPIRED);
     try {

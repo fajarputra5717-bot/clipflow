@@ -52,3 +52,34 @@ def earn_state(rules, model, posts, now: datetime):
         elif "outside_window" in probs:
             return {"code": "week_closed", "label": "Week closed"}
     return None
+
+
+# Review (owner 2026-10-14): a finished clip shows where it stands instead of a disabled Approve button.
+PLATFORM_NAMES = {"tiktok": "TikTok", "instagram": "Instagram", "youtube": "YouTube"}
+APPROVED = ("render_queued", "rendering", "completed")
+
+
+def _when(dt: datetime, now: datetime) -> str:
+    """WIB, short: 'Wed 17:00' within the coming week, else 'Wed 22 Oct 17:00'."""
+    d, n = dt.astimezone(payouts.WIB), now.astimezone(payouts.WIB)
+    days = (d.date() - n.date()).days
+    return d.strftime("%a %H:%M") if 0 <= days < 7 else d.strftime("%a %-d %b %H:%M")
+
+
+def finished_label(status: str, posts, now: datetime):
+    """'Approved · Scheduled Wed 17:00' etc. for an approved clip (status in APPROVED), else None.
+    posts = this clip's own clip_posts rows [{platform, status, scheduled_for, posted_at}]; dropped rows are ignored."""
+    if status not in APPROVED:
+        return None
+    live = [p for p in (posts or []) if p.get("status") != "dropped"]
+    posted = [p for p in live if p.get("status") in ("posted", "claimed", "paid")]
+    planned = sorted((p for p in live if p.get("status") == "planned" and p.get("scheduled_for")),
+                     key=lambda p: p["scheduled_for"])
+    if posted:
+        names = sorted({PLATFORM_NAMES.get(p.get("platform"), p.get("platform") or "?") for p in posted})
+        out = "Posted on " + (names[0] if len(names) == 1 else f"{len(names)} platforms")
+        return out + (f" · next {_when(planned[0]['scheduled_for'], now)}" if planned else "")
+    if planned:
+        nxt = planned[0]["scheduled_for"]
+        return f"Approved · Scheduled {_when(nxt, now)}" + (" (overdue)" if nxt < now else "")
+    return "Approved · Rendering final" if status != "completed" else "Approved · Not scheduled yet"

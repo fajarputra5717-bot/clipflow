@@ -208,7 +208,7 @@
     const chips = c.rule_checks || [];
     const blocking = chips.filter((ch) => ch.blocking && !ch.ok).length;
     const thumb = typeof window.mediaUrl === "function" ? mediaUrl(`/api/jobs/${c.job_id}/candidates/${c.id}/thumbnail?v=${enc(c.updated_at || "")}`) : "";
-    const state = c.status === "review" ? "" : `<span class="badge ${badge(c.status)}">${esc(label(c.status))}</span>`;
+    const state = c.status === "review" || c.finished ? "" : `<span class="badge ${badge(c.status)}">${esc(label(c.status))}</span>`;  // finished: the status line says it
     const earn = c.earn ? `<span class="badge cancelled rv-earn" title="This clip can no longer earn">${esc(c.earn.label)}</span>` : "";
     const canApprove = c.status === "review" && !blocking;
     const hint = c.status !== "review" ? (c.status === "completed" ? "Final rendered." : RUNNING.includes(c.status) ? "Rendering… (progress in the island)" : "")
@@ -225,14 +225,15 @@
         ${chips.length ? `<div class="rv-checks">${chips.map((ch) => chipHtml(c, ch)).join("")}</div>` : ""}
         ${(c.render_warnings || []).length ? `<div class="render-warnings" role="status">${c.render_warnings.map((w) => `<span class="render-warn" title="${esc(w.message || "")}">⚠ ${esc(w.message || w.code)}</span>`).join("")}</div>` : ""}
         <div class="rv-actions">
-          <button type="button" class="primary" data-rv-approve="${esc(c.id)}" data-rv-jid="${esc(c.job_id)}" ${canApprove ? "" : "disabled"}>Approve</button>
+          ${c.finished ? `<span class="rv-done" role="status">${esc(c.finished)}</span>`      /* approved: where it stands, no dead button */
+            : `<button type="button" class="primary" data-rv-approve="${esc(c.id)}" data-rv-jid="${esc(c.job_id)}" ${canApprove ? "" : "disabled"}>Approve</button>`}
           <details class="rv-more"><summary aria-label="More actions" title="More actions">⋯</summary>
             <div class="rv-menu">
               <a class="rv-open" href="#editor/${esc(c.job_id)}/${esc(c.id)}">Open editor</a>
               ${!blocking ? `<button type="button" data-approve-schedule="${esc(c.job_id)}" data-cid="${esc(c.id)}">${RUNNING.includes(c.status) || c.status === "completed" ? "Schedule" : "Approve &amp; schedule"}</button>` : ""}
             </div></details>
         </div>
-        <p class="rv-hint">${esc(hint)}</p>
+        ${c.finished ? "" : `<p class="rv-hint">${esc(hint)}</p>`}
       </div>`;
   }
 
