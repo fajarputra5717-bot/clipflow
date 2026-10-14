@@ -8,8 +8,9 @@ required, so `_strict()` makes optional properties nullable + required and `_dro
 callers get the same shape as from Gemini/Claude. A top-level array (hooks) is wrapped as {"clips": [...]}.
 
 Limits (console.groq.com/docs/models, /rate-limits, 2026-10-14): 131,072-token context for the models used here;
-the account's tokens-per-minute limit (free plan 8K on gpt-oss) caps ONE request too, so the router asks `accepts()`
-first and skips Groq for a prompt that clearly won't fit (estimate = chars / 3, conservative for Indonesian). The
+the account's tokens-per-minute limit (free plan 8K on gpt-oss) caps ONE request's prompt too, so the router asks
+`accepts()` first and skips Groq for a prompt that clearly won't fit (estimate = chars / 3; measured ~3.9 for
+Indonesian transcript text, so it errs on skipping). The
 TPM limit is learned per model from `x-ratelimit-limit-tokens` (and from a 413's "Limit N"). 429 / 413 /
 refused key raise AIProviderSkip / AINotConfiguredError: the router moves to the next provider instead of failing the
 job. No vision: calls with images skip Groq. GROQ_API_KEY is env-only and only ever sent as the Bearer header.
@@ -69,11 +70,12 @@ def _completion_budget(model, task, max_tokens):
 
 
 def request_limit(model):
-    """Tokens one request may use: the context window, or the learned per-minute limit if smaller."""
-    ctx = CONTEXT_TOKENS.get(model, DEFAULT_CONTEXT)
+    """Prompt tokens one request may send: the learned per-minute limit (Groq answers 413 when the PROMPT alone is
+    over it; measured 2026-10-14: 'Limit 8000, Requested 8078' for a ~7.8K-token prompt with a 20K completion
+    budget, so the budget isn't counted), else the context window."""
     with _lock:
         tpm = _tpm_limit.get(model)
-    return min(ctx, tpm) if tpm else ctx
+    return tpm or CONTEXT_TOKENS.get(model, DEFAULT_CONTEXT)
 
 
 def accepts(prompt, *, task, max_tokens, setting, images=None):
@@ -81,10 +83,13 @@ def accepts(prompt, *, task, max_tokens, setting, images=None):
     if images:
         return False, "no vision model"
     model = model_for(task, setting)
-    need = estimate_tokens(prompt) + _completion_budget(model, task, max_tokens)
+    est = estimate_tokens(prompt)
+    ctx = CONTEXT_TOKENS.get(model, DEFAULT_CONTEXT)
+    if est + _completion_budget(model, task, max_tokens) > ctx:
+        return False, f"~{est} prompt tokens + the answer > the {ctx}-token context of {model}"
     limit = request_limit(model)
-    if need > limit:
-        return False, f"~{need} tokens > {limit} allowed per request for {model}"
+    if est > limit:
+        return False, f"~{est} prompt tokens > {limit} allowed per request for {model}"
     return True, ""
 
 

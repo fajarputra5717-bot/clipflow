@@ -131,11 +131,15 @@ class GroqTest(unittest.TestCase):
         hour = "x" * 75_000                                                        # ~1 h timed transcript ≈ 25K tokens
         self.assertTrue(groq.accepts(hour, task="hooks", max_tokens=16000, setting=setting)[0])
         groq._tpm_limit["openai/gpt-oss-120b"] = 8000                              # free plan TPM
-        self.assertFalse(groq.accepts(hour, task="hooks", max_tokens=16000, setting=setting)[0])
+        okay, why = groq.accepts(hour, task="hooks", max_tokens=16000, setting=setting)
+        self.assertFalse(okay)
+        self.assertIn("> 8000 allowed", why)
+        short = "x" * 18_000                                                       # ~6K tokens: fits, the 20K answer budget isn't counted
+        self.assertTrue(groq.accepts(short, task="hooks", max_tokens=16000, setting=setting)[0])
 
     def test_limit_learned_from_headers(self):
         self.call(ok({"clips": []}))
-        self.assertEqual(groq.request_limit("openai/gpt-oss-120b"), 131072)       # 250K TPM > context: context wins
+        self.assertEqual(groq.request_limit("openai/gpt-oss-120b"), 250000)       # learned from the header
 
 
 if __name__ == "__main__":
