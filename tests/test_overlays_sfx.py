@@ -14,7 +14,9 @@ class Assets(unittest.TestCase):
         lic = (ASSETS / "LICENSES.md").read_text()
         for ch, code in D.EMOJI.items():
             self.assertTrue((ASSETS / "emoji" / f"{code}.png").is_file(), ch)
+        from shared import sfx_library
         for name in D.SFX:
+            name = sfx_library.FALLBACK.get(name, name)     # 217: laugh = the user's sound, else bundled ding
             self.assertTrue((ASSETS / "sfx" / f"{name}.wav").is_file(), name)
             self.assertIn(f"{name}.wav", lic)
         self.assertIn("Noto Emoji", lic); self.assertIn("Apache License 2.0", lic); self.assertNotIn("Twemoji", lic)
@@ -43,7 +45,7 @@ class Sfx(unittest.TestCase):
         d = {"items": [{"t": 2, "effect": "freeze", "on": True, "params": {"sfx": "record_scratch"}},
                        {"t": 4.5, "effect": "punch", "on": True, "params": {"sfx": "boom"}},       # inside the cut: dropped
                        {"t": 6, "effect": "whip", "on": True, "params": {"sfx": "whoosh"}},
-                       {"t": 8, "effect": "shake", "on": True, "params": {"sfx": "laugh"}}]}      # not bundled: dropped
+                       {"t": 8, "effect": "shake", "on": True, "params": {"sfx": "airhorn"}}]}    # unknown: dropped
         keep = [(0.0, 4.0), (5.0, 10.0)]
         pieces = r.warp_pieces(keep, D.warps(d))
         self.assertEqual(D.sfx_events(d, keep, pieces), [(2.0, "record_scratch"), (5.6, "whoosh")])   # freeze adds 0.6

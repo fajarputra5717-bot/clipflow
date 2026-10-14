@@ -115,6 +115,29 @@ WATERMARK_PATH = Path(
 )
 
 
+def owner_sfx_paths(job_id):
+    """217: {sound name: file} for this job owner's render, read fresh per render: their assigned library sounds
+    (sfx_assets.category) over the bundled ones; laugh → ding until they assign one. A missing file = bundled."""
+    from shared import sfx_library
+    assigned = {}
+    try:
+        with db() as conn:
+            rows = conn.execute(
+                "SELECT s.category, s.path FROM sfx_assets s JOIN jobs j ON j.user_id = s.user_id "
+                "WHERE j.id = %s AND s.category IS NOT NULL", (job_id,)).fetchall()
+        for r in rows:
+            p = DATA_ROOT / r["path"]
+            if p.is_file():
+                assigned[r["category"]] = str(p)
+            else:
+                log(f"WARNING: SFX file missing for '{r['category']}' ({r['path']}); using the built-in sound")
+    except psycopg.errors.UndefinedTable:
+        pass   # backend not migrated yet
+    except Exception as exc:
+        log(f"Could not read the owner's sound effects (job {job_id}): {exc}; using the built-in sounds")
+    return sfx_library.resolve_paths(assigned, str(render_steps.ASSETS / "sfx"))
+
+
 def resolve_watermark_path(asset_id=None):
     """
     The watermark burned into every render is chosen from the asset
@@ -5690,7 +5713,8 @@ def create_preview(
     )
 
     render_steps.apply_cuts(preview_path, candidate, duration, preset=setting("FFMPEG_PREVIEW_PRESET"), crf=setting("FFMPEG_PREVIEW_CRF"), run=run_command, timeout=render_timeout_seconds(duration), log=log)
-    render_steps.mix_sfx(preview_path, candidate, duration, run=run_command, timeout=render_timeout_seconds(duration), log=log)
+    render_steps.mix_sfx(preview_path, candidate, duration, run=run_command, timeout=render_timeout_seconds(duration), log=log,
+                         sfx_paths=owner_sfx_paths(job.get("id") or candidate.get("job_id")))
     # QA P0: previews sound like the final (same chain + verify, never fatal).
     normalize_loudness(preview_path, duration, candidate_id=candidate_id,
                        audio_bitrate="96k", punchy=edit_specs_loud(candidate))
@@ -6160,7 +6184,8 @@ def render_final_candidate(
     )
 
     render_steps.apply_cuts(output_path, candidate, duration, preset=setting("FFMPEG_PRESET"), crf=setting("FFMPEG_CRF"), run=run_command, timeout=render_timeout_seconds(duration), log=log)
-    render_steps.mix_sfx(output_path, candidate, duration, run=run_command, timeout=render_timeout_seconds(duration), log=log)
+    render_steps.mix_sfx(output_path, candidate, duration, run=run_command, timeout=render_timeout_seconds(duration), log=log,
+                         sfx_paths=owner_sfx_paths(job.get("id") or candidate.get("job_id")))
     # QA #2: loudness last (after every audio step of the render).
     update_candidate(candidate_id, progress=90, message="Normalising loudness")
     normalize_loudness(output_path, duration, candidate_id=candidate_id, punchy=edit_specs_loud(candidate))

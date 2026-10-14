@@ -33,8 +33,8 @@ PACKS: dict[str, dict] = {
         "caption": {"preset": "pop", "keyword_color": None},
         "map": {
             "punchline": [("freeze", {"hold": 0.6, "sfx": "record_scratch"})],
-            "laugh": [("emoji", {"emoji": "😂", "sfx": "ding"}), ("emoji", {"emoji": "😭", "sfx": "ding"}),
-                      ("emoji", {"emoji": "💀", "sfx": "ding"})],        # "laugh" SFX: no CC0 recording yet → ding
+            "laugh": [("emoji", {"emoji": "😂", "sfx": "laugh"}), ("emoji", {"emoji": "😭", "sfx": "laugh"}),
+                      ("emoji", {"emoji": "💀", "sfx": "laugh"})],       # 217: the user's laugh sound, else ding
             "shock": [("slowmo", {"dur": 1.2, "factor": 0.5})],          # fails
             "hook": [("punch", {"sfx": "ding"})],
             "reaction": [("emoji", {"emoji": "😂"})],

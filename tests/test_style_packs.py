@@ -38,7 +38,7 @@ class Mapping(unittest.TestCase):
              {"t": 10.0, "kind": "punchline", "text": "c"}, {"t": 14.0, "kind": "shock", "text": "d"}]
         items = D.plan(duration=30, moments=m, mapping=P.PACKS["funny_meme"]["map"], min_gap=3)
         self.assertEqual([(i["effect"], i["params"]) for i in items],
-                         [("emoji", {"emoji": "😂", "sfx": "ding"}), ("emoji", {"emoji": "😭", "sfx": "ding"}),
+                         [("emoji", {"emoji": "😂", "sfx": "laugh"}), ("emoji", {"emoji": "😭", "sfx": "laugh"}),
                           ("freeze", {"hold": 0.6, "sfx": "record_scratch"}), ("slowmo", {"dur": 1.2, "factor": 0.5, })])
         podcast = D.plan(duration=30, moments=m, mapping=P.PACKS["podcast_clean"]["map"], min_gap=6)
         self.assertEqual([(i["t"], i["effect"]) for i in podcast], [(10.0, "punch")])           # laughs/shock unused
