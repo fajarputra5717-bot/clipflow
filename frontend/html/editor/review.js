@@ -138,7 +138,11 @@
     const seq = ++R.loadSeq;
     let d;
     try { d = await api(clipsUrl()); }
-    catch (e) { if (seq === R.loadSeq) $("rvBody").innerHTML = `<div class="panel error-box">Can't load clips: ${esc(e.message)}</div>`; return; }
+    catch (e) {                                                  // left Review meanwhile: no #rvBody to write to
+      const body = seq === R.loadSeq && R.open && $("rvBody");
+      if (body) body.innerHTML = `<div class="panel error-box">Can't load clips: ${esc(e.message)}</div>`;
+      return;
+    }
     if (seq !== R.loadSeq || !R.open) return;                  // a newer filter won
     R.data = d;
     const h = d.header;
@@ -152,10 +156,13 @@
           <div>
             <h2 class="rv-title">${esc(h.title || (h.kind === "job" ? "Untitled video" : "Clips"))}</h2>
             ${statusLine}
-            <p class="rv-desc">Clips are sorted by hook score. A clip can be scheduled only when every campaign rule passes.</p></div>
+            <p class="rv-desc">${R.filter.job === "all" ? "Grouped by video, best hook first." : "Sorted by hook score."} A clip can be scheduled only when every campaign rule passes.</p></div>
           <span class="badge attention rv-count" id="rvCount"></span>
         </div>
-        ${active.length ? `<div class="rv-grid" id="rvGrid">${active.map(slot).join("")}</div>` : expired.length ? "" : emptyState()}
+        ${active.length ? (R.filter.job === "all" ? `<div id="rvGrid">${byJob(active).map((g) => `
+          <section class="rv-group" aria-label="${esc(g.title)}"><h3 class="rv-group-title">${esc(g.title)}<span>${esc(g.date)} · ${g.clips.length} clip${g.clips.length === 1 ? "" : "s"}</span></h3>
+            <div class="rv-grid">${g.clips.map(slot).join("")}</div></section>`).join("")}</div>`
+          : `<div class="rv-grid" id="rvGrid">${active.map(slot).join("")}</div>`) : expired.length ? "" : emptyState()}
         ${expired.length ? `<details class="rv-expired" ${R.expiredOpen ? "open" : ""}><summary>Expired · ${expired.length} clip${expired.length === 1 ? "" : "s"} (campaign ended)</summary>
           <div class="rv-grid">${expired.map(slot).join("")}</div></details>` : ""}
       </section>`;
@@ -163,6 +170,17 @@
     if (ex) ex.addEventListener("toggle", () => { R.expiredOpen = ex.open; });
     patch(d);
     R.pollT = setInterval(poll, window.POLL_INTERVAL || 2200);
+  }
+
+  // Owner 2026-10-14: across jobs, clips are grouped by their source video (title once per group, not on every card).
+  // Groups keep the server's order (best clip first); inside a group the clips keep it too (hook score, earn last).
+  function byJob(clips) {
+    const out = new Map();
+    clips.forEach((c) => {
+      if (!out.has(c.job_id)) out.set(c.job_id, { title: c.job_title || "Untitled video", date: day(c.job_date), clips: [] });
+      out.get(c.job_id).clips.push(c);
+    });
+    return [...out.values()];
   }
 
   function emptyState() {
@@ -203,36 +221,52 @@
       ? `<button type="button" class="rv-fix" data-rv-fix="${esc(ch.fix)}" data-rv-cid="${esc(c.id)}" data-rv-jid="${esc(c.job_id)}" data-rv-target="${ch.fix_target || ""}" ${RUNNING.includes(c.status) ? "disabled" : ""}>${esc(fixLabel)}</button>` : ""}</span>`;
   }
 
+  // Owner 2026-10-14: only failing checks get a chip; when every check passes, one "All rules pass" (its title lists them).
+  function checksHtml(c, chips) {
+    const failing = chips.filter((ch) => !ch.ok);
+    if (failing.length) return failing.map((ch) => chipHtml(c, ch)).join("");
+    return `<span class="badge completed" title="${esc(chips.map((ch) => "✓ " + ch.label).join("\n"))}">✓ All rules pass</span>`;
+  }
+
+  // Owner 2026-10-14: a content-check warning says what the issue is (rule, quote, reason from rule_checks "issues").
+  function issuesHtml(chips) {
+    const list = chips.filter((ch) => !ch.ok).flatMap((ch) => ch.issues || []);
+    if (!list.length) return "";
+    const li = (i) => `<li><b>${esc(i.rule)}</b>${i.quote ? `: “${esc(i.quote)}”` : ""}${i.reason ? ` · ${esc(i.reason)}` : ""}</li>`;
+    // QA Low 2: full text (no clamp), extra issues behind a tappable "+N more" (touch has no hover)
+    return `<ul class="rv-issues">${list.map(li).join("")}${list.length > 2
+      ? `<li class="rv-issues-more"><button type="button" class="rv-fix" data-rv-issues-more>+${list.length - 2} more</button></li>` : ""}</ul>`;
+  }
+
   function card(c) {
     const title = c.manual_title || c.title || c.ai_title || "Untitled clip";
     const chips = c.rule_checks || [];
     const blocking = chips.filter((ch) => ch.blocking && !ch.ok).length;
     const thumb = typeof window.mediaUrl === "function" ? mediaUrl(`/api/jobs/${c.job_id}/candidates/${c.id}/thumbnail?v=${enc(c.updated_at || "")}`) : "";
-    const state = c.status === "review" ? "" : `<span class="badge ${badge(c.status)}">${esc(label(c.status))}</span>`;
+    const state = c.status === "review" || c.finished ? "" : `<span class="badge ${badge(c.status)}">${esc(label(c.status))}</span>`;  // finished: the status line says it
     const earn = c.earn ? `<span class="badge cancelled rv-earn" title="This clip can no longer earn">${esc(c.earn.label)}</span>` : "";
     const canApprove = c.status === "review" && !blocking;
     const hint = c.status !== "review" ? (c.status === "completed" ? "Final rendered." : RUNNING.includes(c.status) ? "Rendering… (progress in the island)" : "")
-      : chips.length ? (blocking ? `Fix ${blocking} rule${blocking === 1 ? "" : "s"} to approve.` : "All campaign rules pass.") : "No campaign rules for this job.";
-    const src = R.filter.job === "all" ? `<div class="rv-src">${esc(c.job_title)} · ${esc(day(c.job_date))}</div>` : "";
+      : chips.length ? (blocking ? `Fix ${blocking} rule${blocking === 1 ? "" : "s"} to approve.` : "") : "No campaign rules for this job.";
     return `
       <a class="rv-frame" href="#editor/${esc(c.job_id)}/${esc(c.id)}" aria-label="Open ${esc(title)} in the editor">${thumb ? `<img src="${thumb}" alt="" loading="lazy" onerror="this.remove()">` : ""}
         <span class="rv-time">${fmtLen(outputSeconds(c))}</span></a>
       <div class="rv-info">
-        ${src}
         <div class="rv-row">${c.score != null ? `<span class="rv-score" title="AI estimate of the hook strength">Hook ${Math.round(c.score)}</span><span class="rv-est">AI estimate</span>` : ""}<span class="rv-spacer"></span>${earn}${state}</div>
         <h3 class="rv-ctitle">${esc(title)}</h3>
         ${c.reason ? `<p class="rv-reason">${reasonHtml(c.reason)}</p>` : ""}
-        ${chips.length ? `<div class="rv-checks">${chips.map((ch) => chipHtml(c, ch)).join("")}</div>` : ""}
+        ${chips.length ? `<div class="rv-checks">${checksHtml(c, chips)}</div>${issuesHtml(chips)}` : ""}
         ${(c.render_warnings || []).length ? `<div class="render-warnings" role="status">${c.render_warnings.map((w) => `<span class="render-warn" title="${esc(w.message || "")}">⚠ ${esc(w.message || w.code)}</span>`).join("")}</div>` : ""}
         <div class="rv-actions">
-          <button type="button" class="primary" data-rv-approve="${esc(c.id)}" data-rv-jid="${esc(c.job_id)}" ${canApprove ? "" : "disabled"}>Approve</button>
+          ${c.finished ? `<span class="rv-done" role="status">${esc(c.finished)}</span>`      /* approved: where it stands, no dead button */
+            : `<button type="button" class="primary" data-rv-approve="${esc(c.id)}" data-rv-jid="${esc(c.job_id)}" ${canApprove ? "" : "disabled"}>Approve</button>`}
           <details class="rv-more"><summary aria-label="More actions" title="More actions">⋯</summary>
             <div class="rv-menu">
               <a class="rv-open" href="#editor/${esc(c.job_id)}/${esc(c.id)}">Open editor</a>
               ${!blocking ? `<button type="button" data-approve-schedule="${esc(c.job_id)}" data-cid="${esc(c.id)}">${RUNNING.includes(c.status) || c.status === "completed" ? "Schedule" : "Approve &amp; schedule"}</button>` : ""}
             </div></details>
         </div>
-        <p class="rv-hint">${esc(hint)}</p>
+        ${c.finished || !hint ? "" : `<p class="rv-hint">${esc(hint)}</p>`}
       </div>`;
   }
 
@@ -260,10 +294,15 @@
   document.addEventListener("click", (e) => {
     if (R.open && e.target.closest("[data-nav],[data-flow-editor]")) { hide(); return; }
     if (R.open) document.querySelectorAll(".rv-more[open]").forEach((d) => { if (!d.contains(e.target) || e.target.closest(".rv-menu > *")) d.open = false; });
-    const t = e.target.closest("[data-rv-status],[data-rv-fix],[data-rv-approve],[data-rv-analyze]");
+    const t = e.target.closest("[data-rv-status],[data-rv-fix],[data-rv-approve],[data-rv-analyze],[data-rv-issues-more]");
     if (!t || !R.open) return;
     if (t.matches("[data-rv-status]")) return setFilter({ status: t.dataset.rvStatus });
     if (t.matches("[data-rv-fix]")) return fix(t);
+    if (t.matches("[data-rv-issues-more]")) {                    // focus moves to the first revealed issue (QA 377eb22 Low)
+      const ul = t.closest(".rv-issues"); ul.classList.add("is-open"); t.closest("li").remove();
+      const first = ul.children[2]; if (first) { first.tabIndex = -1; first.focus(); }
+      return;
+    }
     if (t.matches("[data-rv-approve]")) return approve(t);
     if (t.matches("[data-rv-analyze]")) { e.preventDefault(); hide(); history.replaceState(null, "", location.pathname); document.querySelector('[data-nav="current"]')?.click(); }
   }, true);

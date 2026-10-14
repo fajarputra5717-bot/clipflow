@@ -457,3 +457,25 @@ a.rv-frame:focus-visible{outline:none;box-shadow:var(--ring)}
 .ed-sfx-play{min-height:var(--chip-h,24px);padding:0 8px;font-size:var(--fs-small)}
 .ed-link{display:inline-flex;align-items:center;min-height:var(--chip-h,24px);margin-top:2px;padding:0;border:0;background:none;color:var(--accent);font:600 var(--fs-small) var(--font-text);cursor:pointer}
 @media (max-width:600px){.ed-sfx-play,.ed-link{min-height:var(--hit,44px)}}
+/* Review (owner 2026-10-14): an approved clip says where it stands instead of showing a disabled Approve */
+.rv-done{flex:1;min-width:0;min-height:36px;display:inline-flex;align-items:center;padding:0 12px;border-radius:var(--r-pill,999px);
+  background:var(--badge-good-bg);color:var(--badge-good-fg);box-shadow:inset 0 0 0 1px var(--badge-good-line);font:600 var(--fs-small) var(--font-text);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* Review across jobs: one heading per source video (owner 2026-10-14) */
+.rv-group+.rv-group{margin-top:var(--sp-3)}
+.rv-group-title{display:flex;align-items:baseline;gap:8px;margin:0 0 8px;font:600 var(--fs-base)/1.3 var(--font-text);min-width:0}
+.rv-group-title span{flex:none;font-weight:500;font-size:var(--fs-small);color:var(--muted)}
+/* Review: what a content-check warning is about */
+.rv-issues{margin:6px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:2px;font-size:var(--fs-small);color:var(--badge-warn-fg)}
+.rv-issues li:nth-child(n+3):not(.rv-issues-more){display:none}      /* first two; "+N more" opens the rest (QA Low 2) */
+.rv-issues.is-open li:nth-child(n+3){display:list-item}
+.rv-issues li{overflow-wrap:anywhere}
+.rv-issues b{font-weight:600}
+.rv-issues-more{color:var(--muted)}
+/* Phone / narrow (owner 2026-10-14, "Hook title card cut off"): the sticky player sits just under the top bar instead
+   of sliding beneath it, and anything scrolled or focused into view stops below the player, not behind it. */
+@media (max-width:899px){
+  .ed-page{--ed-top:var(--appbar-h,48px)}
+  body.is-staging .ed-page{--ed-top:calc(var(--appbar-h,48px) + 22px)}
+  .ed-page .ed-insp,.ed-page .ed-group,.ed-page .ed-tlwrap{scroll-margin-top:calc(var(--ed-top) + max(40vh,220px) + 8px)}
+}

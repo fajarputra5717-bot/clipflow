@@ -48,5 +48,22 @@ class Watermark(unittest.TestCase):
         self.assertIsNone(chip(rc.check(RULES, cand()), "watermark")["fix"])
 
 
+class SafetyIssues(unittest.TestCase):
+    """Review shows what the content issue is (owner 2026-10-14): rule text from the campaign, quote, reason."""
+    def test_issues_carry_rule_text(self):
+        rules = {**RULES, "content_rules": [{"id": "no_sara_or_insults", "text": "No SARA or insults"}]}
+        c = cand(safety_check={"flags": [{"rule": "no_sara_or_insults", "quote": "orang itu", "reason": "could read as a jab"},
+                                         {"rule": "unknown_rule", "quote": "x", "reason": "y"}]})
+        ch = chip(rc.check(rules, c), "safety")
+        self.assertFalse(ch["ok"])
+        self.assertEqual(ch["issues"], [{"rule": "No SARA or insults", "quote": "orang itu", "reason": "could read as a jab"},
+                                        {"rule": "unknown_rule", "quote": "x", "reason": "y"}])
+
+    def test_dismissed_or_clean_has_no_issues(self):
+        self.assertEqual(chip(rc.check(RULES, cand(safety_check={"flags": []})), "safety")["issues"], [])
+        ch = chip(rc.check(RULES, cand(safety_check={"flags": [{"rule": "r"}], "dismissed": True})), "safety")
+        self.assertEqual(ch["issues"], [])
+
+
 if __name__ == "__main__":
     unittest.main()

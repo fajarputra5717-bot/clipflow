@@ -105,6 +105,7 @@ def check(rules, c):
 
     safety = c.get("safety_check")
     if isinstance(safety, dict):
+        texts = {r.get("id"): r.get("text") for r in campaigns.content_rules(rules or {})}
         flags = safety.get("flags") or []
         if safety.get("dismissed"):
             flags = []
@@ -114,6 +115,9 @@ def check(rules, c):
             "detail": "; ".join(f"[{f.get('rule')}] “{f.get('quote', '')}”: {f.get('reason', '')}" for f in flags)
                       or ("Dismissed by you." if safety.get("dismissed") else "No campaign content rule looks broken."),
             "fix": "dismiss" if flags else None,
+            # owner 2026-10-14: Review shows what the issue is, not just a count (rule text from the campaign)
+            "issues": [{"rule": texts.get(f.get("rule")) or f.get("rule") or "Content rule", "quote": f.get("quote") or "",
+                        "reason": f.get("reason") or ""} for f in flags],
         })
     return chips
 

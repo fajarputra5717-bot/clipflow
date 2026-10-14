@@ -158,6 +158,7 @@ def _captions_state(c: dict, spec: dict) -> dict:
         "style": style, "animation": o_anim or job_anim,
         "caption_y": spec.get("caption_y"), "auto_caption_y": c.get("auto_caption_y", 78.0),
         "keywords": list(spec.get("keywords") or []), "keyword_color": spec.get("keyword_color"),
+        "stopwords": sorted(languages.keyword_stopwords()),   # never offered as keyword chips (owner 2026-10-14)
         "auto_keyword_color": caption_options.auto_keyword_color(style),
         "transcript": c.get("subtitle_text") or "", "override": override,
         "text": override or (c.get("subtitle_text") or ""),
@@ -541,6 +542,7 @@ def review_clips(campaign: str = "all", job: str = "all", status: str = "to_revi
     from datetime import datetime, timezone
     from shared import campaigns, payouts, rule_checks
     from shared import campaign_status as campaign_status_mod
+    from shared import review_state
     from shared.review_state import campaign_status
     core = _core()
     now = datetime.now(timezone.utc)
@@ -568,10 +570,10 @@ def review_clips(campaign: str = "all", job: str = "all", status: str = "to_revi
         ids = [r[0] for r in rows]
         posts = {}
         if ids:
-            cur.execute("SELECT candidate_id, platform, status, posted_at FROM clip_posts WHERE candidate_id = ANY(%s) "
-                        "AND user_id = %s", (ids, user["id"]))
-            for cid, plat, st, at in cur.fetchall():
-                posts.setdefault(cid, []).append({"platform": plat, "status": st, "posted_at": at})
+            cur.execute("SELECT candidate_id, platform, status, posted_at, scheduled_for FROM clip_posts "
+                        "WHERE candidate_id = ANY(%s) AND user_id = %s", (ids, user["id"]))
+            for cid, plat, st, at, sched in cur.fetchall():
+                posts.setdefault(cid, []).append({"platform": plat, "status": st, "posted_at": at, "scheduled_for": sched})
     rules_cache, clips = {}, []
     for r in rows:
         c = dict(zip(cols, r))
@@ -583,6 +585,7 @@ def review_clips(campaign: str = "all", job: str = "all", status: str = "to_revi
         c["rule_checks"] = rule_checks.check(rules, c) if rules else []
         c["output_seconds"] = round(rule_checks._duration(c), 2)      # cuts + Auto Edit time effects (E2)
         c.update(campaign_status_mod.clip_labels(rules, posts.get(c["id"], []), now))   # 162: earn + expired
+        c["finished"] = review_state.finished_label(c["status"], posts.get(c["id"], []), now)   # "Approved · Scheduled Wed 17:00"
         c.update(campaign=slug, job_title=jtitle or "Untitled video", job_date=jdate.isoformat() if jdate else None,
                  job_status=jstatus, updated_at=c["updated_at"].isoformat() if c["updated_at"] else None,
                  score=float(c["score"]) if c["score"] is not None else None)

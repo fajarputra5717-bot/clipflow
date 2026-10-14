@@ -984,7 +984,8 @@ img.topbar-logo-icon{background:none;padding:0;object-fit:cover}
 .sfx-res .row-label small{white-space:normal}
 .sfx-res-actions,.sfx-row-actions{display:flex;gap:6px;align-items:center;margin-left:auto}
 .sfx-res-actions button{min-height:32px;padding:0 12px;border-radius:999px;font-size:14px;white-space:nowrap}
-.sfx-row select{max-width:150px;min-height:32px;font-size:14px}
+.sfx-row select{width:auto;max-width:none;min-height:32px;font-size:14px}  /* owner 2026-10-14: never cut "Use for Record scratch" */
+@media (max-width:600px){.sfx-row-actions{flex-wrap:wrap}.sfx-row .sfx-row-actions select{flex:1 1 160px;min-width:0}}  /* phone: buttons wrap, the select keeps its text */
 .sfx-rename-input{width:100%;font-size:16px;min-height:30px}
 .sfx-note{padding:10px 2px 0;font-size:14px;color:var(--muted)}
 .sfx-empty{padding:12px 14px;color:var(--muted);font-size:16px}
@@ -3388,12 +3389,14 @@ function sfxSummary(){
   const n=sfxData.sounds.length,used=sfxData.categories.filter(c=>c.assigned).length;
   el.textContent=n?`${n} sound${n===1?"":"s"} · ${used} in use`:"Your own laugh, hit and whoosh sounds";
 }
+// Owner 2026-10-14: every sound shows its licence (Freesound saves store the CC0 deed URL; uploads are the user's own).
+function sfxLicence(s){if(!s)return "";const l=String(s.license||"");return /publicdomain\/zero|^cc0$/i.test(l)?"CC0":l?l:s.source==="freesound"?"CC0":"Your upload · your own rights"}
 function renderSfx(){
   if(!sfxData)return;sfxStop();sfxSummary();
   const fs=sfxData.freesound;
   $("sfxCats").innerHTML=sfxData.categories.map(c=>{
     const mine=c.assigned,open=sfxOpenCat===c.key,src=mine?sfxFileUrl(mine.id):sfxBuiltinUrl(c);
-    const now=mine?`Yours: ${mine.name}`:c.default;
+    const now=mine?`Yours: ${mine.name} · ${sfxLicence(sfxData.sounds.find(s=>s.id===mine.id))}`:`${c.default} · CC0`;
     const by=c.used_by.length?` · Used by ${c.used_by.join(", ")}`:"";
     return `<div class="sfx-cat" data-sfx-cat-row="${esc(c.key)}"><div class="inset-row">${sfxPlayBtn(src,`${c.label}: ${now}`)}
       <span class="row-label">${esc(c.label)}<small>${esc(now+by)}</small></span>
@@ -3405,7 +3408,7 @@ function renderSfx(){
       </div></div>`}).join("")+(fs?"":`<p class="sfx-empty">Freesound search isn't set up yet (the admin adds FREESOUND_API_KEY). Uploads work.</p>`);
   const list=sfxData.sounds.filter(s=>!sfxPendingDelete.has(s.id));
   $("sfxList").innerHTML=list.length?list.map(s=>{
-    const src=s.source==="freesound"?`Freesound · by ${esc(s.author||"unknown")} · CC0`:"Uploaded";
+    const src=s.source==="freesound"?`Freesound · by ${esc(s.author||"unknown")} · ${esc(sfxLicence(s))}`:esc(sfxLicence(s));
     return `<div class="inset-row sfx-row" data-sfx-row="${esc(s.id)}">${sfxPlayBtn(sfxFileUrl(s.id),s.name)}
       <span class="row-label"><span class="sfx-name">${esc(s.name)}</span><small>${s.duration.toFixed(1)} s · ${src}</small></span>
       <span class="sfx-row-actions"><select data-sfx-assign="${esc(s.id)}" aria-label="Category for ${esc(s.name)}"><option value="">Not used</option>${sfxData.categories.map(c=>`<option value="${esc(c.key)}" ${s.category===c.key?"selected":""}>Use for ${esc(c.label)}</option>`).join("")}</select>

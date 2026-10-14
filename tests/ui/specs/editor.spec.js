@@ -314,6 +314,18 @@ test.describe("Editor page", () => {
     expect(await app.evaluate(() => !!document.activeElement.closest(".ed-tl-words"))).toBe(false);
   });
 
+  test("phone: a section scrolled into view stops below the sticky player (Hook title card not hidden)", async ({ app, api }, info) => {
+    test.skip(info.project.name !== "mobile", "phone layout");
+    await mockEditor(app, api);
+    await app.evaluate(() => { location.hash = "#editor/job-done/cand-a"; });
+    await expect(app.locator("#edHookText")).toBeAttached();
+    const r = await app.evaluate(() => { const g = document.querySelector("#edHookText").closest(".ed-group"); g.scrollIntoView({ block: "start", behavior: "instant" });
+      const p = document.querySelector(".ed-player").getBoundingClientRect(), b = document.querySelector("#toolbar").getBoundingClientRect();
+      return { group: g.getBoundingClientRect().top, player: p.bottom, playerTop: p.top, bar: b.bottom }; });
+    expect(r.group).toBeGreaterThanOrEqual(r.player - 1);
+    expect(r.playerTop).toBeGreaterThanOrEqual(r.bar - 1);            // the player sits under the top bar, not beneath it
+  });
+
   test("Tab order: player controls → timeline → inspector (owner 2026-10-14)", async ({ app, api }) => {
     await mockEditor(app, api);
     await app.evaluate(() => { location.hash = "#editor/job-done/cand-a"; });
@@ -544,6 +556,18 @@ test.describe("Editor Captions tab", () => {
       await kw.evaluate((e) => { e.scrollTop = e.scrollHeight; });
       await expect(app.locator("#edKwMore")).toBeHidden();
     }
+  });
+
+  test("keyword chips: filler/stopwords never offered; ranked highlighted → numbers → repeated/longer → reading order", async ({ app, api }) => {
+    await mockEditor(app, api);
+    Object.assign(api.editor.captions, { text: "YANG SI KEKUATAN HITAM 2026 ITU KEKUATAN polisi ya", transcript: "YANG SI KEKUATAN HITAM 2026 ITU KEKUATAN polisi ya",
+      keywords: ["kekuatan"], stopwords: ["itu", "si", "ya", "yang"] });
+    await app.evaluate(() => { location.hash = "#editor/job-done/cand-a"; });
+    await expect(app.locator("[data-ed-kw]").first()).toBeVisible();
+    await expect(app.locator("[data-ed-kw]")).toHaveText(["KEKUATAN", "2026", "HITAM", "POLISI"]);
+    await app.locator('[data-ed-kw="hitam"]').click();                   // toggling never reorders
+    await app.locator('[data-ed-kw-color]').nth(1).click();              // nor does a repaint
+    await expect(app.locator("[data-ed-kw]")).toHaveText(["KEKUATAN", "2026", "HITAM", "POLISI"]);
   });
 
   test("preset is this clip's own; equal to the job's clears it; untouched keywords aren't sent", async ({ app, api }) => {

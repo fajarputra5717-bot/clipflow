@@ -80,15 +80,20 @@ test("categories show the sound in use and who uses it; My sounds lists mine", a
   const st = sfxState();
   await openSfx(app, st);
   const laugh = app.locator('[data-sfx-cat-row="laugh"]');
-  await expect(laugh.locator(".row-label small")).toHaveText("Built-in ding · Used by Funny / Meme");
+  await expect(laugh.locator(".row-label small")).toHaveText("Built-in ding · CC0 · Used by Funny / Meme");   // every sound shows its licence
   await expect(laugh.locator(".sfx-play")).toHaveAttribute("data-sfx-play", "/sfx/ding.wav");
   const boom = app.locator('[data-sfx-cat-row="boom"]');
-  await expect(boom.locator(".row-label small")).toHaveText("Yours: My boom · Used by Gaming Hype, Drama / Tension");
+  await expect(boom.locator(".row-label small")).toHaveText("Yours: My boom · Your upload · your own rights · Used by Gaming Hype, Drama / Tension");
   await expect(boom.locator(".sfx-play")).toHaveAttribute("data-sfx-play", /\/api\/sfx\/11111111-1111-4111-8111-111111111111\/file\?mt=mock-token$/);
   const rows = app.locator("[data-sfx-row]");
   await expect(rows).toHaveCount(2);
   await expect(rows.nth(1).locator("small")).toHaveText("2.0 s · Freesound · by fs-user · CC0");
+  await expect(rows.nth(0).locator("small")).toHaveText("1.4 s · Your upload · your own rights");
   await expect(rows.nth(0).locator("select")).toHaveValue("boom");
+  await rows.nth(0).locator("select").selectOption("record_scratch");      // the longest option is never cut
+  await expect.poll(() => rows.nth(0).locator("select").evaluate((e) => e.value === "record_scratch" && e.scrollWidth <= e.clientWidth + 1 && e.getBoundingClientRect().width >= 140)).toBe(true);
+  expect(await app.locator("#sfxSheet .sheet").evaluate((e) => e.scrollWidth - e.clientWidth)).toBeLessThanOrEqual(0);   // phone: no sideways overflow
+  await rows.nth(0).locator("select").selectOption("boom");
   await shot(app, "sfx-sheet");
 });
 
@@ -116,7 +121,7 @@ test("Find sounds: CC0 results with preview, Save keeps it unassigned, Use for a
   expect(st.sounds[0]).toMatchObject({ name: "Giggle", category: null });
   await expect(app.locator('[data-sfx-cat-row="laugh"] > .inset-row .row-label small')).toHaveText(/^Built-in ding/);
   await app.locator('#sfxRes-laugh [data-sfx-save="101"][data-sfx-use]').click();
-  await expect(app.locator('[data-sfx-cat-row="laugh"] > .inset-row .row-label small')).toHaveText("Yours: Crowd laugh short · Used by Funny / Meme");
+  await expect(app.locator('[data-sfx-cat-row="laugh"] > .inset-row .row-label small')).toHaveText("Yours: Crowd laugh short · CC0 · Used by Funny / Meme");
   expect(st.calls).toContain("POST /api/sfx/freesound/101");
 });
 
