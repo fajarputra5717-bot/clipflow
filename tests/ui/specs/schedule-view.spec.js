@@ -55,12 +55,15 @@ test("list: overdue on top, chips, free slots, actions", async ({ app, api }) =>
   await f.locator("button[type=submit]").click();
   await expect(r1).toHaveCount(0);
   expect(api.calls.filter((c) => c.method === "PATCH" && c.path === "/api/posts/pl-1").at(-1).body).toEqual({ status: "posted", url: "https://www.tiktok.com/@imeclips/video/7" });
-  const drop = r2.locator("[data-sched-drop]");
-  await drop.click();
-  await expect(drop).toHaveText("Confirm drop");
-  await drop.click();
+  // phase 2: Drop = gone at once with Undo; the PATCH goes out after 5 s (Undo cancels it)
+  await r2.locator("[data-sched-drop]").click();
   await expect(r2).toHaveCount(0);
-  expect(api.calls.filter((c) => c.method === "PATCH" && c.path === "/api/posts/pl-2").at(-1).body).toEqual({ status: "dropped" });
+  await app.click("#toastAction");                                                    // Undo
+  await expect(r2).toHaveCount(1);
+  expect(api.calls.some((c) => c.method === "PATCH" && c.path === "/api/posts/pl-2")).toBe(false);
+  await r2.locator("[data-sched-drop]").click();
+  await expect(r2).toHaveCount(0);
+  await expect.poll(() => api.calls.filter((c) => c.method === "PATCH" && c.path === "/api/posts/pl-2").at(-1)?.body, { timeout: 8000 }).toEqual({ status: "dropped" });
 });
 
 test("reschedule opens the schedule sheet for that clip; week nav asks the next week", async ({ app, api }) => {
@@ -111,4 +114,36 @@ test("reminders (148): chip per row, banner when Telegram isn't set up, lead lin
   await app.evaluate(() => loadSchedule());   // UI phase 1 item 5: the menu's Refresh is gone
   await expect(app.locator(".sched-lead")).toHaveText("Telegram reminder 15 min before each post (Settings → Posting times).");
   await expect(app.locator(".sched-tg")).toHaveCount(0);
+});
+
+// UI phase 2, Schedule (owner 2026-10-14): one reminder line, neutral week arrows, Mark posted primary + Drop quiet,
+// 9:16 thumbnails, past empty days on one line.
+test("Schedule phase 2: buttons, thumbnails, week arrows, past empty days", async ({ app, api }) => {
+  seed(api);
+  const today = api.schedule.days.findIndex((d) => d.posts.length);
+  await open(app);
+  const row = app.locator("[data-sched-row]").first();
+  await expect(row.locator("[data-sched-mark]")).toHaveClass(/primary/);
+  await expect(row.locator("[data-sched-drop]")).toHaveClass(/quiet/);
+  const t = await row.locator(".qthumb").boundingBox();
+  expect(Math.round((t.height / t.width) * 9)).toBe(16);                          // 9:16
+  expect(t.width).toBeGreaterThanOrEqual(56);
+  for (const theme of ["light", "dark"]) { await app.evaluate((t) => window.applyTheme(t), theme);
+  for (const b of await app.locator(".week-nav button").all()) {
+    expect(await b.getAttribute("aria-pressed")).toBeNull();
+    const bg = await b.evaluate((e) => getComputedStyle(e).backgroundColor);
+    expect(bg).toMatch(/rgba\(0, 0, 0, 0\)|transparent/);                         // neutral, not the accent
+  } }
+  await expect(app.locator("#infoSchedule")).not.toContainText("Telegram");        // one reminder line: the list's own
+});
+
+test("Schedule phase 2: past days with nothing planned are one line", async ({ app, api }) => {
+  seed(api);
+  const base = new Date(api.schedule.days[0].date + "T12:00:00+07:00").getTime();
+  api.schedule.days = [-3, -2, -1].map((n) => ({ date: wibKey(new Date(Date.now() + n * 864e5)), posts: [] }))
+    .concat([{ date: wibKey(new Date()), posts: [] }]);
+  await open(app);
+  await expect(app.locator("[data-sched-past]")).toHaveCount(1);
+  await expect(app.locator("[data-sched-past]")).toContainText("nothing planned");
+  await expect(app.locator(".sday:not(.is-overdue):not(.sday-past)")).toHaveCount(1);   // just today
 });

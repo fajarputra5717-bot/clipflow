@@ -1407,6 +1407,16 @@ select::-ms-expand{display:none}
 .qitem{border-top:1px solid var(--line);padding:10px 0}
 .qrow{display:grid;grid-template-columns:40px minmax(0,1fr) 140px 190px 110px;align-items:center;gap:var(--sp-2)}
 .qthumb{width:40px;height:56px;border-radius:8px;object-fit:cover;background:linear-gradient(160deg,#3a3a3c,#1d1d1f);display:block}
+/* phase 2 Schedule: bigger 9:16 thumbnails, neutral week arrows, quiet Drop, past empty days on one line */
+.srow .qthumb{width:72px;height:128px;border-radius:12px;flex:none}
+@media (max-width:600px){.srow .qthumb{width:56px;height:100px}}
+.week-nav{display:inline-flex;align-items:center;gap:2px;padding:3px;border-radius:999px;background:var(--fill)}
+.week-nav button,[data-theme="dark"] .week-nav button{min-height:var(--control-h);padding:0 14px;border:0;border-radius:999px;background:transparent;color:var(--text);box-shadow:none}
+.week-nav button:hover{background:var(--fill2)}
+.week-nav button[data-sched-week="-1"],.week-nav button[data-sched-week="1"]{min-width:var(--control-h);padding:0;font-size:20px}
+button.quiet,[data-theme="dark"] button.quiet{background:transparent;border:0;box-shadow:none;color:var(--muted);padding:0 12px}
+button.quiet:hover{color:var(--text);background:var(--fill)}
+.sday-past{padding:10px 0;color:var(--muted);font-size:var(--fs-small);border-top:1px solid var(--line)}
 .qn{min-width:0}
 .qn .qt{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .qn .qc{font-size:14px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -1877,8 +1887,8 @@ input[type=checkbox],input[type=radio]{accent-color:var(--accent)}
       </section>
       <section id="scheduleSection" class="view-section hidden" aria-labelledby="scheduleTitle">
         <div class="panel publish-panel">
-          <div class="section-head"><div><h2 id="scheduleTitle">Schedule</h2><p class="muted small page-intro">Planned posts by day, in WIB. <button class="info-btn" type="button" data-info aria-expanded="false" aria-controls="infoSchedule" aria-label="More about the schedule"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg></button></p><p class="info-more small" id="infoSchedule" hidden>ClipFlow reminds you on Telegram at the planned time; you post them yourself and mark them posted.</p></div><span class="spacer"></span>
-            <div class="publish-filters"><div class="seg" role="group" aria-label="Week"><button type="button" data-sched-week="-1" aria-label="Previous week">‹</button><button type="button" data-sched-week="0" id="schedWeekLabel">This week</button><button type="button" data-sched-week="1" aria-label="Next week">›</button></div>
+          <div class="section-head"><div><h2 id="scheduleTitle">Schedule</h2><p class="muted small page-intro">Planned posts by day, in WIB. <button class="info-btn" type="button" data-info aria-expanded="false" aria-controls="infoSchedule" aria-label="More about the schedule"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg></button></p><p class="info-more small" id="infoSchedule" hidden>You post them yourself, then mark them posted here.</p></div><span class="spacer"></span>
+            <div class="publish-filters"><div class="week-nav" role="group" aria-label="Week"><button class="wk" type="button" data-sched-week="-1" aria-label="Previous week">‹</button><button class="wk" type="button" data-sched-week="0" id="schedWeekLabel">This week</button><button class="wk" type="button" data-sched-week="1" aria-label="Next week">›</button></div>
               <div class="seg sched-viewseg" role="group" aria-label="View"><button type="button" data-sched-view="list" aria-pressed="true">List</button><button type="button" data-sched-view="week" aria-pressed="false">Week</button></div></div></div>
           <div id="scheduleList" aria-live="polite"></div>
         </div>
@@ -4150,8 +4160,8 @@ function schedRowHtml(p){
     <div class="qactions">
       <button class="secondary" type="button" data-sched-replan="${esc(p.id)}">Reschedule</button>
       <button class="secondary" type="button" data-sched-send="${esc(p.id)}" ${rs.state==="ready"?"":"disabled title=\"The final isn't rendered yet\""}>Send to phone</button>
-      <button class="secondary" type="button" data-sched-mark="${esc(p.id)}" aria-expanded="${open?"true":"false"}">Mark posted</button>
-      <button class="secondary" type="button" data-sched-drop="${esc(p.id)}">Drop</button>
+      <button class="primary" type="button" data-sched-mark="${esc(p.id)}" aria-expanded="${open?"true":"false"}">Mark posted</button>
+      <button class="quiet" type="button" data-sched-drop="${esc(p.id)}">Drop</button>
     </div>
     ${open?`<form class="qmark" data-sched-mark-form="${esc(p.id)}" novalidate><div class="field"><label for="surl-${esc(p.id)}">Link to the post${p.account_handle?" on @"+esc(p.account_handle):""}</label><input id="surl-${esc(p.id)}" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://…"></div>
       <button class="primary" type="submit">Save</button><button class="secondary" type="button" data-sched-mark="${esc(p.id)}">Cancel</button><div class="account-msg" role="status" aria-live="polite"></div></form>`:""}
@@ -4168,20 +4178,36 @@ function renderScheduleView(){
   const d=scheduleData,today=wibDateKey(new Date()),wide=SCHED_WIDE.matches,view=wide?scheduleView:"list",free=freeSlotsText();
   $("schedWeekLabel").textContent=scheduleWeek===0?"This week":scheduleWeek===1?"Next week":scheduleWeek===-1?"Last week":wibDay(d.from)+" –";
   document.querySelectorAll("[data-sched-view]").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.schedView===view)));
-  const over=d.overdue.length?`<div class="sday is-overdue"><h3>Overdue · ${d.overdue.length}</h3>${d.overdue.map(schedRowHtml).join("")}</div>`:"";
+  const live=(list)=>list.filter(p=>!schedDropping.has(p.id));
+  const over=live(d.overdue).length?`<div class="sday is-overdue"><h3>Overdue · ${live(d.overdue).length}</h3>${live(d.overdue).map(schedRowHtml).join("")}</div>`:"";
   const total=d.overdue.length+d.days.reduce((a,x)=>a+x.posts.length,0);
   let body;
   if(view==="week"){
     body=`<div class="sweek">${d.days.map(day=>`<div class="sweek-day${day.date===today?" is-today":""}"><h4>${esc(wibDay(day.date+"T12:00:00+07:00"))}</h4>
-      ${day.posts.map(p=>`<button type="button" class="sweek-post${p.eligible===false?" is-warn":""}" data-sched-open="${esc(p.id)}"><b>${PLATFORM_ICON[p.platform]||""}${esc(fmtWib(p.scheduled_for,false).replace(" WIB",""))}</b><span>${esc(p.title||"")}</span></button>`).join("")||(day.date>=today&&free?`<span class="sweek-free">Free</span>`:"")}</div>`).join("")}</div>`;
+      ${live(day.posts).map(p=>`<button type="button" class="sweek-post${p.eligible===false?" is-warn":""}" data-sched-open="${esc(p.id)}"><b>${PLATFORM_ICON[p.platform]||""}${esc(fmtWib(p.scheduled_for,false).replace(" WIB",""))}</b><span>${esc(p.title||"")}</span></button>`).join("")||(day.date>=today&&free?`<span class="sweek-free">Free</span>`:"")}</div>`).join("")}</div>`;
   }else{
-    body=d.days.map(day=>`<div class="sday"><h3>${esc(wibDay(day.date+"T12:00:00+07:00"))}${day.date===today?` <span class="is-today">Today</span>`:""}</h3>
-      ${day.posts.length?day.posts.map(schedRowHtml).join(""):`<div class="sfree">${day.date<today?"Nothing planned":free?`Free: ${esc(free)} WIB`:"Nothing planned. Add times in Settings → Posting times."}</div>`}</div>`).join("");
+    const pastEmpty=d.days.filter(day=>day.date<today&&!live(day.posts).length);
+    body=(pastEmpty.length?`<div class="sday sday-past" data-sched-past>${pastEmpty.length===1?esc(wibDay(pastEmpty[0].date+"T12:00:00+07:00")):`${esc(wibDay(pastEmpty[0].date+"T12:00:00+07:00"))} – ${esc(wibDay(pastEmpty.at(-1).date+"T12:00:00+07:00"))}`}: nothing planned</div>`:"")
+      +d.days.filter(day=>!pastEmpty.includes(day)).map(day=>`<div class="sday"><h3>${esc(wibDay(day.date+"T12:00:00+07:00"))}${day.date===today?` <span class="is-today">Today</span>`:""}</h3>
+      ${live(day.posts).length?live(day.posts).map(schedRowHtml).join(""):`<div class="sfree">${free?`Free: ${esc(free)} WIB`:"Nothing planned. Add times in Settings → Posting times."}</div>`}</div>`).join("");
   }
   const tgNote=total&&d.telegram_ready===false?`<p class="plan-block sched-tg">Reminders go to your own Telegram chat, which isn't set up yet. <button class="plain" type="button" data-account>Add it in Account → Telegram</button></p>`
     :total&&d.reminder_lead_min!=null?`<p class="plan-intro sched-lead">Telegram reminder ${d.reminder_lead_min?d.reminder_lead_min+" min before":"at"} each post (Settings → Posting times).</p>`:"";
   $("scheduleList").innerHTML=tgNote+over+(total?"":`<p class="publish-empty">Nothing planned this week. Use <b>Approve &amp; schedule</b> on a clip in <button class="plain" type="button" data-nav="queue">Review</button>.</p>`)+body;
 }
+// phase 2: Drop = gone at once with Undo (5 s); the PATCH goes out when the toast expires or the page closes.
+const schedDropping=new Map();
+function dropPlanned(id){
+  const p=schedPost(id);if(!p||schedDropping.has(id))return;
+  schedDropping.set(id,setTimeout(()=>commitDrop(id),5000));renderScheduleView();
+  showToast(`Dropped “${p.title||"clip"}” from the schedule.`,"Undo",()=>{clearTimeout(schedDropping.get(id));schedDropping.delete(id);renderScheduleView()},5000);
+}
+async function commitDrop(id,keepalive=false){
+  if(!schedDropping.has(id))return;schedDropping.delete(id);
+  try{await api("/api/posts/"+encodeURIComponent(id),{method:"PATCH",body:JSON.stringify({status:"dropped"}),keepalive});if(!keepalive)await loadSchedule()}
+  catch(err){if(!keepalive){showToast("Couldn't drop it: "+err.message);await loadSchedule()}}
+}
+window.addEventListener("pagehide",()=>{[...schedDropping.keys()].forEach(id=>{clearTimeout(schedDropping.get(id));commitDrop(id,true)})});
 function schedPost(id){if(!scheduleData)return null;for(const p of scheduleData.overdue)if(p.id===id)return p;for(const d of scheduleData.days)for(const p of d.posts)if(p.id===id)return p;return null}
 document.addEventListener("click",async e=>{
   const w=e.target.closest("[data-sched-week]");if(w){const n=+w.dataset.schedWeek;scheduleWeek=n===0?0:scheduleWeek+n;return loadSchedule()}
@@ -4196,8 +4222,7 @@ document.addEventListener("click",async e=>{
     try{await api("/api/publish/send-to-phone",{method:"POST",body:JSON.stringify({candidate_id:p.candidate_id,platform:p.platform})});schedSent[p.id]=true;renderScheduleView();refreshRunningJobs()}
     catch(err){setBusy(sd,false);alert(err.message)}return}
   const dr=e.target.closest("[data-sched-drop]");
-  if(dr){if(!dr.classList.contains("is-confirm")){dr.classList.add("is-confirm");dr.textContent="Confirm drop";setTimeout(()=>{if(document.contains(dr)){dr.classList.remove("is-confirm");dr.textContent="Drop"}},4000);return}
-    setBusy(dr,true);try{await api("/api/posts/"+encodeURIComponent(dr.dataset.schedDrop),{method:"PATCH",body:JSON.stringify({status:"dropped"})});await loadSchedule()}catch(err){setBusy(dr,false);alert(err.message)}}
+  if(dr)return dropPlanned(dr.dataset.schedDrop);
 });
 document.addEventListener("submit",async e=>{
   const f=e.target.closest?.("[data-sched-mark-form]");if(!f)return;e.preventDefault();
