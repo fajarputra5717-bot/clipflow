@@ -1,8 +1,13 @@
 {
- "version": "v3.221",
- "number": 221,
+ "version": "v3.222",
+ "number": 222,
  "date": "2026-10-14",
  "entries": [
+  {
+   "number": 222,
+   "date": "2026-10-14",
+   "title": "UI phase 1: scale ×1.2, glass dock (glider, tooltips, bar → pill), bottom padding, one title per page, account menu without duplicates + Refresh, version v3.NN…"
+  },
   {
    "number": 221,
    "date": "2026-10-14",
@@ -22,11 +27,6 @@
    "number": 218,
    "date": "2026-10-14",
    "title": "Editor: draggable video/timeline split (455 px video default, arrow keys, remembered per user; no-scroll layout from 640 px tall) + timeline word chips one Tab…"
-  },
-  {
-   "number": 217,
-   "date": "2026-10-14",
-   "title": "Sound effects library: per-user sound per category (laugh new, falls back to ding), uploads checked + levelled with ffmpeg in the backend, Freesound CC0 search…"
   }
  ]
 }
