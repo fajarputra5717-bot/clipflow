@@ -5,3 +5,5 @@
    "Approved · Not scheduled yet", "Posted on TikTok · next Thu 17:00" / "Posted on 2 platforms". `review_clips` returns
    it as `finished` (posts query adds `scheduled_for`); the card shows it in place of the disabled Approve, without the
    status badge or hint line it repeated.
+2. Review rule chips: only failing checks get a chip (`checksHtml()`); when all pass, one "✓ All rules pass" whose
+   title lists the passed rules. The "All campaign rules pass." hint line is gone (the chip says it).

@@ -203,6 +203,13 @@
       ? `<button type="button" class="rv-fix" data-rv-fix="${esc(ch.fix)}" data-rv-cid="${esc(c.id)}" data-rv-jid="${esc(c.job_id)}" data-rv-target="${ch.fix_target || ""}" ${RUNNING.includes(c.status) ? "disabled" : ""}>${esc(fixLabel)}</button>` : ""}</span>`;
   }
 
+  // Owner 2026-10-14: only failing checks get a chip; when every check passes, one "All rules pass" (its title lists them).
+  function checksHtml(c, chips) {
+    const failing = chips.filter((ch) => !ch.ok);
+    if (failing.length) return failing.map((ch) => chipHtml(c, ch)).join("");
+    return `<span class="badge completed" title="${esc(chips.map((ch) => "✓ " + ch.label).join("\n"))}">✓ All rules pass</span>`;
+  }
+
   function card(c) {
     const title = c.manual_title || c.title || c.ai_title || "Untitled clip";
     const chips = c.rule_checks || [];
@@ -212,7 +219,7 @@
     const earn = c.earn ? `<span class="badge cancelled rv-earn" title="This clip can no longer earn">${esc(c.earn.label)}</span>` : "";
     const canApprove = c.status === "review" && !blocking;
     const hint = c.status !== "review" ? (c.status === "completed" ? "Final rendered." : RUNNING.includes(c.status) ? "Rendering… (progress in the island)" : "")
-      : chips.length ? (blocking ? `Fix ${blocking} rule${blocking === 1 ? "" : "s"} to approve.` : "All campaign rules pass.") : "No campaign rules for this job.";
+      : chips.length ? (blocking ? `Fix ${blocking} rule${blocking === 1 ? "" : "s"} to approve.` : "") : "No campaign rules for this job.";
     const src = R.filter.job === "all" ? `<div class="rv-src">${esc(c.job_title)} · ${esc(day(c.job_date))}</div>` : "";
     return `
       <a class="rv-frame" href="#editor/${esc(c.job_id)}/${esc(c.id)}" aria-label="Open ${esc(title)} in the editor">${thumb ? `<img src="${thumb}" alt="" loading="lazy" onerror="this.remove()">` : ""}
@@ -222,7 +229,7 @@
         <div class="rv-row">${c.score != null ? `<span class="rv-score" title="AI estimate of the hook strength">Hook ${Math.round(c.score)}</span><span class="rv-est">AI estimate</span>` : ""}<span class="rv-spacer"></span>${earn}${state}</div>
         <h3 class="rv-ctitle">${esc(title)}</h3>
         ${c.reason ? `<p class="rv-reason">${reasonHtml(c.reason)}</p>` : ""}
-        ${chips.length ? `<div class="rv-checks">${chips.map((ch) => chipHtml(c, ch)).join("")}</div>` : ""}
+        ${chips.length ? `<div class="rv-checks">${checksHtml(c, chips)}</div>` : ""}
         ${(c.render_warnings || []).length ? `<div class="render-warnings" role="status">${c.render_warnings.map((w) => `<span class="render-warn" title="${esc(w.message || "")}">⚠ ${esc(w.message || w.code)}</span>`).join("")}</div>` : ""}
         <div class="rv-actions">
           ${c.finished ? `<span class="rv-done" role="status">${esc(c.finished)}</span>`      /* approved: where it stands, no dead button */
@@ -233,7 +240,7 @@
               ${!blocking ? `<button type="button" data-approve-schedule="${esc(c.job_id)}" data-cid="${esc(c.id)}">${RUNNING.includes(c.status) || c.status === "completed" ? "Schedule" : "Approve &amp; schedule"}</button>` : ""}
             </div></details>
         </div>
-        ${c.finished ? "" : `<p class="rv-hint">${esc(hint)}</p>`}
+        ${c.finished || !hint ? "" : `<p class="rv-hint">${esc(hint)}</p>`}
       </div>`;
   }
 

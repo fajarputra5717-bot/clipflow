@@ -11,13 +11,27 @@ test.describe("Campaign rule chips on Review", () => {
       { id: "safety", ok: false, blocking: false, label: "Content check: 1 possible issue", detail: "[no_sara] “x”: y", fix: "dismiss" },
     ] }]);
     const card = app.locator("#rv-cand-a");
-    await expect(card.locator(".rv-checks .badge")).toHaveCount(3);
+    await expect(card.locator(".rv-checks .badge")).toHaveCount(2);                 // owner 2026-10-14: failing checks only
+    await expect(card.locator(".rv-checks")).not.toContainText("Length");
     await expect(card.locator(".badge.failed")).toContainText("Hashtags");
     await expect(card.locator(".badge.attention")).toContainText("Content check");
     await expect(card.locator("[data-rv-approve]")).toBeDisabled();
     await expect(card.locator('[data-rv-fix="dismiss"]')).toBeVisible();
     await card.locator('[data-rv-fix="hashtags"]').click();
     await expect.poll(() => api.calls.some((c) => c.method === "POST" && c.path === "/api/jobs/job-done/candidates/cand-a/fix-rule" && c.body?.rule === "hashtags")).toBe(true);
+  });
+
+  test("every check passes: one 'All rules pass' chip (its title lists the rules), no hint line", async ({ app, api }) => {
+    await mockReviewClips(app, api, [{ id: "cand-a", rule_checks: [
+      { id: "length", ok: true, blocking: true, label: "Length 34 s", detail: "", fix: null },
+      { id: "hashtags", ok: true, blocking: true, label: "Hashtags", detail: "", fix: null },
+    ] }]);
+    const chips = app.locator("#rv-cand-a .rv-checks .badge");
+    await expect(chips).toHaveCount(1);
+    await expect(chips).toHaveText("✓ All rules pass");
+    await expect(chips).toHaveAttribute("title", "✓ Length 34 s\n✓ Hashtags");
+    await expect(app.locator("#rv-cand-a .rv-hint")).toHaveCount(0);
+    await expect(app.locator("#rv-cand-a [data-rv-approve]")).toBeEnabled();
   });
 
   test("render warning final_outdated shows 'Final outdated · re-render' on the card", async ({ app, api }) => {
