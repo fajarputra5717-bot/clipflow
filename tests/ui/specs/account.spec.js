@@ -43,8 +43,12 @@ test("169: top bar stays at the top and the stepper pill at the bottom when scro
   expect(bar.height).toBeLessThanOrEqual(56);   // UI task phase 1: --appbar-h 48 → 56 (×1.2)
   expect(pill.y + pill.height).toBeLessThanOrEqual(480);
   expect(pill.y).toBeGreaterThan(400);
-  if (app.viewportSize().width > 440) await expect(app.locator("#flow li.active .flow-label")).toBeVisible();
-  else await expect(app.locator("#flow li.active .flow-label")).toBeHidden();   // 183: 8 live steps; icon-only on narrow phones
   await expect(app.locator("#flow li.active button")).toHaveAccessibleName(/Analyze/);
-  await expect(app.locator("#flow li:not(.active) .flow-label").first()).toBeHidden();
+  // UI phase 1 item 2: icon dock; the name is a tooltip on hover/focus (desktop), hidden at rest
+  const tip = app.locator("#flow li.active .flow-label");
+  expect(await tip.evaluate((e) => getComputedStyle(e).opacity)).toBe("0");
+  if (app.viewportSize().width > 600) {
+    await app.locator("#flow li.active button").hover();
+    await expect.poll(() => tip.evaluate((e) => getComputedStyle(e).opacity)).toBe("1");
+  }
 });

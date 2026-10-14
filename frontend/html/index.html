@@ -1502,28 +1502,56 @@ body{font-size:var(--fs-base)}
 .acct-new>summary{list-style:none}.acct-new>summary::-webkit-details-marker{display:none}
 .acct-new .version-badge{pointer-events:none}
 .acct-new ul{margin:2px 0 6px;padding:0 10px 0 26px;display:grid;gap:4px;font-size:var(--fs-small);color:var(--muted);line-height:1.4}
-/* the stepper pill */
-.flow-pill{position:fixed;left:50%;bottom:calc(12px + env(safe-area-inset-bottom));z-index:80;transform:translateX(-50%);max-width:calc(100vw - 16px);
-  padding:4px;border-radius:var(--r-pill);background:var(--material-thick,var(--material));-webkit-backdrop-filter:var(--material-blur);backdrop-filter:var(--material-blur);
-  border:1px solid var(--hairline);box-shadow:0 10px 30px rgba(0,0,0,.14);
+/* the dock (UI phase 1 item 2): equal icon buttons, a glider that slides under the active one (transform only),
+   page-name tooltips on hover/focus, liquid glass. Bar at the top of the page, smaller pill once scrolled (.is-pill,
+   toggled with hysteresis by initToolbar's one scroll handler): scale + a cross-fade of two glass layers. */
+:root{--dock-btn:48px;--dock-pad:5px;--dock-gap:2px;--dock-bottom:14px;--dock-h:calc(var(--dock-btn) + 2 * var(--dock-pad));
+  --glass:rgba(255,255,255,.58);--glass-line:rgba(255,255,255,.7);--glass-hi:rgba(255,255,255,.75);--glass-shadow:0 12px 36px rgba(0,0,0,.16),0 2px 6px rgba(0,0,0,.06)}
+[data-theme="dark"]{--glass:rgba(38,38,42,.55);--glass-line:rgba(255,255,255,.14);--glass-hi:rgba(255,255,255,.12);--glass-shadow:0 12px 36px rgba(0,0,0,.5),0 2px 6px rgba(0,0,0,.3)}
+.flow-pill{position:fixed;left:50%;bottom:calc(var(--dock-bottom) + env(safe-area-inset-bottom));z-index:80;max-width:calc(100vw - 16px);
+  padding:var(--dock-pad);border-radius:var(--r-pill);isolation:isolate;transform:translateX(-50%);transform-origin:50% 100%;
   transition:opacity var(--dur-2) var(--ease-out),transform var(--dur-3) var(--ease-out),visibility 0s}
-.flow-pill .flow{display:flex;gap:2px;padding:0;margin:0;min-height:var(--pill-btn);overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.flow-pill.is-pill{transform:translateX(-50%) scale(.88)}
+.flow-pill::before,.flow-pill::after{content:"";position:absolute;z-index:-1;pointer-events:none;border:1px solid var(--glass-line);
+  background:var(--glass);-webkit-backdrop-filter:blur(22px) saturate(180%);backdrop-filter:blur(22px) saturate(180%);
+  box-shadow:inset 0 1px 0 var(--glass-hi),var(--glass-shadow);transition:opacity var(--dur-3) var(--ease-out)}
+.flow-pill::before{inset:-4px -14px;border-radius:22px}                  /* bar: wider, softer corners */
+.flow-pill::after{inset:0;border-radius:var(--r-pill);opacity:0}           /* pill */
+.flow-pill.is-pill::before{opacity:0}
+.flow-pill.is-pill::after{opacity:1}
+/* only the visible layer blurs (two backdrop blurs cost frames on big screens) */
+.flow-pill::after,.flow-pill.is-pill::before{-webkit-backdrop-filter:none;backdrop-filter:none}
+.flow-pill.is-pill::after{-webkit-backdrop-filter:blur(22px) saturate(180%);backdrop-filter:blur(22px) saturate(180%)}
+.flow-pill .flow{position:relative;display:flex;gap:var(--dock-gap);padding:0;margin:0;min-height:var(--dock-btn);overflow:visible;scrollbar-width:none;-webkit-overflow-scrolling:touch}
 .flow-pill .flow::-webkit-scrollbar{display:none}
-.flow-pill .flow li{flex:none;display:block}
+.flow-pill .flow li{position:relative;flex:none;display:block}
 .flow-pill .flow li+li::before{display:none}
-.flow-pill .flow-node,.flow-pill .flow-node:hover:not(:disabled),[data-theme="dark"] .flow-pill .flow-node{display:flex;flex-direction:row;align-items:center;gap:6px;width:auto;min-width:var(--pill-btn);height:var(--pill-btn);min-height:var(--pill-btn);padding:0;border-radius:var(--r-pill);background:transparent;border:0!important;box-shadow:none;color:var(--muted)}
-.flow-pill .flow-dot{width:var(--pill-btn);height:var(--pill-btn);background:transparent;color:inherit;transform:none!important}
+.dock-glider{position:absolute;left:var(--dock-pad);top:var(--dock-pad);width:var(--dock-btn);height:var(--dock-btn);border-radius:var(--r-pill);
+  background:var(--accent);box-shadow:0 4px 14px rgba(0,113,227,.35);pointer-events:none;opacity:0;transform:translateX(var(--glide,0px));
+  transition:transform var(--dur-4) var(--ease-spring),opacity var(--dur-2) var(--ease-out)}
+.dock-glider.is-on{opacity:1}
+.flow-pill .flow-node,.flow-pill .flow-node:hover:not(:disabled),[data-theme="dark"] .flow-pill .flow-node{position:relative;z-index:1;display:grid;place-items:center;
+  width:var(--dock-btn);min-width:var(--dock-btn);height:var(--dock-btn);min-height:var(--dock-btn);padding:0;border-radius:var(--r-pill);background:transparent;border:0!important;box-shadow:none;color:var(--text)}
+.flow-pill .flow-dot{display:grid;place-items:center;width:var(--dock-btn);height:var(--dock-btn);border-radius:var(--r-pill);background:transparent;color:inherit;transform:none!important;transition:color var(--dur-2) var(--ease-out)}
 .flow-pill .flow-dot svg{width:var(--pill-icon);height:var(--pill-icon);stroke-width:1.8}
 .flow-pill .flow-node:hover:not(:disabled) .flow-dot{background:var(--fill)}
+.flow-pill .flow li.active .flow-node:hover .flow-dot,.flow-pill .flow li.active .flow-dot{background:transparent;color:#fff}
 .flow-pill .flow li.done .flow-dot{background:transparent;color:var(--text)}
-.flow-pill .flow-label{display:none;font-size:16px;font-weight:600;white-space:nowrap}
-.flow-pill .flow li.active .flow-node{background:var(--accent);color:#fff;padding-right:14px}
-.flow-pill .flow li.active .flow-label{display:inline;color:#fff}
-.flow-pill .flow li.active .flow-dot{background:transparent;color:#fff}
 .flow-pill .flow li.off .flow-dot{opacity:.38}
+.flow-pill .flow-node:focus-visible{outline:none;box-shadow:var(--ring)}
+/* tooltip = the step's name (the label span): on hover and keyboard focus; the dock is fixed, so it sits above it */
+.flow-pill .flow-label{position:absolute;left:50%;bottom:calc(100% + 12px);z-index:2;padding:6px 10px;border-radius:10px;white-space:nowrap;
+  font-size:var(--fs-small);font-weight:600;color:var(--text);background:var(--panel);border:1px solid var(--hairline);box-shadow:0 6px 18px rgba(0,0,0,.14);
+  pointer-events:none;opacity:0;transform:translate(-50%,4px);transition:opacity var(--dur-1) var(--ease-out),transform var(--dur-1) var(--ease-out)}
+.flow-pill .flow-node:hover .flow-label,.flow-pill .flow-node:focus-visible .flow-label{opacity:1;transform:translate(-50%,0)}
+@media (hover:none){.flow-pill .flow-node:hover .flow-label{opacity:0}}
+/* solid fallbacks: no backdrop-filter, or the user asked for less transparency */
+@supports not ((-webkit-backdrop-filter:blur(1px)) or (backdrop-filter:blur(1px))){.flow-pill::before,.flow-pill::after{background:var(--panel)}}
+@media (prefers-reduced-transparency:reduce){.flow-pill::before,.flow-pill::after{background:var(--panel);-webkit-backdrop-filter:none;backdrop-filter:none}}
+@media (prefers-reduced-motion:reduce){.flow-pill,.flow-pill::before,.flow-pill::after,.dock-glider,.flow-pill .flow-label{transition:none}}
 body{padding-bottom:calc(72px + env(safe-area-inset-bottom))}
 /* the editor's own sticky action bar rides above the pill; on phone the pill steps aside while that bar is in use */
-body:has(#editorSection:not(.hidden)) .ed-foot{bottom:calc(var(--pill-btn) + 30px + env(safe-area-inset-bottom))}
+body:has(#editorSection:not(.hidden)) .ed-foot{bottom:calc(var(--dock-h) + var(--dock-bottom) + 10px + env(safe-area-inset-bottom))}
 .acct-narrow{display:none}
 @media(max-width:600px){
   .appbar{gap:var(--s-1)}
@@ -1538,18 +1566,14 @@ body:has(#editorSection:not(.hidden)) .ed-foot{bottom:calc(var(--pill-btn) + 30p
   .acct-btn{padding:0;justify-content:center;background:transparent}
   .acct-name,.acct-chev{display:none}
   .acct-burger{display:block}
-  .flow-pill{left:4px;right:4px;padding:2px;transform:none;max-width:none;display:flex;justify-content:center}
-  .flow-pill .flow{max-width:100%;gap:0}
-  .flow-pill .flow-node,.flow-pill .flow-node:hover:not(:disabled){gap:4px}
-  .flow-pill .flow li.active .flow-node{padding-right:8px}
-  .flow-pill .flow-label{font-size:14px;max-width:52px;overflow:hidden;text-overflow:ellipsis}   /* 7 steps × 44 px + a label in 390 px */
+  :root{--dock-btn:44px;--dock-pad:4px;--dock-gap:0px;--dock-bottom:8px}
+  .flow-pill .flow{overflow-x:auto}   /* very narrow phones scroll the steps (no tooltips to clip here) */
+  .flow-pill.is-pill{transform:translateX(-50%)}   /* phones: no shrink (44 px targets); only the glass cross-fades */
+  .flow-pill .flow-label{display:none}   /* phones: no hover; the page title names the page */
   body:has(.ed-foot:focus-within) .flow-pill{opacity:0;visibility:hidden;pointer-events:none;transform:translateY(20px);transition:opacity var(--dur-2) var(--ease-out),transform var(--dur-3) var(--ease-out),visibility 0s linear var(--dur-2)}
   body:has(.ed-foot:focus-within) .ed-foot{bottom:calc(12px + env(safe-area-inset-bottom))}
 }
-/* 183: all 8 steps live = 8 × 44 px; with the active label that's > 390 px, so narrow phones show the active step as
-   an icon on the accent pill (its name stays in aria-label/title and the page title). */
-@media(max-width:440px){.flow-pill .flow li.active .flow-label{display:none}.flow-pill .flow li.active .flow-node{padding-right:0}}
-@media (prefers-reduced-motion:reduce){.flow-pill,.acct-menu{transition:none}}
+@media (prefers-reduced-motion:reduce){.acct-menu{transition:none}}
 /* 171: Pick a clip (Editor with no clip) = compact Review grid */
 .pk-filters{display:flex;flex-wrap:wrap;gap:var(--s-3);align-items:flex-end;margin:var(--s-3) 0 var(--s-4)}
 .pk-f{display:flex;flex-direction:column;gap:var(--s-1);min-width:0}
@@ -1861,7 +1885,7 @@ body:has(#editorSection:not(.hidden)) .ed-foot{bottom:calc(var(--pill-btn) + 30p
   </div>
 </div>
 <!-- 168: the stepper = floating glass pill, bottom centre on every size (icons; only the active step shows its label). -->
-<nav class="flow-pill" id="flowNav" aria-label="Workflow"><ol class="flow" id="flow"></ol></nav>
+<nav class="flow-pill" id="flowNav" aria-label="Workflow"><span class="dock-glider" id="dockGlider" aria-hidden="true"></span><ol class="flow" id="flow"></ol></nav>
 </div>
 
 <!-- Dynamic Island (073). Not rendered (hidden) while nothing runs. #islandMain is the black shape whose
@@ -4334,9 +4358,13 @@ const TITLE_RANGE=48;
 (function initToolbar(){
   const bar=$("toolbar");if(!bar)return;
   let ticking=false,last=-1;
+  const dock=$("flowNav");let pill=false;
   function apply(){
     ticking=false;
-    const p=Math.min(1,Math.max(0,window.scrollY/TITLE_RANGE)),q=Math.round(p*1000)/1000;
+    // dock bar → pill (UI phase 1 item 2), hysteresis so it doesn't flicker near the threshold
+    const y=window.scrollY;
+    if(dock&&(pill?y<24:y>64)){pill=!pill;dock.classList.toggle("is-pill",pill)}
+    const p=Math.min(1,Math.max(0,y/TITLE_RANGE)),q=Math.round(p*1000)/1000;
     if(q===last)return;last=q;
     bar.style.setProperty("--p",q);bar.classList.toggle("is-collapsed",q>=1);
   }
@@ -4397,13 +4425,27 @@ function renderFlow(){
     const off=!!s.phase||(s.id==="editor"&&!canEdit),sub=s.phase?`Coming in ${s.phase}`:s.id==="editor"&&!canEdit?"Open a clip in Review":s.sub;
     const attrs=s.nav?`data-nav="${s.nav}"`:s.id==="editor"?"data-flow-editor":"";
     // 168: pill = icons; the active step shows its label, the rest carry it in aria-label/title (+ why it's off)
-    return `<li class="${i<idx&&!s.phase?"done":i===idx?"active":""}${off?" off":""}${s.phase?" phase":""}"><button class="flow-node" type="button" ${attrs} ${off?"disabled":""} ${i===idx?'aria-current="step"':""} aria-label="${s.label}${off?` (${sub})`:""}" title="${s.label} · ${sub}">
+    return `<li class="${i<idx&&!s.phase?"done":i===idx?"active":""}${off?" off":""}${s.phase?" phase":""}"><button class="flow-node" type="button" ${attrs} ${off?"disabled":""} ${i===idx?'aria-current="step"':""} aria-label="${s.label}${off?` (${sub})`:""}">
       <span class="flow-dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${FLOW_ICON[s.icon]}</svg></span>
-      <span class="flow-label" aria-hidden="true">${s.label}</span></button></li>`;
+      <span class="flow-label" aria-hidden="true">${off?`${s.label} · ${sub}`:s.label}</span></button></li>`;
   }).join("");
   if(ol.dataset.html!==html){ol.dataset.html=html;ol.innerHTML=html;
     const a=ol.querySelector("li.active");if(a&&window.matchMedia("(max-width:600px)").matches)a.scrollIntoView({behavior:scrollMode(),block:"nearest",inline:"center"})}
+  placeGlider();
 }
+// The glider (UI phase 1 item 2) slides to the active step: one transform, its x read from the button's box.
+function placeGlider(){
+  const g=$("dockGlider"),nav=$("flowNav"),btn=$("flow")?.querySelector("li.active .flow-node");if(!g||!nav)return;
+  if(!btn){g.classList.remove("is-on");return}
+  const x=btn.getBoundingClientRect().left-nav.getBoundingClientRect().left-nav.clientLeft-parseFloat(getComputedStyle(nav).paddingLeft||0);
+  const first=!g.classList.contains("is-on");
+  if(first)g.style.transition="none";
+  g.style.setProperty("--glide",`${Math.round(x/(nav.getBoundingClientRect().width/nav.offsetWidth||1))}px`);
+  g.classList.add("is-on");
+  if(first){g.getBoundingClientRect();g.style.transition=""}
+}
+window.addEventListener("resize",()=>placeGlider(),{passive:true});
+document.addEventListener("scroll",e=>{if(e.target?.id==="flow")placeGlider()},{capture:true,passive:true});
 function openFlowEditor(){   // 171/179: the last opened clip, else Pick a clip (the old drawer is gone)
   go(lastEditorClip?`#editor/${encodeURIComponent(lastEditorClip[0])}/${encodeURIComponent(lastEditorClip[1])}`:"#editor");
 }
