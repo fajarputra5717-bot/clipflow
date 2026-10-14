@@ -286,6 +286,29 @@ test.describe("Editor page", () => {
     expect(await app.evaluate(() => document.documentElement.scrollHeight - innerHeight)).toBeLessThanOrEqual(0);
   });
 
+  test("Word chips: one Tab stop; ←/→ move in time order, Home/End jump; Tab leaves to the inspector side", async ({ app, api }) => {
+    await mockEditor(app, api);
+    await app.evaluate(() => { location.hash = "#editor/job-done/cand-a"; });
+    await expect(app.locator(".ed-tl-words > button").first()).toBeVisible();
+    const chips = app.locator(".ed-tl-words > button");
+    const n = await chips.count();
+    expect(await chips.evaluateAll((bs) => bs.filter((b) => b.tabIndex === 0).length)).toBe(1);
+    const order = await chips.evaluateAll((bs) => bs.sort((a, b) => parseFloat(a.style.left) - parseFloat(b.style.left)).map((b) => b.textContent.trim()));
+    const focused = () => app.evaluate(() => document.activeElement.textContent.trim());
+    await app.locator('.ed-tl-words > button[tabindex="0"]').focus();
+    expect(await focused()).toBe(order[0]);
+    await app.keyboard.press("ArrowRight");
+    expect(await focused()).toBe(order[1]);
+    await app.keyboard.press("End");
+    expect(await focused()).toBe(order[n - 1]);
+    await app.keyboard.press("Home");
+    expect(await focused()).toBe(order[0]);
+    await app.keyboard.press("ArrowRight");
+    expect(await chips.evaluateAll((bs) => bs.filter((b) => b.tabIndex === 0).map((b) => b.textContent.trim()))).toEqual([order[1]]);
+    await app.keyboard.press("Tab");                                   // one press leaves the words
+    expect(await app.evaluate(() => !!document.activeElement.closest(".ed-tl-words"))).toBe(false);
+  });
+
   test("Tab order: player controls → timeline → inspector (owner 2026-10-14)", async ({ app, api }) => {
     await mockEditor(app, api);
     await app.evaluate(() => { location.hash = "#editor/job-done/cand-a"; });

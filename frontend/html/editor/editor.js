@@ -206,7 +206,7 @@
           <div id="edBands" aria-hidden="true"></div>
           <div class="ed-zoom-lane" id="edZoomLane" aria-label="Zoom punch-ins"></div>
           <div class="ed-plan-lane" id="edPlanLane" role="group" aria-label="Auto edit plan"></div>
-          <div class="ed-tl-words" role="group" aria-label="Words and pauses">${pauses}${words}</div>
+          <div class="ed-tl-words" role="group" aria-label="Words and pauses: one Tab stop, arrow keys move, Home and End jump">${pauses}${words}</div>
           <div class="ed-trim-shade l" id="edShadeL" aria-hidden="true"></div><div class="ed-trim-shade r" id="edShadeR" aria-hidden="true"></div>
           <div class="ed-trim-h" id="edTrimA" role="slider" tabindex="0" aria-label="Clip start" data-ed-trim="a"></div>
           <div class="ed-trim-h" id="edTrimB" role="slider" tabindex="0" aria-label="Clip end" data-ed-trim="b"></div>
@@ -217,6 +217,31 @@
     drawWave();
     paintCuts();
     paintPlayhead();
+    setRoving();
+  }
+
+  // Word + pause chips = ONE Tab stop (owner 2026-10-14): roving tabindex in time order; ←/→ move, Home/End jump,
+  // Enter/Space act on the chip as before. E.rove = the chip that keeps the stop across repaints.
+  function chipList() {
+    return [...document.querySelectorAll(".ed-tl-words > button")]
+      .sort((a, b) => parseFloat(a.style.left) - parseFloat(b.style.left));
+  }
+  const chipId = (b) => b.dataset.edWord != null ? "w" + b.dataset.edWord : "p" + b.dataset.edPause;
+  function setRoving(target) {
+    const list = chipList(); if (!list.length) return;
+    const on = target || list.find((b) => chipId(b) === E.rove) || list[0];
+    list.forEach((b) => { b.tabIndex = b === on ? 0 : -1; });
+    E.rove = chipId(on);
+    return on;
+  }
+  function chipKey(e) {
+    const k = e.key, list = chipList(), i = list.indexOf(e.target);
+    if (i < 0 || e.metaKey || e.ctrlKey || e.altKey) return false;
+    const j = k === "ArrowRight" ? Math.min(list.length - 1, i + 1) : k === "ArrowLeft" ? Math.max(0, i - 1)
+      : k === "Home" ? 0 : k === "End" ? list.length - 1 : null;
+    if (j === null) return false;
+    setRoving(list[j]).focus();
+    return true;
   }
 
   // ---- cuts (task 3): source-time ranges; the rendered preview's keep maps video ↔ timeline
@@ -1418,6 +1443,7 @@
       setTrim(h.dataset.edTrim, (h.dataset.edTrim === "a" ? lo : hi) + step); cutsChanged(); e.preventDefault(); return;
     }
     if (e.target.closest && e.target.closest("[data-ed-split]")) { if (splitKey(e)) e.preventDefault(); return; }
+    if (e.target.closest && e.target.closest(".ed-tl-words > button")) { if (chipKey(e)) { e.preventDefault(); return; } }
     if (playerKey(e)) { e.preventDefault(); return; }
     if ((e.key === "c" || e.key === "C") && !e.target.closest("input,textarea,select,[contenteditable]") && !e.metaKey && !e.ctrlKey) {
       setMode(E.mode === "cut" ? "seek" : "cut");
@@ -1484,6 +1510,9 @@
     const t = e.target; if (t && t.classList && (t.classList.contains("ed-seg") || t.classList.contains("ed-kw"))) fadeEdges(t);
   }, { capture: true, passive: true });
   document.addEventListener("click", () => { if (E.state) requestAnimationFrame(fadeAll); });   // after panel repaints
+  document.addEventListener("focusin", (e) => {               // a clicked/focused chip becomes the timeline's Tab stop
+    if (E.state && e.target.matches && e.target.matches(".ed-tl-words > button") && e.target.tabIndex !== 0) setRoving(e.target);
+  });
   window.addEventListener("hashchange", route);
   window.addEventListener("resize", () => { if (E.cid) { E.tlW = 0; fitPage(); moveSeg(); } }, { passive: true });
   window.addEventListener("load", () => setTimeout(route, 0));

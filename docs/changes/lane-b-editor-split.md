@@ -11,3 +11,9 @@ the video and the timeline. The two rows share a fixed height, so `--ed-tl-h` (t
   inspector so the video starts at the top.
 Measured on staging (22 px banner; production gets +22 px): 1280×700 188×334 → 210×374 (and no page scroll),
 1280×800 169×300 → 244×434, 1440×900 225×400 → 256×455.
+
+## Word chips: one Tab stop (owner 2026-10-14, separate commit)
+The timeline's word + pause chips are one roving-tabindex group (`setRoving()`, `chipKey()`): one Tab stop, ←/→ move
+in time order, Home/End jump to first/last, Enter/Space act as before; a clicked chip becomes the stop and keeps it
+across repaints (`E.rove`). Measured from the play button at 1280×800: first inspector tab 97th → 21st, Render
+preview 152nd → 76th (the inspector's keyword chips are still one stop each).
