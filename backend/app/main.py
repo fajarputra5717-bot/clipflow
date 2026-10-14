@@ -88,6 +88,7 @@ MEDIA_PATH_RE = re.compile(
     r"(preview|render|thumbnail|thumbnail-options/\d+)"
     r"|assets/watermarks/[^/]+/file"
     r"|campaigns/[^/]+/watermark"   # 161: the campaign's watermark preview (detail page)
+    r"|sfx/[^/]+/file|sfx/freesound/\d+/preview"   # 217: my sound / a Freesound preview (<audio> src)
     r")$"
 )
 
@@ -107,6 +108,7 @@ WATERMARK_PATH_RE = re.compile(r"^/api/assets/watermarks/([^/]+)(?:/|$)")
 ACCOUNT_PATH_RE = re.compile(r"^/api/accounts/([^/]+)(?:/|$)")
 POST_PATH_RE = re.compile(r"^/api/posts/([^/]+)(?:/|$)")
 IMPORT_PATH_RE = re.compile(r"^/api/auto-import/imports/([^/]+)(?:/|$)")   # 187: source_imports rows
+SFX_PATH_RE = re.compile(r"^/api/sfx/(?!freesound(?:/|$))([^/]+)(?:/|$)")      # 217: sfx_assets rows
 
 
 def _path_owned(user: dict, path: str) -> bool:
@@ -115,7 +117,8 @@ def _path_owned(user: dict, path: str) -> bool:
     a = ACCOUNT_PATH_RE.match(path)
     po = POST_PATH_RE.match(path)
     im = IMPORT_PATH_RE.match(path)
-    if not m and not w and not a and not po and not im:
+    sx = SFX_PATH_RE.match(path)
+    if not m and not w and not a and not po and not im and not sx:
         return True
     with get_db() as conn:
         with conn.cursor() as cur:
@@ -133,6 +136,9 @@ def _path_owned(user: dict, path: str) -> bool:
                 return True
             if im:
                 cur.execute("SELECT 1 FROM source_imports WHERE id = %s AND user_id = %s", (im.group(1), user["id"]))
+                return bool(cur.fetchone())
+            if sx:
+                cur.execute("SELECT 1 FROM sfx_assets WHERE id::text = %s AND user_id = %s", (sx.group(1), user["id"]))
                 return bool(cur.fetchone())
             if a:
                 cur.execute(
@@ -330,6 +336,7 @@ app.add_middleware(
     allow_headers=["Content-Type", API_KEY_HEADER, "Authorization"],
 )
 from app import routes_editor; app.include_router(routes_editor.router)
+from app import routes_sfx; app.include_router(routes_sfx.router)   # 217
 
 
 # ============================================================
@@ -663,6 +670,26 @@ def ensure_schema():
         # P5 parts 2+3 (199): Instagram + Facebook pulls with the user's own META_ACCESS_TOKEN; one run row per user
         # (platform 'meta'); token_hash = fingerprint so a refused token waits for a new one.
         "ALTER TABLE view_pull_runs ADD COLUMN IF NOT EXISTS token_hash TEXT",
+        # 217: sound effects library (routes_sfx.py, shared/sfx_library.py); category = which built-in sound it
+        # replaces in this user's renders, at most one per category.
+        """
+        CREATE TABLE IF NOT EXISTS sfx_assets (
+            id UUID PRIMARY KEY,
+            user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            name TEXT NOT NULL,
+            path TEXT NOT NULL,
+            duration REAL NOT NULL,
+            category TEXT,
+            source TEXT NOT NULL CHECK (source IN ('upload', 'freesound')),
+            source_url TEXT,
+            author TEXT,
+            license TEXT,
+            freesound_id BIGINT,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS idx_sfx_assets_user ON sfx_assets (user_id, created_at DESC)",
+        "CREATE UNIQUE INDEX IF NOT EXISTS uq_sfx_assets_category ON sfx_assets (user_id, category) WHERE category IS NOT NULL",
     ]
 
     try:
