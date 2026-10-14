@@ -30,3 +30,5 @@ Merge: OK for 5a58a03..411d4cf.
 - Low (new, minor): after the "+N more" button removes itself, keyboard focus falls to `<body>` (the button is deleted): move focus to the first revealed issue or keep the button as a "show fewer" toggle.
 
 Merge: OK for 377eb22; the whole Phase 2 Lane B set (5a58a03..377eb22) is Merge OK.
+
+Addendum 2: cd3b6b8 closes the focus Low: after tapping +N more focus lands on the first revealed issue (an LI inside .rv-issues), checked at 1280×900 and 390×844. Merge: OK.
