@@ -924,7 +924,7 @@ img.topbar-logo-icon{background:none;padding:0;object-fit:cover}
 :root{--checker-a:#ffffff;--checker-b:#e6e6ea}
 :root[data-theme="dark"]{--checker-a:#2c2c2e;--checker-b:#1f1f21}
 .sheet-lede{margin:0 0 var(--sp-2);color:var(--muted);font-size:16px}
-.wm-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+.wm-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px}
 .wm-tile{position:relative;transition:opacity var(--dur-2) var(--ease),transform var(--dur-2) var(--ease)}
 .wm-tile.removing{opacity:0;transform:scale(.9)}
 .wm-select{
@@ -938,6 +938,20 @@ img.topbar-logo-icon{background:none;padding:0;object-fit:cover}
 .wm-preview{position:relative;display:block;aspect-ratio:16/10;
   background:repeating-conic-gradient(var(--checker-a) 0% 25%,var(--checker-b) 0% 50%) 50%/14px 14px}
 .wm-preview img{position:absolute;inset:12px;width:calc(100% - 24px);height:calc(100% - 24px);object-fit:contain}
+/* phase 2: a sample 9:16 frame (CSS only: sky, ground, a figure) with the cropped mark at the real width / height */
+.wm-preview.wm-frame{aspect-ratio:9/16;background:
+  radial-gradient(circle at 70% 22%,rgba(255,214,120,.9) 0 7%,transparent 8%),
+  radial-gradient(ellipse at 50% 112%,#3c5a2e 0 38%,transparent 39%),
+  radial-gradient(ellipse 18% 26% at 34% 70%,#2a2f3a 0 60%,transparent 62%),
+  linear-gradient(180deg,#5c7fae 0%,#9db6d6 52%,#6d8a54 53%,#3f5733 100%)}
+.wm-frame img{inset:auto;left:50%;height:auto;max-height:40%;object-fit:contain;transform:translate(-50%,-50%);filter:drop-shadow(0 1px 2px rgba(0,0,0,.35))}
+.wm-tools{position:absolute;top:4px;right:4px;display:flex;gap:4px}
+.wm-tools .wm-delete{position:static}
+.wm-rename{width:36px;height:36px;min-height:36px;border-radius:50%;background:var(--material)!important;backdrop-filter:var(--material-blur);-webkit-backdrop-filter:var(--material-blur);color:var(--text);opacity:0;transition:opacity var(--dur-2) var(--ease)}
+.wm-rename svg{width:18px;height:18px}
+.wm-tile:hover .wm-rename,.wm-rename:focus-visible{opacity:1}
+@media(hover:none){.wm-rename{opacity:1}}
+.wm-rename-input{display:block;width:100%;margin:0;border-radius:0 0 14px 14px;font-size:14px}
 .wm-name{display:block;padding:10px 12px;font-size:14px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:var(--hit);line-height:24px}
 .wm-check{position:absolute;top:8px;left:8px;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;
   background:var(--accent);color:#fff;box-shadow:0 2px 6px rgba(0,0,0,.25);opacity:0;transform:scale(.4);
@@ -3394,15 +3408,44 @@ function renderWatermarks(){
   const list=wmAssets.filter(a=>!wmPendingDelete.has(a.id)),active=list.find(a=>a.active)?.id||null;
   const popId=active&&active!==wmLastActive&&wmLastActive!==null?active:null;wmLastActive=active;
   if(!list.length){$("watermarkPanel").innerHTML=`<div class="wm-empty">No watermarks yet: renders use the built-in default.</div>`;return}
+  // phase 2 (owner 2026-10-14): the preview is the mark's visible pixels (alpha-cropped in a canvas, like the render's
+  // get_watermark_rect) on a sample 9:16 frame, at your Watermark width / height settings; rename + delete per tile.
+  const st=k=>parseFloat((settingsCache[k]||{}).value),wmW=Math.min(100,Math.max(4,(st("WATERMARK_WIDTH")||300)/1080*100)),wmY=Math.min(90,Math.max(10,st("WATERMARK_POSITION_Y")||50));
   $("watermarkPanel").innerHTML=`<div class="wm-grid">${list.map(a=>`
     <div class="wm-tile${a.active?" is-active":""}${a.id===popId?" pop":""}" data-wm-id="${esc(a.id)}">
       <button type="button" class="wm-select" ${a.active?"":`data-watermark-activate="${esc(a.id)}"`} aria-pressed="${a.active?"true":"false"}" aria-label="${a.active?"In use":"Use"}: ${esc(a.filename)}">
-        <span class="wm-preview"><img src="${esc(mediaUrl(`${API}/api/assets/watermarks/${a.id}/file`))}" alt="" loading="lazy"></span>
+        <span class="wm-preview wm-frame" aria-hidden="true"><img data-wm-crop="${esc(a.id)}" style="width:${wmW.toFixed(1)}%;top:${wmY.toFixed(1)}%" src="${esc(wmCropped[a.id]||mediaUrl(`${API}/api/assets/watermarks/${a.id}/file`))}" alt=""></span>
         <span class="wm-name">${esc(a.filename)}</span>
         <span class="wm-check">${CHECK}</span>
       </button>
-      <button type="button" class="icon-btn wm-delete" data-watermark-delete="${esc(a.id)}" aria-label="Delete ${esc(a.filename)}">${TRASH}</button>
+      <span class="wm-tools"><button type="button" class="icon-btn wm-rename" data-watermark-rename="${esc(a.id)}" aria-label="Rename ${esc(a.filename)}">${PEN_ICON}</button><button type="button" class="icon-btn wm-delete" data-watermark-delete="${esc(a.id)}" aria-label="Delete ${esc(a.filename)}">${TRASH}</button></span>
     </div>`).join("")}</div>`;
+  $("watermarkPanel").querySelectorAll("img[data-wm-crop]").forEach(img=>{if(img.complete&&img.naturalWidth)wmCrop(img);else img.addEventListener("load",()=>wmCrop(img),{once:true})});
+}
+// Alpha-crop a watermark to its visible pixels (same idea as the worker's get_watermark_rect); cached per asset.
+const wmCropped={};
+function wmCrop(img){
+  const id=img.dataset.wmCrop;if(!id||wmCropped[id])return;
+  try{
+    const w=img.naturalWidth,h=img.naturalHeight,c=document.createElement("canvas");c.width=w;c.height=h;
+    const x=c.getContext("2d",{willReadFrequently:true});x.drawImage(img,0,0);const d=x.getImageData(0,0,w,h).data;
+    let t=h,l=w,b=-1,r=-1;
+    for(let yy=0;yy<h;yy++)for(let xx=0;xx<w;xx++)if(d[(yy*w+xx)*4+3]>8){if(yy<t)t=yy;if(yy>b)b=yy;if(xx<l)l=xx;if(xx>r)r=xx}
+    if(b<0)return;
+    const o=document.createElement("canvas");o.width=r-l+1;o.height=b-t+1;o.getContext("2d").drawImage(c,l,t,o.width,o.height,0,0,o.width,o.height);
+    wmCropped[id]=o.toDataURL("image/png");img.src=wmCropped[id];
+  }catch{}   // a tainted canvas or a decode error keeps the plain image
+}
+function renameWatermark(id){
+  const a=wmAssets.find(x=>x.id===id),tile=document.querySelector(`.wm-tile[data-wm-id="${CSS.escape(id)}"]`);if(!a||!tile)return;
+  const name=tile.querySelector(".wm-name");
+  name.outerHTML=`<input class="wm-name wm-rename-input" data-esc-local maxlength="80" aria-label="New name for ${esc(a.filename)}" value="${esc(a.filename)}">`;
+  const inp=tile.querySelector(".wm-rename-input");inp.focus();inp.select();let done=false;
+  const finish=async save=>{if(done)return;done=true;const v=inp.value.trim();
+    if(save&&v&&v!==a.filename){try{await api(`/api/assets/watermarks/${id}`,{method:"PATCH",body:JSON.stringify({filename:v})});a.filename=v}catch(e){showToast("Couldn't rename: "+e.message)}}
+    renderWatermarks();document.querySelector(`[data-watermark-rename="${CSS.escape(id)}"]`)?.focus()};
+  inp.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();finish(true)}else if(e.key==="Escape"){e.preventDefault();finish(false)}});
+  inp.addEventListener("blur",()=>finish(true));
 }
 async function uploadWatermarkAsset(file){
   const input=$("watermarkUploadInput"),label=input?.closest("label");
@@ -4422,6 +4465,7 @@ document.addEventListener("click",e=>{
   if(e.target.closest("#reloadSettings")){loadSettings();return loadWatermarkAssets();}
   const wa=e.target.closest("[data-watermark-activate]");if(wa)return activateWatermarkAsset(wa.dataset.watermarkActivate);
   const wd=e.target.closest("[data-watermark-delete]");if(wd)return deleteWatermarkAsset(wd.dataset.watermarkDelete);
+  const wr=e.target.closest("[data-watermark-rename]");if(wr)return renameWatermark(wr.dataset.watermarkRename);
   if(e.target.closest("#saveSettings"))return saveSettings();
   const ri=e.target.closest("[data-running-job]");
   if(ri){
