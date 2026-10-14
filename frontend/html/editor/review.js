@@ -138,7 +138,11 @@
     const seq = ++R.loadSeq;
     let d;
     try { d = await api(clipsUrl()); }
-    catch (e) { if (seq === R.loadSeq) $("rvBody").innerHTML = `<div class="panel error-box">Can't load clips: ${esc(e.message)}</div>`; return; }
+    catch (e) {                                                  // left Review meanwhile: no #rvBody to write to
+      const body = seq === R.loadSeq && R.open && $("rvBody");
+      if (body) body.innerHTML = `<div class="panel error-box">Can't load clips: ${esc(e.message)}</div>`;
+      return;
+    }
     if (seq !== R.loadSeq || !R.open) return;                  // a newer filter won
     R.data = d;
     const h = d.header;

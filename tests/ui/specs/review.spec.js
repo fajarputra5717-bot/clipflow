@@ -96,6 +96,17 @@ test.describe("Review page", () => {
     await expect.poll(() => api.calls.some((c) => c.method === "POST" && c.path.endsWith("/job-a/candidates/c94/approve"))).toBe(true);
   });
 
+  test("a clip load that fails after leaving Review writes nothing (no page error)", async ({ app, api }) => {
+    await mockReview(app, api);
+    let release; const gate = new Promise((r) => { release = r; });
+    await app.route(/\/api\/review\/clips\?/, async (route) => { await gate; route.fulfill({ status: 500, contentType: "application/json", body: '{"detail":"boom"}' }); });
+    await app.evaluate(() => { location.hash = "#review"; });
+    await expect(app.locator("#rvFilters select").first()).toBeVisible();
+    await app.evaluate(() => { location.hash = "#analyze"; });
+    release();
+    await app.waitForTimeout(300);                                       // the fixture fails the test on any page error
+  });
+
   test("2 columns on desktop, 1 on mobile; no horizontal scroll", async ({ app, api }, info) => {
     await open(app, api);
     const cols = await app.locator("#rvGrid .rv-grid").first().evaluate((g) => getComputedStyle(g).gridTemplateColumns.split(" ").length);
