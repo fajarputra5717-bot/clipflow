@@ -29,3 +29,8 @@ analyze, auto-import, campaigns(-p2), phase-shots, publish, schedule-view, setti
 Admin view (New campaign, Set payout) and Import anyway / See all live (mocked only); the Publish campaign filter with ≥ 2 campaigns live; real-hardware frames; before/after screenshots (Lane A's folder, not reviewed).
 
 Merge: OK for ef2e86e..c43afce.
+
+## Addendum: 1863393 (chart baseline fix) — closed
+Unit: `tests.test_track` 7 OK (incl. DailyViewsPostedTest). Live (staging backend rebuilt): lane-c-a daily total 86,000 = tile, lane-c-b 41,000 = tile, still own views only. The 7 Oct spike is still there for lane-c-a on purpose: both of its counted posts (tiktok 45,000 and instagram 41,000) were posted on 7 Oct, so with the new rule their first count belongs to that day. A post posted BEFORE the window (baseline) could not be built live (no direct DB inserts); it is covered by the unit test.
+
+Merge: OK for 1863393; ui-phase2 (ef2e86e..1863393) is Merge OK from me.
