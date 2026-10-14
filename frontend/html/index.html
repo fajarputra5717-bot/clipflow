@@ -1549,7 +1549,7 @@ body{font-size:var(--fs-base)}
 @supports not ((-webkit-backdrop-filter:blur(1px)) or (backdrop-filter:blur(1px))){.flow-pill::before,.flow-pill::after{background:var(--panel)}}
 @media (prefers-reduced-transparency:reduce){.flow-pill::before,.flow-pill::after{background:var(--panel);-webkit-backdrop-filter:none;backdrop-filter:none}}
 @media (prefers-reduced-motion:reduce){.flow-pill,.flow-pill::before,.flow-pill::after,.dock-glider,.flow-pill .flow-label{transition:none}}
-body{padding-bottom:calc(72px + env(safe-area-inset-bottom))}
+body{padding-bottom:calc(var(--dock-h) + var(--dock-bottom) + 20px + env(safe-area-inset-bottom))}   /* item 3: nothing hides under the dock */
 /* the editor's own sticky action bar rides above the pill; on phone the pill steps aside while that bar is in use */
 body:has(#editorSection:not(.hidden)) .ed-foot{bottom:calc(var(--dock-h) + var(--dock-bottom) + 10px + env(safe-area-inset-bottom))}
 .acct-narrow{display:none}

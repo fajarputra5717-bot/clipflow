@@ -82,6 +82,48 @@ async function overflow(app) {
     return out.slice(0, 8);
   });
 }
+// item 3: scrolled to the bottom, the last content of every page ends above the dock (+ a gap)
+async function underDock(app) {
+  await app.evaluate(() => scrollTo(0, document.documentElement.scrollHeight));
+  await app.waitForTimeout(300);
+  return app.evaluate(() => {
+    const dock = document.getElementById("flowNav").getBoundingClientRect(), out = [];
+    for (const e of document.querySelectorAll("main *")) {
+      const cs = getComputedStyle(e);
+      if (!e.offsetParent || cs.position === "fixed" || cs.position === "sticky" || e.closest(".sheet-layer,.ed-foot,[hidden],.hidden,details:not([open]) > :not(summary)")) continue;
+      if (e.children.length) continue;                       // leaves only: text, buttons, images
+      const r = e.getBoundingClientRect();
+      if (r.height && r.width && r.bottom > dock.top - 12 && r.top < dock.bottom && r.right > dock.left - 40 && r.left < dock.right + 40)   // ≥ 12 px clear of the dock (its shadow + glass edge)
+        out.push(`${e.tagName.toLowerCase()}.${[...e.classList].join(".")} bottom ${Math.round(r.bottom)} > dock ${Math.round(dock.top)}`);
+    }
+    return out.slice(0, 5);
+  });
+}
+for (const [w, h] of [[390, 844], [1280, 800]]) {
+  test(`nothing hides under the dock at ${w}×${h}`, async ({ app, api }, info) => {
+    test.skip((w === 390) !== (info.project.name === "mobile"), "one size per project");
+    test.setTimeout(120_000);
+    await app.setViewportSize({ width: w, height: h });
+    await seed(app, api);
+    api.current = Array.from({ length: 12 }, (_, i) => job({ id: "s" + i, status: "review", source_title: "Stream " + i }));
+    api.jobs = { ...api.jobs, ...Object.fromEntries(api.current.map((j) => [j.id, j])) };
+    // long pages: 9 review clips, 6 publish cards, a post on every schedule day
+    api.publishGroups = [{ campaign: "ime-roleplay", campaign_name: "IME Roleplay", rows: Array.from({ length: 6 }, (_, i) => row({ candidate_id: "c" + i, title: "Clip " + i })) }];
+    api.schedule.days.forEach((d, i) => { if (!d.posts.length) d.posts = [{ ...api.schedule.days[0].posts[0], id: "pl-" + i, title: "Planned " + i }]; });
+    await app.route(/\/api\/review\/clips\?/, (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
+      header: { kind: "campaign", title: "IME Roleplay X Motion Klip", status: { text: "Week 2", ended: false }, to_review: 9 },
+      clips: Array.from({ length: 9 }, (_, i) => clip({ id: "r" + i, score: 90 - i, ai_title: "Clip " + i })) }) }));
+    await app.reload();
+    const bad = {};
+    for (const [name, go] of STEPS) {
+      if (name === "5-editor") continue;                     // the Editor fits the window above the dock (its own layout)
+      await go(app); await app.waitForTimeout(700);
+      const o = await underDock(app); if (o.length) bad[name] = o;
+    }
+    expect(bad).toEqual({});
+  });
+}
+
 for (const [w, h] of [[390, 844], [1280, 700]]) {
   test(`no horizontal overflow at ${w}×${h}`, async ({ app, api }, info) => {
     test.skip((w === 390) !== (info.project.name === "mobile"), "one size per project");
