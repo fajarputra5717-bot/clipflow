@@ -63,7 +63,8 @@
 .ed-tl{margin-top:var(--sp-3);background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:12px 12px 10px;box-shadow:var(--shadow)}
 .ed-tl-head{display:flex;align-items:center;gap:var(--sp-1);margin-bottom:8px;flex-wrap:wrap}
 .ed-tl-scroll{overflow-x:auto;overscroll-behavior-x:contain;border-radius:12px;background:var(--panel2,var(--fill))}
-.ed-tl-inner{position:relative;height:118px;cursor:pointer;user-select:none;-webkit-user-select:none}
+.ed-tl-inner{position:relative;height:118px;cursor:pointer;user-select:none;-webkit-user-select:none;
+  margin:0 24px}   /* QA (Lane C Medium): room inside the scroller for the trim handles' full 44 px hit areas at both ends (editor.js TL_PAD) */
 .ed-tl-ruler{position:absolute;left:0;right:0;top:0;height:18px;font-size:var(--fs-small);color:var(--muted2);font-variant-numeric:tabular-nums;pointer-events:none}
 .ed-tl-ruler i{position:absolute;top:0;width:1px;height:6px;background:var(--line2,var(--line))}
 .ed-tl-ruler span{position:absolute;top:4px;transform:translateX(3px)}

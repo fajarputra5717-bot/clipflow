@@ -14,6 +14,7 @@
   const SM_BUSY = ["queued_upload", "uploading", "transcribing", "queued_export", "exporting", "queued_apply", "applying"];
   const edUrl = (jid, cid) => `/api/jobs/${encodeURIComponent(jid)}/candidates/${encodeURIComponent(cid)}/editor`;
   const reduced = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const TL_PAD = 24;                            // editor.css .ed-tl-inner side margin (trim handle hit areas fit)
   const PPS = 100;                              // timeline pixels per second
   const ZOOM_SPAN = 1.75;                       // ramp 0.25 + hold 1.0 + ramp 0.25 + merge gap: retention.plan_zoom_windows
   // 2b: preview sound is on by default; volume + mute are remembered per browser (a viewer convenience only).
@@ -563,7 +564,8 @@
       if (i >= 0) document.querySelector(`[data-ed-word="${i}"]`)?.classList.add("now");
       E.nowWord = i;
     }
-    if (follow && sc && (x < left + 24 || x > left + width - 48)) sc.scrollLeft = Math.max(0, x - 48);
+    const sx = x + TL_PAD;                                   // x inside the scroller (the inner sits TL_PAD in)
+    if (follow && sc && (sx < left + 24 || sx > left + width - 48)) sc.scrollLeft = Math.max(0, sx - 48);
   }
 
   function loop() {

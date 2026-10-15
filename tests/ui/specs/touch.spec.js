@@ -241,12 +241,14 @@ test("phone Editor: swatches and switches answer a tap 21 px from their centre (
     const trim = [];
     for (const e of document.querySelectorAll(".ed-trim-h")) {           // total hit width, scanned outward
       if (!e.getClientRects().length) continue;
-      e.scrollIntoView({ block: "center", inline: "nearest" }); await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      // centred in the timeline scroller: "nearest" parks the 18 px box exactly on the scroller's edge, which clips any
+      // hit area there; a user scrolls the handle into the timeline (at the clip's ends the 24 px inset keeps it whole)
+      e.scrollIntoView({ block: "center", inline: "center" }); await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
       const r = e.getBoundingClientRect(), cy = r.top + r.height / 2; let L = 0, R = 0;
       while (document.elementFromPoint(r.left + r.width / 2 - L - 0.5, cy) === e && L < 60) L += 0.5;
       while (document.elementFromPoint(r.left + r.width / 2 + R + 0.5, cy) === e && R < 60) R += 0.5;
       probed[".ed-trim-h"] = (probed[".ed-trim-h"] || 0) + 1;
-      if (L + R + 1 < 44) trim.push(`${e.getAttribute("aria-label")} ${L + R + 1} px`);
+      trim.push({ label: e.getAttribute("aria-label"), w: L + R + 1 });
     }
     return { out: out.slice(0, 10), probed, trim };
   }, probed);
@@ -254,8 +256,8 @@ test("phone Editor: swatches and switches answer a tap 21 px from their centre (
   expect(miss.probed[".ed-sw-sm"] || 0, "keyword swatches were probed").toBeGreaterThanOrEqual(1);   // QA 06aee4a: it skipped them before
   expect(miss.probed[".ed-switch"] || 0, "switches were probed").toBeGreaterThanOrEqual(1);
   expect(miss.probed[".ed-trim-h"] || 0, "trim handles were probed").toBeGreaterThanOrEqual(2);
-  // Trim handles are NOT ≥ 44 yet (measured ~23 / 32 px): #edTlInner clips half of each handle at the clip's ends, and a
-  // hit area leaning inward steals timeline scrubbing. Lane B (timeline owner) fixes it in the timeline's layout; until
-  // then the check below only reports them.
-  if (miss.trim.length) console.log("trim handles (known, Lane B): " + miss.trim.join("; "));
+  // Trim handles: the timeline content is inset 24 px inside its scroller (Lane B, after 225), so each handle's ±13 px
+  // phone hit area is no longer clipped at the clip's ends (was ~23 / 32 px). Hard check at the real scrolled position.
+  console.log("trim handle hit widths: " + miss.trim.map((t) => `${t.label} ${t.w} px`).join("; "));
+  for (const t of miss.trim) expect(t.w, `${t.label} hit width`).toBeGreaterThanOrEqual(44);
 });

@@ -1,8 +1,13 @@
 {
- "version": "v3.225",
- "number": 225,
+ "version": "v3.226",
+ "number": 226,
  "date": "2026-10-15",
  "entries": [
+  {
+   "number": 226,
+   "date": "2026-10-15",
+   "title": "Phone Editor trim handles: timeline content inset 24 px inside its scroller, so each handle's 44 px hit area isn't clipped (45/45 px at 390, start was 23); tou…"
+  },
   {
    "number": 225,
    "date": "2026-10-15",
@@ -22,11 +27,6 @@
    "number": 222,
    "date": "2026-10-14",
    "title": "UI phase 1: scale ×1.2, glass dock (glider, tooltips, bar → pill), bottom padding, one title per page, account menu without duplicates + Refresh, version v3.NN…"
-  },
-  {
-   "number": 221,
-   "date": "2026-10-14",
-   "title": "UI task phase 2 (Lane B): Review (only failing rule chips / All rules pass, grouped by source video, approved clips show their status, content-check issue show…"
   }
  ]
 }
