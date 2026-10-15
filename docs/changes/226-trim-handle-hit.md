@@ -1,4 +1,4 @@
-# lane-b: phone trim handles get their full 44 px hit area (Lane C Medium, after 224/225)
+# 226 — phone trim handles get their full 44 px hit area (Lane C Medium, after 224/225)
 
 The timeline content (`.ed-tl-inner`) sat flush against its horizontal scroller, so the clip-start handle (at x 0)
 and the clip-end handle (at the last second) lost half their width plus their ±13 px phone hit area to the scroller's
