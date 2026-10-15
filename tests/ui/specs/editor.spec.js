@@ -224,6 +224,7 @@ test.describe("Editor zoom punch-ins", () => {
   test("Z toggles zoom mode; a click on a word in zoom mode adds a marker instead of seeking", async ({ app, api }) => {
     await mockEditor(app, api);
     await app.evaluate(() => { location.hash = "#editor/job-done/cand-a"; });
+    await expect(app.locator('[data-ed-word="2"]')).toBeVisible();      // the timeline is loaded (keys act on it)
     await app.keyboard.press("z");
     await expect(app.locator('[data-ed-mode="zoom"]')).toHaveAttribute("aria-pressed", "true");
     await app.locator('[data-ed-word="2"]').click();                     // "hitam" 3.0–3.5
@@ -786,6 +787,18 @@ test.describe("Editor Auto edit E2 effects", () => {
 // Auto Edit E3: a sound per item and an emoji per emoji item (params.sfx / params.emoji).
 test.describe("Editor Auto edit E3 sound + emoji", () => {
   test.use({ reducedMotion: "reduce" });
+  test("a slow /api/sfx answer relabels the pickers in place: focus inside the Effects tab is kept", async ({ app, api }) => {
+    await app.route(/\/api\/sfx$/, async (r) => { await new Promise((ok) => setTimeout(ok, 400)); r.fulfill({ status: 200, contentType: "application/json",
+      body: JSON.stringify({ categories: [{ key: "boom", label: "Boom", used_by: [], assigned: { id: "s-1", name: "My boom" }, default: null }], sounds: [], freesound: false, limits: {} }) }); });
+    await mockEditor(app, api);
+    await app.evaluate(() => { location.hash = "#editor/job-done/cand-a"; });
+    await app.locator('[data-ed-tab="effects"]').click();
+    await app.locator("[data-ed-plan-gen]").click();
+    await app.locator("[data-ed-zoom-intensity]").focus();
+    await expect(app.locator('[data-ed-plan-sfx="punch-50"] option[value="boom"]')).toHaveText("Boom · My boom");   // arrived
+    await expect(app.locator("[data-ed-zoom-intensity]")).toBeFocused();
+  });
+
   test("217 SFX library: picker names your sound or the fallback, ▶ plays that file, 'Your sounds' opens Settings → Sound effects", async ({ app, api }) => {
     await app.route(/\/api\/sfx$/, (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
       categories: [{ key: "laugh", label: "Laugh", used_by: ["Funny / Meme"], assigned: null, default: "Built-in ding" },

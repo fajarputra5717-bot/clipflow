@@ -365,7 +365,10 @@
   async function loadSfxLib() {
     try { const r = await api("/api/sfx"); E.sfxCats = Object.fromEntries((r.categories || []).map((c) => [c.key, c])); }
     catch { E.sfxCats = E.sfxCats || {}; }
-    if (E.tab === "effects" && E.state) repaintPanel();
+    // relabel in place: a panel repaint here would drop the focus of whatever the user just tabbed/clicked into
+    document.querySelectorAll("#editorSection [data-ed-plan-sfx] option[value]").forEach((o) => {
+      if (o.value) { const t = sfxLabel(o.value); if (o.textContent !== t) o.textContent = t; }
+    });
   }
   function sfxLabel(x) {
     const own = E.sfxCats && E.sfxCats[x] && E.sfxCats[x].assigned;
