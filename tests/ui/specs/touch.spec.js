@@ -213,3 +213,28 @@ test("switches that are on use the accent, not green", async ({ app, api }) => {
   }
   expect(bad).toEqual([]);
 });
+
+// QA 79276bb Medium: in the Editor at 390 the small controls (keyword swatches 26 px, switches 42×26, trim handles
+// 18 px wide) must take a tap 22 px from their centre, i.e. a real ≥ 44 px hit area (now 46), probed with elementFromPoint.
+test("phone Editor: swatches, switches and trim handles answer a tap 21 px from their centre (≥ 44 px hit area)", async ({ app, api }) => {
+  test.skip(test.info().project.name !== "mobile", "phone rule");
+  await seed(app, api);
+  await app.evaluate(() => { location.hash = "#editor/job-done/cand-a"; }); await app.waitForTimeout(900);
+  const miss = await app.evaluate(() => {
+    const out = [];
+    for (const q of [".ed-sw-sm", ".ed-switch", ".ed-trim-h"]) for (const e of document.querySelectorAll(q)) {
+      const r = e.getBoundingClientRect(); if (!r.width || r.bottom < 0 || r.top > innerHeight) continue;
+      const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+      for (const [dx, dy] of [[21, 0], [-21, 0], [0, 21], [0, -21]]) {   // just inside a 44 px area
+        const x = cx + dx, y = cy + dy; if (x < 0 || y < 0 || x >= innerWidth || y >= innerHeight) continue;
+        const hit = document.elementFromPoint(x, y); if (hit?.closest("#flowNav,#toolbar")) continue;   // under the fixed bars: scroll first
+        if (!hit || !(hit === e || e.contains(hit))) {
+          if (dy && q === ".ed-trim-h") continue;                          // trim handles: only the width is small
+          out.push(`${q} ${dx},${dy} → ${hit ? hit.className : "nothing"}`);
+        }
+      }
+    }
+    return out.slice(0, 10);
+  });
+  expect(miss).toEqual([]);
+});
