@@ -6,7 +6,7 @@
   {
    "number": 225,
    "date": "2026-10-15",
-   "title": "Phone Editor: swatches + switches tap areas 44×46, swatches 20 px apart (no overlapping hit areas); elementFromPoint probe test (QA 79276bb Medium)"
+   "title": "Phone Editor: keyword swatches 44×46 (insets count inside the border; gap override fixed, 20 px apart) + switches 44×46; trim handles measured, handed to Lane…"
   },
   {
    "number": 224,
