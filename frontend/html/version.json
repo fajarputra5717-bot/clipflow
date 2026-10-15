@@ -1,8 +1,13 @@
 {
- "version": "v3.227",
- "number": 227,
+ "version": "v3.228",
+ "number": 228,
  "date": "2026-10-15",
  "entries": [
+  {
+   "number": 228,
+   "date": "2026-10-15",
+   "title": "Editor: the late /api/sfx answer no longer repaints the Effects panel and drops focus (real bug since 219, the Timeline keys flake); Z-mode test race fixed (La…"
+  },
   {
    "number": 227,
    "date": "2026-10-15",
@@ -22,11 +27,6 @@
    "number": 224,
    "date": "2026-10-15",
    "title": "Editor only: top bar 44 px + the dock as its compact pill (44 px targets) → video 414 → 455 px at 1280×800 (366 → 422 at 1280×700); other pages unchanged"
-  },
-  {
-   "number": 223,
-   "date": "2026-10-14",
-   "title": "UI phase 2 (Lane A pages): Campaigns (title-row New, whole-card link, due highlight, Set payout form, bar on every card), Auto-import (Import anyway, See all),…"
   }
  ]
 }

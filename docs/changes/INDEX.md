@@ -197,3 +197,4 @@ Format: `NNN · YYYY-MM-DD · title · files touched`
 225 · 2026-10-15 · Phone Editor: keyword swatches 44×46 (insets count inside the border; gap override fixed, 20 px apart) + switches 44×46; trim handles measured, handed to Lane B (clipped by the timeline) (QA 79276bb / 06aee4a) · index.html
 226 · 2026-10-15 · Phone Editor trim handles: timeline content inset 24 px inside its scroller, so each handle's 44 px hit area isn't clipped (45/45 px at 390, start was 23); touch.spec trim check is now a hard ≥ 44 (Lane B) · editor/*
 227 · 2026-10-15 · Editor preset tiles: the caption sample scales with its tile (container-relative), no clipped "THIS CHANGES" at 360–390 phones (Lane B) · editor.css
+228 · 2026-10-15 · Editor: the late /api/sfx answer no longer repaints the Effects panel and drops focus (real bug since 219, the Timeline keys flake); Z-mode test race fixed (Lane B) · editor.js, editor.spec
