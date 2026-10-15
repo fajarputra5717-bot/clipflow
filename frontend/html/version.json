@@ -1,8 +1,13 @@
 {
- "version": "v3.224",
- "number": 224,
+ "version": "v3.225",
+ "number": 225,
  "date": "2026-10-15",
  "entries": [
+  {
+   "number": 225,
+   "date": "2026-10-15",
+   "title": "Phone Editor: swatches + switches tap areas 44×46, swatches 20 px apart (no overlapping hit areas); elementFromPoint probe test (QA 79276bb Medium)"
+  },
   {
    "number": 224,
    "date": "2026-10-15",
@@ -22,11 +27,6 @@
    "number": 221,
    "date": "2026-10-14",
    "title": "UI task phase 2 (Lane B): Review (only failing rule chips / All rules pass, grouped by source video, approved clips show their status, content-check issue show…"
-  },
-  {
-   "number": 220,
-   "date": "2026-10-14",
-   "title": "Groq as second AI provider: auto chain Gemini → Groq → Claude, strict JSON schema (gpt-oss-120b analysis / gpt-oss-20b utility), 429/413 skip to the next provi…"
   }
  ]
 }
