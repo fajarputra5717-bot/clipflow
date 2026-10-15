@@ -326,6 +326,17 @@ test.describe("Editor page", () => {
     expect(r.playerTop).toBeGreaterThanOrEqual(r.bar - 1);            // the player sits under the top bar, not beneath it
   });
 
+  test("preset samples ('THIS CHANGES') never clip, down to 360 px wide", async ({ app, api }) => {
+    await mockEditor(app, api);
+    for (const w of [360, 390]) {
+      await app.setViewportSize({ width: w, height: 800 });
+      await app.evaluate(() => { location.hash = "#analyze"; });
+      await app.evaluate(() => { location.hash = "#editor/job-done/cand-a"; });
+      await expect(app.locator(".ed-ptile").first()).toBeVisible();
+      expect(await app.locator(".ed-ptile").evaluateAll((ts) => ts.filter((t) => t.scrollWidth > t.clientWidth + 1).length), `${w} px`).toBe(0);
+    }
+  });
+
   test("phone: both trim handles have a ≥ 44 px wide hit area (not clipped by the timeline scroller)", async ({ app, api }, info) => {
     test.skip(info.project.name !== "mobile", "phone hit areas (index.html ≤ 600 px rule)");
     await mockEditor(app, api);

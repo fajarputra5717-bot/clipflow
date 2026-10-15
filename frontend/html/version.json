@@ -1,8 +1,13 @@
 {
- "version": "v3.226",
- "number": 226,
+ "version": "v3.227",
+ "number": 227,
  "date": "2026-10-15",
  "entries": [
+  {
+   "number": 227,
+   "date": "2026-10-15",
+   "title": "Editor preset tiles: the caption sample scales with its tile (container-relative), no clipped \"THIS CHANGES\" at 360–390 phones (Lane B)"
+  },
   {
    "number": 226,
    "date": "2026-10-15",
@@ -22,11 +27,6 @@
    "number": 223,
    "date": "2026-10-14",
    "title": "UI phase 2 (Lane A pages): Campaigns (title-row New, whole-card link, due highlight, Set payout form, bar on every card), Auto-import (Import anyway, See all),…"
-  },
-  {
-   "number": 222,
-   "date": "2026-10-14",
-   "title": "UI phase 1: scale ×1.2, glass dock (glider, tooltips, bar → pill), bottom padding, one title per page, account menu without duplicates + Refresh, version v3.NN…"
   }
  ]
 }

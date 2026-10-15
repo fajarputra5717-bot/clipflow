@@ -318,6 +318,9 @@ a.rv-frame:focus-visible{outline:none;box-shadow:var(--ring)}
 .ed-preset{min-height:0;padding:4px;gap:3px;border-radius:10px;font-size:var(--fs-small)}
 .ed-ptile{height:28px;border-radius:7px}
 .ed-ptile .ed-capsample{font-size:var(--fs-small)}
+/* Lane C (×1.2 scale): on phones the tile is 101–111 px and "THIS CHANGES" clipped; the sample shrinks with its tile */
+.ed-ptile{container-type:inline-size}
+.ed-ptile .ed-capsample{font-size:min(var(--fs-small),11cqi)}
 .ed-kwword{min-height:var(--chip-h);padding:0 8px;font-size:var(--fs-small);border-radius:6px}
 .ed-kwword::after{inset:-4px -2px}
 .ed-kw{gap:4px;margin-top:6px;max-height:120px}
