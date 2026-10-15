@@ -1776,7 +1776,7 @@ input[type=checkbox],input[type=radio]{accent-color:var(--accent)}
   body button:not(.flow-node):not(.ed-switch):not(.ed-sw):not(.ai-switch):not(.rename-btn):not(.isl-cancel):not(.toast-action):not(.job-overlay-close):not(.ed-preset):not(.island-main):not(.info-btn),
   body summary,body select,body a.rv-open,body a.btn-sm,body .ed-back,body .ed-headrow .ed-back{min-height:var(--hit);min-width:var(--hit)}
   body .ed-tlwrap>summary,body .rv-more>summary{min-width:var(--hit)}
-  .ed-trim-h::after{content:"";position:absolute;inset:0 -13px}   /* 18 px handle → 44 px wide hit area (wider pokes past the page at the end) */
+  .ed-trim-h::after{content:"";position:absolute;inset:0 -13px}   /* 18 px handle → 44 px wide hit area */
   body a[data-ed-back]{display:inline-flex;align-items:center;justify-content:center;min-height:var(--hit);min-width:var(--hit)}
   body .ed-tlwrap>summary{min-height:var(--hit)}
   body .acct-item{min-height:var(--hit)}
@@ -1786,8 +1786,10 @@ input[type=checkbox],input[type=radio]{accent-color:var(--accent)}
   .isl-cancel::after{inset:-4px!important}
   .toast-action::after{inset:-8px!important}
   .ed-switch::before{content:"";position:absolute;inset:-10px -1px}   /* 42×26 → 44×46 (right-aligned: wider pokes past the page) */
-  .ed-sw::after,.ed-sw-sm::after{inset:-10px -9px!important}   /* 26 → 44×46 px (wider pokes past the page at the right edge) */
-  .ed-swatches{gap:20px}   /* 26 + 20 = 46 px between centres: neighbouring hit areas don't overlap */
+  .ed-sw::after,.ed-sw-sm::after{inset:-12px -11px!important}   /* insets count from the padding box (inside the 2 px border): 22 + 22 = 44 wide, 22 + 24 = 46 tall */
+  /* 26 + 20 = 46 px between centres, and room around the row so the swatches' hit areas aren't clipped by the panel
+     or covered by the next row (editor.css's gap:12px loads later, hence .ed-page; QA 06aee4a) */
+  .ed-page .ed-swatches{gap:20px;padding:10px 10px;margin:-4px 0 2px}
   .ed-kw{max-height:200px}
   /* audit M3: text fields + sliders too (Settings rows were 34 px, posting times + reminder lead 36 px, editor sliders 40 px) */
   body input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=color]):not([type=hidden]),
