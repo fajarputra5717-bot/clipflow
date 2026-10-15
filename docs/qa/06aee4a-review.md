@@ -14,3 +14,9 @@ Served myself (throwaway nginx on the staging network, `git archive origin/touch
 - Their new touch.spec probe (tap 21 px from the centre) passes for switches; for swatches 21 px lands on the neighbour at a 38 px spacing, so it would only pass if the test skips them or the gap rule worked in their environment (a different CSS load order, as in a bundled test server).
 
 Merge: OK for 06aee4a as an improvement (switches fixed, no overflow, nothing worse than main), but the swatch half of the fix is not live: don't claim ≥ 44 px for the colour swatches until the gap override is fixed.
+
+## Addendum: f1d64a1 (swatches fixed for real) — closed
+Re-measured on a served copy of f1d64a1 (same method). **Swatches: 44.5 × 46.5 px** each, centres 46 px apart (gap 20) at 390 and 360 (at 360 they wrap to two rows, no overflow); computed `column-gap` 20 px and padding 10 px on the phone row, 12 px / 0 on 768, 1280 and 1440 (desktop unchanged). **Switches: 44.5 × 46.5** (Hook, Burn, Effects, Audio tabs). No horizontal overflow at 360, 390, 768, 1280, 1440; 0 page errors. Agreed on the cause: the `inset` counts from the padding box inside the swatch's 2 px border, plus editor.css:191's gap override.
+Still open: the trim handles (Clip start / end, 18 px wide + 13 px areas, clipped by `#edTlInner`): not fixed, handed to Lane B; I could not measure them either.
+
+Merge: OK for f1d64a1 (swatches + switches done; trim handles open for Lane B).
