@@ -326,6 +326,24 @@ test.describe("Editor page", () => {
     expect(r.playerTop).toBeGreaterThanOrEqual(r.bar - 1);            // the player sits under the top bar, not beneath it
   });
 
+  test("phone: both trim handles have a ≥ 44 px wide hit area (not clipped by the timeline scroller)", async ({ app, api }, info) => {
+    test.skip(info.project.name !== "mobile", "phone hit areas (index.html ≤ 600 px rule)");
+    await mockEditor(app, api);
+    await app.evaluate(() => { location.hash = "#editor/job-done/cand-a"; });
+    await expect(app.locator("#edTrimA")).toBeAttached();
+    for (const id of ["edTrimA", "edTrimB"]) {
+      const w = await app.evaluate((hid) => {
+        const h = document.getElementById(hid);
+        h.scrollIntoView({ block: "center", inline: "center", behavior: "instant" });
+        const r = h.getBoundingClientRect(), cx = r.left + r.width / 2, y = r.top + r.height / 2;
+        let n = 0;
+        for (let x = cx - 40; x <= cx + 40; x++) { const e = document.elementFromPoint(x, y); if (e && (e === h || h.contains(e))) n++; }
+        return n;
+      }, id);
+      expect(w, id).toBeGreaterThanOrEqual(44);
+    }
+  });
+
   test("Tab order: player controls → timeline → inspector (owner 2026-10-14)", async ({ app, api }) => {
     await mockEditor(app, api);
     await app.evaluate(() => { location.hash = "#editor/job-done/cand-a"; });
