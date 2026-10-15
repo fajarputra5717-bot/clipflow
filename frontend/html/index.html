@@ -1637,6 +1637,13 @@ body{font-size:var(--fs-base)}
 @supports not ((-webkit-backdrop-filter:blur(1px)) or (backdrop-filter:blur(1px))){.flow-pill::before,.flow-pill::after{background:var(--panel)}}
 @media (prefers-reduced-transparency:reduce){.flow-pill::before,.flow-pill::after{background:var(--panel);-webkit-backdrop-filter:none;backdrop-filter:none}}
 @media (prefers-reduced-motion:reduce){.flow-pill,.flow-pill::before,.flow-pill::after,.dock-glider,.flow-pill .flow-label{transition:none}}
+/* Owner 2026-10-15: in the Editor only, a slimmer top bar and the dock as its compact pill (44 px targets, no shrink),
+   so the video reaches ≥ 455 px at 1280×800. Every other page keeps the normal sizes. */
+body.editor-open{--appbar-h:44px;--ed-top:44px;--dock-btn:44px;--dock-pad:4px;--dock-bottom:8px}
+body.editor-open .container{margin-top:0}
+body.editor-open .appbar{margin-bottom:8px}
+@media (min-width:601px){body.editor-open .appbar .icon-btn{height:40px}}   /* phones keep 44 px (the bar is 44) */
+body.editor-open .flow-pill.is-pill{transform:translateX(-50%)}   /* compact pill look, same 44 px tap targets */
 body{padding-bottom:calc(var(--dock-h) + var(--dock-bottom) + 20px + env(safe-area-inset-bottom))}   /* item 3: nothing hides under the dock */
 /* the editor's own sticky action bar rides above the pill; on phone the pill steps aside while that bar is in use */
 body:has(#editorSection:not(.hidden)) .ed-foot{bottom:calc(var(--dock-h) + var(--dock-bottom) + 10px + env(safe-area-inset-bottom))}
@@ -4592,14 +4599,17 @@ const TITLE_RANGE=48;
   function apply(){
     ticking=false;
     // dock bar → pill (UI phase 1 item 2), hysteresis so it doesn't flicker near the threshold
-    const y=window.scrollY;
-    if(dock&&(pill?y<24:y>64)){pill=!pill;dock.classList.toggle("is-pill",pill)}
+    const y=window.scrollY,ed=document.body.classList.contains("editor-open");
+    if(dock&&(ed?!pill:(pill?y<24:y>64))){pill=ed?true:!pill;dock.classList.toggle("is-pill",pill)}
+    else if(dock&&!ed&&pill&&y<24){pill=false;dock.classList.remove("is-pill")}
     const p=Math.min(1,Math.max(0,y/TITLE_RANGE)),q=Math.round(p*1000)/1000;
     if(q===last)return;last=q;
     bar.style.setProperty("--p",q);bar.classList.toggle("is-collapsed",q>=1);
   }
   window.addEventListener("scroll",()=>{if(!ticking){ticking=true;requestAnimationFrame(apply)}},{passive:true});
   window.addEventListener("resize",()=>{last=-1;apply()},{passive:true});
+  // the Editor opens/closes without a scroll: follow body.editor-open (editor.js toggles it)
+  new MutationObserver(()=>{last=-1;apply();requestAnimationFrame(()=>window.placeGlider?.())}).observe(document.body,{attributes:true,attributeFilter:["class"]});
   apply();
 })();
 

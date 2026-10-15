@@ -1,8 +1,13 @@
 {
- "version": "v3.223",
- "number": 223,
- "date": "2026-10-14",
+ "version": "v3.224",
+ "number": 224,
+ "date": "2026-10-15",
  "entries": [
+  {
+   "number": 224,
+   "date": "2026-10-15",
+   "title": "Editor only: top bar 44 px + the dock as its compact pill (44 px targets) → video 414 → 455 px at 1280×800 (366 → 422 at 1280×700); other pages unchanged"
+  },
   {
    "number": 223,
    "date": "2026-10-14",
@@ -22,11 +27,6 @@
    "number": 220,
    "date": "2026-10-14",
    "title": "Groq as second AI provider: auto chain Gemini → Groq → Claude, strict JSON schema (gpt-oss-120b analysis / gpt-oss-20b utility), 429/413 skip to the next provi…"
-  },
-  {
-   "number": 219,
-   "date": "2026-10-14",
-   "title": "Editor sound picker uses the SFX library (names your own sound / the fallback, ▶ preview, Your sounds → Settings sheet, laugh) + 218 split timeline fits its ro…"
   }
  ]
 }
